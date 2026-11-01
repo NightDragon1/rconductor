@@ -7,7 +7,7 @@ SQLC_VERSION := 1.31.1
 SQLC ?= sqlc
 export CGO_ENABLED := 0
 
-.PHONY: all build web panel agent test test-integration lint vuln generate
+.PHONY: all build web panel agent images test test-integration lint vuln generate
 
 all: lint test web build
 
@@ -26,8 +26,16 @@ agent:
 test:
 	go test ./...
 
-test-integration:
-	go test -tags integration -count=1 ./...
+# Local images for the integration tests; CI builds multi-arch with buildx.
+PANEL_IMAGE ?= rconductor-panel:dev
+AGENT_IMAGE ?= rconductor-agent:dev
+
+images:
+	docker buildx build --load --target panel --build-arg VERSION=$(VERSION) -t $(PANEL_IMAGE) .
+	docker buildx build --load --target agent --build-arg VERSION=$(VERSION) -t $(AGENT_IMAGE) .
+
+test-integration: images
+	RCD_PANEL_IMAGE=$(PANEL_IMAGE) go test -tags integration -count=1 ./...
 
 lint:
 	go tool -modfile=tools/go.mod golangci-lint run ./...
