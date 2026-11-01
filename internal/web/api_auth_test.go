@@ -19,7 +19,9 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
 const testPassword = "a long enough password"
@@ -29,6 +31,7 @@ var fastParams = password.Params{Time: 1, MemoryKiB: 64, Threads: 1, SaltLen: 16
 type apiFixture struct {
 	h       http.Handler
 	userID  string
+	adminID string
 	proxies Proxies
 }
 
@@ -47,10 +50,17 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := storetest.CreateUser(t, st, storetest.User{Pseudonym: "Mod", Role: "moderator", PasswordHash: hash})
+	adminID := storetest.CreateUser(t, st, storetest.User{Pseudonym: "Boss", Role: "rcon_admin", PasswordHash: hash})
+	id := storetest.CreateUser(t, st, storetest.User{Pseudonym: "Mod", Role: "moderator", PasswordHash: hash, CreatedBy: adminID})
 	log := logging.New(io.Discard, "panel", config.Log{}).Module("web")
+	if err := perm.EnsureDefaults(ctx, st); err != nil {
+		t.Fatal(err)
+	}
 	svc := auth.NewService(st, hasher, log, true)
-	return &apiFixture{h: NewHandler(Options{Log: log, Auth: svc, Proxies: proxies}), userID: id, proxies: proxies}
+	checker := perm.NewChecker(st, log)
+	us := users.NewService(st, checker, log, svc.RevokeUser)
+	h := NewHandler(Options{Log: log, Auth: svc, Perm: checker, Users: us, Proxies: proxies})
+	return &apiFixture{h: h, userID: id, adminID: adminID, proxies: proxies}
 }
 
 type call struct {

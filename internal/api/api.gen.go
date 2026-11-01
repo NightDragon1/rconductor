@@ -75,6 +75,32 @@ func (e Role) Valid() bool {
 	}
 }
 
+// Assignments defines model for Assignments.
+type Assignments struct {
+	AdminScopes []Target             `json:"admin_scopes"`
+	Grants      []Grant              `json:"grants"`
+	Groups      []openapi_types.UUID `json:"groups"`
+
+	// Role One of the four fixed roles (ROLE-001).
+	Role            Role             `json:"role"`
+	SupporterGrants []SupporterGrant `json:"supporter_grants"`
+}
+
+// AssignmentsUpdate defines model for AssignmentsUpdate.
+type AssignmentsUpdate struct {
+	AdminScopes     *[]Target             `json:"admin_scopes,omitempty"`
+	Grants          *[]Grant              `json:"grants,omitempty"`
+	Groups          *[]openapi_types.UUID `json:"groups,omitempty"`
+	SupporterGrants *[]SupporterGrant     `json:"supporter_grants,omitempty"`
+}
+
+// Grant A server or server group for a moderator through one of his moderator groups, whose list applies (Design 4.3).
+type Grant struct {
+	GroupId       openapi_types.UUID  `json:"group_id"`
+	ServerGroupId *openapi_types.UUID `json:"server_group_id,omitempty"`
+	ServerId      *openapi_types.UUID `json:"server_id,omitempty"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Password  string `json:"password"`
@@ -125,6 +151,18 @@ type SessionUser struct {
 	Role Role `json:"role"`
 }
 
+// SupporterGrant defines model for SupporterGrant.
+type SupporterGrant struct {
+	ModeratorId openapi_types.UUID `json:"moderator_id"`
+	ServerId    openapi_types.UUID `json:"server_id"`
+}
+
+// Target Exactly one of server_id or server_group_id.
+type Target struct {
+	ServerGroupId *openapi_types.UUID `json:"server_group_id,omitempty"`
+	ServerId      *openapi_types.UUID `json:"server_id,omitempty"`
+}
+
 // User defines model for User.
 type User struct {
 	// Contacts Contact details such as telegram or whatsapp (AUTH-009).
@@ -170,6 +208,9 @@ type Busy = Problem
 // Forbidden Problem Details for HTTP APIs (RFC 9457).
 type Forbidden = Problem
 
+// Invalid Problem Details for HTTP APIs (RFC 9457).
+type Invalid = Problem
+
 // NotFound Problem Details for HTTP APIs (RFC 9457).
 type NotFound = Problem
 
@@ -192,6 +233,9 @@ type LoginJSONRequestBody = LoginRequest
 
 // UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
 type UpdateUserJSONRequestBody = UserUpdate
+
+// UpdateAssignmentsJSONRequestBody defines body for UpdateAssignments for application/json ContentType.
+type UpdateAssignmentsJSONRequestBody = AssignmentsUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -216,6 +260,12 @@ type ServerInterface interface {
 	// UpdateUser Change role or lock state of a managed user (ROLE-008).
 	// (PATCH /users/{id})
 	UpdateUser(w http.ResponseWriter, r *http.Request, id UserID)
+	// GetAssignments Role, scopes, groups and grants of a managed user.
+	// (GET /users/{id}/assignments)
+	GetAssignments(w http.ResponseWriter, r *http.Request, id UserID)
+	// UpdateAssignments Replace sections of a managed user's assignments (ROLE-003, ROLE-004).
+	// (PUT /users/{id}/assignments)
+	UpdateAssignments(w http.ResponseWriter, r *http.Request, id UserID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -393,6 +443,58 @@ func (siw *ServerInterfaceWrapper) UpdateUser(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetAssignments operation middleware
+func (siw *ServerInterfaceWrapper) GetAssignments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAssignments(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAssignments operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAssignments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAssignments(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -520,6 +622,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}", wrapper.DeleteUser)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{id}", wrapper.GetUser)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/users/{id}", wrapper.UpdateUser)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{id}/assignments", wrapper.GetAssignments)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/users/{id}/assignments", wrapper.UpdateAssignments)
 
 	return m
 }
@@ -536,6 +640,8 @@ type BusyApplicationProblemPlusJSONResponse struct {
 }
 
 type ForbiddenApplicationProblemPlusJSONResponse Problem
+
+type InvalidApplicationProblemPlusJSONResponse Problem
 
 type NotFoundApplicationProblemPlusJSONResponse Problem
 
@@ -985,6 +1091,163 @@ func (response UpdateUser404ApplicationProblemPlusJSONResponse) VisitUpdateUserR
 	return err
 }
 
+type GetAssignmentsRequestObject struct {
+	Id UserID `json:"id"`
+}
+
+type GetAssignmentsResponseObject interface {
+	VisitGetAssignmentsResponse(w http.ResponseWriter) error
+}
+
+type GetAssignments200JSONResponse Assignments
+
+func (response GetAssignments200JSONResponse) VisitGetAssignmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAssignments401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetAssignments401ApplicationProblemPlusJSONResponse) VisitGetAssignmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAssignments404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAssignments404ApplicationProblemPlusJSONResponse) VisitGetAssignmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssignmentsRequestObject struct {
+	Id   UserID `json:"id"`
+	Body *UpdateAssignmentsJSONRequestBody
+}
+
+type UpdateAssignmentsResponseObject interface {
+	VisitUpdateAssignmentsResponse(w http.ResponseWriter) error
+}
+
+type UpdateAssignments200JSONResponse Assignments
+
+func (response UpdateAssignments200JSONResponse) VisitUpdateAssignmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssignments400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAssignments400ApplicationProblemPlusJSONResponse) VisitUpdateAssignmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssignments401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAssignments401ApplicationProblemPlusJSONResponse) VisitUpdateAssignmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssignments403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAssignments403ApplicationProblemPlusJSONResponse) VisitUpdateAssignmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssignments404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAssignments404ApplicationProblemPlusJSONResponse) VisitUpdateAssignmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAssignments422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAssignments422ApplicationProblemPlusJSONResponse) VisitUpdateAssignmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Login Log in with pseudonym and password (AUTH-001, AUTH-006).
@@ -1008,6 +1271,12 @@ type StrictServerInterface interface {
 	// UpdateUser Change role or lock state of a managed user (ROLE-008).
 	// (PATCH /users/{id})
 	UpdateUser(ctx context.Context, request UpdateUserRequestObject) (UpdateUserResponseObject, error)
+	// GetAssignments Role, scopes, groups and grants of a managed user.
+	// (GET /users/{id}/assignments)
+	GetAssignments(ctx context.Context, request GetAssignmentsRequestObject) (GetAssignmentsResponseObject, error)
+	// UpdateAssignments Replace sections of a managed user's assignments (ROLE-003, ROLE-004).
+	// (PUT /users/{id}/assignments)
+	UpdateAssignments(ctx context.Context, request UpdateAssignmentsRequestObject) (UpdateAssignmentsResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1232,6 +1501,65 @@ func (sh *strictHandler) UpdateUser(w http.ResponseWriter, r *http.Request, id U
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateUserResponseObject); ok {
 		if err := validResponse.VisitUpdateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAssignments operation middleware
+func (sh *strictHandler) GetAssignments(w http.ResponseWriter, r *http.Request, id UserID) {
+	var request GetAssignmentsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAssignments(ctx, request.(GetAssignmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAssignments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAssignmentsResponseObject); ok {
+		if err := validResponse.VisitGetAssignmentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAssignments operation middleware
+func (sh *strictHandler) UpdateAssignments(w http.ResponseWriter, r *http.Request, id UserID) {
+	var request UpdateAssignmentsRequestObject
+
+	request.Id = id
+
+	var body UpdateAssignmentsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAssignments(ctx, request.(UpdateAssignmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAssignments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAssignmentsResponseObject); ok {
+		if err := validResponse.VisitUpdateAssignmentsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

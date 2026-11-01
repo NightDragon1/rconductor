@@ -100,3 +100,94 @@ func (s *apiServer) DeleteUser(ctx context.Context, req api.DeleteUserRequestObj
 	}
 	return api.DeleteUser204Response{}, nil
 }
+
+func uuidPtr(s string) *uuid.UUID {
+	if s == "" {
+		return nil
+	}
+	id, err := uuid.Parse(s)
+	if err != nil {
+		return nil
+	}
+	return &id
+}
+
+func idOf(p *uuid.UUID) string {
+	if p == nil {
+		return ""
+	}
+	return p.String()
+}
+
+func toAPIAssignments(a users.Assignments) api.Assignments {
+	out := api.Assignments{
+		Role: api.Role(a.Role), AdminScopes: []api.Target{}, Groups: []uuid.UUID{},
+		Grants: []api.Grant{}, SupporterGrants: []api.SupporterGrant{},
+	}
+	for _, t := range a.AdminScopes {
+		out.AdminScopes = append(out.AdminScopes, api.Target{ServerId: uuidPtr(t.ServerID), ServerGroupId: uuidPtr(t.ServerGroupID)})
+	}
+	for _, g := range a.Groups {
+		if id := uuidPtr(g); id != nil {
+			out.Groups = append(out.Groups, *id)
+		}
+	}
+	for _, g := range a.Grants {
+		gid, _ := uuid.Parse(g.GroupID)
+		out.Grants = append(out.Grants, api.Grant{GroupId: gid, ServerId: uuidPtr(g.ServerID), ServerGroupId: uuidPtr(g.ServerGroupID)})
+	}
+	for _, g := range a.SupporterGrants {
+		m, _ := uuid.Parse(g.ModeratorID)
+		sv, _ := uuid.Parse(g.ServerID)
+		out.SupporterGrants = append(out.SupporterGrants, api.SupporterGrant{ModeratorId: m, ServerId: sv})
+	}
+	return out
+}
+
+func (s *apiServer) GetAssignments(ctx context.Context, req api.GetAssignmentsRequestObject) (api.GetAssignmentsResponseObject, error) {
+	a, err := s.users.Assignments(ctx, adminRequest(ctx), req.Id.String())
+	if err != nil {
+		return nil, adminError(err)
+	}
+	return api.GetAssignments200JSONResponse(toAPIAssignments(a)), nil
+}
+
+func (s *apiServer) UpdateAssignments(ctx context.Context, req api.UpdateAssignmentsRequestObject) (api.UpdateAssignmentsResponseObject, error) {
+	if req.Body == nil {
+		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "body required"}
+	}
+	var up users.AssignmentsUpdate
+	if b := req.Body.AdminScopes; b != nil {
+		v := make([]users.Target, 0, len(*b))
+		for _, t := range *b {
+			v = append(v, users.Target{ServerID: idOf(t.ServerId), ServerGroupID: idOf(t.ServerGroupId)})
+		}
+		up.AdminScopes = &v
+	}
+	if b := req.Body.Groups; b != nil {
+		v := make([]string, 0, len(*b))
+		for _, g := range *b {
+			v = append(v, g.String())
+		}
+		up.Groups = &v
+	}
+	if b := req.Body.Grants; b != nil {
+		v := make([]users.Grant, 0, len(*b))
+		for _, g := range *b {
+			v = append(v, users.Grant{GroupID: g.GroupId.String(), Target: users.Target{ServerID: idOf(g.ServerId), ServerGroupID: idOf(g.ServerGroupId)}})
+		}
+		up.Grants = &v
+	}
+	if b := req.Body.SupporterGrants; b != nil {
+		v := make([]users.SupporterGrant, 0, len(*b))
+		for _, g := range *b {
+			v = append(v, users.SupporterGrant{ModeratorID: g.ModeratorId.String(), ServerID: g.ServerId.String()})
+		}
+		up.SupporterGrants = &v
+	}
+	a, err := s.users.UpdateAssignments(ctx, adminRequest(ctx), req.Id.String(), up)
+	if err != nil {
+		return nil, adminError(err)
+	}
+	return api.UpdateAssignments200JSONResponse(toAPIAssignments(a)), nil
+}
