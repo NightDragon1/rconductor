@@ -22,6 +22,10 @@ const APIBase = "/api/v1"
 
 const shutdownTimeout = 10 * time.Second
 
+// reservedPaths are never served by the UI: the API (any version) and the
+// health and metrics endpoints planned with NFR-006.
+var reservedPaths = []string{"/api", "/api/", "/healthz", "/healthz/", "/metrics", "/metrics/"}
+
 // Options configure the HTTP handler.
 type Options struct {
 	Log *slog.Logger
@@ -39,10 +43,14 @@ var _ api.StrictServerInterface = apiServer{}
 func NewHandler(opts Options) http.Handler {
 	mux := http.NewServeMux()
 
-	// Unknown API paths answer with Problem Details instead of the UI.
-	mux.HandleFunc(APIBase+"/", func(w http.ResponseWriter, _ *http.Request) {
+	// Unknown API paths and paths reserved for operation endpoints answer
+	// with Problem Details and never fall through to the UI.
+	notFound := func(w http.ResponseWriter, _ *http.Request) {
 		WriteProblem(w, http.StatusNotFound, api.ReasonCodeNotFound, "")
-	})
+	}
+	for _, p := range reservedPaths {
+		mux.HandleFunc(p, notFound)
+	}
 	api.HandlerWithOptions(api.NewStrictHandler(apiServer{}, nil), api.StdHTTPServerOptions{
 		BaseURL:    APIBase,
 		BaseRouter: mux,
