@@ -23,6 +23,9 @@ const (
 // made-up pseudonyms.
 const maxTracked = 10000
 
+// maxDelayFailures is a failure count that yields the highest delay.
+const maxDelayFailures = 4
+
 // delayFor returns the wait before checking a password after n consecutive
 // failures of the account: 1 s from the third on, then 2 s, then 4 s.
 func delayFor(n int) time.Duration {
@@ -57,13 +60,16 @@ type pairKey struct {
 // and with a successful login. A restart forgets them.
 type throttle struct {
 	mu       sync.Mutex
+	capacity int
 	accounts map[string]*counter
 	pairs    map[pairKey]*counter
 }
 
 func newThrottle() *throttle {
-	return &throttle{accounts: map[string]*counter{}, pairs: map[pairKey]*counter{}}
+	return &throttle{capacity: maxTracked, accounts: map[string]*counter{}, pairs: map[pairKey]*counter{}}
 }
+
+func (t *throttle) size() int { return len(t.accounts) + len(t.pairs) }
 
 func accountKey(pseudonym string) string { return strings.ToLower(pseudonym) }
 
@@ -78,6 +84,11 @@ func (t *throttle) check(account string, ip netip.Addr, now time.Time, window ti
 	if c := t.accounts[account]; c != nil && now.Sub(c.last) < window {
 		return delayFor(c.failures), 0
 	}
+	if _, tracked := t.accounts[account]; !tracked && t.size() >= t.capacity && !t.hasEvictable(now) {
+		// The table is full of lockouts: untracked attempts get the
+		// highest delay instead of no protection (Design 3.7).
+		return delayFor(maxDelayFailures), 0
+	}
 	return 0, 0
 }
 
@@ -85,24 +96,36 @@ func (t *throttle) check(account string, ip netip.Addr, now time.Time, window ti
 func (t *throttle) fail(account string, ip netip.Addr, now time.Time, maxFailures int, lockout time.Duration) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.prune(now, lockout)
 	bump := func(c *counter) *counter {
 		if c == nil || now.Sub(c.last) >= lockout {
-			c = &counter{}
+			c = &counter{lockedUntil: lockedUntilOf(c)}
 		}
 		c.failures++
 		c.last = now
 		return c
 	}
-	t.accounts[account] = bump(t.accounts[account])
-	p := bump(t.pairs[pairKey{account, ip}])
-	t.pairs[pairKey{account, ip}] = p
+	if _, ok := t.accounts[account]; ok || t.makeRoom(now, lockout) {
+		t.accounts[account] = bump(t.accounts[account])
+	}
+	key := pairKey{account, ip}
+	if _, ok := t.pairs[key]; !ok && !t.makeRoom(now, lockout) {
+		return false
+	}
+	p := bump(t.pairs[key])
+	t.pairs[key] = p
 	if p.failures >= maxFailures && !now.Before(p.lockedUntil) {
 		p.lockedUntil = now.Add(lockout)
 		p.failures = 0
 		return true
 	}
 	return false
+}
+
+func lockedUntilOf(c *counter) time.Time {
+	if c == nil {
+		return time.Time{}
+	}
+	return c.lockedUntil
 }
 
 // success clears the counters of the account.
@@ -117,35 +140,51 @@ func (t *throttle) success(account string) {
 	}
 }
 
-// prune drops counters that ended; if still too many remain, it drops
-// arbitrary ones (map order), which only weakens protection, never locks
-// anyone out.
-func (t *throttle) prune(now time.Time, window time.Duration) {
-	if len(t.accounts)+len(t.pairs) < maxTracked {
-		return
+// makeRoom frees one place if the table is full and reports whether a new
+// entry fits. Locked entries are never evicted; first an ended counter
+// goes, else the oldest unlocked one (Design 3.7).
+func (t *throttle) makeRoom(now time.Time, window time.Duration) bool {
+	if t.size() < t.capacity {
+		return true
+	}
+	var oldest time.Time
+	var dropAccount string
+	var dropPair *pairKey
+	found := false
+	consider := func(c *counter, onAccount string, onPair *pairKey) {
+		if now.Before(c.lockedUntil) {
+			return
+		}
+		if !found || c.last.Before(oldest) {
+			oldest, dropAccount, dropPair, found = c.last, onAccount, onPair, true
+		}
 	}
 	for k, c := range t.accounts {
-		if now.Sub(c.last) >= window {
-			delete(t.accounts, k)
-		}
+		consider(c, k, nil)
 	}
 	for k, c := range t.pairs {
-		if now.Sub(c.last) >= window && !now.Before(c.lockedUntil) {
-			delete(t.pairs, k)
-		}
+		consider(c, "", &k)
 	}
-	for k := range t.accounts {
-		if len(t.accounts)+len(t.pairs) < maxTracked/2 {
-			break
-		}
-		delete(t.accounts, k)
+	if !found {
+		return false
 	}
-	for k, c := range t.pairs {
-		if len(t.accounts)+len(t.pairs) < maxTracked/2 {
-			break
-		}
+	if dropPair != nil {
+		delete(t.pairs, *dropPair)
+	} else {
+		delete(t.accounts, dropAccount)
+	}
+	return true
+}
+
+// hasEvictable reports whether any entry is not locked.
+func (t *throttle) hasEvictable(now time.Time) bool {
+	if len(t.accounts) > 0 {
+		return true // account counters are never locked
+	}
+	for _, c := range t.pairs {
 		if !now.Before(c.lockedUntil) {
-			delete(t.pairs, k)
+			return true
 		}
 	}
+	return false
 }
