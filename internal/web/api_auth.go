@@ -87,7 +87,7 @@ func (s *apiServer) Login(ctx context.Context, req api.LoginRequestObject) (api.
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		return nil, &problem{status: http.StatusUnauthorized, reason: api.ReasonCodeUnauthenticated, detail: auth.ErrInvalidCredentials.Error()}
 	case errors.Is(err, password.ErrBusy):
-		return nil, &problem{status: http.StatusServiceUnavailable, detail: "busy, try again", retryAfter: 1}
+		return nil, errBusy()
 	case err != nil:
 		return nil, err
 	}

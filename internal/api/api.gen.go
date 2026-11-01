@@ -87,23 +87,32 @@ func (e GroupKind) Valid() bool {
 
 // Defines values for ReasonCode.
 const (
-	ReasonCodeInvalid           ReasonCode = "invalid"
-	ReasonCodeNotFound          ReasonCode = "not_found"
-	ReasonCodeNotInList         ReasonCode = "not_in_list"
-	ReasonCodeRateLimited       ReasonCode = "rate_limited"
-	ReasonCodeServerUnavailable ReasonCode = "server_unavailable"
-	ReasonCodeUnauthenticated   ReasonCode = "unauthenticated"
-	ReasonCodeWrapperBlocked    ReasonCode = "wrapper_blocked"
+	ReasonCodeBusy                   ReasonCode = "busy"
+	ReasonCodeForbidden              ReasonCode = "forbidden"
+	ReasonCodeInvalid                ReasonCode = "invalid"
+	ReasonCodeNotFound               ReasonCode = "not_found"
+	ReasonCodeNotInList              ReasonCode = "not_in_list"
+	ReasonCodePasswordChangeRequired ReasonCode = "password_change_required"
+	ReasonCodeRateLimited            ReasonCode = "rate_limited"
+	ReasonCodeServerUnavailable      ReasonCode = "server_unavailable"
+	ReasonCodeUnauthenticated        ReasonCode = "unauthenticated"
+	ReasonCodeWrapperBlocked         ReasonCode = "wrapper_blocked"
 )
 
 // Valid indicates whether the value is a known member of the ReasonCode enum.
 func (e ReasonCode) Valid() bool {
 	switch e {
+	case ReasonCodeBusy:
+		return true
+	case ReasonCodeForbidden:
+		return true
 	case ReasonCodeInvalid:
 		return true
 	case ReasonCodeNotFound:
 		return true
 	case ReasonCodeNotInList:
+		return true
+	case ReasonCodePasswordChangeRequired:
 		return true
 	case ReasonCodeRateLimited:
 		return true

@@ -5,6 +5,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -242,5 +243,29 @@ func TestLoginLockoutAnswer(t *testing.T) {
 	}
 	if ra := rec.Header().Get("Retry-After"); ra != "900" {
 		t.Errorf("Retry-After = %q, want 900", ra)
+	}
+}
+
+// TestReasonCodes: refusals outside commands carry the codes of Design
+// 3.5 (forbidden for administration and origin).
+func TestReasonCodes(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/auth/login", body: loginBody("Mod", testPassword), origin: "http://evil.example"})
+	var p api.Problem
+	_ = json.Unmarshal(rec.Body.Bytes(), &p)
+	if rec.Code != http.StatusForbidden || p.Reason == nil || *p.Reason != api.ReasonCodeForbidden {
+		t.Errorf("origin refusal = %d %s", rec.Code, rec.Body.String())
+	}
+	admin := f.login(t, "Boss")
+	rec = f.do(t, call{method: http.MethodPatch, path: "/api/v1/users/" + f.userID, body: `{"role":"rcon_admin"}`,
+		cookies: []*http.Cookie{admin}, origin: "http://panel.lan"})
+	p = api.Problem{}
+	_ = json.Unmarshal(rec.Body.Bytes(), &p)
+	if rec.Code != http.StatusForbidden || p.Reason == nil || *p.Reason != api.ReasonCodeForbidden {
+		t.Errorf("administration refusal = %d %s", rec.Code, rec.Body.String())
+	}
+	var pr *problem
+	if !errors.As(errBusy(), &pr) || pr.reason != api.ReasonCodeBusy || pr.status != http.StatusServiceUnavailable || pr.retryAfter != 1 {
+		t.Errorf("busy = %+v", pr)
 	}
 }
