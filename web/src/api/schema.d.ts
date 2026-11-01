@@ -173,6 +173,48 @@ export interface paths {
         patch: operations["updateUserGroup"];
         trace?: never;
     };
+    "/command-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Command lists the caller administers (ROLE-005). */
+        get: operations["listCommandLists"];
+        put?: never;
+        /**
+         * Create a command list owned by the caller.
+         * @description Any command may be listed, also one without catalog entry (CAT-002). At least one command must stay locked for supporters (ROLE-007).
+         */
+        post: operations["createCommandList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/command-lists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CommandListID"];
+            };
+            cookie?: never;
+        };
+        /** A command list the caller administers. */
+        get: operations["getCommandList"];
+        put?: never;
+        post?: never;
+        /** Delete a command list (soft delete). */
+        delete: operations["deleteCommandList"];
+        options?: never;
+        head?: never;
+        /** Rename a list or replace its entries (ROLE-007). */
+        patch: operations["updateCommandList"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -199,6 +241,31 @@ export interface components {
         };
         UserList: {
             items: components["schemas"]["User"][];
+        };
+        CommandListEntry: {
+            /** @description Token path such as "whitelist add" (CMD-004). */
+            path: string;
+            /** @description May be passed on to supporters (ROLE-007). */
+            passable: boolean;
+        };
+        CommandList: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            owner_id: string;
+            entries: components["schemas"]["CommandListEntry"][];
+        };
+        CommandListList: {
+            items: components["schemas"]["CommandList"][];
+        };
+        CommandListCreate: {
+            name: string;
+            entries?: components["schemas"]["CommandListEntry"][];
+        };
+        CommandListUpdate: {
+            name?: string;
+            entries?: components["schemas"]["CommandListEntry"][];
         };
         /** @enum {string} */
         GroupKind: "general" | "moderator";
@@ -385,6 +452,7 @@ export interface components {
         };
     };
     parameters: {
+        CommandListID: string;
         GroupID: string;
         UserID: string;
     };
@@ -739,6 +807,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserGroup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    listCommandLists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The lists. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandListList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    createCommandList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandListCreate"];
+            };
+        };
+        responses: {
+            /** @description The new list. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getCommandList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CommandListID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteCommandList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CommandListID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateCommandList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CommandListID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandListUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandList"];
                 };
             };
             400: components["responses"]["BadRequest"];

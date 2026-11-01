@@ -112,6 +112,40 @@ type AssignmentsUpdate struct {
 	SupporterGrants *[]SupporterGrant     `json:"supporter_grants,omitempty"`
 }
 
+// CommandList defines model for CommandList.
+type CommandList struct {
+	Entries []CommandListEntry `json:"entries"`
+	Id      openapi_types.UUID `json:"id"`
+	Name    string             `json:"name"`
+	OwnerId openapi_types.UUID `json:"owner_id"`
+}
+
+// CommandListCreate defines model for CommandListCreate.
+type CommandListCreate struct {
+	Entries *[]CommandListEntry `json:"entries,omitempty"`
+	Name    string              `json:"name"`
+}
+
+// CommandListEntry defines model for CommandListEntry.
+type CommandListEntry struct {
+	// Passable May be passed on to supporters (ROLE-007).
+	Passable bool `json:"passable"`
+
+	// Path Token path such as "whitelist add" (CMD-004).
+	Path string `json:"path"`
+}
+
+// CommandListList defines model for CommandListList.
+type CommandListList struct {
+	Items []CommandList `json:"items"`
+}
+
+// CommandListUpdate defines model for CommandListUpdate.
+type CommandListUpdate struct {
+	Entries *[]CommandListEntry `json:"entries,omitempty"`
+	Name    *string             `json:"name,omitempty"`
+}
+
 // Grant A server or server group for a moderator through one of his moderator groups, whose list applies (Design 4.3).
 type Grant struct {
 	GroupId       openapi_types.UUID  `json:"group_id"`
@@ -251,6 +285,9 @@ type UserUpdate struct {
 	Role *Role `json:"role,omitempty"`
 }
 
+// CommandListID defines model for CommandListID.
+type CommandListID = openapi_types.UUID
+
 // GroupID defines model for GroupID.
 type GroupID = openapi_types.UUID
 
@@ -289,6 +326,12 @@ type ListUsersParams struct {
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// CreateCommandListJSONRequestBody defines body for CreateCommandList for application/json ContentType.
+type CreateCommandListJSONRequestBody = CommandListCreate
+
+// UpdateCommandListJSONRequestBody defines body for UpdateCommandList for application/json ContentType.
+type UpdateCommandListJSONRequestBody = CommandListUpdate
+
 // CreateUserGroupJSONRequestBody defines body for CreateUserGroup for application/json ContentType.
 type CreateUserGroupJSONRequestBody = UserGroupCreate
 
@@ -312,6 +355,21 @@ type ServerInterface interface {
 	// GetSession The current session and its user (AUTH-006).
 	// (GET /auth/session)
 	GetSession(w http.ResponseWriter, r *http.Request)
+	// ListCommandLists Command lists the caller administers (ROLE-005).
+	// (GET /command-lists)
+	ListCommandLists(w http.ResponseWriter, r *http.Request)
+	// CreateCommandList Create a command list owned by the caller.
+	// (POST /command-lists)
+	CreateCommandList(w http.ResponseWriter, r *http.Request)
+	// DeleteCommandList Delete a command list (soft delete).
+	// (DELETE /command-lists/{id})
+	DeleteCommandList(w http.ResponseWriter, r *http.Request, id CommandListID)
+	// GetCommandList A command list the caller administers.
+	// (GET /command-lists/{id})
+	GetCommandList(w http.ResponseWriter, r *http.Request, id CommandListID)
+	// UpdateCommandList Rename a list or replace its entries (ROLE-007).
+	// (PATCH /command-lists/{id})
+	UpdateCommandList(w http.ResponseWriter, r *http.Request, id CommandListID)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(w http.ResponseWriter, r *http.Request)
@@ -389,6 +447,112 @@ func (siw *ServerInterfaceWrapper) GetSession(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCommandLists operation middleware
+func (siw *ServerInterfaceWrapper) ListCommandLists(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCommandLists(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCommandList operation middleware
+func (siw *ServerInterfaceWrapper) CreateCommandList(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCommandList(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCommandList operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCommandList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CommandListID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCommandList(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCommandList operation middleware
+func (siw *ServerInterfaceWrapper) GetCommandList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CommandListID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCommandList(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCommandList operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCommandList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id CommandListID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCommandList(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -814,6 +978,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/user-groups/{id}", wrapper.DeleteUserGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/user-groups/{id}", wrapper.GetUserGroup)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/user-groups/{id}", wrapper.UpdateUserGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/command-lists", wrapper.ListCommandLists)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/command-lists", wrapper.CreateCommandList)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/command-lists/{id}", wrapper.DeleteCommandList)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/command-lists/{id}", wrapper.GetCommandList)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/command-lists/{id}", wrapper.UpdateCommandList)
 
 	return m
 }
@@ -1034,6 +1203,318 @@ func (response GetSession401ApplicationProblemPlusJSONResponse) VisitGetSessionR
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommandListsRequestObject struct {
+}
+
+type ListCommandListsResponseObject interface {
+	VisitListCommandListsResponse(w http.ResponseWriter) error
+}
+
+type ListCommandLists200JSONResponse CommandListList
+
+func (response ListCommandLists200JSONResponse) VisitListCommandListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommandLists401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListCommandLists401ApplicationProblemPlusJSONResponse) VisitListCommandListsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCommandListRequestObject struct {
+	Body *CreateCommandListJSONRequestBody
+}
+
+type CreateCommandListResponseObject interface {
+	VisitCreateCommandListResponse(w http.ResponseWriter) error
+}
+
+type CreateCommandList201JSONResponse CommandList
+
+func (response CreateCommandList201JSONResponse) VisitCreateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCommandList400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCommandList400ApplicationProblemPlusJSONResponse) VisitCreateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCommandList401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCommandList401ApplicationProblemPlusJSONResponse) VisitCreateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCommandList403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCommandList403ApplicationProblemPlusJSONResponse) VisitCreateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCommandList422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCommandList422ApplicationProblemPlusJSONResponse) VisitCreateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCommandListRequestObject struct {
+	Id CommandListID `json:"id"`
+}
+
+type DeleteCommandListResponseObject interface {
+	VisitDeleteCommandListResponse(w http.ResponseWriter) error
+}
+
+type DeleteCommandList204Response struct {
+}
+
+func (response DeleteCommandList204Response) VisitDeleteCommandListResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCommandList401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCommandList401ApplicationProblemPlusJSONResponse) VisitDeleteCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCommandList404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCommandList404ApplicationProblemPlusJSONResponse) VisitDeleteCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommandListRequestObject struct {
+	Id CommandListID `json:"id"`
+}
+
+type GetCommandListResponseObject interface {
+	VisitGetCommandListResponse(w http.ResponseWriter) error
+}
+
+type GetCommandList200JSONResponse CommandList
+
+func (response GetCommandList200JSONResponse) VisitGetCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommandList401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetCommandList401ApplicationProblemPlusJSONResponse) VisitGetCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommandList404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetCommandList404ApplicationProblemPlusJSONResponse) VisitGetCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCommandListRequestObject struct {
+	Id   CommandListID `json:"id"`
+	Body *UpdateCommandListJSONRequestBody
+}
+
+type UpdateCommandListResponseObject interface {
+	VisitUpdateCommandListResponse(w http.ResponseWriter) error
+}
+
+type UpdateCommandList200JSONResponse CommandList
+
+func (response UpdateCommandList200JSONResponse) VisitUpdateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCommandList400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCommandList400ApplicationProblemPlusJSONResponse) VisitUpdateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCommandList401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCommandList401ApplicationProblemPlusJSONResponse) VisitUpdateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCommandList404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCommandList404ApplicationProblemPlusJSONResponse) VisitUpdateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCommandList422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCommandList422ApplicationProblemPlusJSONResponse) VisitUpdateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1777,6 +2258,21 @@ type StrictServerInterface interface {
 	// GetSession The current session and its user (AUTH-006).
 	// (GET /auth/session)
 	GetSession(ctx context.Context, request GetSessionRequestObject) (GetSessionResponseObject, error)
+	// ListCommandLists Command lists the caller administers (ROLE-005).
+	// (GET /command-lists)
+	ListCommandLists(ctx context.Context, request ListCommandListsRequestObject) (ListCommandListsResponseObject, error)
+	// CreateCommandList Create a command list owned by the caller.
+	// (POST /command-lists)
+	CreateCommandList(ctx context.Context, request CreateCommandListRequestObject) (CreateCommandListResponseObject, error)
+	// DeleteCommandList Delete a command list (soft delete).
+	// (DELETE /command-lists/{id})
+	DeleteCommandList(ctx context.Context, request DeleteCommandListRequestObject) (DeleteCommandListResponseObject, error)
+	// GetCommandList A command list the caller administers.
+	// (GET /command-lists/{id})
+	GetCommandList(ctx context.Context, request GetCommandListRequestObject) (GetCommandListResponseObject, error)
+	// UpdateCommandList Rename a list or replace its entries (ROLE-007).
+	// (PATCH /command-lists/{id})
+	UpdateCommandList(ctx context.Context, request UpdateCommandListRequestObject) (UpdateCommandListResponseObject, error)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(ctx context.Context, request ListUserGroupsRequestObject) (ListUserGroupsResponseObject, error)
@@ -1923,6 +2419,146 @@ func (sh *strictHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetSessionResponseObject); ok {
 		if err := validResponse.VisitGetSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCommandLists operation middleware
+func (sh *strictHandler) ListCommandLists(w http.ResponseWriter, r *http.Request) {
+	var request ListCommandListsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCommandLists(ctx, request.(ListCommandListsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCommandLists")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCommandListsResponseObject); ok {
+		if err := validResponse.VisitListCommandListsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCommandList operation middleware
+func (sh *strictHandler) CreateCommandList(w http.ResponseWriter, r *http.Request) {
+	var request CreateCommandListRequestObject
+
+	var body CreateCommandListJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCommandList(ctx, request.(CreateCommandListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCommandList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCommandListResponseObject); ok {
+		if err := validResponse.VisitCreateCommandListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCommandList operation middleware
+func (sh *strictHandler) DeleteCommandList(w http.ResponseWriter, r *http.Request, id CommandListID) {
+	var request DeleteCommandListRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCommandList(ctx, request.(DeleteCommandListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCommandList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCommandListResponseObject); ok {
+		if err := validResponse.VisitDeleteCommandListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCommandList operation middleware
+func (sh *strictHandler) GetCommandList(w http.ResponseWriter, r *http.Request, id CommandListID) {
+	var request GetCommandListRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCommandList(ctx, request.(GetCommandListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCommandList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCommandListResponseObject); ok {
+		if err := validResponse.VisitGetCommandListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCommandList operation middleware
+func (sh *strictHandler) UpdateCommandList(w http.ResponseWriter, r *http.Request, id CommandListID) {
+	var request UpdateCommandListRequestObject
+
+	request.Id = id
+
+	var body UpdateCommandListJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCommandList(ctx, request.(UpdateCommandListRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCommandList")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCommandListResponseObject); ok {
+		if err := validResponse.VisitUpdateCommandListResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

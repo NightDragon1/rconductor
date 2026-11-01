@@ -328,9 +328,113 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "404":
           $ref: "#/components/responses/NotFound"
+  /command-lists:
+    get:
+      operationId: listCommandLists
+      summary: Command lists the caller administers (ROLE-005).
+      tags: [command-lists]
+      responses:
+        "200":
+          description: The lists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandListList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      operationId: createCommandList
+      summary: Create a command list owned by the caller.
+      description: >-
+        Any command may be listed, also one without catalog entry
+        (CAT-002). At least one command must stay locked for supporters
+        (ROLE-007).
+      tags: [command-lists]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandListCreate"
+      responses:
+        "201":
+          description: The new list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /command-lists/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CommandListID"
+    get:
+      operationId: getCommandList
+      summary: A command list the caller administers.
+      tags: [command-lists]
+      responses:
+        "200":
+          description: The list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateCommandList
+      summary: Rename a list or replace its entries (ROLE-007).
+      tags: [command-lists]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandListUpdate"
+      responses:
+        "200":
+          description: The changed list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteCommandList
+      summary: Delete a command list (soft delete).
+      tags: [command-lists]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
 components:
   parameters:
+    CommandListID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     GroupID:
       name: id
       in: path
@@ -389,6 +493,70 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    CommandListEntry:
+      type: object
+      required: [path, passable]
+      properties:
+        path:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Token path such as "whitelist add" (CMD-004).
+        passable:
+          type: boolean
+          description: May be passed on to supporters (ROLE-007).
+
+    CommandList:
+      type: object
+      required: [id, name, owner_id, entries]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        owner_id:
+          type: string
+          format: uuid
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandListEntry"
+
+    CommandListList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandList"
+
+    CommandListCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandListEntry"
+
+    CommandListUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandListEntry"
 
     GroupKind:
       type: string
