@@ -106,7 +106,8 @@ Das Panel löscht den Agent-Schlüssel, sendet revoked und trennt die Verbindung
 | --- | --- | --- | --- |
 | /auth/login, /auth/logout, /auth/session | POST, POST, GET | Anmeldung, Abmeldung, aktuelle Session | alle |
 | /me | GET, PATCH | Eigenes Profil | alle |
-| /me/password | POST | Eigenes Passwort ändern; alle anderen Sessions enden | alle |
+| /me/password | POST | Eigenes Passwort ändern; alle anderen Sessions enden; löscht must\_change\_password | alle |
+| /users/{id}/password-reset | POST | Einmalpasswort für einen verwalteten Benutzer setzen; setzt must\_change\_password und beendet seine Sessions (AUTH-010) | wie /users |
 | /me/avatar | PUT, DELETE | Eigenes Profilbild | alle |
 | /users, /users/{id} | GET, PATCH, DELETE | Benutzerverwaltung im eigenen Scope (3.6); Benutzer entstehen nur per Einladung (D-046) | RCON-Admin, Server-Admin, Moderator (nur Supporter) |
 | /users/{id}/assignments | GET, PUT | Rollen, Gruppen und Server eines Benutzers; Vorlage für Schnelleingabe; PUT ersetzt nur Einträge, über die der Aufrufer verfügt (3.6) | wie /users |
@@ -173,7 +174,7 @@ Verkleinert sich ein Scope oben, verkleinert er sich sofort für alle darunter. 
 
 ### 3.4 Ratenlimit
 
-Token-Bucket je Benutzer und Server, vom RCON-Admin einstellbar. Standardwerte:
+Token-Bucket je Benutzer und Server, vom RCON-Admin über die Einstellungen ratelimit.<rolle>.per\_minute und ratelimit.<rolle>.burst änderbar (5.6). Standardwerte:
 
 | Rolle | Befehle je Minute | Kurzzeitig am Stück |
 | --- | --- | --- |
@@ -198,6 +199,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | 429 | rate\_limited | Ratenlimit erreicht |
 | 503 | server\_unavailable | Keine RCON-Verbindung zum Spieleserver |
 | 403 | forbidden | Verwaltungsaktion nicht erlaubt, z. B. Rolle auf eigene Stufe heben (3.6) |
+| 403 | password\_change\_required | Passwortwechsel erzwungen; erlaubt sind nur /me/password, /auth/logout und /auth/session (AUTH-010) |
 | 503 | busy | Panel ausgelastet, z. B. alle Plätze der Passwortberechnung belegt; mit Retry-After |
 
 ### 3.6 Verwaltungsrechte
@@ -209,6 +211,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 - Wer wen verwaltet: der RCON-Admin alle niedrigeren Rollen; ein Server-Admin die Moderatoren, die er eingeladen hat oder die Mitglied einer seiner Moderatorgruppen sind, deren Supporter und die von ihm eingeladenen Supporter; ein Moderator nur seine Supporter (eingeladen oder zugewiesen), solange die Supporter-Freigabe global und für ihn gilt; ein Supporter niemanden.
 - Zuweisungen: Ein Ersetzen ändert nur die Einträge, über die der Aufrufer verfügt (eigene Gruppen, eigene Moderatoren); Einträge anderer bleiben. Eine Servergruppe darf nur zugewiesen werden, wenn alle ihre Server im Scope liegen.
 - Ein Rollenwechsel entfernt Scopes, Gruppenmitgliedschaften und Grants der alten Rolle.
+- Ein Passwort-Reset setzt ein zufälliges Einmalpasswort, das einmal angezeigt wird, setzt must\_change\_password und beendet die Sessions des Benutzers; nur wer den Benutzer verwaltet, darf ihn auslösen (AUTH-010). Der Notfall-Admin wird nicht zurückgesetzt.
 - Echtname, Profilbild und Kontaktangaben sehen der Benutzer selbst, der RCON-Admin und wer ihn verwaltet; alle anderen nur das Pseudonym (AUTH-009).
 
 ### 3.7 Login-Schutz
@@ -241,7 +244,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 
 | Tabelle | Wichtige Felder | Release |
 | --- | --- | --- |
-| users | pseudonym (eindeutig), real\_name, avatar (BLOB) mit avatar\_type, contacts, role, auth\_source, password\_hash, totp\_secret (verschlüsselt, R2), is\_emergency, supporters\_allowed, created\_by, last\_login\_at, disabled\_at, deleted\_at | R1 |
+| users | pseudonym (eindeutig), real\_name, avatar (BLOB) mit avatar\_type, contacts, must\_change\_password, role, auth\_source, password\_hash, totp\_secret (verschlüsselt, R2), is\_emergency, supporters\_allowed, created\_by, last\_login\_at, disabled\_at, deleted\_at | R1 |
 | sessions | id\_hash, user\_id, created\_at, last\_seen\_at, expires\_at, ip, user\_agent | R1 |
 | invites | token\_hash, created\_by, role, template\_user\_id, expires\_at, used\_at | R1 |
 | user\_groups | name, kind (allgemein oder Moderatorgruppe), owner\_id, command\_list\_id (nur Moderatorgruppe), deleted\_at | R1 |
@@ -407,6 +410,7 @@ Globale Einstellungen in settings; nur der RCON-Admin liest und ändert sie übe
 | invite.lifetime | 72 h | Gültigkeit von Einladungen (UI-008) |
 | supporters.enabled | aus | Globale Supporter-Freigabe (ROLE-006); Abschalten beendet die Sessions aller Supporter |
 | audit.retention\_days | 90 | Aufbewahrung des Audit-Logs (AUD-003) |
+| ratelimit.<rolle>.per\_minute, ratelimit.<rolle>.burst | laut 3.4 (z. B. ratelimit.moderator: 20 und 5) | Ratenlimit je Rolle (CMD-019); <rolle> ist rcon\_admin, server\_admin, moderator oder supporter |
 
 Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in die Volumes. Die Compose-Dateien setzen read\_only: true.
 
