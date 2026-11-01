@@ -1,6 +1,6 @@
 # Design
 
-Freigegeben mit Dokumentversion 2.0. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -90,10 +90,11 @@ Das Panel löscht den Agent-Schlüssel, sendet revoked und trennt die Verbindung
 | --- | --- |
 | Stil | REST mit JSON, Basis /api/v1, Version im Pfad |
 | Live-Daten | Ein WebSocket je Browser-Tab mit Abos (2.3) |
-| Session | Serverseitig; Session-ID im Cookie mit HttpOnly, Secure, SameSite=Strict; in der DB nur als Hash gespeichert |
-| Rechte | Bei jeder Anfrage neu geprüft, nie aus der Session übernommen; Deaktivierung eines Benutzers beendet seine Sessions sofort |
-| CSRF | SameSite=Strict plus Prüfung des Origin-Headers bei allen schreibenden Anfragen und beim WebSocket-Aufbau |
-| Proxy | X-Forwarded-For und X-Forwarded-Proto werden nur von konfigurierten vertrauenswürdigen Proxys übernommen |
+| Session | Serverseitig; Session-ID im Cookie, immer HttpOnly und SameSite=Lax; über HTTPS (RCD\_PUBLIC\_URL mit https oder X-Forwarded-Proto: https von einem vertrauenswürdigen Proxy) zusätzlich Secure und mit Präfix \_\_Host-, sonst ohne Secure und mit Warnung beim Start; in der DB nur als Hash gespeichert. Inaktivität und Höchstdauer laut 5.6 (D-043) |
+| Rechte | Bei jeder Anfrage neu geprüft, nie aus der Session übernommen. Sperre, Löschen und jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants oder Supporter-Freigabe eines Benutzers beenden seine Sessions sofort (AUTH-006, D-044). Änderungen am Inhalt einer Befehlsliste wirken ab der nächsten Anfrage, ohne Abmeldung |
+| CSRF | SameSite=Lax (D-043) plus Prüfung des Origin-Headers bei allen schreibenden Anfragen und beim WebSocket-Aufbau |
+| Proxy | X-Forwarded-For und X-Forwarded-Proto werden nur von konfigurierten vertrauenswürdigen Proxys übernommen; Client ist die rechteste Adresse in X-Forwarded-For, die kein vertrauenswürdiger Proxy ist |
+| Reservierte Pfade | /api (jede Version), /healthz und /metrics werden nie von der Oberfläche beantwortet; /healthz und /metrics werden mit NFR-006 (R2) befüllt |
 | HAProxy | Normales HTTP/1.1, kein HTTP/2 nötig; für den WebSocket genügt ein ausreichendes timeout tunnel |
 | Fehler | Einheitlich als Problem Details nach RFC 9457 |
 | Listen | Cursorbasierte Paginierung für Audit und Verlauf |
@@ -105,11 +106,16 @@ Das Panel löscht den Agent-Schlüssel, sendet revoked und trennt die Verbindung
 | --- | --- | --- | --- |
 | /auth/login, /auth/logout, /auth/session | POST, POST, GET | Anmeldung, Abmeldung, aktuelle Session | alle |
 | /me | GET, PATCH | Eigenes Profil | alle |
-| /users, /users/{id} | GET, POST, PATCH, DELETE | Benutzerverwaltung im eigenen Scope | RCON-Admin, Server-Admin, Moderator (nur Supporter) |
-| /users/{id}/assignments | GET, PUT | Rollen, Gruppen und Server eines Benutzers; Vorlage für Schnelleingabe | wie /users |
-| /invites | GET, POST, DELETE | Einladungslinks mit Ablaufzeit | wie /users |
-| /user-groups | GET, POST, PATCH, DELETE | Benutzer- und Moderatorgruppen | RCON-Admin, Server-Admin |
-| /command-lists | GET, POST, PATCH, DELETE | Befehlslisten und weitergebbare Befehle | RCON-Admin, Server-Admin |
+| /me/password | POST | Eigenes Passwort ändern; alle anderen Sessions enden; löscht must\_change\_password | alle |
+| /users/{id}/password-reset | POST | Temporäres Passwort für einen verwalteten Benutzer setzen, nur in dieser Antwort enthalten; setzt must\_change\_password und beendet alle seine Sessions (AUTH-010) | wie /users |
+| /me/avatar | PUT, DELETE | Eigenes Profilbild | alle |
+| /users, /users/{id} | GET, PATCH, DELETE | Benutzerverwaltung im eigenen Scope (3.6); Benutzer entstehen nur per Einladung (D-046) | RCON-Admin, Server-Admin, Moderator (nur Supporter) |
+| /users/{id}/assignments | GET, PUT | Rollen, Gruppen und Server eines Benutzers; Vorlage für Schnelleingabe; PUT ersetzt nur Einträge, über die der Aufrufer verfügt (3.6) | wie /users |
+| /users/{id}/avatar | GET | Profilbild (4.2) | der Benutzer, RCON-Admin, wer ihn verwaltet |
+| /invites, /invites/{id} | GET, POST, DELETE | Einladungslinks mit Ablaufzeit; ein Moderator lädt Supporter nur bei Supporter-Freigabe ein | wie /users |
+| /invites/redeem | POST | Einladung einlösen mit eigenem Pseudonym und Passwort | ohne Session |
+| /user-groups, /user-groups/{id} | GET, POST, PATCH, DELETE | Benutzer- und Moderatorgruppen mit Mitgliedern und Grants an die ganze Gruppe | RCON-Admin, Server-Admin |
+| /command-lists, /command-lists/{id} | GET, POST, PATCH, DELETE | Befehlslisten und weitergebbare Befehle | RCON-Admin, Server-Admin |
 | /server-groups | GET, POST, PATCH, DELETE | Servergruppen | RCON-Admin; Server-Admin lesend im Scope |
 | /servers, /servers/{id} | GET, POST, PATCH, DELETE | Spieleserver und RCON-Zugangsdaten | RCON-Admin; übrige lesend im Scope |
 | /servers/{id}/commands | POST | Befehl senden; Antwort synchron mit Timeout, zusätzlich als Ereignis an alle Abonnenten | alle im Scope, gefiltert |
@@ -168,7 +174,7 @@ Verkleinert sich ein Scope oben, verkleinert er sich sofort für alle darunter. 
 
 ### 3.4 Ratenlimit
 
-Token-Bucket je Benutzer und Server, vom RCON-Admin einstellbar. Standardwerte:
+Token-Bucket je Benutzer und Server, vom RCON-Admin über die Einstellungen ratelimit.<rolle>.per\_minute und ratelimit.<rolle>.burst änderbar (5.6). Standardwerte:
 
 | Rolle | Befehle je Minute | Kurzzeitig am Stück |
 | --- | --- | --- |
@@ -192,6 +198,9 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | 422 | invalid | Leerer oder zu langer Befehl nach der Bereinigung |
 | 429 | rate\_limited | Ratenlimit erreicht |
 | 503 | server\_unavailable | Keine RCON-Verbindung zum Spieleserver |
+| 403 | forbidden | Verwaltungsaktion nicht erlaubt, z. B. Rolle auf eigene Stufe heben (3.6) |
+| 403 | password\_change\_required | Passwortwechsel erzwungen; erlaubt sind nur /me/password, /auth/logout und /auth/session (AUTH-010) |
+| 503 | busy | Panel ausgelastet, z. B. alle Plätze der Passwortberechnung belegt; mit Retry-After |
 
 ### 3.6 Verwaltungsrechte
 
@@ -199,6 +208,23 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 - Zuweisungen an andere sind immer eine Teilmenge des eigenen Scopes und der eigenen Befehle.
 - Verwaltungsrechte selbst sind nie weitergebbar.
 - Beim Markieren weitergebbarer Befehle bleibt mindestens ein Befehl der Liste gesperrt; das Panel lehnt das Speichern sonst ab.
+- Wer wen verwaltet: der RCON-Admin alle niedrigeren Rollen; ein Server-Admin die Moderatoren, die er eingeladen hat oder die Mitglied einer seiner Moderatorgruppen sind, deren Supporter und die von ihm eingeladenen Supporter; ein Moderator nur seine Supporter (eingeladen oder zugewiesen), solange die Supporter-Freigabe global und für ihn gilt; ein Supporter niemanden.
+- Zuweisungen: Ein Ersetzen ändert nur die Einträge, über die der Aufrufer verfügt (eigene Gruppen, eigene Moderatoren); Einträge anderer bleiben. Eine Servergruppe darf nur zugewiesen werden, wenn alle ihre Server im Scope liegen.
+- Ein Rollenwechsel entfernt Scopes, Gruppenmitgliedschaften und Grants der alten Rolle.
+- Wiederherstellung des Notfall-Admins (AUTH-011): Mit RCD\_EMERGENCY\_ADMIN\_RESET=true erzeugt das Panel beim Start ein neues Initialpasswort, ausgegeben wie in AUTH-007, setzt must\_change\_password, beendet alle Sessions des Notfall-Admins, schreibt einen Audit-Eintrag ohne Passwort und auth.emergency\_admin.reset. Gesperrt (disabled) bleibt er nicht; die Variable wirkt bei jedem Start, solange sie gesetzt ist, deshalb warnt das Panel dabei.
+- Ein Passwort-Reset setzt ein zufälliges temporäres Passwort, setzt must\_change\_password und beendet alle Sessions des Benutzers (wie D-044); nur wer den Benutzer verwaltet, darf ihn auslösen (AUTH-010). Das temporäre Passwort steht genau einmal in der API-Antwort an den Verwaltenden, nie in Log oder Audit; der Audit-Eintrag nennt nur Verwaltenden, Benutzer und Ergebnis. Der Notfall-Admin wird nicht zurückgesetzt.
+- Echtname, Profilbild und Kontaktangaben sehen der Benutzer selbst, der RCON-Admin und wer ihn verwaltet; alle anderen nur das Pseudonym (AUTH-009).
+
+### 3.7 Login-Schutz
+
+| Punkt | Festlegung |
+| --- | --- |
+| Verzögerung | Je Konto ab dem dritten Fehlversuch in Folge 1 s, dann 2 s, dann 4 s vor der Passwortprüfung |
+| Sperre | Je Konto und Client-Adresse nach login.max\_failures (Standard 5) Fehlversuchen für login.lockout\_duration (Standard 15 min); auch das richtige Passwort wird dann mit 429 abgelehnt |
+| Unbekannte Benutzer | Zählen wie bekannte; gleiche Antwort, gleiche Fehlermeldung, gleiche Argon2id-Arbeit über einen Ersatz-Hash |
+| Zähler | Im Arbeitsspeicher, höchstens 10 000 Einträge; enden nach der Sperrdauer ohne Fehlversuch, mit erfolgreicher Anmeldung und beim Neustart. Ist die Tabelle voll, wird der älteste nicht gesperrte Eintrag verdrängt; gesperrte Einträge werden nie verdrängt; ist sie ganz mit Sperren gefüllt, gilt für neue Versuche die höchste Verzögerung (4 s) |
+| Passwortberechnung | Argon2id mit t=3, 64 MiB, p=4; höchstens RCD\_PASSWORD\_HASH\_CONCURRENCY Berechnungen gleichzeitig, sonst nach 5 s Wartezeit 503 busy |
+| Passwörter | 12 bis 128 Zeichen |
 
 ## 4. Datenmodell
 
@@ -219,7 +245,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 
 | Tabelle | Wichtige Felder | Release |
 | --- | --- | --- |
-| users | pseudonym (eindeutig), real\_name, avatar\_path, contacts, role, auth\_source, password\_hash, totp\_secret (verschlüsselt, R2), is\_emergency, supporters\_allowed, created\_by, last\_login\_at, disabled\_at, deleted\_at | R1 |
+| users | pseudonym (eindeutig), real\_name, avatar (BLOB) mit avatar\_type, contacts, must\_change\_password, role, auth\_source, password\_hash, totp\_secret (verschlüsselt, R2), is\_emergency, supporters\_allowed, created\_by, last\_login\_at, disabled\_at, deleted\_at | R1 |
 | sessions | id\_hash, user\_id, created\_at, last\_seen\_at, expires\_at, ip, user\_agent | R1 |
 | invites | token\_hash, created\_by, role, template\_user\_id, expires\_at, used\_at | R1 |
 | user\_groups | name, kind (allgemein oder Moderatorgruppe), owner\_id, command\_list\_id (nur Moderatorgruppe), deleted\_at | R1 |
@@ -228,7 +254,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | server\_groups | name, deleted\_at | R1 |
 | server\_group\_members | server\_group\_id, server\_id | R1 |
 | admin\_scopes | user\_id (Server-Admin), genau eines von server\_group\_id oder server\_id, assigned\_by | R1 |
-| grants | genau eines von user\_id oder user\_group\_id (Moderatorgruppe), genau eines von server\_id oder server\_group\_id, granted\_by | R1 |
+| grants | user\_group\_id (Moderatorgruppe, Pflicht), user\_id optional (leer: alle Mitglieder, gesetzt: nur dieses Mitglied), genau eines von server\_id oder server\_group\_id, granted\_by | R1 |
 | command\_lists | name, owner\_id, deleted\_at | R1 |
 | command\_list\_entries | command\_list\_id, path (Token-Pfad), passable | R1 |
 | supporter\_grants | supporter\_id, moderator\_id, server\_id, granted\_by | R1 |
@@ -245,7 +271,8 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 ### 4.3 Rechte im Datenmodell
 
 - Scope eines Server-Admins: alle Server aus admin\_scopes, Servergruppen aufgelöst über server\_group\_members.
-- Scope und Liste eines Moderators: grants auf ihn selbst oder auf seine Moderatorgruppen. Die Liste kommt aus user\_groups.command\_list\_id der Gruppe, über die der Grant läuft. Ein direkter Grant auf einen Moderator nennt deshalb immer auch die Moderatorgruppe, aus der die Liste stammt.
+- Scope und Liste eines Moderators: grants seiner Moderatorgruppen, an die ganze Gruppe oder an ihn als Mitglied. Die Liste kommt aus user\_groups.command\_list\_id der Gruppe, über die der Grant läuft; der Eigentümer der Gruppe ist der zuständige Server-Admin. Ein direkter Grant nennt deshalb immer die Moderatorgruppe, und der Moderator muss ihr Mitglied sein.
+- Profilbild: PNG oder JPEG, höchstens 1 MiB und 4096 × 4096 Pixel, am Inhalt geprüft, neu kodiert ohne Metadaten, verkleinert auf höchstens 512 × 512, ausgeliefert mit nosniff und einer Content-Security-Policy, die nichts erlaubt (D-045).
 - Supporter: supporter\_grants je Server; erlaubt sind die Einträge mit passable der Liste, die für seinen Moderator auf diesem Server gilt.
 - Supporter-Freigabe: global in settings, je Moderator in users.supporters\_allowed.
 
@@ -278,6 +305,8 @@ Ein täglicher Job entfernt Audit-Einträge nach Ablauf der Frist (Standard 90 T
 | RCD\_BACKUP\_DIR | /backups | Sicherungen |
 | RCD\_MASTER\_KEY\_FILE | leer | Master-Key aus einer anderen Datei, z. B. Docker-Secret; leer: /secrets, beim ersten Start erzeugt |
 | RCD\_EMERGENCY\_ADMIN | true | Notfall-Admin aktiv |
+| RCD\_EMERGENCY\_ADMIN\_RESET | false | true: beim Start neues Initialpasswort für den Notfall-Admin (AUTH-011); danach wieder entfernen |
+| RCD\_PASSWORD\_HASH\_CONCURRENCY | 2 | Gleichzeitige Passwortberechnungen (1 bis 64), je 64 MiB |
 | RCD\_LOG\_LEVEL | info | debug, info, warn, error |
 | RCD\_LOG\_FORMAT | text | text oder json |
 
@@ -302,6 +331,7 @@ services:
   panel:
     image: ghcr.io/<owner>/rconductor-panel:1
     restart: unless-stopped
+    read_only: true
     ports:
       - "8080:8080"
       - "8443:8443"
@@ -324,6 +354,7 @@ services:
   agent:
     image: ghcr.io/<owner>/rconductor-agent:1
     restart: unless-stopped
+    read_only: true
     environment:
       RCD_PAIRING_TOKEN: "<Token aus dem Panel>"
     volumes:
@@ -342,6 +373,7 @@ services:
   panel:
     image: ghcr.io/<owner>/rconductor-panel:1
     restart: unless-stopped
+    read_only: true
     ports:
       - "8080:8080"
     environment:
@@ -353,6 +385,7 @@ services:
   agent:
     image: ghcr.io/<owner>/rconductor-agent:1
     restart: unless-stopped
+    read_only: true
     environment:
       RCD_PAIRING_TOKEN: "<Token aus dem Panel>"
     volumes:
@@ -366,6 +399,22 @@ volumes:
 ```
 
 Der Agent-Port 8443 wird nicht veröffentlicht; der Agent erreicht das Panel über das Compose-Netz. Die Kopplung läuft wie in der getrennten Variante per Token: Ohne Token wartet der Agent und schreibt einen Hinweis ins Log. Der Betreiber erzeugt das Token im Panel, trägt es ein und startet den Agent neu.
+
+### 5.6 Laufzeit-Einstellungen
+
+Globale Einstellungen in settings; nur der RCON-Admin liest und ändert sie über /settings, nur bekannte Schlüssel mit Typ- und Bereichsprüfung, alles oder nichts.
+
+| Schlüssel | Standard | Zweck |
+| --- | --- | --- |
+| backup.interval, backup.keep\_auto, backup.keep\_pre\_migration | 24 h, 7, 3 | Backups (NFR-008, NFR-013) |
+| session.idle\_timeout, session.max\_lifetime | 12 h, 7 Tage | Sessions (AUTH-006) |
+| login.max\_failures, login.lockout\_duration | 5, 15 min | Login-Schutz (SEC-004, 3.7) |
+| invite.lifetime | 72 h | Gültigkeit von Einladungen (UI-008) |
+| supporters.enabled | aus | Globale Supporter-Freigabe (ROLE-006); Abschalten beendet die Sessions aller Supporter |
+| audit.retention\_days | 90 | Aufbewahrung des Audit-Logs (AUD-003) |
+| ratelimit.<rolle>.per\_minute, ratelimit.<rolle>.burst | laut 3.4 (z. B. ratelimit.moderator: 20 und 5) | Ratenlimit je Rolle (CMD-019); <rolle> ist rcon\_admin, server\_admin, moderator oder supporter |
+
+Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in die Volumes. Die Compose-Dateien setzen read\_only: true.
 
 ## 6. Oberfläche
 
@@ -381,6 +430,7 @@ Der Agent-Port 8443 wird nicht veröffentlicht; der Agent erreicht das Panel üb
 | Live-Daten | Veraltete Werte werden markiert statt ausgeblendet (Haupttab 4.6) |
 | Bestätigung | Nur bei destruktiven Aktionen; sonst Rückgängig |
 | Tastaturkürzel | Standardmäßig aus, nur global durch den RCON-Admin aktivierbar |
+| Auslieferung | Pfade ohne Dateiendung erhalten index.html (no-cache) samt base href aus RCD\_BASE\_PATH, ohne Inline-Skript; Pfade mit Dateiendung sind Assets und antworten bei Fehlen mit 404; versteckte Dateien werden nicht ausgeliefert; nur GET und HEAD; ohne gebaute Oberfläche 503 |
 
 ### 6.2 Navigation je Rolle
 
@@ -538,7 +588,7 @@ Die Zahlenwerte im Beispiel (z. B. max\_length) werden beim ersten Profil gegen 
 - Panel und Agent schreiben jedes prüfrelevante Ereignis als eine JSON-Zeile mit festem Ereigniscode auf stdout. Damit lassen sich Abnahmekriterien über die Container-Logs nachweisen, z. B. per Portainer-MCP.
 - Ereigniscodes sind eine Schnittstelle: dokumentiert, innerhalb einer Hauptversion nie umbenannt oder entfernt, nur ergänzt.
 - RCD\_LOG\_LEVEL=debug ergänzt Details (Dauer, Zwischenschritte), ändert aber keine Ereigniscodes. Für die Abnahme läuft die Testinstanz mit RCD\_LOG\_FORMAT=json und RCD\_LOG\_LEVEL=debug.
-- Keine Geheimnisse in Logs, auch nicht auf debug: Passwörter, RCON-Zugangsdaten, Tokens, Schlüssel und Session-IDs werden ersetzt; Sessions erscheinen nur als kurzer Hash. Einzige Ausnahme ist die einmalige Ausgabe des Initialpassworts (AUTH-007), außerhalb der Ereignisfelder.
+- Keine Geheimnisse in Logs, auch nicht auf debug: Passwörter, RCON-Zugangsdaten, Tokens, Schlüssel und Session-IDs werden ersetzt; Sessions erscheinen nur als kurzer Hash. Einzige Ausnahme ist die einmalige Ausgabe des Initialpassworts (AUTH-007) als Hinweisblock auf stderr; stdout bleibt reines JSON, dort steht nur auth.initial\_password.issued ohne Passwort.
 - Abnahme über Logs nur gegen eine Testinstanz, nie gegen den Produktivbetrieb.
 
 ### 8.2 Felder jeder Ereigniszeile
@@ -562,7 +612,7 @@ Die Zahlenwerte im Beispiel (z. B. max\_length) werden beim ersten Profil gegen 
 | Bereich | Codes |
 | --- | --- |
 | Betrieb | app.start, app.ready, db.migrate.start, db.migrate.done, db.migrate.lock\_wait, key.created, key.loaded, backup.done, backup.failed, audit.purge |
-| Anmeldung | auth.login.ok, auth.login.failed, auth.lockout, auth.logout, auth.session.revoked, auth.initial\_password.issued, auth.invite.used |
+| Anmeldung | auth.login.ok, auth.login.failed, auth.lockout, auth.logout, auth.session.revoked, auth.initial\_password.issued, auth.invite.used, auth.emergency\_admin.reset |
 | Rechte | perm.denied (reason), perm.recomputed |
 | Befehle | cmd.accepted, cmd.denied (reason: not\_in\_list, wrapper\_blocked, rate\_limited, invalid), cmd.sent, cmd.response, cmd.timeout |
 | RCON | rcon.connected, rcon.auth\_failed, rcon.disconnected, rcon.reconnect |
