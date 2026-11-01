@@ -175,8 +175,8 @@ func TestModeratorListPerServer(t *testing.T) {
 	w := newWorld(t)
 	want := map[string][]string{
 		"s1": {"kick", "say", "time set", "whitelist add"}, // mg1 and mg2
-		"s2": {"say", "time set"},                         // mg2 only
-		"s3": {"list"},                                    // mg3; mg1's grant is outside sa's scope
+		"s2": {"say", "time set"},                          // mg2 only
+		"s3": {"list"},                                     // mg3; mg1's grant is outside sa's scope
 	}
 	r := w.rights("m")
 	if got := r.ServerIDs(); !slices.Equal(got, []string{"s1", "s2", "s3"}) {
