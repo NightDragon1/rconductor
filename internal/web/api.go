@@ -12,6 +12,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/perm"
 )
 
 // publicOperations need no session; every other operation is rejected
@@ -22,6 +23,7 @@ var publicOperations = map[string]bool{"Login": true}
 // apiServer implements the generated strict server interface.
 type apiServer struct {
 	auth    *auth.Service
+	perm    *perm.Checker
 	log     *slog.Logger
 	proxies Proxies
 }

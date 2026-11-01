@@ -16,6 +16,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
+	"github.com/NightDragon1/rconductor/internal/perm"
 )
 
 // APIBase is the base path of the REST API (Design 2.1).
@@ -36,6 +37,8 @@ type Options struct {
 	Proxies Proxies
 	// Auth resolves sessions; nil means every API call is unauthenticated.
 	Auth *auth.Service
+	// Perm decides about every access to servers and administration.
+	Perm *perm.Checker
 }
 
 // NewHandler returns the root handler of the web port.
@@ -50,7 +53,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{auth: opts.Auth, log: opts.Log, proxies: opts.Proxies}
+	srv := &apiServer{auth: opts.Auth, perm: opts.Perm, log: opts.Log, proxies: opts.Proxies}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,
