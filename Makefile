@@ -7,7 +7,7 @@ SQLC_VERSION := 1.31.1
 SQLC ?= sqlc
 export CGO_ENABLED := 0
 
-.PHONY: all build web panel agent images test test-integration lint vuln generate
+.PHONY: all build web panel agent images test test-integration lint vuln generate check
 
 all: lint test web build
 
@@ -36,6 +36,10 @@ images:
 
 test-integration: images
 	RCD_PANEL_IMAGE=$(PANEL_IMAGE) go test -tags integration -count=1 ./...
+
+# Full pre-commit gate (also run by the hook in .githooks).
+check:
+	scripts/check.sh
 
 lint:
 	go tool -modfile=tools/go.mod golangci-lint run ./...

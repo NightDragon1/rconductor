@@ -3,10 +3,634 @@
  * Do not make direct changes to the file.
  */
 
-export type paths = Record<string, never>;
+export interface paths {
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log in with pseudonym and password (AUTH-001, AUTH-006).
+         * @description Starts a new session and sets the session cookie. Wrong credentials, unknown users and disabled accounts get the same answer.
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End the current session (AUTH-006). */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The current session and its user (AUTH-006). */
+        get: operations["getSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Users the caller manages (Design 2.2, 3.6).
+         * @description RCON admin: everyone with a lower role. Server admin: his moderators and their supporters. Moderator: his supporters, if supporters are enabled for him. Users are created only through invites.
+         */
+        get: operations["listUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        /** A user the caller manages. */
+        get: operations["getUser"];
+        put?: never;
+        post?: never;
+        /** Delete a managed user (soft delete, Design 4.1). */
+        delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        /**
+         * Change role, lock state or supporter release of a managed user (ROLE-006, ROLE-008).
+         * @description The new role must stay below the caller's role. A role change removes the user's scopes, group memberships and grants, which belong to the old role.
+         */
+        patch: operations["updateUser"];
+        trace?: never;
+    };
+    "/users/{id}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Role, scopes, groups and grants of a managed user.
+         * @description Also the template for quick entry (UI-008).
+         */
+        get: operations["getAssignments"];
+        /**
+         * Replace sections of a managed user's assignments (ROLE-003, ROLE-004).
+         * @description Each given section replaces the entries the caller controls; entries others made in their own groups stay. Admin scopes: only the RCON admin, only for server admins. Groups: groups the caller owns. Grants: moderator groups the caller owns, targets within the caller's and the group owner's scope, the moderator must be a member. Supporter grants: for moderators the caller is or manages, only with supporters enabled, servers within the moderator's scope. Refusals are logged and audited.
+         */
+        put: operations["updateAssignments"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Groups the caller administers (AUTH-002, ROLE-005).
+         * @description RCON admin all groups, server admin his own.
+         */
+        get: operations["listUserGroups"];
+        put?: never;
+        /** Create a user group or moderator group owned by the caller. */
+        post: operations["createUserGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user-groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupID"];
+            };
+            cookie?: never;
+        };
+        /** A group the caller administers. */
+        get: operations["getUserGroup"];
+        put?: never;
+        post?: never;
+        /** Delete a group (soft delete). */
+        delete: operations["deleteUserGroup"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, set the list, replace members or group-wide grants.
+         * @description Members must be users the caller manages; a moderator group takes only moderators. Grants apply to all members and must lie within the caller's and the owner's scope. Members whose rights change lose their sessions.
+         */
+        patch: operations["updateUserGroup"];
+        trace?: never;
+    };
+    "/command-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Command lists the caller administers (ROLE-005). */
+        get: operations["listCommandLists"];
+        put?: never;
+        /**
+         * Create a command list owned by the caller.
+         * @description Any command may be listed, also one without catalog entry (CAT-002). At least one command must stay locked for supporters (ROLE-007).
+         */
+        post: operations["createCommandList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/command-lists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CommandListID"];
+            };
+            cookie?: never;
+        };
+        /** A command list the caller administers. */
+        get: operations["getCommandList"];
+        put?: never;
+        post?: never;
+        /** Delete a command list (soft delete). */
+        delete: operations["deleteCommandList"];
+        options?: never;
+        head?: never;
+        /** Rename a list or replace its entries (ROLE-007). */
+        patch: operations["updateCommandList"];
+        trace?: never;
+    };
+    "/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Invitations of the caller; the RCON admin sees all (UI-008). */
+        get: operations["listInvites"];
+        put?: never;
+        /**
+         * Invite a new user with a role below the caller's (AUTH-001, UI-008).
+         * @description The token is returned only now and is valid once until expires_at (setting invite.lifetime, default 72 h). With a template the new user takes the template's assignments as far as the caller controls them. A moderator invites supporters only while supporters are enabled for him.
+         */
+        post: operations["createInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["InviteID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraw an unused invitation. */
+        delete: operations["deleteInvite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create the invited user with own pseudonym and password.
+         * @description Unknown, expired and used tokens get the same answer. The new user logs in afterwards.
+         */
+        post: operations["redeemInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own profile (AUTH-009). */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change pseudonym, real name or contacts (AUTH-009).
+         * @description The emergency admin keeps his pseudonym.
+         */
+        patch: operations["updateMe"];
+        trace?: never;
+    };
+    "/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the own password (AUTH-007).
+         * @description The old password, also the initial password, is invalid at once; all other sessions of the user end.
+         */
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload the own profile picture (AUTH-009).
+         * @description PNG or JPEG, at most 1 MiB and 4096 × 4096 pixels; checked by content, re-encoded without metadata and scaled to at most 512 × 512.
+         */
+        put: operations["setMyAvatar"];
+        post?: never;
+        /** Remove the own profile picture. */
+        delete: operations["deleteMyAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Profile picture of a user (AUTH-009, decision W4).
+         * @description For the user himself, the RCON admin and whoever manages him. Served with nosniff and a Content-Security-Policy that allows nothing.
+         */
+        get: operations["getUserAvatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit log, newest first (AUD-001, AUD-004).
+         * @description RCON admin: everything. Server admin: entries about servers in his scope, about users he manages and his own actions. Others: 403. Cursor-based paging (Design 2.1).
+         */
+        get: operations["listAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Global settings (Design 5.1); RCON admin only. */
+        get: operations["getSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change global settings; RCON admin only (AUD-003).
+         * @description Only known keys with valid values, all or nothing; for example audit.retention_days, supporters.enabled, session.idle_timeout. Switching supporters off ends the sessions of all supporters.
+         */
+        patch: operations["updateSettings"];
+        trace?: never;
+    };
+}
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        User: {
+            /** Format: uuid */
+            id: string;
+            pseudonym: string;
+            role: components["schemas"]["Role"];
+            real_name?: string;
+            /** @description Contact details such as telegram or whatsapp (AUTH-009). */
+            contacts: {
+                [key: string]: string;
+            };
+            has_avatar: boolean;
+            disabled: boolean;
+            is_emergency: boolean;
+            /** @description The moderator may have supporters (ROLE-006). */
+            supporters_allowed: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_login_at?: string;
+        };
+        UserList: {
+            items: components["schemas"]["User"][];
+        };
+        AuditEntry: {
+            /**
+             * Format: uuid
+             * @description For commands also the request ID (Design 4.1).
+             */
+            id: string;
+            /** Format: date-time */
+            ts: string;
+            /** @enum {string} */
+            kind: "command" | "agent" | "admin" | "auth";
+            /** Format: uuid */
+            actor_id?: string;
+            actor_role?: string;
+            /** @description First 8 characters of the session hash. */
+            session?: string;
+            /** Format: uuid */
+            server_id?: string;
+            target_type?: string;
+            target_id?: string;
+            action: string;
+            payload: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            result: "ok" | "denied" | "error" | "timeout";
+            reason?: string;
+        };
+        AuditPage: {
+            items: components["schemas"]["AuditEntry"][];
+            next_cursor?: string;
+        };
+        /** @description Setting key to JSON value. */
+        Settings: {
+            [key: string]: unknown;
+        };
+        ProfileUpdate: {
+            pseudonym?: string;
+            /** @description An empty string removes the real name. */
+            real_name?: string;
+            contacts?: {
+                [key: string]: string;
+            };
+        };
+        PasswordChange: {
+            current_password: string;
+            new_password: string;
+        };
+        Invite: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            created_by: string;
+            role: components["schemas"]["Role"];
+            /** Format: uuid */
+            template_user_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            used_at?: string;
+            /** Format: uuid */
+            used_by?: string;
+        };
+        InviteList: {
+            items: components["schemas"]["Invite"][];
+        };
+        InviteCreate: {
+            role: components["schemas"]["Role"];
+            /** Format: uuid */
+            template_user_id?: string;
+        };
+        InviteCreated: {
+            invite: components["schemas"]["Invite"];
+            /** @description Shown only once; stored only as hash. */
+            token: string;
+            /** @description Link for the invitee; the token is in the fragment, so it reaches no server log. */
+            url: string;
+        };
+        InviteRedeem: {
+            token: string;
+            pseudonym: string;
+            password: string;
+        };
+        CommandListEntry: {
+            /** @description Token path such as "whitelist add" (CMD-004). */
+            path: string;
+            /** @description May be passed on to supporters (ROLE-007). */
+            passable: boolean;
+        };
+        CommandList: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            owner_id: string;
+            entries: components["schemas"]["CommandListEntry"][];
+        };
+        CommandListList: {
+            items: components["schemas"]["CommandList"][];
+        };
+        CommandListCreate: {
+            name: string;
+            entries?: components["schemas"]["CommandListEntry"][];
+        };
+        CommandListUpdate: {
+            name?: string;
+            entries?: components["schemas"]["CommandListEntry"][];
+        };
+        /** @enum {string} */
+        GroupKind: "general" | "moderator";
+        UserGroup: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["GroupKind"];
+            /** Format: uuid */
+            owner_id: string;
+            /** Format: uuid */
+            command_list_id?: string;
+            members: string[];
+            /** @description Servers and server groups for all members. */
+            grants: components["schemas"]["Target"][];
+        };
+        UserGroupList: {
+            items: components["schemas"]["UserGroup"][];
+        };
+        UserGroupCreate: {
+            name: string;
+            kind: components["schemas"]["GroupKind"];
+            /** Format: uuid */
+            command_list_id?: string;
+        };
+        UserGroupUpdate: {
+            name?: string;
+            /** @description A list ID, or an empty string to remove the list. */
+            command_list_id?: string;
+            members?: string[];
+            grants?: components["schemas"]["Target"][];
+        };
+        /** @description Exactly one of server_id or server_group_id. */
+        Target: {
+            /** Format: uuid */
+            server_id?: string;
+            /** Format: uuid */
+            server_group_id?: string;
+        };
+        /** @description A server or server group for a moderator through one of his moderator groups, whose list applies (Design 4.3). */
+        Grant: {
+            /** Format: uuid */
+            group_id: string;
+            /** Format: uuid */
+            server_id?: string;
+            /** Format: uuid */
+            server_group_id?: string;
+        };
+        SupporterGrant: {
+            /** Format: uuid */
+            moderator_id: string;
+            /** Format: uuid */
+            server_id: string;
+        };
+        Assignments: {
+            role: components["schemas"]["Role"];
+            admin_scopes: components["schemas"]["Target"][];
+            groups: string[];
+            grants: components["schemas"]["Grant"][];
+            supporter_grants: components["schemas"]["SupporterGrant"][];
+        };
+        AssignmentsUpdate: {
+            admin_scopes?: components["schemas"]["Target"][];
+            groups?: string[];
+            grants?: components["schemas"]["Grant"][];
+            supporter_grants?: components["schemas"]["SupporterGrant"][];
+        };
+        UserUpdate: {
+            role?: components["schemas"]["Role"];
+            disabled?: boolean;
+            /** @description Release supporters for a moderator (ROLE-006); only server admins and the RCON admin. Switching off takes the rights of the moderator's supporters. */
+            supporters_allowed?: boolean;
+        };
+        /**
+         * @description One of the four fixed roles (ROLE-001).
+         * @enum {string}
+         */
+        Role: "rcon_admin" | "server_admin" | "moderator" | "supporter";
+        LoginRequest: {
+            pseudonym: string;
+            password: string;
+        };
+        SessionUser: {
+            /** Format: uuid */
+            id: string;
+            pseudonym: string;
+            role: components["schemas"]["Role"];
+        };
+        Session: {
+            user: components["schemas"]["SessionUser"];
+            /**
+             * Format: date-time
+             * @description End of the session unless it is used again; it also ends after the maximum lifetime.
+             */
+            expires_at: string;
+        };
         /**
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
@@ -32,8 +656,55 @@ export interface components {
         };
     };
     responses: {
+        /** @description The request body or parameters are malformed. */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Not allowed, for example a write request without matching Origin header (Design 2.1). */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Too many attempts; Retry-After gives the wait in seconds. */
+        RateLimited: {
+            headers: {
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The panel is busy (for example all password hashing slots are in use); retry after Retry-After seconds. */
+        Busy: {
+            headers: {
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description No valid session. */
         Unauthenticated: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The request breaks a rule of the data. */
+        Invalid: {
             headers: {
                 [name: string]: unknown;
             };
@@ -51,10 +722,818 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        InviteID: string;
+        CommandListID: string;
+        GroupID: string;
+        UserID: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Logged in; the response sets the session cookie. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Busy"];
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logged out; the response clears the session cookie. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current session. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: {
+                role?: components["schemas"]["Role"];
+                /** @description Part of the pseudonym or real name, ignoring case. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Managed users, ordered by pseudonym. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted; the user's sessions have ended. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The assignments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignments"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentsUpdate"];
+            };
+        };
+        responses: {
+            /** @description The assignments after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignments"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    listUserGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The groups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserGroupList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    createUserGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserGroupCreate"];
+            };
+        };
+        responses: {
+            /** @description The new group. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserGroup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getUserGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserGroup"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteUserGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateUserGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserGroupUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserGroup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    listCommandLists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The lists. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandListList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    createCommandList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandListCreate"];
+            };
+        };
+        responses: {
+            /** @description The new list. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getCommandList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CommandListID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteCommandList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CommandListID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateCommandList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["CommandListID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandListUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    listInvites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invitations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    createInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCreate"];
+            };
+        };
+        responses: {
+            /** @description The invitation with its token and link. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    deleteInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["InviteID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    redeemInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteRedeem"];
+            };
+        };
+        responses: {
+            /** @description The new user. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+            503: components["responses"]["Busy"];
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Changed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+            503: components["responses"]["Busy"];
+        };
+    };
+    setMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The image; its type is taken from the content, not from the header. */
+        requestBody: {
+            content: {
+                "image/*": string;
+            };
+        };
+        responses: {
+            /** @description Stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    deleteMyAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getUserAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The picture. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAudit: {
+        parameters: {
+            query?: {
+                kind?: "command" | "agent" | "admin" | "auth";
+                server_id?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All global settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Settings"];
+            };
+        };
+        responses: {
+            /** @description All global settings after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+}

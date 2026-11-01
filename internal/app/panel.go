@@ -10,14 +10,20 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 
+	"github.com/NightDragon1/rconductor/internal/auth"
+	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/ops/backup"
+	"github.com/NightDragon1/rconductor/internal/ops/cleanup"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
+	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
+	"github.com/NightDragon1/rconductor/internal/users"
 	"github.com/NightDragon1/rconductor/internal/web"
 )
 
@@ -27,6 +33,11 @@ type PanelOptions struct {
 	UI http.Handler
 	// Ready is called with the bound web address once the panel serves.
 	Ready func(httpAddr net.Addr)
+	// Console receives the one-time initial password of the emergency
+	// admin (AUTH-007), apart from the event log; nil means os.Stderr.
+	Console io.Writer
+	// HashParams override the Argon2id cost, for tests only.
+	HashParams *password.Params
 }
 
 // RunPanel starts the panel and blocks until ctx ends: migrations (with a
@@ -70,13 +81,54 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err := backup.EnsureDefaults(ctx, st); err != nil {
 		return err
 	}
+	if err := auth.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
+	if err := perm.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
+	if err := users.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
+	if err := users.EnsureAuditDefaults(ctx, st); err != nil {
+		return err
+	}
+
+	params := password.Default
+	if opts.HashParams != nil {
+		params = *opts.HashParams
+	}
+	hasher, err := password.NewHasher(params, cfg.HashConcurrency, password.DefaultWait)
+	if err != nil {
+		return err
+	}
+	console := opts.Console
+	if console == nil {
+		console = os.Stderr
+	}
+	authLog := logs.Module("auth")
+	if err := auth.EnsureEmergencyAdmin(ctx, st, hasher, cfg.EmergencyAdmin, authLog, console); err != nil {
+		return err
+	}
+	authSvc := auth.NewService(st, hasher, authLog, cfg.EmergencyAdmin)
+	checker := perm.NewChecker(st, logs.Module("perm"))
+	userSvc := users.NewService(st, checker, logs.Module("users"), authSvc.RevokeUser)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	wg.Go(func() { backup.Schedule(ctx, st, backups) })
+	wg.Go(func() { cleanup.Schedule(ctx, st, logs.Module("audit")) })
 
 	webLog := logs.Module("web")
-	return web.Serve(ctx, cfg.HTTPAddr, web.NewHandler(web.Options{Log: webLog, UI: opts.UI}), webLog,
+	proxies := web.Proxies{Trusted: cfg.TrustedProxies, PublicURL: cfg.PublicURL}
+	if !proxies.HTTPSKnown() {
+		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
+			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
+	}
+	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Auth: authSvc, Perm: checker, Users: userSvc,
+		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
+	})
+	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,
 		func(addr net.Addr) {
 			logs.Root().Info("ready", logging.Event(logging.AppReady),
 				slog.String(logging.KeyVersion, buildinfo.Version), slog.String("http_addr", addr.String()))

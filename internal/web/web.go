@@ -15,6 +15,9 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/api"
+	"github.com/NightDragon1/rconductor/internal/auth"
+	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
 // APIBase is the base path of the REST API (Design 2.1).
@@ -31,13 +34,19 @@ type Options struct {
 	Log *slog.Logger
 	// UI serves the web interface; nil means no UI is mounted.
 	UI http.Handler
+	// Proxies decide which forwarding headers are trusted.
+	Proxies Proxies
+	// Auth resolves sessions; nil means every API call is unauthenticated.
+	Auth *auth.Service
+	// Perm decides about every access to servers and administration.
+	Perm *perm.Checker
+	// Users administers users and assignments.
+	Users *users.Service
+	// Invites creates and redeems invitations.
+	Invites *users.Invites
+	// Profiles maintains the caller's own profile and password.
+	Profiles *users.Profiles
 }
-
-// apiServer implements the generated strict server interface. Endpoints
-// are added per milestone.
-type apiServer struct{}
-
-var _ api.StrictServerInterface = apiServer{}
 
 // NewHandler returns the root handler of the web port.
 func NewHandler(opts Options) http.Handler {
@@ -51,9 +60,11 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	api.HandlerWithOptions(api.NewStrictHandler(apiServer{}, nil), api.StdHTTPServerOptions{
-		BaseURL:    APIBase,
-		BaseRouter: mux,
+	srv := &apiServer{auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
+	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
+		BaseURL:     APIBase,
+		BaseRouter:  mux,
+		Middlewares: []api.MiddlewareFunc{srv.checkOrigin},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			WriteProblem(w, http.StatusBadRequest, api.ReasonCodeInvalid, err.Error())
 		},
@@ -66,7 +77,7 @@ func NewHandler(opts Options) http.Handler {
 			WriteProblem(w, http.StatusNotFound, "", "")
 		})
 	}
-	return mux
+	return withRequestID(withClient(opts.Proxies, mux))
 }
 
 // Serve listens on addr and serves h until ctx ends, then shuts down
