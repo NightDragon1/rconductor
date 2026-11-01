@@ -645,6 +645,96 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "404":
           $ref: "#/components/responses/NotFound"
+  /audit:
+    get:
+      operationId: listAudit
+      summary: Audit log, newest first (AUD-001, AUD-004).
+      description: >-
+        RCON admin: everything. Server admin: entries about servers in his
+        scope, about users he manages and his own actions. Others: 403.
+        Cursor-based paging (Design 2.1).
+      tags: [audit]
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [command, agent, admin, auth]
+        - name: server_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 256
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /settings:
+    get:
+      operationId: getSettings
+      summary: Global settings (Design 5.1); RCON admin only.
+      tags: [settings]
+      responses:
+        "200":
+          description: All global settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      operationId: updateSettings
+      summary: Change global settings; RCON admin only (AUD-003).
+      description: >-
+        Only known keys with valid values, all or nothing; for example
+        audit.retention_days, supporters.enabled, session.idle_timeout.
+        Switching supporters off ends the sessions of all supporters.
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Settings"
+      responses:
+        "200":
+          description: All global settings after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
 
 components:
   parameters:
@@ -720,6 +810,62 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    AuditEntry:
+      type: object
+      required: [id, ts, kind, action, payload, result]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: For commands also the request ID (Design 4.1).
+        ts:
+          type: string
+          format: date-time
+        kind:
+          type: string
+          enum: [command, agent, admin, auth]
+        actor_id:
+          type: string
+          format: uuid
+        actor_role:
+          type: string
+        session:
+          type: string
+          description: First 8 characters of the session hash.
+        server_id:
+          type: string
+          format: uuid
+        target_type:
+          type: string
+        target_id:
+          type: string
+        action:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        result:
+          type: string
+          enum: [ok, denied, error, timeout]
+        reason:
+          type: string
+
+    AuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+        next_cursor:
+          type: string
+
+    Settings:
+      type: object
+      additionalProperties: true
+      description: Setting key to JSON value.
 
     ProfileUpdate:
       type: object

@@ -359,6 +359,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit log, newest first (AUD-001, AUD-004).
+         * @description RCON admin: everything. Server admin: entries about servers in his scope, about users he manages and his own actions. Others: 403. Cursor-based paging (Design 2.1).
+         */
+        get: operations["listAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Global settings (Design 5.1); RCON admin only. */
+        get: operations["getSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change global settings; RCON admin only (AUD-003).
+         * @description Only known keys with valid values, all or nothing; for example audit.retention_days, supporters.enabled, session.idle_timeout. Switching supporters off ends the sessions of all supporters.
+         */
+        patch: operations["updateSettings"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -385,6 +426,41 @@ export interface components {
         };
         UserList: {
             items: components["schemas"]["User"][];
+        };
+        AuditEntry: {
+            /**
+             * Format: uuid
+             * @description For commands also the request ID (Design 4.1).
+             */
+            id: string;
+            /** Format: date-time */
+            ts: string;
+            /** @enum {string} */
+            kind: "command" | "agent" | "admin" | "auth";
+            /** Format: uuid */
+            actor_id?: string;
+            actor_role?: string;
+            /** @description First 8 characters of the session hash. */
+            session?: string;
+            /** Format: uuid */
+            server_id?: string;
+            target_type?: string;
+            target_id?: string;
+            action: string;
+            payload: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            result: "ok" | "denied" | "error" | "timeout";
+            reason?: string;
+        };
+        AuditPage: {
+            items: components["schemas"]["AuditEntry"][];
+            next_cursor?: string;
+        };
+        /** @description Setting key to JSON value. */
+        Settings: {
+            [key: string]: unknown;
         };
         ProfileUpdate: {
             pseudonym?: string;
@@ -1380,6 +1456,84 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listAudit: {
+        parameters: {
+            query?: {
+                kind?: "command" | "agent" | "admin" | "auth";
+                server_id?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All global settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Settings"];
+            };
+        };
+        responses: {
+            /** @description All global settings after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
         };
     };
 }
