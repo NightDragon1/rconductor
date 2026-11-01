@@ -212,3 +212,8 @@ func TestDisableAndDelete(t *testing.T) {
 	// The pseudonym is free again.
 	storetest.CreateUser(t, f.st, storetest.User{Pseudonym: "m"})
 }
+
+func storeUser(t *testing.T, f *fixture, name, role, by string) string {
+	t.Helper()
+	return storetest.CreateUser(t, f.st, storetest.User{Pseudonym: name, Role: role, CreatedBy: f.ids[by]})
+}

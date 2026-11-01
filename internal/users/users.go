@@ -155,13 +155,18 @@ func (s *Service) mustManage(ctx context.Context, req Request, target, action st
 }
 
 func (s *Service) denied(ctx context.Context, req Request, action, target, reason string, payload any) {
+	s.deniedOn(ctx, req, action, "user", target, reason, payload)
+}
+
+// deniedOn logs perm.denied and audits a refused action on any object.
+func (s *Service) deniedOn(ctx context.Context, req Request, action, targetType, target, reason string, payload any) {
 	perm.LogDenied(s.log, perm.Denial{
 		RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym,
 		Role: req.Actor.Role, Reason: reason, Action: action,
 	})
 	if _, err := audit.Write(ctx, s.st.DB, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
-		TargetType: "user", TargetID: target, Action: action, Payload: payload,
+		TargetType: targetType, TargetID: target, Action: action, Payload: payload,
 		Result: audit.ResultDenied, Reason: reason,
 	}); err != nil {
 		s.log.Error("audit entry not written", slog.String("action", action), slog.Any("err", err))
@@ -272,9 +277,14 @@ func clearAssignments(ctx context.Context, q *sqlitedb.Queries, id string) error
 }
 
 func (s *Service) audit(ctx context.Context, tx *sql.Tx, req Request, action, target string, payload any) error {
+	return s.auditOn(ctx, tx, req, action, "user", target, payload)
+}
+
+// auditOn writes the audit entry of a successful change inside tx.
+func (s *Service) auditOn(ctx context.Context, tx *sql.Tx, req Request, action, targetType, target string, payload any) error {
 	_, err := audit.Write(ctx, tx, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
-		TargetType: "user", TargetID: target, Action: action, Payload: payload, Result: audit.ResultOK,
+		TargetType: targetType, TargetID: target, Action: action, Payload: payload, Result: audit.ResultOK,
 	})
 	return err
 }

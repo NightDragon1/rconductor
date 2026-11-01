@@ -121,7 +121,7 @@ func TestLoginSessionLogout(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &s); err != nil {
 		t.Fatal(err)
 	}
-	if s.User.Id.String() != f.userID || s.User.Role != api.Moderator || s.User.Pseudonym != "Mod" {
+	if s.User.Id.String() != f.userID || s.User.Role != api.RoleModerator || s.User.Pseudonym != "Mod" {
 		t.Errorf("session = %+v", s)
 	}
 	c := sessionCookie(t, rec, "rcd_session")
