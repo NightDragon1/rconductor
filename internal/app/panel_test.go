@@ -7,15 +7,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -58,13 +61,15 @@ func testConfig(t *testing.T, root string) config.Panel {
 }
 
 // startPanel runs the panel until the returned stop function is called.
-func startPanel(t *testing.T, cfg config.Panel, out *syncBuffer) (addr string, stop func() error) {
+func startPanel(t *testing.T, cfg config.Panel, out, console *syncBuffer) (addr string, stop func() error) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	ready := make(chan net.Addr, 1)
 	errc := make(chan error, 1)
 	go func() {
-		errc <- RunPanel(ctx, cfg, out, PanelOptions{Ready: func(a net.Addr) { ready <- a }})
+		errc <- RunPanel(ctx, cfg, out, PanelOptions{
+			Ready: func(a net.Addr) { ready <- a }, Console: console, HashParams: &fastHash,
+		})
 	}()
 	select {
 	case a := <-ready:
@@ -78,6 +83,8 @@ func startPanel(t *testing.T, cfg config.Panel, out *syncBuffer) (addr string, s
 	}
 	return "", nil
 }
+
+var fastHash = password.Params{Time: 1, MemoryKiB: 64, Threads: 1, SaltLen: 16, KeyLen: 32}
 
 func events(t *testing.T, logs string) []string {
 	t.Helper()
@@ -93,7 +100,9 @@ func events(t *testing.T, logs string) []string {
 				t.Errorf("line without %s: %s", k, sc.Text())
 			}
 		}
-		if e, ok := m[logging.KeyEvent].(string); ok {
+		// The clean-up runs concurrently with the start; its place in the
+		// sequence varies.
+		if e, ok := m[logging.KeyEvent].(string); ok && e != string(logging.AuditPurge) {
 			out = append(out, e)
 		}
 	}
@@ -104,8 +113,8 @@ func TestPanelStartupSequence(t *testing.T) {
 	root := t.TempDir()
 	cfg := testConfig(t, root)
 
-	var first syncBuffer
-	addr, stop := startPanel(t, cfg, &first)
+	var first, console syncBuffer
+	addr, stop := startPanel(t, cfg, &first, &console)
 
 	resp, err := http.Get("http://" + addr + "/api/v1/unknown")
 	if err != nil {
@@ -120,7 +129,7 @@ func TestPanelStartupSequence(t *testing.T) {
 	}
 
 	got := strings.Join(events(t, first.String()), " ")
-	want := "app.start db.migrate.start db.migrate.done key.created app.ready"
+	want := "app.start db.migrate.start db.migrate.done key.created auth.initial_password.issued app.ready"
 	if got != want {
 		t.Errorf("first start events = %q, want %q", got, want)
 	}
@@ -130,13 +139,17 @@ func TestPanelStartupSequence(t *testing.T) {
 
 	// Second start with the same directories keeps key and data.
 	var second syncBuffer
-	_, stop = startPanel(t, cfg, &second)
+	_, stop = startPanel(t, cfg, &second, &console)
 	if err := stop(); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
 	got = strings.Join(events(t, second.String()), " ")
 	if want := "app.start db.migrate.done key.loaded app.ready"; got != want {
 		t.Errorf("second start events = %q, want %q", got, want)
+	}
+	// AUTH-007: the initial password appears exactly once over two starts.
+	if n := strings.Count(console.String(), "password: "); n != 1 {
+		t.Errorf("initial password printed %d times:\n%s", n, console.String())
 	}
 }
 
@@ -146,7 +159,7 @@ func TestPanelFailsOnBadKeyFile(t *testing.T) {
 	cfg.MasterKeyFile = filepath.Join(root, "missing-secret")
 
 	var out syncBuffer
-	err := RunPanel(context.Background(), cfg, &out, PanelOptions{})
+	err := RunPanel(context.Background(), cfg, &out, PanelOptions{Console: io.Discard, HashParams: &fastHash})
 	if err == nil {
 		t.Fatal("panel started without its configured master key")
 	}
@@ -174,5 +187,74 @@ func TestAgentStub(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"comp":"agent"`) {
 		t.Errorf("agent comp missing:\n%s", out.String())
+	}
+}
+
+// TestInitialPasswordLifecycle covers AUTH-003 and AUTH-007 end to end: the
+// printed initial password logs the emergency admin in; after a change in
+// the API it is invalid and the new one works.
+func TestInitialPasswordLifecycle(t *testing.T) {
+	cfg := testConfig(t, t.TempDir())
+	var out, console syncBuffer
+	addr, stop := startPanel(t, cfg, &out, &console)
+	defer func() { _ = stop() }()
+
+	m := regexp.MustCompile(`password: (\S+)`).FindStringSubmatch(console.String())
+	if m == nil {
+		t.Fatalf("no initial password:\n%s", console.String())
+	}
+	base := "http://" + addr
+	type answer struct {
+		StatusCode int
+		cookies    []*http.Cookie
+	}
+	post := func(path, body string, cookie *http.Cookie) answer {
+		t.Helper()
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, base+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", base)
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return answer{StatusCode: resp.StatusCode, cookies: resp.Cookies()}
+	}
+	login := func(pw string) answer {
+		return post("/api/v1/auth/login", `{"pseudonym":"admin","password":"`+pw+`"}`, nil)
+	}
+
+	resp := login(m[1])
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login with the initial password = %d", resp.StatusCode)
+	}
+	var cookie *http.Cookie
+	for _, c := range resp.cookies {
+		if c.Name == "rcd_session" {
+			cookie = c
+		}
+	}
+	if resp := post("/api/v1/me/password", `{"current_password":"`+m[1]+`","new_password":"a much better password"}`, cookie); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("change password = %d", resp.StatusCode)
+	}
+	if resp := login(m[1]); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("initial password after the change = %d, want 401", resp.StatusCode)
+	}
+	if resp := login("a much better password"); resp.StatusCode != http.StatusOK {
+		t.Errorf("new password = %d", resp.StatusCode)
+	}
+	if strings.Contains(out.String(), m[1]) || strings.Contains(out.String(), "a much better password") {
+		t.Error("a password appears in the event log")
+	}
+	for _, ev := range []string{"auth.login.ok", "auth.login.failed"} {
+		if !strings.Contains(out.String(), `"event":"`+ev+`"`) {
+			t.Errorf("%s missing", ev)
+		}
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/NightDragon1/rconductor/internal/api"
 )
 
@@ -47,5 +49,33 @@ func TestUIMountedAtRoot(t *testing.T) {
 		if rec.Code != http.StatusNotFound || rec.Body.String() == "ui" {
 			t.Errorf("%s served by UI: %d", target, rec.Code)
 		}
+	}
+}
+
+func TestRequestID(t *testing.T) {
+	var seen string
+	ui := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { seen = RequestID(r.Context()) })
+	h := NewHandler(Options{UI: ui})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(HeaderRequestID, "forged")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	id := rec.Header().Get(HeaderRequestID)
+	if id == "" || id == "forged" || id != seen {
+		t.Errorf("request id header %q, context %q", id, seen)
+	}
+	if u, err := uuid.Parse(id); err != nil || u.Version() != 7 {
+		t.Errorf("request id %q is not a UUIDv7", id)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/x", nil))
+	var p api.Problem
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.RequestId == nil || *p.RequestId != rec.Header().Get(HeaderRequestID) {
+		t.Errorf("problem request_id = %v, header %q", p.RequestId, rec.Header().Get(HeaderRequestID))
 	}
 }

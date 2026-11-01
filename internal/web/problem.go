@@ -22,6 +22,9 @@ func WriteProblem(w http.ResponseWriter, status int, reason api.ReasonCode, deta
 	if detail != "" {
 		p.Detail = &detail
 	}
+	if id := w.Header().Get(HeaderRequestID); id != "" {
+		p.RequestId = &id
+	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)

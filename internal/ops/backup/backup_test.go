@@ -5,6 +5,7 @@ package backup
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -169,7 +170,8 @@ func TestBackupBeforeMigration(t *testing.T) {
 	b := New(s.DB, backups, log)
 	opts := store.MigrateOptions{BeforeMigrate: BeforeMigrate(s, b)}
 
-	if _, err := s.Migrate(ctx, log, opts); err != nil {
+	first, err := s.Migrate(ctx, log, opts)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if all, _ := List(backups); len(all) != 0 {
@@ -195,8 +197,8 @@ func TestBackupBeforeMigration(t *testing.T) {
 	}
 
 	all, _ := List(backups)
-	if len(all) != 1 || all[0].Kind != KindPreMigrate || !strings.HasSuffix(all[0].Name, "-v1.db") {
-		t.Fatalf("backups = %+v, want one pre-migrate backup of v1", all)
+	if want := fmt.Sprintf("-v%d.db", first.To); len(all) != 1 || all[0].Kind != KindPreMigrate || !strings.HasSuffix(all[0].Name, want) {
+		t.Fatalf("backups = %+v, want one pre-migrate backup ending in %s", all, want)
 	}
 	out := logs.String()
 	if i, j := strings.LastIndex(out, `"event":"backup.done"`), strings.LastIndex(out, `"event":"db.migrate.start"`); i < 0 || j < 0 || i > j {
