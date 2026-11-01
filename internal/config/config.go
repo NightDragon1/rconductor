@@ -49,6 +49,8 @@ type Panel struct {
 	BackupDir       string
 	MasterKeyFile   string // empty: generated in SecretsDir
 	EmergencyAdmin  bool
+	// HashConcurrency limits parallel Argon2id computations (64 MiB each).
+	HashConcurrency int
 	Log             Log
 }
 
@@ -82,6 +84,7 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 		BackupDir:       r.str("RCD_BACKUP_DIR", "/backups"),
 		MasterKeyFile:   r.str("RCD_MASTER_KEY_FILE", ""),
 		EmergencyAdmin:  r.boolean("RCD_EMERGENCY_ADMIN", true),
+		HashConcurrency: r.integer("RCD_PASSWORD_HASH_CONCURRENCY", 2, 1, 64),
 		Log:             r.log(),
 	}
 	if c.AgentPublicAddr != "" {
@@ -163,6 +166,19 @@ func (r *reader) boolean(key string, def bool) bool {
 		return def
 	}
 	return b
+}
+
+func (r *reader) integer(key string, def, lo, hi int) int {
+	v := r.str(key, "")
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < lo || n > hi {
+		r.fail(key, fmt.Sprintf("must be a whole number from %d to %d", lo, hi))
+		return def
+	}
+	return n
 }
 
 func (r *reader) publicURL(key string) *url.URL {
