@@ -218,3 +218,19 @@ func TestHTTPSCookie(t *testing.T) {
 		t.Errorf("untrusted peer: %d %v", rec.Code, rec.Header().Values("Set-Cookie"))
 	}
 }
+
+func TestLoginLockoutAnswer(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	for range auth.DefaultMaxFailures {
+		f.do(t, call{method: http.MethodPost, path: "/api/v1/auth/login", body: loginBody("Mod", "wrong password!!"), origin: "http://panel.lan"})
+	}
+	rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/auth/login", body: loginBody("Mod", testPassword), origin: "http://panel.lan"})
+	var p api.Problem
+	_ = json.Unmarshal(rec.Body.Bytes(), &p)
+	if rec.Code != http.StatusTooManyRequests || p.Reason == nil || *p.Reason != api.ReasonCodeRateLimited {
+		t.Fatalf("locked login = %d %s", rec.Code, rec.Body.String())
+	}
+	if ra := rec.Header().Get("Retry-After"); ra != "900" {
+		t.Errorf("Retry-After = %q, want 900", ra)
+	}
+}
