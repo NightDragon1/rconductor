@@ -1,0 +1,26 @@
+# Build output
+/bin/
+/dist/
+*.exe
+*.test
+coverage.out
+
+# Local runtime data
+/data/
+/secrets/
+/backups/
+
+# Frontend
+/web/node_modules/
+/web/dist/*
+!/web/dist/.gitkeep
+/web/coverage/
+/web/test-results/
+/web/playwright-report/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
