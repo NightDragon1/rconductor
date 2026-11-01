@@ -100,7 +100,13 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	wg.Go(func() { backup.Schedule(ctx, st, backups) })
 
 	webLog := logs.Module("web")
-	return web.Serve(ctx, cfg.HTTPAddr, web.NewHandler(web.Options{Log: webLog, UI: opts.UI}), webLog,
+	proxies := web.Proxies{Trusted: cfg.TrustedProxies, PublicURL: cfg.PublicURL}
+	if !proxies.HTTPSKnown() {
+		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
+			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
+	}
+	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies})
+	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,
 		func(addr net.Addr) {
 			logs.Root().Info("ready", logging.Event(logging.AppReady),
 				slog.String(logging.KeyVersion, buildinfo.Version), slog.String("http_addr", addr.String()))

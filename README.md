@@ -62,9 +62,9 @@ file, for example a Docker secret.
 | `RCD_HTTP_ADDR` | `:8080` | address of the web UI and API |
 | `RCD_AGENT_ADDR` | `:8443` | address of the agent port (TLS), served from the agent milestone |
 | `RCD_AGENT_PUBLIC_ADDR` | empty | address under which agents reach the panel, written into pairing tokens |
-| `RCD_PUBLIC_URL` | empty | public URL of the UI for invitation links and origin checks |
+| `RCD_PUBLIC_URL` | empty | public URL of the UI for invitation links and origin checks; with `https://` session cookies are always marked Secure |
 | `RCD_BASE_PATH` | `/` | base path behind a reverse proxy |
-| `RCD_TRUSTED_PROXIES` | empty | IP ranges whose `X-Forwarded-*` headers are trusted |
+| `RCD_TRUSTED_PROXIES` | empty | IP ranges of reverse proxies whose `X-Forwarded-For` and `X-Forwarded-Proto` are trusted; from anyone else these headers are ignored |
 | `RCD_DB_DRIVER` | `sqlite` | database driver; `postgres` follows in release 2 |
 | `RCD_DB_URL` / `_FILE` | empty | connection URL of an external Postgres (release 2) |
 | `RCD_DATA_DIR` | `/data` | database and other data |
