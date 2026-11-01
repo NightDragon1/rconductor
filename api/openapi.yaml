@@ -16,11 +16,117 @@ info:
 servers:
   - url: /api/v1
 
+# Every operation needs a session unless it says otherwise.
+security:
+  - session: []
+
 # Endpoints are added per milestone (Design 2.2).
-paths: {}
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      summary: Log in with pseudonym and password (AUTH-001, AUTH-006).
+      description: >-
+        Starts a new session and sets the session cookie. Wrong
+        credentials, unknown users and disabled accounts get the same
+        answer.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in; the response sets the session cookie.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: End the current session (AUTH-006).
+      tags: [auth]
+      responses:
+        "204":
+          description: Logged out; the response clears the session cookie.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /auth/session:
+    get:
+      operationId: getSession
+      summary: The current session and its user (AUTH-006).
+      tags: [auth]
+      responses:
+        "200":
+          description: Current session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
 
 components:
   schemas:
+    Role:
+      type: string
+      description: One of the four fixed roles (ROLE-001).
+      enum: [rcon_admin, server_admin, moderator, supporter]
+
+    LoginRequest:
+      type: object
+      required: [pseudonym, password]
+      properties:
+        pseudonym:
+          type: string
+          minLength: 1
+          maxLength: 64
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+
+    SessionUser:
+      type: object
+      required: [id, pseudonym, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        pseudonym:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+
+    Session:
+      type: object
+      required: [user, expires_at]
+      properties:
+        user:
+          $ref: "#/components/schemas/SessionUser"
+        expires_at:
+          type: string
+          format: date-time
+          description: >-
+            End of the session unless it is used again; it also ends after
+            the maximum lifetime.
+
     ReasonCode:
       type: string
       description: Machine-readable reason of a rejection (Design 3.5).
@@ -62,6 +168,42 @@ components:
           description: Request ID of the call, also found in the logs.
 
   responses:
+    BadRequest:
+      description: The request body or parameters are malformed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: >-
+        Not allowed, for example a write request without matching Origin
+        header (Design 2.1).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    RateLimited:
+      description: Too many attempts; Retry-After gives the wait in seconds.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Busy:
+      description: >-
+        The panel is busy (for example all password hashing slots are in
+        use); retry after Retry-After seconds.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     Unauthenticated:
       description: No valid session.
       content:
@@ -81,5 +223,7 @@ components:
       in: cookie
       name: rcd_session
       description: >-
-        Server-side session; cookie is HttpOnly, Secure and SameSite=Strict
-        (Design 2.1).
+        Server-side session (Design 2.1, decision W1). The cookie is
+        HttpOnly and SameSite=Lax. Over HTTPS it is named
+        __Host-rcd_session and marked Secure; over plain HTTP it is named
+        rcd_session.

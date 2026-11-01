@@ -78,6 +78,9 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err := backup.EnsureDefaults(ctx, st); err != nil {
 		return err
 	}
+	if err := auth.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
 
 	params := password.Default
 	if opts.HashParams != nil {
@@ -91,9 +94,11 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if console == nil {
 		console = os.Stderr
 	}
-	if err := auth.EnsureEmergencyAdmin(ctx, st, hasher, cfg.EmergencyAdmin, logs.Module("auth"), console); err != nil {
+	authLog := logs.Module("auth")
+	if err := auth.EnsureEmergencyAdmin(ctx, st, hasher, cfg.EmergencyAdmin, authLog, console); err != nil {
 		return err
 	}
+	authSvc := auth.NewService(st, hasher, authLog, cfg.EmergencyAdmin)
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -105,7 +110,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
 			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
 	}
-	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies})
+	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Auth: authSvc})
 	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,
 		func(addr net.Addr) {
 			logs.Root().Info("ready", logging.Event(logging.AppReady),

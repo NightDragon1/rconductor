@@ -26,6 +26,35 @@ func (q *Queries) GetEmergencyAdmin(ctx context.Context) (GetEmergencyAdminRow, 
 	return i, err
 }
 
+const getLoginUser = `-- name: GetLoginUser :one
+SELECT id, pseudonym, role, password_hash, is_emergency, disabled_at
+FROM users
+WHERE pseudonym = ? COLLATE NOCASE AND deleted_at IS NULL
+`
+
+type GetLoginUserRow struct {
+	ID           string
+	Pseudonym    string
+	Role         string
+	PasswordHash string
+	IsEmergency  int64
+	DisabledAt   sql.NullString
+}
+
+func (q *Queries) GetLoginUser(ctx context.Context, pseudonym string) (GetLoginUserRow, error) {
+	row := q.db.QueryRowContext(ctx, getLoginUser, pseudonym)
+	var i GetLoginUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Pseudonym,
+		&i.Role,
+		&i.PasswordHash,
+		&i.IsEmergency,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
 const insertUser = `-- name: InsertUser :exec
 INSERT INTO users (
     id, pseudonym, role, password_hash, is_emergency, created_by, created_at, updated_at
@@ -54,5 +83,19 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
+	return err
+}
+
+const setLastLogin = `-- name: SetLastLogin :exec
+UPDATE users SET last_login_at = ? WHERE id = ?
+`
+
+type SetLastLoginParams struct {
+	LastLoginAt sql.NullString
+	ID          string
+}
+
+func (q *Queries) SetLastLogin(ctx context.Context, arg SetLastLoginParams) error {
+	_, err := q.db.ExecContext(ctx, setLastLogin, arg.LastLoginAt, arg.ID)
 	return err
 }
