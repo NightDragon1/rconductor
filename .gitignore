@@ -10,10 +10,11 @@ coverage.out
 /secrets/
 /backups/
 
-# Frontend
+# Frontend (the UI build is embedded from internal/webui/dist; only the
+# placeholder is committed so go:embed always finds the directory)
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep
 /web/node_modules/
-/web/dist/*
-!/web/dist/.gitkeep
 /web/coverage/
 /web/test-results/
 /web/playwright-report/
