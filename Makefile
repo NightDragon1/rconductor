@@ -3,6 +3,8 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
 LDFLAGS := -s -w -X github.com/NightDragon1/rconductor/internal/buildinfo.Version=$(VERSION)
 GOFLAGS := -trimpath
+SQLC_VERSION := 1.31.1
+SQLC ?= sqlc
 export CGO_ENABLED := 0
 
 .PHONY: all build panel agent test test-integration lint vuln generate
@@ -30,4 +32,5 @@ vuln:
 	go tool -modfile=tools/go.mod govulncheck ./...
 
 generate:
+	$(SQLC) generate
 	go generate ./...
