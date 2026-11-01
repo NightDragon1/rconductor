@@ -1,0 +1,45 @@
+schema: 1
+id: minecraft-java
+name: Minecraft (Java Edition)
+match:
+  images: ["itzg/minecraft-server*"]
+protocol:
+  type: source-rcon
+  default_port: 25575
+ports:
+  game:
+    - { port: 25565, proto: tcp, name: Spiel }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: [execute]
+players:
+  command: list
+  pattern: "players online: (.*)$"
+  separator: ", "
+stop:
+  command: stop
+version:
+  pattern: "Starting minecraft server version (\\S+)"
+formatting: minecraft
+catalog:
+  - path: list
+    description: Spieler online anzeigen
+  - path: whitelist add
+    description: Spieler auf die Whitelist setzen
+    params:
+      - { name: spieler, type: player }
+  - path: kick
+    description: Spieler vom Server werfen
+    params:
+      - { name: spieler, type: player }
+      - { name: grund, type: text, optional: true }
+  - path: time set
+    description: Tageszeit setzen
+    params:
+      - { name: zeit, type: choice, values: [day, night] }
+  - path: say
+    description: Nachricht an alle Spieler
+    params:
+      - { name: text, type: text }
