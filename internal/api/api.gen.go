@@ -156,6 +156,50 @@ type Grant struct {
 // GroupKind defines model for GroupKind.
 type GroupKind string
 
+// Invite defines model for Invite.
+type Invite struct {
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy openapi_types.UUID `json:"created_by"`
+	ExpiresAt time.Time          `json:"expires_at"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Role One of the four fixed roles (ROLE-001).
+	Role           Role                `json:"role"`
+	TemplateUserId *openapi_types.UUID `json:"template_user_id,omitempty"`
+	UsedAt         *time.Time          `json:"used_at,omitempty"`
+	UsedBy         *openapi_types.UUID `json:"used_by,omitempty"`
+}
+
+// InviteCreate defines model for InviteCreate.
+type InviteCreate struct {
+	// Role One of the four fixed roles (ROLE-001).
+	Role           Role                `json:"role"`
+	TemplateUserId *openapi_types.UUID `json:"template_user_id,omitempty"`
+}
+
+// InviteCreated defines model for InviteCreated.
+type InviteCreated struct {
+	Invite Invite `json:"invite"`
+
+	// Token Shown only once; stored only as hash.
+	Token string `json:"token"`
+
+	// Url Link for the invitee; the token is in the fragment, so it reaches no server log.
+	Url string `json:"url"`
+}
+
+// InviteList defines model for InviteList.
+type InviteList struct {
+	Items []Invite `json:"items"`
+}
+
+// InviteRedeem defines model for InviteRedeem.
+type InviteRedeem struct {
+	Password  string `json:"password"`
+	Pseudonym string `json:"pseudonym"`
+	Token     string `json:"token"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Password  string `json:"password"`
@@ -294,6 +338,9 @@ type CommandListID = openapi_types.UUID
 // GroupID defines model for GroupID.
 type GroupID = openapi_types.UUID
 
+// InviteID defines model for InviteID.
+type InviteID = openapi_types.UUID
+
 // UserID defines model for UserID.
 type UserID = openapi_types.UUID
 
@@ -335,6 +382,12 @@ type CreateCommandListJSONRequestBody = CommandListCreate
 // UpdateCommandListJSONRequestBody defines body for UpdateCommandList for application/json ContentType.
 type UpdateCommandListJSONRequestBody = CommandListUpdate
 
+// CreateInviteJSONRequestBody defines body for CreateInvite for application/json ContentType.
+type CreateInviteJSONRequestBody = InviteCreate
+
+// RedeemInviteJSONRequestBody defines body for RedeemInvite for application/json ContentType.
+type RedeemInviteJSONRequestBody = InviteRedeem
+
 // CreateUserGroupJSONRequestBody defines body for CreateUserGroup for application/json ContentType.
 type CreateUserGroupJSONRequestBody = UserGroupCreate
 
@@ -373,6 +426,18 @@ type ServerInterface interface {
 	// UpdateCommandList Rename a list or replace its entries (ROLE-007).
 	// (PATCH /command-lists/{id})
 	UpdateCommandList(w http.ResponseWriter, r *http.Request, id CommandListID)
+	// ListInvites Invitations of the caller; the RCON admin sees all (UI-008).
+	// (GET /invites)
+	ListInvites(w http.ResponseWriter, r *http.Request)
+	// CreateInvite Invite a new user with a role below the caller's (AUTH-001, UI-008).
+	// (POST /invites)
+	CreateInvite(w http.ResponseWriter, r *http.Request)
+	// RedeemInvite Create the invited user with own pseudonym and password.
+	// (POST /invites/redeem)
+	RedeemInvite(w http.ResponseWriter, r *http.Request)
+	// DeleteInvite Withdraw an unused invitation.
+	// (DELETE /invites/{id})
+	DeleteInvite(w http.ResponseWriter, r *http.Request, id InviteID)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(w http.ResponseWriter, r *http.Request)
@@ -556,6 +621,74 @@ func (siw *ServerInterfaceWrapper) UpdateCommandList(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCommandList(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListInvites operation middleware
+func (siw *ServerInterfaceWrapper) ListInvites(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInvites(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateInvite operation middleware
+func (siw *ServerInterfaceWrapper) CreateInvite(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateInvite(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RedeemInvite operation middleware
+func (siw *ServerInterfaceWrapper) RedeemInvite(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RedeemInvite(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteInvite operation middleware
+func (siw *ServerInterfaceWrapper) DeleteInvite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id InviteID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteInvite(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -986,6 +1119,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/command-lists/{id}", wrapper.DeleteCommandList)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/command-lists/{id}", wrapper.GetCommandList)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/command-lists/{id}", wrapper.UpdateCommandList)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/invites", wrapper.ListInvites)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/invites", wrapper.CreateInvite)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/invites/{id}", wrapper.DeleteInvite)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/invites/redeem", wrapper.RedeemInvite)
 
 	return m
 }
@@ -1511,6 +1648,314 @@ type UpdateCommandList422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateCommandList422ApplicationProblemPlusJSONResponse) VisitUpdateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListInvitesRequestObject struct {
+}
+
+type ListInvitesResponseObject interface {
+	VisitListInvitesResponse(w http.ResponseWriter) error
+}
+
+type ListInvites200JSONResponse InviteList
+
+func (response ListInvites200JSONResponse) VisitListInvitesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListInvites401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListInvites401ApplicationProblemPlusJSONResponse) VisitListInvitesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInviteRequestObject struct {
+	Body *CreateInviteJSONRequestBody
+}
+
+type CreateInviteResponseObject interface {
+	VisitCreateInviteResponse(w http.ResponseWriter) error
+}
+
+type CreateInvite201JSONResponse InviteCreated
+
+func (response CreateInvite201JSONResponse) VisitCreateInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInvite400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateInvite400ApplicationProblemPlusJSONResponse) VisitCreateInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInvite401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateInvite401ApplicationProblemPlusJSONResponse) VisitCreateInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInvite403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateInvite403ApplicationProblemPlusJSONResponse) VisitCreateInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInvite404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateInvite404ApplicationProblemPlusJSONResponse) VisitCreateInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateInvite422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response CreateInvite422ApplicationProblemPlusJSONResponse) VisitCreateInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemInviteRequestObject struct {
+	Body *RedeemInviteJSONRequestBody
+}
+
+type RedeemInviteResponseObject interface {
+	VisitRedeemInviteResponse(w http.ResponseWriter) error
+}
+
+type RedeemInvite201JSONResponse SessionUser
+
+func (response RedeemInvite201JSONResponse) VisitRedeemInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemInvite400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemInvite400ApplicationProblemPlusJSONResponse) VisitRedeemInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemInvite403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemInvite403ApplicationProblemPlusJSONResponse) VisitRedeemInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemInvite404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemInvite404ApplicationProblemPlusJSONResponse) VisitRedeemInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemInvite422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemInvite422ApplicationProblemPlusJSONResponse) VisitRedeemInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemInvite503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemInvite503ApplicationProblemPlusJSONResponse) VisitRedeemInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteInviteRequestObject struct {
+	Id InviteID `json:"id"`
+}
+
+type DeleteInviteResponseObject interface {
+	VisitDeleteInviteResponse(w http.ResponseWriter) error
+}
+
+type DeleteInvite204Response struct {
+}
+
+func (response DeleteInvite204Response) VisitDeleteInviteResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteInvite401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteInvite401ApplicationProblemPlusJSONResponse) VisitDeleteInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteInvite404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteInvite404ApplicationProblemPlusJSONResponse) VisitDeleteInviteResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteInvite422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteInvite422ApplicationProblemPlusJSONResponse) VisitDeleteInviteResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -2276,6 +2721,18 @@ type StrictServerInterface interface {
 	// UpdateCommandList Rename a list or replace its entries (ROLE-007).
 	// (PATCH /command-lists/{id})
 	UpdateCommandList(ctx context.Context, request UpdateCommandListRequestObject) (UpdateCommandListResponseObject, error)
+	// ListInvites Invitations of the caller; the RCON admin sees all (UI-008).
+	// (GET /invites)
+	ListInvites(ctx context.Context, request ListInvitesRequestObject) (ListInvitesResponseObject, error)
+	// CreateInvite Invite a new user with a role below the caller's (AUTH-001, UI-008).
+	// (POST /invites)
+	CreateInvite(ctx context.Context, request CreateInviteRequestObject) (CreateInviteResponseObject, error)
+	// RedeemInvite Create the invited user with own pseudonym and password.
+	// (POST /invites/redeem)
+	RedeemInvite(ctx context.Context, request RedeemInviteRequestObject) (RedeemInviteResponseObject, error)
+	// DeleteInvite Withdraw an unused invitation.
+	// (DELETE /invites/{id})
+	DeleteInvite(ctx context.Context, request DeleteInviteRequestObject) (DeleteInviteResponseObject, error)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(ctx context.Context, request ListUserGroupsRequestObject) (ListUserGroupsResponseObject, error)
@@ -2562,6 +3019,118 @@ func (sh *strictHandler) UpdateCommandList(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCommandListResponseObject); ok {
 		if err := validResponse.VisitUpdateCommandListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListInvites operation middleware
+func (sh *strictHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
+	var request ListInvitesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListInvites(ctx, request.(ListInvitesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListInvites")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListInvitesResponseObject); ok {
+		if err := validResponse.VisitListInvitesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateInvite operation middleware
+func (sh *strictHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
+	var request CreateInviteRequestObject
+
+	var body CreateInviteJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateInvite(ctx, request.(CreateInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateInviteResponseObject); ok {
+		if err := validResponse.VisitCreateInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RedeemInvite operation middleware
+func (sh *strictHandler) RedeemInvite(w http.ResponseWriter, r *http.Request) {
+	var request RedeemInviteRequestObject
+
+	var body RedeemInviteJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RedeemInvite(ctx, request.(RedeemInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RedeemInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RedeemInviteResponseObject); ok {
+		if err := validResponse.VisitRedeemInviteResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteInvite operation middleware
+func (sh *strictHandler) DeleteInvite(w http.ResponseWriter, r *http.Request, id InviteID) {
+	var request DeleteInviteRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteInvite(ctx, request.(DeleteInviteRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteInvite")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteInviteResponseObject); ok {
+		if err := validResponse.VisitDeleteInviteResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
