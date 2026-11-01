@@ -215,6 +215,66 @@ export interface paths {
         patch: operations["updateCommandList"];
         trace?: never;
     };
+    "/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Invitations of the caller; the RCON admin sees all (UI-008). */
+        get: operations["listInvites"];
+        put?: never;
+        /**
+         * Invite a new user with a role below the caller's (AUTH-001, UI-008).
+         * @description The token is returned only now and is valid once until expires_at (setting invite.lifetime, default 72 h). With a template the new user takes the template's assignments as far as the caller controls them. A moderator invites supporters only while supporters are enabled for him.
+         */
+        post: operations["createInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["InviteID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraw an unused invitation. */
+        delete: operations["deleteInvite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invites/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create the invited user with own pseudonym and password.
+         * @description Unknown, expired and used tokens get the same answer. The new user logs in afterwards.
+         */
+        post: operations["redeemInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -241,6 +301,43 @@ export interface components {
         };
         UserList: {
             items: components["schemas"]["User"][];
+        };
+        Invite: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            created_by: string;
+            role: components["schemas"]["Role"];
+            /** Format: uuid */
+            template_user_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            used_at?: string;
+            /** Format: uuid */
+            used_by?: string;
+        };
+        InviteList: {
+            items: components["schemas"]["Invite"][];
+        };
+        InviteCreate: {
+            role: components["schemas"]["Role"];
+            /** Format: uuid */
+            template_user_id?: string;
+        };
+        InviteCreated: {
+            invite: components["schemas"]["Invite"];
+            /** @description Shown only once; stored only as hash. */
+            token: string;
+            /** @description Link for the invitee; the token is in the fragment, so it reaches no server log. */
+            url: string;
+        };
+        InviteRedeem: {
+            token: string;
+            pseudonym: string;
+            password: string;
         };
         CommandListEntry: {
             /** @description Token path such as "whitelist add" (CMD-004). */
@@ -454,6 +551,7 @@ export interface components {
         };
     };
     parameters: {
+        InviteID: string;
         CommandListID: string;
         GroupID: string;
         UserID: string;
@@ -940,6 +1038,108 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Invalid"];
+        };
+    };
+    listInvites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invitations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    createInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCreate"];
+            };
+        };
+        responses: {
+            /** @description The invitation with its token and link. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    deleteInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["InviteID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Withdrawn. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    redeemInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteRedeem"];
+            };
+        };
+        responses: {
+            /** @description The new user. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+            503: components["responses"]["Busy"];
         };
     };
 }

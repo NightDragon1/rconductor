@@ -19,13 +19,14 @@ import (
 // publicOperations need no session; every other operation is rejected
 // with 401 unless a valid session is present (default deny).
 // The names are the generated Go method names of the operations.
-var publicOperations = map[string]bool{"Login": true}
+var publicOperations = map[string]bool{"Login": true, "RedeemInvite": true}
 
 // apiServer implements the generated strict server interface.
 type apiServer struct {
 	auth    *auth.Service
 	perm    *perm.Checker
 	users   *users.Service
+	invites *users.Invites
 	log     *slog.Logger
 	proxies Proxies
 }
