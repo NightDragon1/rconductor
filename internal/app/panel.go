@@ -107,7 +107,8 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		console = os.Stderr
 	}
 	authLog := logs.Module("auth")
-	if err := auth.EnsureEmergencyAdmin(ctx, st, hasher, cfg.EmergencyAdmin, authLog, console); err != nil {
+	if err := auth.EnsureEmergencyAdmin(ctx, st, hasher,
+		auth.EmergencyOptions{Enabled: cfg.EmergencyAdmin, Reset: cfg.EmergencyAdminReset}, authLog, console); err != nil {
 		return err
 	}
 	authSvc := auth.NewService(st, hasher, authLog, cfg.EmergencyAdmin)

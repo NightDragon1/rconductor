@@ -29,6 +29,8 @@ const (
 	AuthSessionRevoked  Code = "auth.session.revoked"
 	AuthInitialPassword Code = "auth.initial_password.issued" //nolint:gosec // event code, not a credential
 	AuthInviteUsed      Code = "auth.invite.used"
+	// AuthEmergencyReset is new in revision 2.1 (AUTH-011).
+	AuthEmergencyReset Code = "auth.emergency_admin.reset"
 )
 
 // Permissions.
@@ -92,7 +94,7 @@ var AllCodes = []Code{
 	AppStart, AppReady, DBMigrateStart, DBMigrateDone, DBMigrateLockWt,
 	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge,
 	AuthLoginOK, AuthLoginFailed, AuthLockout, AuthLogout, AuthSessionRevoked,
-	AuthInitialPassword, AuthInviteUsed,
+	AuthInitialPassword, AuthInviteUsed, AuthEmergencyReset,
 	PermDenied, PermRecomputed,
 	CmdAccepted, CmdDenied, CmdSent, CmdResponse, CmdTimeout,
 	RCONConnected, RCONAuthFailed, RCONDisconnected, RCONReconnect,

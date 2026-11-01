@@ -275,3 +275,49 @@ func TestInitialPasswordLifecycle(t *testing.T) {
 		}
 	}
 }
+
+// TestEmergencyAdminRecovery covers AUTH-011 over two starts: the second
+// start with RCD_EMERGENCY_ADMIN_RESET=true prints a new initial password
+// exactly once; the old password does not log in any more.
+func TestEmergencyAdminRecovery(t *testing.T) {
+	cfg := testConfig(t, t.TempDir())
+	var out, console syncBuffer
+	addr, stop := startPanel(t, cfg, &out, &console)
+	old := regexp.MustCompile(`password: (\S+)`).FindStringSubmatch(console.String())[1]
+	login := func(addr, pw string) int {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, "http://"+addr+"/api/v1/auth/login",
+			strings.NewReader(`{"pseudonym":"admin","password":"`+pw+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "http://"+addr)
+		r, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = r.Body.Close()
+		return r.StatusCode
+	}
+	if code := login(addr, old); code != http.StatusOK {
+		t.Fatalf("first login = %d", code)
+	}
+	if err := stop(); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg.EmergencyAdminReset = true
+	var out2, console2 syncBuffer
+	addr, stop = startPanel(t, cfg, &out2, &console2)
+	defer func() { _ = stop() }()
+	m := regexp.MustCompile(`password: (\S+)`).FindAllStringSubmatch(console2.String(), -1)
+	if len(m) != 1 || m[0][1] == old {
+		t.Fatalf("new initial password printed %d times", len(m))
+	}
+	if !strings.Contains(out2.String(), `"event":"auth.emergency_admin.reset"`) {
+		t.Error("auth.emergency_admin.reset missing")
+	}
+	if code := login(addr, old); code != http.StatusUnauthorized {
+		t.Errorf("old password after the reset = %d", code)
+	}
+	if code := login(addr, m[0][1]); code != http.StatusOK {
+		t.Errorf("new password = %d", code)
+	}
+}

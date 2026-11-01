@@ -30,6 +30,11 @@ container logs as long as the container and its logs exist. You must
 change it at your first login (profile, change password); the initial
 password is invalid from then on.
 
+Lost the emergency admin's password? Start the panel once with
+`RCD_EMERGENCY_ADMIN_RESET=true`: it prints a new initial password the same
+way, ends all sessions of the emergency admin and lifts a lock. Remove the
+variable afterwards, otherwise every start resets the password again.
+
 Run the panel only in your LAN or behind a VPN. The web port speaks plain
 HTTP; TLS is the job of a reverse proxy.
 
@@ -79,6 +84,7 @@ file, for example a Docker secret.
 | `RCD_BACKUP_DIR` | `/backups` | backups |
 | `RCD_MASTER_KEY_FILE` | empty | read the master key from this file instead of `/secrets/master.key`; it is never replaced |
 | `RCD_EMERGENCY_ADMIN` | `true` | emergency admin enabled |
+| `RCD_EMERGENCY_ADMIN_RESET` | `false` | `true`: on start, give the emergency admin a new initial password and end his sessions; remove it again afterwards |
 | `RCD_PASSWORD_HASH_CONCURRENCY` | `2` | password hashes computed at once (1 to 64); each takes 64 MiB of RAM |
 | `RCD_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `RCD_LOG_FORMAT` | `text` | `text` or `json`; each audit-relevant event carries a fixed event code |
