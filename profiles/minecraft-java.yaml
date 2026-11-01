@@ -10,7 +10,7 @@ protocol:
   default_port: 25575
 ports:
   game:
-    - { port: 25565, proto: tcp, name: Spiel }
+    - { port: 25565, proto: tcp, name: game }
 syntax:
   case_sensitive: false
   strip_prefix: "/"
@@ -27,21 +27,21 @@ version:
 formatting: minecraft
 catalog:
   - path: list
-    description: Spieler online anzeigen
+    description: Show players online
   - path: whitelist add
-    description: Spieler auf die Whitelist setzen
+    description: Add a player to the whitelist
     params:
-      - { name: spieler, type: player }
+      - { name: player, type: player }
   - path: kick
-    description: Spieler vom Server werfen
+    description: Kick a player from the server
     params:
-      - { name: spieler, type: player }
-      - { name: grund, type: text, optional: true }
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
   - path: time set
-    description: Tageszeit setzen
+    description: Set the time of day
     params:
-      - { name: zeit, type: choice, values: [day, night] }
+      - { name: time, type: choice, values: [day, night] }
   - path: say
-    description: Nachricht an alle Spieler
+    description: Message to all players
     params:
       - { name: text, type: text }
