@@ -5,12 +5,27 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/NightDragon1/rconductor/internal/buildinfo"
+	"github.com/NightDragon1/rconductor/internal/app"
+	"github.com/NightDragon1/rconductor/internal/config"
 )
 
 func main() {
-	fmt.Fprintf(os.Stderr, "rconductor agent %s\n", buildinfo.Version)
+	cfg, err := config.LoadAgentFromOS()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "rconductor agent: invalid configuration:\n%v\n", err)
+		os.Exit(2)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := app.RunAgent(ctx, cfg, os.Stdout); err != nil {
+		stop()
+		os.Exit(1) //nolint:gocritic // stop already called
+	}
 }

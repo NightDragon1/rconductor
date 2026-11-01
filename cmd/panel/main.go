@@ -4,12 +4,27 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/NightDragon1/rconductor/internal/buildinfo"
+	"github.com/NightDragon1/rconductor/internal/app"
+	"github.com/NightDragon1/rconductor/internal/config"
 )
 
 func main() {
-	fmt.Fprintf(os.Stderr, "rconductor panel %s\n", buildinfo.Version)
+	cfg, err := config.LoadPanelFromOS()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "rconductor panel: invalid configuration:\n%v\n", err)
+		os.Exit(2)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := app.RunPanel(ctx, cfg, os.Stdout, app.PanelOptions{}); err != nil {
+		stop()
+		os.Exit(1) //nolint:gocritic // stop already called
+	}
 }

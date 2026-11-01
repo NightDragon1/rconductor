@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Single source of the panel API (D-039). Server stubs are generated with
+# oapi-codegen, client types with openapi-typescript. Extend this file
+# before implementing an endpoint.
+openapi: 3.1.0
+info:
+  title: RCONductor Panel API
+  version: 1.0.0
+  description: >-
+    REST API between the browser and the panel (Design 2). In R1 it serves
+    only the panel's own web UI. Errors use Problem Details (RFC 9457).
+  license:
+    name: AGPL-3.0-or-later
+    identifier: AGPL-3.0-or-later
+servers:
+  - url: /api/v1
+
+# Endpoints are added per milestone (Design 2.2).
+paths: {}
+
+components:
+  schemas:
+    ReasonCode:
+      type: string
+      description: Machine-readable reason of a rejection (Design 3.5).
+      enum:
+        - unauthenticated
+        - not_found
+        - not_in_list
+        - wrapper_blocked
+        - invalid
+        - rate_limited
+        - server_unavailable
+
+    Problem:
+      type: object
+      description: Problem Details for HTTP APIs (RFC 9457).
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          description: URI reference identifying the problem type.
+          default: about:blank
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        detail:
+          type: string
+          description: Human-readable explanation of this occurrence.
+        instance:
+          type: string
+          description: URI reference of this occurrence.
+        reason:
+          $ref: "#/components/schemas/ReasonCode"
+        request_id:
+          type: string
+          description: Request ID of the call, also found in the logs.
+
+  responses:
+    Unauthenticated:
+      description: No valid session.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource does not exist or is outside the caller's scope.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: rcd_session
+      description: >-
+        Server-side session; cookie is HttpOnly, Secure and SameSite=Strict
+        (Design 2.1).

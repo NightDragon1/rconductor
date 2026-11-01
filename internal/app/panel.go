@@ -1,0 +1,87 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+// Package app wires the modules of panel and agent and runs their start-up
+// sequence (Architecture 5.4).
+package app
+
+import (
+	"context"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"sync"
+
+	"github.com/NightDragon1/rconductor/internal/buildinfo"
+	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/ops/backup"
+	"github.com/NightDragon1/rconductor/internal/ops/keys"
+	"github.com/NightDragon1/rconductor/internal/store"
+	"github.com/NightDragon1/rconductor/internal/web"
+)
+
+// PanelOptions are optional hooks for RunPanel.
+type PanelOptions struct {
+	// UI serves the embedded web interface.
+	UI http.Handler
+	// Ready is called with the bound web address once the panel serves.
+	Ready func(httpAddr net.Addr)
+}
+
+// RunPanel starts the panel and blocks until ctx ends: migrations (with a
+// backup first), master key, backup schedule, web port. Errors are logged
+// and returned.
+func RunPanel(ctx context.Context, cfg config.Panel, out io.Writer, opts PanelOptions) error {
+	logs := logging.New(out, "panel", cfg.Log)
+	root := logs.Root()
+	root.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version))
+
+	err := runPanel(ctx, cfg, logs, opts)
+	if err != nil {
+		root.Error("panel stopped with error", slog.Any("err", err))
+	}
+	return err
+}
+
+func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts PanelOptions) error {
+	dbLog := logs.Module("db")
+	st, err := store.Open(ctx, cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = st.Close() }()
+
+	backups := backup.New(st.DB, cfg.BackupDir, logs.Module("backup"))
+	if _, err := st.Migrate(ctx, dbLog, store.MigrateOptions{
+		BeforeMigrate: backup.BeforeMigrate(st, backups),
+	}); err != nil {
+		return err
+	}
+
+	if _, err := keys.LoadOrCreate(logs.Module("keys"), keys.Options{
+		SecretsDir: cfg.SecretsDir,
+		File:       cfg.MasterKeyFile,
+		Forbidden:  []string{cfg.DataDir, cfg.BackupDir},
+	}); err != nil {
+		return err
+	}
+
+	if err := backup.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	wg.Go(func() { backup.Schedule(ctx, st, backups) })
+
+	webLog := logs.Module("web")
+	return web.Serve(ctx, cfg.HTTPAddr, web.NewHandler(web.Options{Log: webLog, UI: opts.UI}), webLog,
+		func(addr net.Addr) {
+			logs.Root().Info("ready", logging.Event(logging.AppReady),
+				slog.String(logging.KeyVersion, buildinfo.Version), slog.String("http_addr", addr.String()))
+			if opts.Ready != nil {
+				opts.Ready(addr)
+			}
+		})
+}
