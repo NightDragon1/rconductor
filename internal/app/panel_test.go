@@ -240,8 +240,25 @@ func TestInitialPasswordLifecycle(t *testing.T) {
 			cookie = c
 		}
 	}
+	// AUTH-010: the initial password forces a change before anything else.
+	getUsers := func() int {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, base+"/api/v1/users", nil)
+		req.AddCookie(cookie)
+		r, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = r.Body.Close()
+		return r.StatusCode
+	}
+	if code := getUsers(); code != http.StatusForbidden {
+		t.Errorf("GET /users before the change = %d, want 403", code)
+	}
 	if resp := post("/api/v1/me/password", `{"current_password":"`+m[1]+`","new_password":"a much better password"}`, cookie); resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("change password = %d", resp.StatusCode)
+	}
+	if code := getUsers(); code != http.StatusOK {
+		t.Errorf("GET /users after the change = %d, want 200", code)
 	}
 	if resp := login(m[1]); resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("initial password after the change = %d, want 401", resp.StatusCode)

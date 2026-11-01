@@ -85,3 +85,16 @@ func (s *apiServer) GetUserAvatar(ctx context.Context, req api.GetUserAvatarRequ
 	}
 	return api.GetUserAvatar200ImagepngResponse{Body: bytes.NewReader(data), ContentLength: int64(len(data))}, nil
 }
+
+func (s *apiServer) ResetPassword(ctx context.Context, req api.ResetPasswordRequestObject) (api.ResetPasswordResponseObject, error) {
+	pw, err := s.profiles.ResetPassword(ctx, adminRequest(ctx), req.Id.String())
+	switch {
+	case errors.Is(err, password.ErrBusy):
+		return nil, errBusy()
+	case err != nil:
+		return nil, adminError(err)
+	}
+	// The temporary password must not stay in any cache.
+	httpOf(ctx).w.Header().Set("Cache-Control", "no-store")
+	return api.ResetPassword200JSONResponse(api.PasswordReset{Password: pw}), nil
+}

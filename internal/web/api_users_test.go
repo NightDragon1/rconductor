@@ -55,3 +55,40 @@ func TestUsersAPI(t *testing.T) {
 		t.Errorf("session after rights change = %d", rec.Code)
 	}
 }
+
+// TestForcedPasswordChange covers AUTH-010 over HTTP: with the flag set
+// only /me/password, /auth/logout and /auth/session work.
+func TestForcedPasswordChange(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	admin := f.login(t, "Boss")
+	rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/users/" + f.userID + "/password-reset", cookies: []*http.Cookie{admin}, origin: "http://panel.lan"})
+	var reset api.PasswordReset
+	if err := json.Unmarshal(rec.Body.Bytes(), &reset); err != nil || rec.Code != http.StatusOK || len(reset.Password) != 20 {
+		t.Fatalf("reset = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Error("temporary password may be cached")
+	}
+
+	r := f.do(t, call{method: http.MethodPost, path: "/api/v1/auth/login", body: loginBody("Mod", reset.Password), origin: "http://panel.lan"})
+	if r.Code != http.StatusOK || !strings.Contains(r.Body.String(), `"must_change_password":true`) {
+		t.Fatalf("login with temporary password = %d %s", r.Code, r.Body.String())
+	}
+	mod := sessionCookie(t, r, "rcd_session")
+	rec = f.do(t, call{method: http.MethodGet, path: "/api/v1/me", cookies: []*http.Cookie{mod}})
+	var p api.Problem
+	_ = json.Unmarshal(rec.Body.Bytes(), &p)
+	if rec.Code != http.StatusForbidden || p.Reason == nil || *p.Reason != api.ReasonCodePasswordChangeRequired {
+		t.Errorf("GET /me before the change = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/auth/session", cookies: []*http.Cookie{mod}}); rec.Code != http.StatusOK {
+		t.Errorf("session before the change = %d", rec.Code)
+	}
+	body := `{"current_password":"` + reset.Password + `","new_password":"my own new password"}`
+	if rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/me/password", body: body, cookies: []*http.Cookie{mod}, origin: "http://panel.lan"}); rec.Code != http.StatusNoContent {
+		t.Fatalf("change = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/me", cookies: []*http.Cookie{mod}}); rec.Code != http.StatusOK {
+		t.Errorf("GET /me after the change = %d %s", rec.Code, rec.Body.String())
+	}
+}

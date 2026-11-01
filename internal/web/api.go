@@ -21,6 +21,10 @@ import (
 // The names are the generated Go method names of the operations.
 var publicOperations = map[string]bool{"Login": true, "RedeemInvite": true}
 
+// whileMustChange are the only operations a user with a forced password
+// change may call (AUTH-010).
+var whileMustChange = map[string]bool{"ChangePassword": true, "Logout": true, "GetSession": true}
+
 // apiServer implements the generated strict server interface.
 type apiServer struct {
 	auth     *auth.Service
@@ -116,8 +120,17 @@ func (s *apiServer) authenticate(next api.StrictHandlerFunc, operationID string)
 				}
 			}
 		}
-		if _, ok := principal(ctx); !ok && !publicOperations[operationID] {
+		p, ok := principal(ctx)
+		if !ok && !publicOperations[operationID] {
 			return nil, errUnauthenticated()
+		}
+		if ok && p.MustChangePassword && !whileMustChange[operationID] {
+			perm.LogDenied(s.log, perm.Denial{
+				RequestID: RequestID(ctx), SessionRef: p.SessionRef(), User: p.Pseudonym, Role: perm.Role(p.Role),
+				Reason: string(api.ReasonCodePasswordChangeRequired), Action: operationID,
+			})
+			return nil, &problem{status: http.StatusForbidden, reason: api.ReasonCodePasswordChangeRequired,
+				detail: "change your password first"}
 		}
 		return next(ctx, w, r, request)
 	}

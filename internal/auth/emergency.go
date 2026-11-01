@@ -77,7 +77,7 @@ func EnsureEmergencyAdmin(ctx context.Context, st *store.Store, h *password.Hash
 	now := store.Now()
 	if err := sqlitedb.New(tx).InsertUser(ctx, sqlitedb.InsertUserParams{
 		ID: id, Pseudonym: EmergencyPseudonym, Role: RoleRCONAdmin, PasswordHash: hash,
-		IsEmergency: 1, CreatedAt: now, UpdatedAt: now,
+		IsEmergency: 1, MustChangePassword: 1, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		return fmt.Errorf("create emergency admin (is the pseudonym %q taken?): %w", EmergencyPseudonym, err)
 	}
@@ -103,6 +103,10 @@ func EnsureEmergencyAdmin(ctx context.Context, st *store.Store, h *password.Hash
 		EmergencyPseudonym, pw)
 	return err
 }
+
+// RandomPassword returns a random password of n characters from an
+// alphabet without look-alike characters.
+func RandomPassword(n int) (string, error) { return randomPassword(n) }
 
 func randomPassword(n int) (string, error) {
 	b := make([]byte, n)

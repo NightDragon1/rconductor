@@ -337,6 +337,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users/{id}/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a temporary password for a managed user (AUTH-010).
+         * @description The temporary password is in this answer only, never in log or audit; the user must change it at the next login, and all his sessions end.
+         */
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users/{id}/avatar": {
         parameters: {
             query?: never;
@@ -469,6 +491,10 @@ export interface components {
             contacts?: {
                 [key: string]: string;
             };
+        };
+        PasswordReset: {
+            /** @description Temporary password; shown only once. */
+            password: string;
         };
         PasswordChange: {
             current_password: string;
@@ -624,6 +650,8 @@ export interface components {
             role: components["schemas"]["Role"];
         };
         Session: {
+            /** @description Until the password is changed only /me/password, /auth/logout and /auth/session are allowed (AUTH-010). */
+            must_change_password: boolean;
             user: components["schemas"]["SessionUser"];
             /**
              * Format: date-time
@@ -1431,6 +1459,32 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The temporary password, shown once. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordReset"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Busy"];
         };
     };
     getUserAvatar: {

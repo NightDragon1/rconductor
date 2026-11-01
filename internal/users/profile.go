@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -238,4 +239,52 @@ func (p *Profiles) Avatar(ctx context.Context, req Request, id string) ([]byte, 
 		return nil, "", err
 	}
 	return a.Avatar, a.AvatarType.String, nil
+}
+
+// tempPasswordLen gives about 119 bits, like the initial password.
+const tempPasswordLen = 20
+
+// ResetPassword sets a random temporary password for a managed user and
+// returns it once for the managing user (AUTH-010). The user must change
+// it at the next login, and all his sessions end. The password never goes
+// to log or audit.
+func (p *Profiles) ResetPassword(ctx context.Context, req Request, id string) (string, error) {
+	s := p.users
+	if err := s.mustManage(ctx, req, id, "password.reset"); err != nil {
+		return "", err
+	}
+	u, err := s.load(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if u.IsEmergency {
+		s.denied(ctx, req, "password.reset", id, "forbidden", nil)
+		return "", ErrForbidden
+	}
+	pw, err := auth.RandomPassword(tempPasswordLen)
+	if err != nil {
+		return "", err
+	}
+	hash, err := p.hasher.Hash(ctx, pw)
+	if err != nil {
+		return "", err
+	}
+	tx, err := s.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := sqlitedb.New(tx).ResetPassword(ctx, sqlitedb.ResetPasswordParams{PasswordHash: hash, UpdatedAt: store.Now(), ID: id}); err != nil {
+		return "", err
+	}
+	if err := s.audit(ctx, tx, req, "password.reset", id, nil); err != nil {
+		return "", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+	if err := s.rightsChanged(ctx, req, "password.reset", id); err != nil {
+		return "", err
+	}
+	return pw, nil
 }

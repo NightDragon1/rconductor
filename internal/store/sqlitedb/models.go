@@ -154,23 +154,24 @@ type SupporterGrant struct {
 }
 
 type User struct {
-	ID                string
-	Pseudonym         string
-	RealName          sql.NullString
-	Contacts          string
-	Avatar            []byte
-	AvatarType        sql.NullString
-	Role              string
-	AuthSource        string
-	PasswordHash      string
-	IsEmergency       int64
-	SupportersAllowed int64
-	CreatedBy         sql.NullString
-	CreatedAt         string
-	UpdatedAt         string
-	LastLoginAt       sql.NullString
-	DisabledAt        sql.NullString
-	DeletedAt         sql.NullString
+	ID                 string
+	Pseudonym          string
+	RealName           sql.NullString
+	Contacts           string
+	Avatar             []byte
+	AvatarType         sql.NullString
+	Role               string
+	AuthSource         string
+	PasswordHash       string
+	IsEmergency        int64
+	SupportersAllowed  int64
+	CreatedBy          sql.NullString
+	CreatedAt          string
+	UpdatedAt          string
+	LastLoginAt        sql.NullString
+	DisabledAt         sql.NullString
+	DeletedAt          sql.NullString
+	MustChangePassword int64
 }
 
 type UserGroup struct {

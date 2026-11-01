@@ -80,18 +80,19 @@ func (q *Queries) GetEmergencyAdmin(ctx context.Context) (GetEmergencyAdminRow, 
 }
 
 const getLoginUser = `-- name: GetLoginUser :one
-SELECT id, pseudonym, role, password_hash, is_emergency, disabled_at
+SELECT id, pseudonym, role, password_hash, is_emergency, disabled_at, must_change_password
 FROM users
 WHERE pseudonym = ? COLLATE NOCASE AND deleted_at IS NULL
 `
 
 type GetLoginUserRow struct {
-	ID           string
-	Pseudonym    string
-	Role         string
-	PasswordHash string
-	IsEmergency  int64
-	DisabledAt   sql.NullString
+	ID                 string
+	Pseudonym          string
+	Role               string
+	PasswordHash       string
+	IsEmergency        int64
+	DisabledAt         sql.NullString
+	MustChangePassword int64
 }
 
 func (q *Queries) GetLoginUser(ctx context.Context, pseudonym string) (GetLoginUserRow, error) {
@@ -104,6 +105,7 @@ func (q *Queries) GetLoginUser(ctx context.Context, pseudonym string) (GetLoginU
 		&i.PasswordHash,
 		&i.IsEmergency,
 		&i.DisabledAt,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
@@ -160,19 +162,20 @@ func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
 
 const insertUser = `-- name: InsertUser :exec
 INSERT INTO users (
-    id, pseudonym, role, password_hash, is_emergency, created_by, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    id, pseudonym, role, password_hash, is_emergency, must_change_password, created_by, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertUserParams struct {
-	ID           string
-	Pseudonym    string
-	Role         string
-	PasswordHash string
-	IsEmergency  int64
-	CreatedBy    sql.NullString
-	CreatedAt    string
-	UpdatedAt    string
+	ID                 string
+	Pseudonym          string
+	Role               string
+	PasswordHash       string
+	IsEmergency        int64
+	MustChangePassword int64
+	CreatedBy          sql.NullString
+	CreatedAt          string
+	UpdatedAt          string
 }
 
 func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
@@ -182,6 +185,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
 		arg.Role,
 		arg.PasswordHash,
 		arg.IsEmergency,
+		arg.MustChangePassword,
 		arg.CreatedBy,
 		arg.CreatedAt,
 		arg.UpdatedAt,
@@ -272,6 +276,40 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 	return items, nil
 }
 
+const resetEmergencyAdmin = `-- name: ResetEmergencyAdmin :exec
+UPDATE users SET password_hash = ?, must_change_password = 1, disabled_at = NULL, updated_at = ?
+WHERE id = ? AND is_emergency = 1
+`
+
+type ResetEmergencyAdminParams struct {
+	PasswordHash string
+	UpdatedAt    string
+	ID           string
+}
+
+// Recovery of the emergency admin also lifts a lock (AUTH-011).
+func (q *Queries) ResetEmergencyAdmin(ctx context.Context, arg ResetEmergencyAdminParams) error {
+	_, err := q.db.ExecContext(ctx, resetEmergencyAdmin, arg.PasswordHash, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const resetPassword = `-- name: ResetPassword :exec
+UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = ? WHERE id = ?
+`
+
+type ResetPasswordParams struct {
+	PasswordHash string
+	UpdatedAt    string
+	ID           string
+}
+
+// A reset sets a temporary password that must be changed (AUTH-010); a
+// lock stays.
+func (q *Queries) ResetPassword(ctx context.Context, arg ResetPasswordParams) error {
+	_, err := q.db.ExecContext(ctx, resetPassword, arg.PasswordHash, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const setAvatar = `-- name: SetAvatar :exec
 UPDATE users SET avatar = ?, avatar_type = ?, updated_at = ? WHERE id = ?
 `
@@ -308,7 +346,7 @@ func (q *Queries) SetLastLogin(ctx context.Context, arg SetLastLoginParams) erro
 }
 
 const setPasswordHash = `-- name: SetPasswordHash :exec
-UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?
+UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ?
 `
 
 type SetPasswordHashParams struct {
@@ -317,6 +355,7 @@ type SetPasswordHashParams struct {
 	ID           string
 }
 
+// The user's own change clears a forced change (AUTH-010).
 func (q *Queries) SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error {
 	_, err := q.db.ExecContext(ctx, setPasswordHash, arg.PasswordHash, arg.UpdatedAt, arg.ID)
 	return err
