@@ -44,6 +44,8 @@ type Options struct {
 	Users *users.Service
 	// Invites creates and redeems invitations.
 	Invites *users.Invites
+	// Profiles maintains the caller's own profile and password.
+	Profiles *users.Profiles
 }
 
 // NewHandler returns the root handler of the web port.
@@ -58,7 +60,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, log: opts.Log, proxies: opts.Proxies}
+	srv := &apiServer{auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,

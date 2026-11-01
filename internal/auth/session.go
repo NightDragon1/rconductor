@@ -409,3 +409,18 @@ func (s *Service) RevokeUser(ctx context.Context, userID, reason, requestID stri
 	}
 	return nil
 }
+
+// RevokeOtherSessions ends all sessions of a user except keep, for example
+// after a password change.
+func (s *Service) RevokeOtherSessions(ctx context.Context, userID, keepHash, reason, requestID string) error {
+	hashes, err := s.st.Queries.DeleteOtherSessions(ctx, sqlitedb.DeleteOtherSessionsParams{UserID: userID, IDHash: keepHash})
+	if err != nil {
+		return fmt.Errorf("end sessions: %w", err)
+	}
+	for _, h := range hashes {
+		s.log.Info("session ended", logging.Event(logging.AuthSessionRevoked),
+			slog.String(logging.KeyRequestID, requestID), slog.String(logging.KeySession, h[:8]),
+			slog.String("user_id", userID), slog.String("cause", reason))
+	}
+	return nil
+}

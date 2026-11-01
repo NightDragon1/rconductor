@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -206,6 +207,12 @@ type LoginRequest struct {
 	Pseudonym string `json:"pseudonym"`
 }
 
+// PasswordChange defines model for PasswordChange.
+type PasswordChange struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
 // Problem Problem Details for HTTP APIs (RFC 9457).
 type Problem struct {
 	// Detail Human-readable explanation of this occurrence.
@@ -226,6 +233,15 @@ type Problem struct {
 
 	// Type URI reference identifying the problem type.
 	Type string `json:"type"`
+}
+
+// ProfileUpdate defines model for ProfileUpdate.
+type ProfileUpdate struct {
+	Contacts  *map[string]string `json:"contacts,omitempty"`
+	Pseudonym *string            `json:"pseudonym,omitempty"`
+
+	// RealName An empty string removes the real name.
+	RealName *string `json:"real_name,omitempty"`
 }
 
 // ReasonCode Machine-readable reason of a rejection (Design 3.5).
@@ -388,6 +404,12 @@ type CreateInviteJSONRequestBody = InviteCreate
 // RedeemInviteJSONRequestBody defines body for RedeemInvite for application/json ContentType.
 type RedeemInviteJSONRequestBody = InviteRedeem
 
+// UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
+type UpdateMeJSONRequestBody = ProfileUpdate
+
+// ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
+type ChangePasswordJSONRequestBody = PasswordChange
+
 // CreateUserGroupJSONRequestBody defines body for CreateUserGroup for application/json ContentType.
 type CreateUserGroupJSONRequestBody = UserGroupCreate
 
@@ -438,6 +460,21 @@ type ServerInterface interface {
 	// DeleteInvite Withdraw an unused invitation.
 	// (DELETE /invites/{id})
 	DeleteInvite(w http.ResponseWriter, r *http.Request, id InviteID)
+	// GetMe The caller's own profile (AUTH-009).
+	// (GET /me)
+	GetMe(w http.ResponseWriter, r *http.Request)
+	// UpdateMe Change pseudonym, real name or contacts (AUTH-009).
+	// (PATCH /me)
+	UpdateMe(w http.ResponseWriter, r *http.Request)
+	// DeleteMyAvatar Remove the own profile picture.
+	// (DELETE /me/avatar)
+	DeleteMyAvatar(w http.ResponseWriter, r *http.Request)
+	// SetMyAvatar Upload the own profile picture (AUTH-009).
+	// (PUT /me/avatar)
+	SetMyAvatar(w http.ResponseWriter, r *http.Request)
+	// ChangePassword Change the own password (AUTH-007).
+	// (POST /me/password)
+	ChangePassword(w http.ResponseWriter, r *http.Request)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(w http.ResponseWriter, r *http.Request)
@@ -471,6 +508,9 @@ type ServerInterface interface {
 	// UpdateAssignments Replace sections of a managed user's assignments (ROLE-003, ROLE-004).
 	// (PUT /users/{id}/assignments)
 	UpdateAssignments(w http.ResponseWriter, r *http.Request, id UserID)
+	// GetUserAvatar Profile picture of a user (AUTH-009, decision W4).
+	// (GET /users/{id}/avatar)
+	GetUserAvatar(w http.ResponseWriter, r *http.Request, id UserID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -689,6 +729,76 @@ func (siw *ServerInterfaceWrapper) DeleteInvite(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteInvite(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMe operation middleware
+func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMe operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMyAvatar operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMyAvatar(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMyAvatar(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMyAvatar operation middleware
+func (siw *ServerInterfaceWrapper) SetMyAvatar(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMyAvatar(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangePassword operation middleware
+func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangePassword(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -980,6 +1090,32 @@ func (siw *ServerInterfaceWrapper) UpdateAssignments(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// GetUserAvatar operation middleware
+func (siw *ServerInterfaceWrapper) GetUserAvatar(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUserAvatar(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1123,6 +1259,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/invites", wrapper.CreateInvite)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/invites/{id}", wrapper.DeleteInvite)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/invites/redeem", wrapper.RedeemInvite)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.GetMe)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/me", wrapper.UpdateMe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/password", wrapper.ChangePassword)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/avatar", wrapper.DeleteMyAvatar)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/me/avatar", wrapper.SetMyAvatar)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{id}/avatar", wrapper.GetUserAvatar)
 
 	return m
 }
@@ -1967,6 +2109,292 @@ func (response DeleteInvite422ApplicationProblemPlusJSONResponse) VisitDeleteInv
 	return err
 }
 
+type GetMeRequestObject struct {
+}
+
+type GetMeResponseObject interface {
+	VisitGetMeResponse(w http.ResponseWriter) error
+}
+
+type GetMe200JSONResponse User
+
+func (response GetMe200JSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMe401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetMe401ApplicationProblemPlusJSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMeRequestObject struct {
+	Body *UpdateMeJSONRequestBody
+}
+
+type UpdateMeResponseObject interface {
+	VisitUpdateMeResponse(w http.ResponseWriter) error
+}
+
+type UpdateMe200JSONResponse User
+
+func (response UpdateMe200JSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMe400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMe400ApplicationProblemPlusJSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMe401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMe401ApplicationProblemPlusJSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMe422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateMe422ApplicationProblemPlusJSONResponse) VisitUpdateMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMyAvatarRequestObject struct {
+}
+
+type DeleteMyAvatarResponseObject interface {
+	VisitDeleteMyAvatarResponse(w http.ResponseWriter) error
+}
+
+type DeleteMyAvatar204Response struct {
+}
+
+func (response DeleteMyAvatar204Response) VisitDeleteMyAvatarResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMyAvatar401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMyAvatar401ApplicationProblemPlusJSONResponse) VisitDeleteMyAvatarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMyAvatarRequestObject struct {
+	ContentType string
+	Body        io.Reader
+}
+
+type SetMyAvatarResponseObject interface {
+	VisitSetMyAvatarResponse(w http.ResponseWriter) error
+}
+
+type SetMyAvatar204Response struct {
+}
+
+func (response SetMyAvatar204Response) VisitSetMyAvatarResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SetMyAvatar401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SetMyAvatar401ApplicationProblemPlusJSONResponse) VisitSetMyAvatarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetMyAvatar422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response SetMyAvatar422ApplicationProblemPlusJSONResponse) VisitSetMyAvatarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePasswordRequestObject struct {
+	Body *ChangePasswordJSONRequestBody
+}
+
+type ChangePasswordResponseObject interface {
+	VisitChangePasswordResponse(w http.ResponseWriter) error
+}
+
+type ChangePassword204Response struct {
+}
+
+func (response ChangePassword204Response) VisitChangePasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ChangePassword400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword400ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePassword401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword401ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePassword403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword403ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePassword422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword422ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangePassword503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword503ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUserGroupsRequestObject struct {
 }
 
@@ -2695,6 +3123,86 @@ func (response UpdateAssignments422ApplicationProblemPlusJSONResponse) VisitUpda
 	return err
 }
 
+type GetUserAvatarRequestObject struct {
+	Id UserID `json:"id"`
+}
+
+type GetUserAvatarResponseObject interface {
+	VisitGetUserAvatarResponse(w http.ResponseWriter) error
+}
+
+type GetUserAvatar200ImagejpegResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetUserAvatar200ImagejpegResponse) VisitGetUserAvatarResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetUserAvatar200ImagepngResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetUserAvatar200ImagepngResponse) VisitGetUserAvatarResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "image/png")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetUserAvatar401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetUserAvatar401ApplicationProblemPlusJSONResponse) VisitGetUserAvatarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserAvatar404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetUserAvatar404ApplicationProblemPlusJSONResponse) VisitGetUserAvatarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Login Log in with pseudonym and password (AUTH-001, AUTH-006).
@@ -2733,6 +3241,21 @@ type StrictServerInterface interface {
 	// DeleteInvite Withdraw an unused invitation.
 	// (DELETE /invites/{id})
 	DeleteInvite(ctx context.Context, request DeleteInviteRequestObject) (DeleteInviteResponseObject, error)
+	// GetMe The caller's own profile (AUTH-009).
+	// (GET /me)
+	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
+	// UpdateMe Change pseudonym, real name or contacts (AUTH-009).
+	// (PATCH /me)
+	UpdateMe(ctx context.Context, request UpdateMeRequestObject) (UpdateMeResponseObject, error)
+	// DeleteMyAvatar Remove the own profile picture.
+	// (DELETE /me/avatar)
+	DeleteMyAvatar(ctx context.Context, request DeleteMyAvatarRequestObject) (DeleteMyAvatarResponseObject, error)
+	// SetMyAvatar Upload the own profile picture (AUTH-009).
+	// (PUT /me/avatar)
+	SetMyAvatar(ctx context.Context, request SetMyAvatarRequestObject) (SetMyAvatarResponseObject, error)
+	// ChangePassword Change the own password (AUTH-007).
+	// (POST /me/password)
+	ChangePassword(ctx context.Context, request ChangePasswordRequestObject) (ChangePasswordResponseObject, error)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(ctx context.Context, request ListUserGroupsRequestObject) (ListUserGroupsResponseObject, error)
@@ -2766,6 +3289,9 @@ type StrictServerInterface interface {
 	// UpdateAssignments Replace sections of a managed user's assignments (ROLE-003, ROLE-004).
 	// (PUT /users/{id}/assignments)
 	UpdateAssignments(ctx context.Context, request UpdateAssignmentsRequestObject) (UpdateAssignmentsResponseObject, error)
+	// GetUserAvatar Profile picture of a user (AUTH-009, decision W4).
+	// (GET /users/{id}/avatar)
+	GetUserAvatar(ctx context.Context, request GetUserAvatarRequestObject) (GetUserAvatarResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -3138,6 +3664,144 @@ func (sh *strictHandler) DeleteInvite(w http.ResponseWriter, r *http.Request, id
 	}
 }
 
+// GetMe operation middleware
+func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
+	var request GetMeRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMe(ctx, request.(GetMeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMeResponseObject); ok {
+		if err := validResponse.VisitGetMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMe operation middleware
+func (sh *strictHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	var request UpdateMeRequestObject
+
+	var body UpdateMeJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMe(ctx, request.(UpdateMeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMeResponseObject); ok {
+		if err := validResponse.VisitUpdateMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMyAvatar operation middleware
+func (sh *strictHandler) DeleteMyAvatar(w http.ResponseWriter, r *http.Request) {
+	var request DeleteMyAvatarRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMyAvatar(ctx, request.(DeleteMyAvatarRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMyAvatar")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMyAvatarResponseObject); ok {
+		if err := validResponse.VisitDeleteMyAvatarResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetMyAvatar operation middleware
+func (sh *strictHandler) SetMyAvatar(w http.ResponseWriter, r *http.Request) {
+	var request SetMyAvatarRequestObject
+
+	request.ContentType = r.Header.Get("Content-Type")
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetMyAvatar(ctx, request.(SetMyAvatarRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetMyAvatar")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetMyAvatarResponseObject); ok {
+		if err := validResponse.VisitSetMyAvatarResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangePassword operation middleware
+func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	var request ChangePasswordRequestObject
+
+	var body ChangePasswordJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangePassword(ctx, request.(ChangePasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangePassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangePasswordResponseObject); ok {
+		if err := validResponse.VisitChangePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListUserGroups operation middleware
 func (sh *strictHandler) ListUserGroups(w http.ResponseWriter, r *http.Request) {
 	var request ListUserGroupsRequestObject
@@ -3441,6 +4105,32 @@ func (sh *strictHandler) UpdateAssignments(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateAssignmentsResponseObject); ok {
 		if err := validResponse.VisitUpdateAssignmentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUserAvatar operation middleware
+func (sh *strictHandler) GetUserAvatar(w http.ResponseWriter, r *http.Request, id UserID) {
+	var request GetUserAvatarRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUserAvatar(ctx, request.(GetUserAvatarRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUserAvatar")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUserAvatarResponseObject); ok {
+		if err := validResponse.VisitGetUserAvatarResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

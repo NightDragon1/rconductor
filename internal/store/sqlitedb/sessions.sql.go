@@ -10,6 +10,38 @@ import (
 	"database/sql"
 )
 
+const deleteOtherSessions = `-- name: DeleteOtherSessions :many
+DELETE FROM sessions WHERE user_id = ? AND id_hash <> ? RETURNING id_hash
+`
+
+type DeleteOtherSessionsParams struct {
+	UserID string
+	IDHash string
+}
+
+func (q *Queries) DeleteOtherSessions(ctx context.Context, arg DeleteOtherSessionsParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, deleteOtherSessions, arg.UserID, arg.IDHash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id_hash string
+		if err := rows.Scan(&id_hash); err != nil {
+			return nil, err
+		}
+		items = append(items, id_hash)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteSession = `-- name: DeleteSession :execrows
 DELETE FROM sessions WHERE id_hash = ?
 `

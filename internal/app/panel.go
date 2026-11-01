@@ -120,7 +120,9 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
 			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
 	}
-	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Auth: authSvc, Perm: checker, Users: userSvc, Invites: users.NewInvites(userSvc, hasher)})
+	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Auth: authSvc, Perm: checker, Users: userSvc,
+		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
+	})
 	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,
 		func(addr net.Addr) {
 			logs.Root().Info("ready", logging.Event(logging.AppReady),

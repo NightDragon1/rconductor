@@ -520,6 +520,131 @@ paths:
           $ref: "#/components/responses/Invalid"
         "503":
           $ref: "#/components/responses/Busy"
+  /me:
+    get:
+      operationId: getMe
+      summary: The caller's own profile (AUTH-009).
+      tags: [profile]
+      responses:
+        "200":
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    patch:
+      operationId: updateMe
+      summary: Change pseudonym, real name or contacts (AUTH-009).
+      description: The emergency admin keeps his pseudonym.
+      tags: [profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: The changed profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /me/password:
+    post:
+      operationId: changePassword
+      summary: Change the own password (AUTH-007).
+      description: >-
+        The old password, also the initial password, is invalid at once;
+        all other sessions of the user end.
+      tags: [profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChange"
+      responses:
+        "204":
+          description: Changed.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /me/avatar:
+    put:
+      operationId: setMyAvatar
+      summary: Upload the own profile picture (AUTH-009).
+      description: >-
+        PNG or JPEG, at most 1 MiB and 4096 × 4096 pixels; checked by
+        content, re-encoded without metadata and scaled to at most
+        512 × 512.
+      tags: [profile]
+      requestBody:
+        required: true
+        description: The image; its type is taken from the content, not from the header.
+        content:
+          image/*:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "204":
+          description: Stored.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteMyAvatar
+      summary: Remove the own profile picture.
+      tags: [profile]
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /users/{id}/avatar:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    get:
+      operationId: getUserAvatar
+      summary: Profile picture of a user (AUTH-009, decision W4).
+      description: >-
+        For the user himself, the RCON admin and whoever manages him.
+        Served with nosniff and a Content-Security-Policy that allows
+        nothing.
+      tags: [profile]
+      responses:
+        "200":
+          description: The picture.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
 components:
   parameters:
@@ -595,6 +720,37 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    ProfileUpdate:
+      type: object
+      properties:
+        pseudonym:
+          type: string
+          minLength: 2
+          maxLength: 32
+        real_name:
+          type: string
+          maxLength: 64
+          description: An empty string removes the real name.
+        contacts:
+          type: object
+          maxProperties: 8
+          additionalProperties:
+            type: string
+            maxLength: 128
+
+    PasswordChange:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        new_password:
+          type: string
+          minLength: 12
+          maxLength: 1024
 
     Invite:
       type: object

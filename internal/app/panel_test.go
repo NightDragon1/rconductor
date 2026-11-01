@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -184,5 +185,74 @@ func TestAgentStub(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"comp":"agent"`) {
 		t.Errorf("agent comp missing:\n%s", out.String())
+	}
+}
+
+// TestInitialPasswordLifecycle covers AUTH-003 and AUTH-007 end to end: the
+// printed initial password logs the emergency admin in; after a change in
+// the API it is invalid and the new one works.
+func TestInitialPasswordLifecycle(t *testing.T) {
+	cfg := testConfig(t, t.TempDir())
+	var out, console syncBuffer
+	addr, stop := startPanel(t, cfg, &out, &console)
+	defer func() { _ = stop() }()
+
+	m := regexp.MustCompile(`password: (\S+)`).FindStringSubmatch(console.String())
+	if m == nil {
+		t.Fatalf("no initial password:\n%s", console.String())
+	}
+	base := "http://" + addr
+	type answer struct {
+		StatusCode int
+		cookies    []*http.Cookie
+	}
+	post := func(path, body string, cookie *http.Cookie) answer {
+		t.Helper()
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, base+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", base)
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return answer{StatusCode: resp.StatusCode, cookies: resp.Cookies()}
+	}
+	login := func(pw string) answer {
+		return post("/api/v1/auth/login", `{"pseudonym":"admin","password":"`+pw+`"}`, nil)
+	}
+
+	resp := login(m[1])
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login with the initial password = %d", resp.StatusCode)
+	}
+	var cookie *http.Cookie
+	for _, c := range resp.cookies {
+		if c.Name == "rcd_session" {
+			cookie = c
+		}
+	}
+	if resp := post("/api/v1/me/password", `{"current_password":"`+m[1]+`","new_password":"a much better password"}`, cookie); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("change password = %d", resp.StatusCode)
+	}
+	if resp := login(m[1]); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("initial password after the change = %d, want 401", resp.StatusCode)
+	}
+	if resp := login("a much better password"); resp.StatusCode != http.StatusOK {
+		t.Errorf("new password = %d", resp.StatusCode)
+	}
+	if strings.Contains(out.String(), m[1]) || strings.Contains(out.String(), "a much better password") {
+		t.Error("a password appears in the event log")
+	}
+	for _, ev := range []string{"auth.login.ok", "auth.login.failed"} {
+		if !strings.Contains(out.String(), `"event":"`+ev+`"`) {
+			t.Errorf("%s missing", ev)
+		}
 	}
 }
