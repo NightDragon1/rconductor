@@ -66,7 +66,7 @@ func NewHandler(opts Options) http.Handler {
 			WriteProblem(w, http.StatusNotFound, "", "")
 		})
 	}
-	return mux
+	return withRequestID(mux)
 }
 
 // Serve listens on addr and serves h until ctx ends, then shuts down
