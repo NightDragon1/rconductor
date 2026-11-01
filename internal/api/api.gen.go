@@ -67,6 +67,24 @@ func (e AuditEntryResult) Valid() bool {
 	}
 }
 
+// Defines values for GamePortProto.
+const (
+	Tcp GamePortProto = "tcp"
+	Udp GamePortProto = "udp"
+)
+
+// Valid indicates whether the value is a known member of the GamePortProto enum.
+func (e GamePortProto) Valid() bool {
+	switch e {
+	case Tcp:
+		return true
+	case Udp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GroupKind.
 const (
 	GroupKindGeneral   GroupKind = "general"
@@ -79,6 +97,30 @@ func (e GroupKind) Valid() bool {
 	case GroupKindGeneral:
 		return true
 	case GroupKindModerator:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProfileParamType.
+const (
+	Choice ProfileParamType = "choice"
+	Number ProfileParamType = "number"
+	Player ProfileParamType = "player"
+	Text   ProfileParamType = "text"
+)
+
+// Valid indicates whether the value is a known member of the ProfileParamType enum.
+func (e ProfileParamType) Valid() bool {
+	switch e {
+	case Choice:
+		return true
+	case Number:
+		return true
+	case Player:
+		return true
+	case Text:
 		return true
 	default:
 		return false
@@ -227,6 +269,13 @@ type AuditPage struct {
 	NextCursor *string      `json:"next_cursor,omitempty"`
 }
 
+// CatalogCommand defines model for CatalogCommand.
+type CatalogCommand struct {
+	Description string         `json:"description"`
+	Params      []ProfileParam `json:"params"`
+	Path        string         `json:"path"`
+}
+
 // CommandList defines model for CommandList.
 type CommandList struct {
 	Entries []CommandListEntry `json:"entries"`
@@ -259,6 +308,39 @@ type CommandListList struct {
 type CommandListUpdate struct {
 	Entries *[]CommandListEntry `json:"entries,omitempty"`
 	Name    *string             `json:"name,omitempty"`
+}
+
+// GamePort defines model for GamePort.
+type GamePort struct {
+	Name  string        `json:"name"`
+	Port  int           `json:"port"`
+	Proto GamePortProto `json:"proto"`
+}
+
+// GamePortProto defines model for GamePort.Proto.
+type GamePortProto string
+
+// GameProfile defines model for GameProfile.
+type GameProfile struct {
+	CaseSensitive bool               `json:"case_sensitive"`
+	Catalog       []CatalogCommand   `json:"catalog"`
+	DefaultPort   int                `json:"default_port"`
+	GamePorts     []GamePort         `json:"game_ports"`
+	Id            openapi_types.UUID `json:"id"`
+	ImportedAt    time.Time          `json:"imported_at"`
+
+	// LastError Reason of the last rejected file; RCON admin only.
+	LastError   *string    `json:"last_error,omitempty"`
+	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
+	MaxLength   int        `json:"max_length"`
+	Name        string     `json:"name"`
+
+	// Overridden A custom profile replaces the shipped one.
+	Overridden  bool     `json:"overridden"`
+	Protocol    string   `json:"protocol"`
+	Slug        string   `json:"slug"`
+	StripPrefix string   `json:"strip_prefix"`
+	Wrappers    []string `json:"wrappers"`
 }
 
 // Grant A server or server group for a moderator through one of his moderator groups, whose list applies (Design 4.3).
@@ -354,6 +436,24 @@ type Problem struct {
 	// Type URI reference identifying the problem type.
 	Type string `json:"type"`
 }
+
+// ProfileList defines model for ProfileList.
+type ProfileList struct {
+	Items []GameProfile `json:"items"`
+}
+
+// ProfileParam defines model for ProfileParam.
+type ProfileParam struct {
+	Max      *int             `json:"max,omitempty"`
+	Min      *int             `json:"min,omitempty"`
+	Name     string           `json:"name"`
+	Optional *bool            `json:"optional,omitempty"`
+	Type     ProfileParamType `json:"type"`
+	Values   *[]string        `json:"values,omitempty"`
+}
+
+// ProfileParamType defines model for ProfileParam.Type.
+type ProfileParamType string
 
 // ProfileUpdate defines model for ProfileUpdate.
 type ProfileUpdate struct {
@@ -618,6 +718,9 @@ type ServerInterface interface {
 	// ChangePassword Change the own password (AUTH-007).
 	// (POST /me/password)
 	ChangePassword(w http.ResponseWriter, r *http.Request)
+	// ListProfiles Game profiles with their command catalog (CAT-001, CAT-002).
+	// (GET /profiles)
+	ListProfiles(w http.ResponseWriter, r *http.Request)
 	// GetSettings Global settings (Design 5.1); RCON admin only.
 	// (GET /settings)
 	GetSettings(w http.ResponseWriter, r *http.Request)
@@ -1023,6 +1126,20 @@ func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ChangePassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProfiles operation middleware
+func (siw *ServerInterfaceWrapper) ListProfiles(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProfiles(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1517,6 +1634,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/login", wrapper.Login)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/session", wrapper.GetSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/profiles", wrapper.ListProfiles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}", wrapper.DeleteUser)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{id}", wrapper.GetUser)
@@ -2747,6 +2865,43 @@ func (response ChangePassword503ApplicationProblemPlusJSONResponse) VisitChangeP
 	return err
 }
 
+type ListProfilesRequestObject struct {
+}
+
+type ListProfilesResponseObject interface {
+	VisitListProfilesResponse(w http.ResponseWriter) error
+}
+
+type ListProfiles200JSONResponse ProfileList
+
+func (response ListProfiles200JSONResponse) VisitListProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProfiles401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListProfiles401ApplicationProblemPlusJSONResponse) VisitListProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSettingsRequestObject struct {
 }
 
@@ -3839,6 +3994,9 @@ type StrictServerInterface interface {
 	// ChangePassword Change the own password (AUTH-007).
 	// (POST /me/password)
 	ChangePassword(ctx context.Context, request ChangePasswordRequestObject) (ChangePasswordResponseObject, error)
+	// ListProfiles Game profiles with their command catalog (CAT-001, CAT-002).
+	// (GET /profiles)
+	ListProfiles(ctx context.Context, request ListProfilesRequestObject) (ListProfilesResponseObject, error)
 	// GetSettings Global settings (Design 5.1); RCON admin only.
 	// (GET /settings)
 	GetSettings(ctx context.Context, request GetSettingsRequestObject) (GetSettingsResponseObject, error)
@@ -4413,6 +4571,30 @@ func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ChangePasswordResponseObject); ok {
 		if err := validResponse.VisitChangePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListProfiles operation middleware
+func (sh *strictHandler) ListProfiles(w http.ResponseWriter, r *http.Request) {
+	var request ListProfilesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListProfiles(ctx, request.(ListProfilesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListProfiles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListProfilesResponseObject); ok {
+		if err := validResponse.VisitListProfilesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

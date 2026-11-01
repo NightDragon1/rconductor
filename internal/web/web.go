@@ -17,6 +17,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
@@ -36,6 +37,8 @@ type Options struct {
 	UI http.Handler
 	// Proxies decide which forwarding headers are trusted.
 	Proxies Proxies
+	// Store gives read access for listings that need no service.
+	Store *store.Store
 	// Auth resolves sessions; nil means every API call is unauthenticated.
 	Auth *auth.Service
 	// Perm decides about every access to servers and administration.
@@ -60,7 +63,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
+	srv := &apiServer{store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,

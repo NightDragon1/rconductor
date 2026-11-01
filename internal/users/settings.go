@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 )
@@ -67,6 +68,7 @@ var settingRules = map[string]rule{
 	SettingInviteLifetime:         durationRule(time.Minute, 30*24*time.Hour),
 	perm.SettingSupportersEnabled: boolRule,
 	SettingAuditRetentionDays:     intRule(1, 3650),
+	profiles.SettingPollInterval:  durationRule(profiles.MinPollInterval, time.Hour),
 }
 
 // EnsureAuditDefaults stores the default audit retention unless it exists.

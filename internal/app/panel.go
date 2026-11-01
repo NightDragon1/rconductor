@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/NightDragon1/rconductor/internal/auth"
@@ -22,9 +23,11 @@ import (
 	"github.com/NightDragon1/rconductor/internal/ops/cleanup"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/users"
 	"github.com/NightDragon1/rconductor/internal/web"
+	builtinprofiles "github.com/NightDragon1/rconductor/profiles"
 )
 
 // PanelOptions are optional hooks for RunPanel.
@@ -93,6 +96,14 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err := users.EnsureAuditDefaults(ctx, st); err != nil {
 		return err
 	}
+	if err := profiles.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
+	// Catalog import before serving (Architecture 5.4), then on every change.
+	importer := profiles.NewImporter(st, logs.Module("profiles"), builtinprofiles.FS(), filepath.Join(cfg.DataDir, "profiles"))
+	if err := importer.Sync(ctx); err != nil {
+		return err
+	}
 
 	params := password.Default
 	if opts.HashParams != nil {
@@ -119,6 +130,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	defer wg.Wait()
 	wg.Go(func() { backup.Schedule(ctx, st, backups) })
 	wg.Go(func() { cleanup.Schedule(ctx, st, logs.Module("audit")) })
+	wg.Go(func() { importer.Watch(ctx) })
 
 	webLog := logs.Module("web")
 	proxies := web.Proxies{Trusted: cfg.TrustedProxies, PublicURL: cfg.PublicURL}
@@ -126,7 +138,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
 			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
 	}
-	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Auth: authSvc, Perm: checker, Users: userSvc,
+	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Auth: authSvc, Perm: checker, Users: userSvc,
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
 	})
 	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,

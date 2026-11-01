@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -21,8 +22,10 @@ import (
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 	"github.com/NightDragon1/rconductor/internal/users"
+	builtinprofiles "github.com/NightDragon1/rconductor/profiles"
 )
 
 const testPassword = "a long enough password"
@@ -57,11 +60,17 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	if err := perm.EnsureDefaults(ctx, st); err != nil {
 		t.Fatal(err)
 	}
+	if err := profiles.EnsureDefaults(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	if err := profiles.NewImporter(st, log, builtinprofiles.FS(), filepath.Join(t.TempDir(), "profiles")).Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
 	svc := auth.NewService(st, hasher, log, true)
 	checker := perm.NewChecker(st, log)
 	us := users.NewService(st, checker, log, svc.RevokeUser)
 	h := NewHandler(Options{
-		Log: log, Auth: svc, Perm: checker, Users: us, Proxies: proxies,
+		Log: log, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies,
 		Profiles: users.NewProfiles(us, hasher, svc.RevokeOtherSessions),
 	})
 	return &apiFixture{h: h, userID: id, adminID: adminID, proxies: proxies}
