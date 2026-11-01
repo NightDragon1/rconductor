@@ -20,6 +20,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/ops/backup"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
+	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/web"
 )
@@ -81,6 +82,9 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err := auth.EnsureDefaults(ctx, st); err != nil {
 		return err
 	}
+	if err := perm.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
 
 	params := password.Default
 	if opts.HashParams != nil {
@@ -99,6 +103,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		return err
 	}
 	authSvc := auth.NewService(st, hasher, authLog, cfg.EmergencyAdmin)
+	checker := perm.NewChecker(st, logs.Module("perm"))
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -110,7 +115,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
 			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
 	}
-	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Auth: authSvc})
+	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Auth: authSvc, Perm: checker})
 	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,
 		func(addr net.Addr) {
 			logs.Root().Info("ready", logging.Event(logging.AppReady),
