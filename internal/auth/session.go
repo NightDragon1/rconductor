@@ -393,3 +393,19 @@ func minTime(a, b time.Time) time.Time {
 	}
 	return b
 }
+
+// RevokeUser ends all sessions of a user, for example after a lock,
+// deletion or change of rights (AUTH-006, decision W2). reason names the
+// cause in the log.
+func (s *Service) RevokeUser(ctx context.Context, userID, reason, requestID string) error {
+	hashes, err := s.st.Queries.DeleteUserSessions(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("end sessions: %w", err)
+	}
+	for _, h := range hashes {
+		s.log.Info("session ended", logging.Event(logging.AuthSessionRevoked),
+			slog.String(logging.KeyRequestID, requestID), slog.String(logging.KeySession, h[:8]),
+			slog.String("user_id", userID), slog.String("cause", reason))
+	}
+	return nil
+}

@@ -58,10 +58,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Users the caller manages (Design 2.2, 3.6).
+         * @description RCON admin: everyone with a lower role. Server admin: his moderators and their supporters. Moderator: his supporters, if supporters are enabled for him. Users are created only through invites.
+         */
+        get: operations["listUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        /** A user the caller manages. */
+        get: operations["getUser"];
+        put?: never;
+        post?: never;
+        /** Delete a managed user (soft delete, Design 4.1). */
+        delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        /**
+         * Change role or lock state of a managed user (ROLE-008).
+         * @description The new role must stay below the caller's role. A role change removes the user's scopes, group memberships and grants, which belong to the old role.
+         */
+        patch: operations["updateUser"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        User: {
+            /** Format: uuid */
+            id: string;
+            pseudonym: string;
+            role: components["schemas"]["Role"];
+            real_name?: string;
+            /** @description Contact details such as telegram or whatsapp (AUTH-009). */
+            contacts: {
+                [key: string]: string;
+            };
+            has_avatar: boolean;
+            disabled: boolean;
+            is_emergency: boolean;
+            /** @description The moderator may have supporters (ROLE-006). */
+            supporters_allowed: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_login_at?: string;
+        };
+        UserList: {
+            items: components["schemas"]["User"][];
+        };
+        UserUpdate: {
+            role?: components["schemas"]["Role"];
+            disabled?: boolean;
+        };
         /**
          * @description One of the four fixed roles (ROLE-001).
          * @enum {string}
@@ -167,7 +238,9 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        UserID: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -242,6 +315,108 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: {
+                role?: components["schemas"]["Role"];
+                /** @description Part of the pseudonym or real name, ignoring case. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Managed users, ordered by pseudonym. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted; the user's sessions have ended. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

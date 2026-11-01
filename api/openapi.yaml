@@ -82,8 +82,159 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthenticated"
 
+  /users:
+    get:
+      operationId: listUsers
+      summary: Users the caller manages (Design 2.2, 3.6).
+      description: >-
+        RCON admin: everyone with a lower role. Server admin: his
+        moderators and their supporters. Moderator: his supporters, if
+        supporters are enabled for him. Users are created only through
+        invites.
+      tags: [users]
+      parameters:
+        - name: role
+          in: query
+          schema:
+            $ref: "#/components/schemas/Role"
+        - name: q
+          in: query
+          description: Part of the pseudonym or real name, ignoring case.
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        "200":
+          description: Managed users, ordered by pseudonym.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    get:
+      operationId: getUser
+      summary: A user the caller manages.
+      tags: [users]
+      responses:
+        "200":
+          description: The user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateUser
+      summary: Change role or lock state of a managed user (ROLE-008).
+      description: >-
+        The new role must stay below the caller's role. A role change
+        removes the user's scopes, group memberships and grants, which
+        belong to the old role.
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: The changed user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteUser
+      summary: Delete a managed user (soft delete, Design 4.1).
+      tags: [users]
+      responses:
+        "204":
+          description: Deleted; the user's sessions have ended.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
+  parameters:
+    UserID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
   schemas:
+    User:
+      type: object
+      required: [id, pseudonym, role, contacts, has_avatar, disabled, is_emergency, supporters_allowed, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        pseudonym:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        real_name:
+          type: string
+        contacts:
+          type: object
+          additionalProperties:
+            type: string
+          description: Contact details such as telegram or whatsapp (AUTH-009).
+        has_avatar:
+          type: boolean
+        disabled:
+          type: boolean
+        is_emergency:
+          type: boolean
+        supporters_allowed:
+          type: boolean
+          description: The moderator may have supporters (ROLE-006).
+        created_at:
+          type: string
+          format: date-time
+        last_login_at:
+          type: string
+          format: date-time
+
+    UserList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+
+    UserUpdate:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/Role"
+        disabled:
+          type: boolean
+
     Role:
       type: string
       description: One of the four fixed roles (ROLE-001).

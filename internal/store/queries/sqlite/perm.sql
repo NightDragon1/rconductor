@@ -42,4 +42,16 @@ ORDER BY e.path;
 -- name: ListSupporterGrants :many
 SELECT moderator_id, server_id FROM supporter_grants WHERE supporter_id = ?;
 
+-- Inputs of the management relation (Design 3.6).
+
+-- name: ListManageCandidates :many
+SELECT id, role, created_by, supporters_allowed FROM users WHERE deleted_at IS NULL;
+
+-- name: ListModeratorGroupOwners :many
+SELECT m.user_id, g.owner_id FROM user_group_members m
+JOIN user_groups g ON g.id = m.user_group_id AND g.kind = 'moderator' AND g.deleted_at IS NULL;
+
+-- name: ListSupporterLinks :many
+SELECT DISTINCT supporter_id, moderator_id FROM supporter_grants;
+
 -- SPDX-License-Identifier: AGPL-3.0-or-later

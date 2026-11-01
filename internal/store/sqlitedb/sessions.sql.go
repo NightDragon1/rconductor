@@ -22,6 +22,33 @@ func (q *Queries) DeleteSession(ctx context.Context, idHash string) (int64, erro
 	return result.RowsAffected()
 }
 
+const deleteUserSessions = `-- name: DeleteUserSessions :many
+DELETE FROM sessions WHERE user_id = ? RETURNING id_hash
+`
+
+func (q *Queries) DeleteUserSessions(ctx context.Context, userID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, deleteUserSessions, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id_hash string
+		if err := rows.Scan(&id_hash); err != nil {
+			return nil, err
+		}
+		items = append(items, id_hash)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSessionUser = `-- name: GetSessionUser :one
 SELECT s.id_hash, s.created_at, s.last_seen_at, s.expires_at,
        u.id AS user_id, u.pseudonym, u.role, u.is_emergency, u.disabled_at, u.deleted_at

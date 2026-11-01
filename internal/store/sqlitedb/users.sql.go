@@ -10,6 +10,43 @@ import (
 	"database/sql"
 )
 
+const deleteUserGrants = `-- name: DeleteUserGrants :exec
+DELETE FROM grants WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserGrants(ctx context.Context, userID sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, deleteUserGrants, userID)
+	return err
+}
+
+const deleteUserMemberships = `-- name: DeleteUserMemberships :exec
+DELETE FROM user_group_members WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserMemberships(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserMemberships, userID)
+	return err
+}
+
+const deleteUserScopes = `-- name: DeleteUserScopes :exec
+DELETE FROM admin_scopes WHERE user_id = ?
+`
+
+// Assignments belong to a role; a role change or deletion removes them.
+func (q *Queries) DeleteUserScopes(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserScopes, userID)
+	return err
+}
+
+const deleteUserSupporterGrants = `-- name: DeleteUserSupporterGrants :exec
+DELETE FROM supporter_grants WHERE supporter_id = ?1 OR moderator_id = ?1
+`
+
+func (q *Queries) DeleteUserSupporterGrants(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserSupporterGrants, userID)
+	return err
+}
+
 const getEmergencyAdmin = `-- name: GetEmergencyAdmin :one
 SELECT id, pseudonym FROM users WHERE is_emergency = 1
 `
@@ -55,6 +92,45 @@ func (q *Queries) GetLoginUser(ctx context.Context, pseudonym string) (GetLoginU
 	return i, err
 }
 
+const getUser = `-- name: GetUser :one
+SELECT id, pseudonym, role, real_name, contacts, CAST(avatar IS NOT NULL AS INTEGER) AS has_avatar,
+       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at
+FROM users WHERE id = ? AND deleted_at IS NULL
+`
+
+type GetUserRow struct {
+	ID                string
+	Pseudonym         string
+	Role              string
+	RealName          sql.NullString
+	Contacts          string
+	HasAvatar         int64
+	DisabledAt        sql.NullString
+	IsEmergency       int64
+	SupportersAllowed int64
+	CreatedAt         string
+	LastLoginAt       sql.NullString
+}
+
+func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
+	row := q.db.QueryRowContext(ctx, getUser, id)
+	var i GetUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Pseudonym,
+		&i.Role,
+		&i.RealName,
+		&i.Contacts,
+		&i.HasAvatar,
+		&i.DisabledAt,
+		&i.IsEmergency,
+		&i.SupportersAllowed,
+		&i.CreatedAt,
+		&i.LastLoginAt,
+	)
+	return i, err
+}
+
 const insertUser = `-- name: InsertUser :exec
 INSERT INTO users (
     id, pseudonym, role, password_hash, is_emergency, created_by, created_at, updated_at
@@ -86,6 +162,62 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
 	return err
 }
 
+const listUsers = `-- name: ListUsers :many
+SELECT id, pseudonym, role, real_name, contacts, CAST(avatar IS NOT NULL AS INTEGER) AS has_avatar,
+       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at
+FROM users WHERE deleted_at IS NULL
+ORDER BY pseudonym COLLATE NOCASE
+`
+
+type ListUsersRow struct {
+	ID                string
+	Pseudonym         string
+	Role              string
+	RealName          sql.NullString
+	Contacts          string
+	HasAvatar         int64
+	DisabledAt        sql.NullString
+	IsEmergency       int64
+	SupportersAllowed int64
+	CreatedAt         string
+	LastLoginAt       sql.NullString
+}
+
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersRow{}
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Pseudonym,
+			&i.Role,
+			&i.RealName,
+			&i.Contacts,
+			&i.HasAvatar,
+			&i.DisabledAt,
+			&i.IsEmergency,
+			&i.SupportersAllowed,
+			&i.CreatedAt,
+			&i.LastLoginAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setLastLogin = `-- name: SetLastLogin :exec
 UPDATE users SET last_login_at = ? WHERE id = ?
 `
@@ -97,5 +229,50 @@ type SetLastLoginParams struct {
 
 func (q *Queries) SetLastLogin(ctx context.Context, arg SetLastLoginParams) error {
 	_, err := q.db.ExecContext(ctx, setLastLogin, arg.LastLoginAt, arg.ID)
+	return err
+}
+
+const setUserDisabled = `-- name: SetUserDisabled :exec
+UPDATE users SET disabled_at = ?, updated_at = ? WHERE id = ?
+`
+
+type SetUserDisabledParams struct {
+	DisabledAt sql.NullString
+	UpdatedAt  string
+	ID         string
+}
+
+func (q *Queries) SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) error {
+	_, err := q.db.ExecContext(ctx, setUserDisabled, arg.DisabledAt, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const setUserRole = `-- name: SetUserRole :exec
+UPDATE users SET role = ?, updated_at = ? WHERE id = ?
+`
+
+type SetUserRoleParams struct {
+	Role      string
+	UpdatedAt string
+	ID        string
+}
+
+func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error {
+	_, err := q.db.ExecContext(ctx, setUserRole, arg.Role, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const softDeleteUser = `-- name: SoftDeleteUser :exec
+UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?
+`
+
+type SoftDeleteUserParams struct {
+	DeletedAt sql.NullString
+	UpdatedAt string
+	ID        string
+}
+
+func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error {
+	_, err := q.db.ExecContext(ctx, softDeleteUser, arg.DeletedAt, arg.UpdatedAt, arg.ID)
 	return err
 }

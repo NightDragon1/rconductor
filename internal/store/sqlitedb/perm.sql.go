@@ -135,6 +135,47 @@ func (q *Queries) ListCommandListEntries(ctx context.Context, commandListID stri
 	return items, nil
 }
 
+const listManageCandidates = `-- name: ListManageCandidates :many
+
+SELECT id, role, created_by, supporters_allowed FROM users WHERE deleted_at IS NULL
+`
+
+type ListManageCandidatesRow struct {
+	ID                string
+	Role              string
+	CreatedBy         sql.NullString
+	SupportersAllowed int64
+}
+
+// Inputs of the management relation (Design 3.6).
+func (q *Queries) ListManageCandidates(ctx context.Context) ([]ListManageCandidatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listManageCandidates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListManageCandidatesRow{}
+	for rows.Next() {
+		var i ListManageCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Role,
+			&i.CreatedBy,
+			&i.SupportersAllowed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listModeratorGrants = `-- name: ListModeratorGrants :many
 SELECT DISTINCT s.id AS server_id, g.id AS group_id, g.command_list_id, g.owner_id
 FROM grants gr
@@ -186,6 +227,39 @@ func (q *Queries) ListModeratorGrants(ctx context.Context, userID string) ([]Lis
 	return items, nil
 }
 
+const listModeratorGroupOwners = `-- name: ListModeratorGroupOwners :many
+SELECT m.user_id, g.owner_id FROM user_group_members m
+JOIN user_groups g ON g.id = m.user_group_id AND g.kind = 'moderator' AND g.deleted_at IS NULL
+`
+
+type ListModeratorGroupOwnersRow struct {
+	UserID  string
+	OwnerID string
+}
+
+func (q *Queries) ListModeratorGroupOwners(ctx context.Context) ([]ListModeratorGroupOwnersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listModeratorGroupOwners)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListModeratorGroupOwnersRow{}
+	for rows.Next() {
+		var i ListModeratorGroupOwnersRow
+		if err := rows.Scan(&i.UserID, &i.OwnerID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSupporterGrants = `-- name: ListSupporterGrants :many
 SELECT moderator_id, server_id FROM supporter_grants WHERE supporter_id = ?
 `
@@ -205,6 +279,38 @@ func (q *Queries) ListSupporterGrants(ctx context.Context, supporterID string) (
 	for rows.Next() {
 		var i ListSupporterGrantsRow
 		if err := rows.Scan(&i.ModeratorID, &i.ServerID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSupporterLinks = `-- name: ListSupporterLinks :many
+SELECT DISTINCT supporter_id, moderator_id FROM supporter_grants
+`
+
+type ListSupporterLinksRow struct {
+	SupporterID string
+	ModeratorID string
+}
+
+func (q *Queries) ListSupporterLinks(ctx context.Context) ([]ListSupporterLinksRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSupporterLinks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSupporterLinksRow{}
+	for rows.Next() {
+		var i ListSupporterLinksRow
+		if err := rows.Scan(&i.SupporterID, &i.ModeratorID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
