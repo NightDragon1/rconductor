@@ -10,8 +10,11 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 
+	"github.com/NightDragon1/rconductor/internal/auth"
+	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -27,6 +30,11 @@ type PanelOptions struct {
 	UI http.Handler
 	// Ready is called with the bound web address once the panel serves.
 	Ready func(httpAddr net.Addr)
+	// Console receives the one-time initial password of the emergency
+	// admin (AUTH-007), apart from the event log; nil means os.Stderr.
+	Console io.Writer
+	// HashParams override the Argon2id cost, for tests only.
+	HashParams *password.Params
 }
 
 // RunPanel starts the panel and blocks until ctx ends: migrations (with a
@@ -68,6 +76,22 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	}
 
 	if err := backup.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
+
+	params := password.Default
+	if opts.HashParams != nil {
+		params = *opts.HashParams
+	}
+	hasher, err := password.NewHasher(params, cfg.HashConcurrency, password.DefaultWait)
+	if err != nil {
+		return err
+	}
+	console := opts.Console
+	if console == nil {
+		console = os.Stderr
+	}
+	if err := auth.EnsureEmergencyAdmin(ctx, st, hasher, cfg.EmergencyAdmin, logs.Module("auth"), console); err != nil {
 		return err
 	}
 
