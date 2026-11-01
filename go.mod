@@ -3,7 +3,7 @@ module github.com/NightDragon1/rconductor
 go 1.27.3
 
 require (
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/goccy/go-yaml v1.19.2
 	github.com/google/uuid v1.6.0
 	github.com/moby/moby/client v0.6.2
