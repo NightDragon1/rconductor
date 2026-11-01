@@ -37,6 +37,21 @@ UPDATE users SET supporters_allowed = ?, updated_at = ? WHERE id = ?;
 -- name: ListSupportersOfModerator :many
 SELECT DISTINCT supporter_id FROM supporter_grants WHERE moderator_id = ?;
 
+-- name: UpdateProfile :exec
+UPDATE users SET pseudonym = ?, real_name = ?, contacts = ?, updated_at = ? WHERE id = ?;
+
+-- name: GetPasswordHash :one
+SELECT password_hash FROM users WHERE id = ? AND deleted_at IS NULL;
+
+-- name: SetPasswordHash :exec
+UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?;
+
+-- name: SetAvatar :exec
+UPDATE users SET avatar = ?, avatar_type = ?, updated_at = ? WHERE id = ?;
+
+-- name: GetAvatar :one
+SELECT avatar, avatar_type FROM users WHERE id = ? AND deleted_at IS NULL AND avatar IS NOT NULL;
+
 -- name: SoftDeleteUser :exec
 UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?;
 

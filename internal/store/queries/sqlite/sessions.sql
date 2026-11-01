@@ -17,4 +17,7 @@ DELETE FROM sessions WHERE id_hash = ?;
 -- name: DeleteUserSessions :many
 DELETE FROM sessions WHERE user_id = ? RETURNING id_hash;
 
+-- name: DeleteOtherSessions :many
+DELETE FROM sessions WHERE user_id = ? AND id_hash <> ? RETURNING id_hash;
+
 -- SPDX-License-Identifier: AGPL-3.0-or-later

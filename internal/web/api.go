@@ -23,12 +23,13 @@ var publicOperations = map[string]bool{"Login": true, "RedeemInvite": true}
 
 // apiServer implements the generated strict server interface.
 type apiServer struct {
-	auth    *auth.Service
-	perm    *perm.Checker
-	users   *users.Service
-	invites *users.Invites
-	log     *slog.Logger
-	proxies Proxies
+	auth     *auth.Service
+	perm     *perm.Checker
+	users    *users.Service
+	invites  *users.Invites
+	profiles *users.Profiles
+	log      *slog.Logger
+	proxies  Proxies
 }
 
 var _ api.StrictServerInterface = (*apiServer)(nil)

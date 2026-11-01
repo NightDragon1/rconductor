@@ -47,6 +47,22 @@ func (q *Queries) DeleteUserSupporterGrants(ctx context.Context, userID string) 
 	return err
 }
 
+const getAvatar = `-- name: GetAvatar :one
+SELECT avatar, avatar_type FROM users WHERE id = ? AND deleted_at IS NULL AND avatar IS NOT NULL
+`
+
+type GetAvatarRow struct {
+	Avatar     []byte
+	AvatarType sql.NullString
+}
+
+func (q *Queries) GetAvatar(ctx context.Context, id string) (GetAvatarRow, error) {
+	row := q.db.QueryRowContext(ctx, getAvatar, id)
+	var i GetAvatarRow
+	err := row.Scan(&i.Avatar, &i.AvatarType)
+	return i, err
+}
+
 const getEmergencyAdmin = `-- name: GetEmergencyAdmin :one
 SELECT id, pseudonym FROM users WHERE is_emergency = 1
 `
@@ -90,6 +106,17 @@ func (q *Queries) GetLoginUser(ctx context.Context, pseudonym string) (GetLoginU
 		&i.DisabledAt,
 	)
 	return i, err
+}
+
+const getPasswordHash = `-- name: GetPasswordHash :one
+SELECT password_hash FROM users WHERE id = ? AND deleted_at IS NULL
+`
+
+func (q *Queries) GetPasswordHash(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getPasswordHash, id)
+	var password_hash string
+	err := row.Scan(&password_hash)
+	return password_hash, err
 }
 
 const getUser = `-- name: GetUser :one
@@ -245,6 +272,27 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 	return items, nil
 }
 
+const setAvatar = `-- name: SetAvatar :exec
+UPDATE users SET avatar = ?, avatar_type = ?, updated_at = ? WHERE id = ?
+`
+
+type SetAvatarParams struct {
+	Avatar     []byte
+	AvatarType sql.NullString
+	UpdatedAt  string
+	ID         string
+}
+
+func (q *Queries) SetAvatar(ctx context.Context, arg SetAvatarParams) error {
+	_, err := q.db.ExecContext(ctx, setAvatar,
+		arg.Avatar,
+		arg.AvatarType,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
+}
+
 const setLastLogin = `-- name: SetLastLogin :exec
 UPDATE users SET last_login_at = ? WHERE id = ?
 `
@@ -256,6 +304,21 @@ type SetLastLoginParams struct {
 
 func (q *Queries) SetLastLogin(ctx context.Context, arg SetLastLoginParams) error {
 	_, err := q.db.ExecContext(ctx, setLastLogin, arg.LastLoginAt, arg.ID)
+	return err
+}
+
+const setPasswordHash = `-- name: SetPasswordHash :exec
+UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?
+`
+
+type SetPasswordHashParams struct {
+	PasswordHash string
+	UpdatedAt    string
+	ID           string
+}
+
+func (q *Queries) SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) error {
+	_, err := q.db.ExecContext(ctx, setPasswordHash, arg.PasswordHash, arg.UpdatedAt, arg.ID)
 	return err
 }
 
@@ -316,5 +379,28 @@ type SoftDeleteUserParams struct {
 
 func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error {
 	_, err := q.db.ExecContext(ctx, softDeleteUser, arg.DeletedAt, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const updateProfile = `-- name: UpdateProfile :exec
+UPDATE users SET pseudonym = ?, real_name = ?, contacts = ?, updated_at = ? WHERE id = ?
+`
+
+type UpdateProfileParams struct {
+	Pseudonym string
+	RealName  sql.NullString
+	Contacts  string
+	UpdatedAt string
+	ID        string
+}
+
+func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) error {
+	_, err := q.db.ExecContext(ctx, updateProfile,
+		arg.Pseudonym,
+		arg.RealName,
+		arg.Contacts,
+		arg.UpdatedAt,
+		arg.ID,
+	)
 	return err
 }
