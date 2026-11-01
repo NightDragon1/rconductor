@@ -635,7 +635,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**

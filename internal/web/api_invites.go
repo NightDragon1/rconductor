@@ -76,7 +76,7 @@ func (s *apiServer) RedeemInvite(ctx context.Context, req api.RedeemInviteReques
 	case errors.Is(err, users.ErrInviteInvalid):
 		return nil, &problem{status: http.StatusNotFound, reason: api.ReasonCodeNotFound, detail: err.Error()}
 	case errors.Is(err, password.ErrBusy):
-		return nil, &problem{status: http.StatusServiceUnavailable, detail: "busy, try again", retryAfter: 1}
+		return nil, errBusy()
 	case err != nil:
 		return nil, adminError(err)
 	}

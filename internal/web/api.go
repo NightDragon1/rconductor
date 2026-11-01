@@ -53,6 +53,12 @@ type problem struct {
 
 func (p *problem) Error() string { return p.detail }
 
+// errBusy answers when the panel is out of capacity, for example all
+// password hashing slots are in use (Design 3.5).
+func errBusy() error {
+	return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeBusy, detail: "busy, try again", retryAfter: 1}
+}
+
 func errUnauthenticated() error {
 	return &problem{status: http.StatusUnauthorized, reason: api.ReasonCodeUnauthenticated}
 }
@@ -133,7 +139,7 @@ func (s *apiServer) checkOrigin(next http.Handler) http.Handler {
 			return
 		}
 		if origin := r.Header.Get("Origin"); origin == "" || origin != s.expectedOrigin(r) {
-			WriteProblem(w, http.StatusForbidden, "", "origin not allowed")
+			WriteProblem(w, http.StatusForbidden, api.ReasonCodeForbidden, "origin not allowed")
 			return
 		}
 		next.ServeHTTP(w, r)

@@ -30,7 +30,7 @@ func adminError(err error) error {
 	case errors.Is(err, users.ErrNotFound):
 		return &problem{status: http.StatusNotFound, reason: api.ReasonCodeNotFound}
 	case errors.Is(err, users.ErrForbidden):
-		return &problem{status: http.StatusForbidden, detail: err.Error()}
+		return &problem{status: http.StatusForbidden, reason: api.ReasonCodeForbidden, detail: err.Error()}
 	case errors.As(err, &inv):
 		return &problem{status: http.StatusUnprocessableEntity, reason: api.ReasonCodeInvalid, detail: inv.Detail}
 	}

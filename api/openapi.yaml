@@ -1266,6 +1266,9 @@ components:
         - invalid
         - rate_limited
         - server_unavailable
+        - forbidden
+        - busy
+        - password_change_required
 
     Problem:
       type: object
