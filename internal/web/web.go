@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/api"
+	"github.com/NightDragon1/rconductor/internal/auth"
 )
 
 // APIBase is the base path of the REST API (Design 2.1).
@@ -33,13 +34,9 @@ type Options struct {
 	UI http.Handler
 	// Proxies decide which forwarding headers are trusted.
 	Proxies Proxies
+	// Auth resolves sessions; nil means every API call is unauthenticated.
+	Auth *auth.Service
 }
-
-// apiServer implements the generated strict server interface. Endpoints
-// are added per milestone.
-type apiServer struct{}
-
-var _ api.StrictServerInterface = apiServer{}
 
 // NewHandler returns the root handler of the web port.
 func NewHandler(opts Options) http.Handler {
@@ -53,9 +50,11 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	api.HandlerWithOptions(api.NewStrictHandler(apiServer{}, nil), api.StdHTTPServerOptions{
-		BaseURL:    APIBase,
-		BaseRouter: mux,
+	srv := &apiServer{auth: opts.Auth, log: opts.Log, proxies: opts.Proxies}
+	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
+		BaseURL:     APIBase,
+		BaseRouter:  mux,
+		Middlewares: []api.MiddlewareFunc{srv.checkOrigin},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			WriteProblem(w, http.StatusBadRequest, api.ReasonCodeInvalid, err.Error())
 		},
