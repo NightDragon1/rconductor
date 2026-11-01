@@ -102,6 +102,32 @@ export interface paths {
         patch: operations["updateUser"];
         trace?: never;
     };
+    "/users/{id}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Role, scopes, groups and grants of a managed user.
+         * @description Also the template for quick entry (UI-008).
+         */
+        get: operations["getAssignments"];
+        /**
+         * Replace sections of a managed user's assignments (ROLE-003, ROLE-004).
+         * @description Each given section replaces the entries the caller controls; entries others made in their own groups stay. Admin scopes: only the RCON admin, only for server admins. Groups: groups the caller owns. Grants: moderator groups the caller owns, targets within the caller's and the group owner's scope, the moderator must be a member. Supporter grants: for moderators the caller is or manages, only with supporters enabled, servers within the moderator's scope. Refusals are logged and audited.
+         */
+        put: operations["updateAssignments"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -128,6 +154,41 @@ export interface components {
         };
         UserList: {
             items: components["schemas"]["User"][];
+        };
+        /** @description Exactly one of server_id or server_group_id. */
+        Target: {
+            /** Format: uuid */
+            server_id?: string;
+            /** Format: uuid */
+            server_group_id?: string;
+        };
+        /** @description A server or server group for a moderator through one of his moderator groups, whose list applies (Design 4.3). */
+        Grant: {
+            /** Format: uuid */
+            group_id: string;
+            /** Format: uuid */
+            server_id?: string;
+            /** Format: uuid */
+            server_group_id?: string;
+        };
+        SupporterGrant: {
+            /** Format: uuid */
+            moderator_id: string;
+            /** Format: uuid */
+            server_id: string;
+        };
+        Assignments: {
+            role: components["schemas"]["Role"];
+            admin_scopes: components["schemas"]["Target"][];
+            groups: string[];
+            grants: components["schemas"]["Grant"][];
+            supporter_grants: components["schemas"]["SupporterGrant"][];
+        };
+        AssignmentsUpdate: {
+            admin_scopes?: components["schemas"]["Target"][];
+            groups?: string[];
+            grants?: components["schemas"]["Grant"][];
+            supporter_grants?: components["schemas"]["SupporterGrant"][];
         };
         UserUpdate: {
             role?: components["schemas"]["Role"];
@@ -221,6 +282,15 @@ export interface components {
         };
         /** @description No valid session. */
         Unauthenticated: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The request breaks a rule of the data. */
+        Invalid: {
             headers: {
                 [name: string]: unknown;
             };
@@ -417,6 +487,61 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The assignments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignments"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentsUpdate"];
+            };
+        };
+        responses: {
+            /** @description The assignments after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Assignments"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
         };
     };
 }

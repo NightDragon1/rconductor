@@ -172,6 +172,61 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /users/{id}/assignments:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    get:
+      operationId: getAssignments
+      summary: Role, scopes, groups and grants of a managed user.
+      description: Also the template for quick entry (UI-008).
+      tags: [users]
+      responses:
+        "200":
+          description: The assignments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignments"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateAssignments
+      summary: Replace sections of a managed user's assignments (ROLE-003, ROLE-004).
+      description: >-
+        Each given section replaces the entries the caller controls; entries
+        others made in their own groups stay. Admin scopes: only the RCON
+        admin, only for server admins. Groups: groups the caller owns.
+        Grants: moderator groups the caller owns, targets within the
+        caller's and the group owner's scope, the moderator must be a
+        member. Supporter grants: for moderators the caller is or manages,
+        only with supporters enabled, servers within the moderator's
+        scope. Refusals are logged and audited.
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignmentsUpdate"
+      responses:
+        "200":
+          description: The assignments after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignments"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
 
 components:
   parameters:
@@ -226,6 +281,90 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    Target:
+      type: object
+      description: Exactly one of server_id or server_group_id.
+      properties:
+        server_id:
+          type: string
+          format: uuid
+        server_group_id:
+          type: string
+          format: uuid
+
+    Grant:
+      type: object
+      required: [group_id]
+      description: >-
+        A server or server group for a moderator through one of his
+        moderator groups, whose list applies (Design 4.3).
+      properties:
+        group_id:
+          type: string
+          format: uuid
+        server_id:
+          type: string
+          format: uuid
+        server_group_id:
+          type: string
+          format: uuid
+
+    SupporterGrant:
+      type: object
+      required: [moderator_id, server_id]
+      properties:
+        moderator_id:
+          type: string
+          format: uuid
+        server_id:
+          type: string
+          format: uuid
+
+    Assignments:
+      type: object
+      required: [role, admin_scopes, groups, grants, supporter_grants]
+      properties:
+        role:
+          $ref: "#/components/schemas/Role"
+        admin_scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Target"
+        groups:
+          type: array
+          items:
+            type: string
+            format: uuid
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Grant"
+        supporter_grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupporterGrant"
+
+    AssignmentsUpdate:
+      type: object
+      properties:
+        admin_scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Target"
+        groups:
+          type: array
+          items:
+            type: string
+            format: uuid
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Grant"
+        supporter_grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupporterGrant"
 
     UserUpdate:
       type: object
@@ -357,6 +496,12 @@ components:
             $ref: "#/components/schemas/Problem"
     Unauthenticated:
       description: No valid session.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Invalid:
+      description: The request breaks a rule of the data.
       content:
         application/problem+json:
           schema:
