@@ -31,6 +31,8 @@ type Options struct {
 	Log *slog.Logger
 	// UI serves the web interface; nil means no UI is mounted.
 	UI http.Handler
+	// Proxies decide which forwarding headers are trusted.
+	Proxies Proxies
 }
 
 // apiServer implements the generated strict server interface. Endpoints
@@ -66,7 +68,7 @@ func NewHandler(opts Options) http.Handler {
 			WriteProblem(w, http.StatusNotFound, "", "")
 		})
 	}
-	return withRequestID(mux)
+	return withRequestID(withClient(opts.Proxies, mux))
 }
 
 // Serve listens on addr and serves h until ctx ends, then shuts down
