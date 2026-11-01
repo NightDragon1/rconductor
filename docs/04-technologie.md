@@ -1,11 +1,11 @@
 # Technologie
 
-Freigegeben mit Dokumentversion 2.0, abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
+Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
 
 ## 1. Grundsätze
 
 - Wenige, gepflegte Abhängigkeiten; Standardbibliothek vor Framework.
-- Ein statisches Binary je Image, ohne CGO, für amd64 und arm64.
+- Ein statisches Binary je Image, ohne CGO, für amd64 und arm64. Tests dürfen CGO nutzen (Race-Detector).
 - Eine Schnittstellenbeschreibung (OpenAPI 3.1) als einzige Quelle für Server- und Client-Typen.
 - Jede Bibliothek mit kompatibler Lizenz zur AGPL-3.0 (D-012).
 
@@ -47,6 +47,7 @@ Freigegeben mit Dokumentversion 2.0, abgeleitet aus den Tabs Architektur und Des
 | Konsole | eigene Komponente mit TanStack Virtual | lange Verläufe ohne Ruckeln | R1 |
 | Formulare | react-hook-form mit zod | Prüfung im Browser, endgültige Prüfung bleibt im Backend | R1 |
 | Sprachen | i18next mit react-i18next | Englisch ab R1, Deutsch ab R2 (NFR-007) | R1 |
+| API-Laufzeit | github.com/oapi-codegen/runtime | vom generierten Server-Code benötigt (D-039) | R1 |
 | Zeitreihen | uPlot | schnell bei vielen Messpunkten, wie in Grafana | R2 |
 | Topologie | React Flow (@xyflow/react) | ausgereifte Graph-Bibliothek für den Live-Graph (UI-010) | R2 |
 
@@ -56,19 +57,19 @@ SvelteKit (bisher D-002) bringt kleinere Bundles und weniger Code. Bei einer ins
 
 | Bereich | Wahl |
 | --- | --- |
-| Repository | Ein Repository: cmd/panel, cmd/agent, internal, web, profiles, migrations, api/openapi.yaml |
-| Images | Mehrstufiger Build; Panel auf distroless static als Nicht-Root-Benutzer; Agent ebenfalls distroless static |
+| Repository | Ein Repository: cmd/panel, cmd/agent, internal, web, profiles, migrations, api/openapi.yaml, deploy/compose, scripts (Hilfsskripte, nicht Teil der Images) |
+| Images | Mehrstufiger Build; Panel auf distroless static als Nicht-Root-Benutzer mit read-only Root-Dateisystem; Agent ebenfalls distroless static |
 | Plattformen | amd64 und arm64 über Go-Cross-Compile und docker buildx |
 | Registry | ghcr.io; Tags 1, 1.2 und 1.2.3, damit die Hauptversion allein genügt (D-023) |
-| Lieferkette | SBOM mit syft, Signatur der Images mit cosign, govulncheck in der CI, Renovate für Abhängigkeiten |
+| Lieferkette | SEC-013: SBOM mit syft, Signatur der Images mit cosign keyless, govulncheck als Pflicht-Check, Actions auf Commit-SHA gepinnt, Renovate gruppiert und ohne Automerge |
 | Tests Backend | go test; Integrationstests mit testcontainers-go gegen Postgres und Docker |
 | Tests Oberfläche | Vitest für Komponenten, Playwright für Abläufe im Browser |
-| Statische Prüfung | golangci-lint, ESLint, Prettier |
+| Statische Prüfung | golangci-lint, ESLint, Prettier, SPDX-Header; gebündelt in make check, auch als Pre-Commit-Hook |
 | CI | GitHub Actions |
 
 ## 5. Offene Punkte
 
-1. Agent-Image: Zugriff auf den Docker-Socket als Root oder über die docker-Gruppe des Hosts; wird bei der Umsetzung festgelegt.
+1. Agent-Image: Zugriff auf den Docker-Socket als Root oder über die docker-Gruppe des Hosts; wird in M3 festgelegt. Bis dahin ist der Agent ein Stub als Nicht-Root-Benutzer. Zu prüfen: Nicht-Root mit group\_add auf die GID des Sockets; Root nur als dokumentierte Ausnahme; mit Socket-Proxy (SEC-010) entfällt der direkte Zugriff.
 2. Vorgehen bei Lizenzprüfung neuer Abhängigkeiten (z. B. automatisiert in der CI).
 
 ## Quellen

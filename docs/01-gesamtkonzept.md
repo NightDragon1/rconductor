@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.0, Stand 01.11.2026, Status freigegeben.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.1, Stand 01.11.2026, Status freigegeben; Änderungen gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -61,7 +61,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | NFR-007 | Sprachen | Oberfläche in Englisch ab R1, Übersetzungsstruktur von Anfang an; Deutsch als zweite Sprache ab R2; weitere Sprachen als Dateien ergänzbar | UI | Muss | R1 | 1 |
 | NFR-008 | Backups | Regelmäßige automatische Backups der veränderlichen Daten (Datenbank, Befehlslisten, Einstellungen) nach /backups; der Master-Key wird getrennt davon gesichert (SEC-005) | Backend | Soll | R1 | 1 |
 | NFR-009 | Erweiterbarkeit | Niedrig priorisierte Anforderungen werden in der Architektur von Anfang an berücksichtigt, damit spätere Releases nichts umbauen müssen | alle | Muss | R1 | 1 |
-| NFR-010 | Volumes | Alle Daten liegen in eigenen Volumes: /data (SQLite, Profilbilder, eigene Profile), /secrets (Master-Key, Agent-Schlüssel), /backups; README beschreibt genau, was wo liegt | Backend, Doku | Muss | R1 | 1 |
+| NFR-010 | Volumes | Alle Daten liegen in eigenen Volumes: /data (SQLite mit Profilbildern, eigene Profile), /secrets (Master-Key, Agent-Schlüssel), /backups; README beschreibt genau, was wo liegt | Backend, Doku | Muss | R1 | 2 |
 | NFR-011 | Datenbankwahl per Env | RCD\_DB\_DRIVER wählt sqlite (Standard) oder postgres. postgres ohne RCD\_DB\_URL: interner Postgres-Dienst aus der mitgelieferten Compose-Datei, Zugangsdaten automatisch über Init-Skript bzw. .env vorbereitet. postgres mit RCD\_DB\_URL: externer Server, alle Zugangsdaten (Host, Port, Datenbank, Benutzer, Passwort) kommen vom Betreiber | Backend, Doku | Soll | R2 | 2 |
 | NFR-012 | Datenbankwechsel | Wechsel von SQLite nach Postgres per Befehl, ohne Datenverlust | Backend | Soll | R2 | 1 |
 | NFR-013 | Schema-Migrationen | Versionierte, ins Binary eingebettete Migrationen; beim Start automatisch ausgeführt, auch gegen externe Datenbanken; mehrere Versionen werden in einem Lauf nacheinander nachgezogen; Sperre gegen parallele Läufe; Backup vor jeder Migration | Backend, DB | Muss | R1 | 1 |
@@ -80,6 +80,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | SEC-010 | Socket-Proxy | Doku empfiehlt einen Socket-Proxy vor dem Docker-Socket, der nur die vom Agent benötigten Endpunkte durchlässt; der Agent funktioniert damit unverändert | Agent, Doku | Kann | R1 | 1 |
 | SEC-011 | Audit-Hash-Kette | Manipulationssichere Verkettung der Audit-Einträge mit Prüffunktion | Backend, DB | Kann | Backlog | 1 |
 | SEC-012 | Keine Geheimnisse in Logs | Passwörter, RCON-Zugangsdaten, Tokens, Schlüssel und Session-IDs erscheinen auf keinem Log-Level; Sessions nur als kurzer Hash; einzige Ausnahme ist die einmalige Ausgabe des Initialpassworts (AUTH-007) | Backend, Agent | Muss | R1 | 1 |
+| SEC-013 | Lieferkette | Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne Automerge; Release-Tags erst nach Veröffentlichung des Repositories | alle | Muss | R1 | 1 |
 | PRJ-001 | Open Source | Veröffentlichung auf GitHub unter GNU AGPL-3.0; Spielprofile sind Teil des Repositories | alle | Muss | R1 | 1 |
 | PRJ-002 | Eigenständigkeit | Eigene Implementierung; Ideen anderer Tools nur sinngemäß, kein fremder Code, kein fremdes Design | alle | Muss | R1 | 1 |
 
@@ -95,6 +96,8 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | AUTH-006 | Sessions | Session-Management für alle Benutzer; Zuordnung Session zu Request-ID wird geloggt | Backend | Muss | R1 | 1 |
 | AUTH-007 | Initialpasswort | Beim ersten Start des Containers wird ein zufälliges Passwort für den Notfall-Admin erzeugt und im Container-Log ausgegeben; Änderung in der Oberfläche | Backend | Muss | R1 | 1 |
 | AUTH-008 | Zwei-Faktor | Optionale Zwei-Faktor-Anmeldung (TOTP); RCON-Admin kann sie für alle erzwingen, jeder Benutzer kann sie für sich aktivieren | Backend, UI | Soll | R2 | 1 |
+| AUTH-011 | Wiederherstellung Notfall-Admin | Mit RCD\_EMERGENCY\_ADMIN\_RESET=true erhält der Notfall-Admin beim Start ein neues Initialpasswort (Ausgabe wie AUTH-007) mit must\_change\_password; alle seine Sessions enden; Audit-Eintrag und Ereigniscode | Backend | Muss | R1 | 1 |
+| AUTH-010 | Erzwungener Passwortwechsel | Benutzer mit must\_change\_password dürfen nur ihr Passwort ändern, sich abmelden und ihre Session abfragen; alles andere wird mit eigenem Grund-Code abgelehnt. Das Flag wird beim Initialpasswort (AUTH-007) und bei einem Passwort-Reset durch einen Verwaltenden gesetzt und mit dem Wechsel gelöscht; ein Reset beendet alle Sessions des Betroffenen, das temporäre Passwort erhält nur der Verwaltende einmal in der Antwort | Backend, UI | Muss | R1 | 1 |
 | AUTH-009 | Benutzerprofil | Pseudonym als primärer Anzeigename; optional Echtname, Profilbild-Upload und Kontaktangaben (z. B. Telegram, WhatsApp) | Backend, UI, DB | Soll | R1 | 1 |
 
 ### 2.3 Rechteverwaltung
@@ -383,6 +386,10 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | D-040 | Images für amd64 und arm64, signiert und mit SBOM auf ghcr.io | x86-Server und Raspberry Pi; nachprüfbare Lieferkette | zusätzlich armv7, nur amd64 |
 | D-041 | Parametertypen player, text, choice, number im Spielprofil; eigene Befehlsdefinitionen (CMD-018) sollen sie übernehmen | CMD-003 braucht Parameterfelder schon in R1, die Argument-Syntax ist vertagt | nur ein freies Argumentfeld je Befehl |
 | D-042 | Abnahme teilweise über Ereigniscodes in den Container-Logs, gelesen per Portainer-MCP | nutzt vorhandenen Zugang ohne neuen Code im Panel; Claude kann Kriterien direkt prüfen | eigener MCP-Endpunkt im Panel |
+| D-043 | Session-Cookie immer HttpOnly und SameSite=Lax; Secure und Präfix \_\_Host- nur über HTTPS | Anmeldung auch ohne TLS-Proxy im LAN (D-011); Lax lässt Links von außen angemeldet ankommen, CSRF bleibt durch die Origin-Prüfung abgedeckt | Secure und SameSite=Strict immer |
+| D-044 | Jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants, Supporter-Freigabe oder Sperre beendet die Sessions des Benutzers; Listeninhalte wirken ohne Abmeldung | keine offene Oberfläche mit veraltetem Stand; Listenpflege meldet niemanden ab | nur Deaktivierung beendet Sessions |
+| D-045 | Profilbild als BLOB in der Datenbank, neu kodiert und verkleinert | ein Backup enthält alle veränderlichen Daten; Metadaten wie EXIF entfallen | Datei unter /data |
+| D-046 | Benutzer entstehen nur per Einladung, dazu der Notfall-Admin | niemand vergibt Passwörter für andere; ein Weg statt zwei | POST /users mit Passwortvergabe |
 
 ## 7. Releaseplan
 
@@ -409,3 +416,41 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 1.4 | 01.11.2026 | Design 7 Spielprofile; Tabs Abnahme R1, Sicherheit (Bedrohungsmodell) und Plan R1 angelegt; SEC-006 bis SEC-011 und D-041 neu; Revision 2 für SRV-002 (Master-Key in /secrets) und CAT-001 |
 | 1.5 | 01.11.2026 | Testbarkeit über Ereignis-Logs: Design 8, Abnahme R1 Abschnitt 9, NFR-016, SEC-012, D-042 |
 | 2.0 | 01.11.2026 | Freigabe durch Rob; Basis für R1. Änderungen ab jetzt nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
+| 2.1 | 01.11.2026 | Freigabe durch Rob: Erkenntnisse aus M0 und M1 eingearbeitet (Kapitel 10); Revision 2 für NFR-010; AUTH-010, AUTH-011, SEC-013 und D-043 bis D-046 neu. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
+
+## 10. Änderungen in Version 2.1
+
+Eingearbeitet aus den Kandidaten nach M0 und M1 (bisher docs/revision-2.1-kandidaten.md). Nummern wie dort.
+
+| Nr. | Änderung | Fundstelle in 2.1 |
+| --- | --- | --- |
+| 1 | /healthz und /metrics reserviert, nie von der Oberfläche beantwortet | Design 2.1 |
+| 2 | Regeln zur Auslieferung der eingebetteten Oberfläche | Design 6.1 |
+| 3 | Read-only Root-Dateisystem für Panel und Agent, read\_only in Compose | Design 5.4 bis 5.6, Technologie 4, Abnahme SEC-002 |
+| 4 | base href je RCD\_BASE\_PATH für Deep-Links | Design 6.1, Abnahme NFR-003 |
+| 5 | AGT-001 prüft das Panel-Binary statt go.mod | Abnahme AGT-001 |
+| 6 | Tests dürfen CGO nutzen (Race-Detector) | Technologie 1 |
+| 7 | Neue Anforderung SEC-013 Lieferkette | 2.1, Sicherheit 4, Abnahme, Plan M0, Technologie 4 |
+| 8 | Socket-Zugriff des Agents wird in M3 entschieden, Stub als Nicht-Root | Technologie 5 |
+| 9 | Verzeichnisse scripts und deploy/compose im Repository | Technologie 4 |
+| 10 | Session-Cookie: Secure und \_\_Host- nur über HTTPS, SameSite=Lax; Proxy-Auswertung in M1 | Design 2.1, D-043, Sicherheit T-001 und T-007, Plan M1 |
+| 11 | Rechteänderungen beenden Sessions | Design 2.1, D-044 |
+| 12 | Sichtbarkeit der Profilfelder | Design 3.6 |
+| 13 | Profilbild als BLOB; Revision 2 von NFR-010 | 2.1 NFR-010, Design 4.2, D-045 |
+| 14 | grants nennt immer die Moderatorgruppe | Design 4.2, 4.3 |
+| 15 | Benutzer nur per Einladung, kein POST /users | Design 2.2, D-046 |
+| 16 | Regel, wer wen verwaltet | Design 3.6 |
+| 17 | Zuweisungen ersetzen nur eigene Einträge; Servergruppe nur ganz im Scope | Design 2.2, 3.6 |
+| 18 | Rollenwechsel entfernt die Zuweisungen | Design 3.6 |
+| 19 | Listenänderungen beenden keine Sessions | Design 2.1, D-044 |
+| 20 | Login-Schutz mit Werten und Zählern | Design 3.7 |
+| 21 | Neue Variable RCD\_PASSWORD\_HASH\_CONCURRENCY | Design 5.2, 3.7 |
+| 22 | Initialpasswort als Hinweisblock auf stderr | Design 8.1 |
+| 23 | Liste der Laufzeit-Einstellungen mit Standardwerten | Design 5.6 |
+| 24 | Grund-Codes forbidden und busy | Design 3.5 |
+| 25 | Zusätzliche API-Pfade | Design 2.2 |
+| 26 | Profilbild nur PNG und JPEG, verkleinert auf 512 Pixel | Design 4.3 |
+| 27 | Teilabnahmen über Meilensteine | Plan R1, Kapitel 3 |
+| 28 | Neue Anforderung AUTH-010: erzwungener Passwortwechsel mit Grund-Code password\_change\_required; Passwort-Reset durch Verwaltende | 2.2 AUTH-010, Design 2.2, 3.5, 3.6, 4.2, Abnahme, Plan M2 |
+| 29 | Ratenlimits als Einstellungen ratelimit.<rolle>.per\_minute und .burst | Design 3.4, 5.6 |
+| 30 | Neue Anforderung AUTH-011: Wiederherstellung des Notfall-Admins per RCD\_EMERGENCY\_ADMIN\_RESET, Ereigniscode auth.emergency\_admin.reset; Verdrängung im Login-Schutz festgelegt | 2.2 AUTH-011, Design 3.6, 3.7, 5.2, 8.3, Abnahme, Plan M2 |
