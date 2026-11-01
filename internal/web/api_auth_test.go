@@ -60,7 +60,10 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	svc := auth.NewService(st, hasher, log, true)
 	checker := perm.NewChecker(st, log)
 	us := users.NewService(st, checker, log, svc.RevokeUser)
-	h := NewHandler(Options{Log: log, Auth: svc, Perm: checker, Users: us, Proxies: proxies})
+	h := NewHandler(Options{
+		Log: log, Auth: svc, Perm: checker, Users: us, Proxies: proxies,
+		Profiles: users.NewProfiles(us, hasher, svc.RevokeOtherSessions),
+	})
 	return &apiFixture{h: h, userID: id, adminID: adminID, proxies: proxies}
 }
 

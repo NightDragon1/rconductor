@@ -11,6 +11,8 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -202,5 +204,47 @@ func TestAvatar(t *testing.T) {
 	}
 	if _, _, err := f.p.Avatar(ctx, f.as("m"), f.ids["m"]); !errors.Is(err, ErrNotFound) {
 		t.Errorf("removed avatar: %v", err)
+	}
+}
+
+// TestResetPassword covers the reset part of AUTH-010: only for managed
+// users, all sessions end, and the temporary password is in the answer
+// only, never in log or audit.
+func TestResetPassword(t *testing.T) {
+	f := newProfiles(t)
+	ctx := context.Background()
+	pw, err := f.p.ResetPassword(ctx, f.as("sa"), f.ids["m"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hash string
+	var must int
+	if err := f.st.DB.QueryRowContext(ctx, `SELECT password_hash, must_change_password FROM users WHERE id = ?`, f.ids["m"]).Scan(&hash, &must); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := f.h.Verify(ctx, hash, pw); !ok || must != 1 {
+		t.Errorf("reset not stored: verify=%v must=%d", ok, must)
+	}
+	if !slices.Contains(f.revoked, f.ids["m"]) {
+		t.Error("sessions not ended")
+	}
+	if strings.Contains(f.logs.String(), pw) || f.count(`SELECT count(*) FROM audit_log WHERE payload LIKE ?`, "%"+pw+"%") != 0 {
+		t.Error("temporary password in log or audit")
+	}
+	if f.count(`SELECT count(*) FROM audit_log WHERE action = 'password.reset' AND result = 'ok' AND target_id = ?`, f.ids["m"]) != 1 {
+		t.Error("reset not audited")
+	}
+	// Own password change clears the flag.
+	req := f.as("m")
+	if err := f.p.ChangePassword(ctx, req, pw, "my own new password"); err != nil {
+		t.Fatal(err)
+	}
+	if f.count(`SELECT must_change_password FROM users WHERE id = ?`, f.ids["m"]) != 0 {
+		t.Error("flag not cleared")
+	}
+	for name, target := range map[string]string{"unmanaged": f.ids["m2"], "server admin": f.ids["sa2"]} {
+		if _, err := f.p.ResetPassword(ctx, f.as("sa"), target); !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }

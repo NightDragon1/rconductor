@@ -58,6 +58,9 @@ type Principal struct {
 	Pseudonym   string
 	Role        string
 	IsEmergency bool
+	// MustChangePassword allows only changing the password, logging out
+	// and reading the session (AUTH-010).
+	MustChangePassword bool
 	// SessionHash identifies the session in the database and the audit log.
 	SessionHash string
 	ExpiresAt   time.Time
@@ -290,7 +293,8 @@ func (s *Service) createSession(ctx context.Context, u sqlitedb.GetLoginUserRow,
 	}
 	return token, Principal{
 		UserID: u.ID, Pseudonym: u.Pseudonym, Role: u.Role, IsEmergency: u.IsEmergency == 1,
-		SessionHash: hash, ExpiresAt: minTime(now.Add(idle), absolute),
+		MustChangePassword: u.MustChangePassword == 1,
+		SessionHash:        hash, ExpiresAt: minTime(now.Add(idle), absolute),
 	}, nil
 }
 
@@ -357,7 +361,8 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Principal, er
 	}
 	return Principal{
 		UserID: row.UserID, Pseudonym: row.Pseudonym, Role: row.Role, IsEmergency: row.IsEmergency == 1,
-		SessionHash: hash, ExpiresAt: minTime(lastSeen.Add(idle), absolute),
+		MustChangePassword: row.MustChangePassword == 1,
+		SessionHash:        hash, ExpiresAt: minTime(lastSeen.Add(idle), absolute),
 	}, nil
 }
 

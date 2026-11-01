@@ -618,6 +618,32 @@ paths:
           description: Removed.
         "401":
           $ref: "#/components/responses/Unauthenticated"
+  /users/{id}/password-reset:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    post:
+      operationId: resetPassword
+      summary: Set a temporary password for a managed user (AUTH-010).
+      description: >-
+        The temporary password is in this answer only, never in log or
+        audit; the user must change it at the next login, and all his
+        sessions end.
+      tags: [users]
+      responses:
+        "200":
+          description: The temporary password, shown once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordReset"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
   /users/{id}/avatar:
     parameters:
       - $ref: "#/components/parameters/UserID"
@@ -884,6 +910,14 @@ components:
           additionalProperties:
             type: string
             maxLength: 128
+
+    PasswordReset:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: Temporary password; shown only once.
 
     PasswordChange:
       type: object
@@ -1244,8 +1278,13 @@ components:
 
     Session:
       type: object
-      required: [user, expires_at]
+      required: [user, expires_at, must_change_password]
       properties:
+        must_change_password:
+          type: boolean
+          description: >-
+            Until the password is changed only /me/password, /auth/logout
+            and /auth/session are allowed (AUTH-010).
         user:
           $ref: "#/components/schemas/SessionUser"
         expires_at:

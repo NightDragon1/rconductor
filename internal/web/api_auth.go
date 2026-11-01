@@ -60,8 +60,9 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 func sessionOf(p auth.Principal) api.Session {
 	id, _ := uuid.Parse(p.UserID)
 	return api.Session{
-		User:      api.SessionUser{Id: id, Pseudonym: p.Pseudonym, Role: api.Role(p.Role)},
-		ExpiresAt: p.ExpiresAt,
+		User:               api.SessionUser{Id: id, Pseudonym: p.Pseudonym, Role: api.Role(p.Role)},
+		ExpiresAt:          p.ExpiresAt,
+		MustChangePassword: p.MustChangePassword,
 	}
 }
 

@@ -3,11 +3,11 @@ SELECT id, pseudonym FROM users WHERE is_emergency = 1;
 
 -- name: InsertUser :exec
 INSERT INTO users (
-    id, pseudonym, role, password_hash, is_emergency, created_by, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    id, pseudonym, role, password_hash, is_emergency, must_change_password, created_by, created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetLoginUser :one
-SELECT id, pseudonym, role, password_hash, is_emergency, disabled_at
+SELECT id, pseudonym, role, password_hash, is_emergency, disabled_at, must_change_password
 FROM users
 WHERE pseudonym = ? COLLATE NOCASE AND deleted_at IS NULL;
 
@@ -43,8 +43,19 @@ UPDATE users SET pseudonym = ?, real_name = ?, contacts = ?, updated_at = ? WHER
 -- name: GetPasswordHash :one
 SELECT password_hash FROM users WHERE id = ? AND deleted_at IS NULL;
 
+-- The user's own change clears a forced change (AUTH-010).
 -- name: SetPasswordHash :exec
-UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?;
+UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = ? WHERE id = ?;
+
+-- A reset sets a temporary password that must be changed (AUTH-010); a
+-- lock stays.
+-- name: ResetPassword :exec
+UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = ? WHERE id = ?;
+
+-- Recovery of the emergency admin also lifts a lock (AUTH-011).
+-- name: ResetEmergencyAdmin :exec
+UPDATE users SET password_hash = ?, must_change_password = 1, disabled_at = NULL, updated_at = ?
+WHERE id = ? AND is_emergency = 1;
 
 -- name: SetAvatar :exec
 UPDATE users SET avatar = ?, avatar_type = ?, updated_at = ? WHERE id = ?;
