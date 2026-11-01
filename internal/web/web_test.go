@@ -41,9 +41,11 @@ func TestUIMountedAtRoot(t *testing.T) {
 		t.Errorf("UI not served: %d %q", rec.Code, rec.Body.String())
 	}
 
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/x", nil))
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("API path served by UI: %d", rec.Code)
+	for _, target := range []string{"/api/v1/x", "/api", "/api/v2/x", "/healthz", "/healthz/live", "/metrics", "/metrics/x"} {
+		rec = httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if rec.Code != http.StatusNotFound || rec.Body.String() == "ui" {
+			t.Errorf("%s served by UI: %d", target, rec.Code)
+		}
 	}
 }

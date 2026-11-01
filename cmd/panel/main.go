@@ -12,6 +12,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/app"
 	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/webui"
 )
 
 func main() {
@@ -23,7 +24,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := app.RunPanel(ctx, cfg, os.Stdout, app.PanelOptions{}); err != nil {
+	if err := app.RunPanel(ctx, cfg, os.Stdout, app.PanelOptions{UI: webui.Handler()}); err != nil {
 		stop()
 		os.Exit(1) //nolint:gocritic // stop already called
 	}

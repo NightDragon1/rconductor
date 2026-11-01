@@ -7,11 +7,15 @@ SQLC_VERSION := 1.31.1
 SQLC ?= sqlc
 export CGO_ENABLED := 0
 
-.PHONY: all build panel agent test test-integration lint vuln generate
+.PHONY: all build web panel agent test test-integration lint vuln generate
 
-all: lint test build
+all: lint test web build
 
 build: panel agent
+
+# The UI build lands in internal/webui/dist and is embedded into the panel.
+web:
+	cd web && npm ci && npm run build
 
 panel:
 	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o bin/panel ./cmd/panel
