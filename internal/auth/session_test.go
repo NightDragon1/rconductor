@@ -21,10 +21,11 @@ import (
 const testPassword = "a long enough password"
 
 type sessionFixture struct {
-	st   *store.Store
-	svc  *Service
-	logs *bytes.Buffer
-	now  time.Time
+	st     *store.Store
+	svc    *Service
+	logs   *bytes.Buffer
+	now    time.Time
+	delays []time.Duration
 }
 
 func newSessionFixture(t *testing.T, emergency bool) *sessionFixture {
@@ -41,6 +42,10 @@ func newSessionFixture(t *testing.T, emergency bool) *sessionFixture {
 	f := &sessionFixture{st: st, logs: logs, now: time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)}
 	f.svc = NewService(st, h, logging.New(logs, "panel", config.Log{Format: "json"}).Module("auth"), emergency)
 	f.svc.now = func() time.Time { return f.now }
+	f.svc.sleep = func(_ context.Context, d time.Duration) error {
+		f.delays = append(f.delays, d)
+		return nil
+	}
 	return f
 }
 

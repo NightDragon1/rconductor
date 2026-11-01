@@ -45,6 +45,12 @@ var (
 	ErrUnauthenticated = errors.New("no valid session")
 )
 
+// LockedError means the account is locked for this client address after
+// too many failed logins (SEC-004).
+type LockedError struct{ RetryAfter time.Duration }
+
+func (e *LockedError) Error() string { return "too many failed logins, try again later" }
+
 // Principal is the authenticated user of a request. Rights are not part of
 // it; they are computed per request (Design 2.1).
 type Principal struct {
@@ -73,13 +79,29 @@ type Service struct {
 	hasher    *password.Hasher
 	log       *slog.Logger
 	emergency bool
+	throttle  *throttle
 	now       func() time.Time
+	sleep     func(ctx context.Context, d time.Duration) error
 }
 
 // NewService returns the authentication service. emergencyEnabled is
 // RCD_EMERGENCY_ADMIN (AUTH-003).
 func NewService(st *store.Store, h *password.Hasher, log *slog.Logger, emergencyEnabled bool) *Service {
-	return &Service{st: st, hasher: h, log: log, emergency: emergencyEnabled, now: time.Now}
+	return &Service{
+		st: st, hasher: h, log: log, emergency: emergencyEnabled, throttle: newThrottle(),
+		now: time.Now, sleep: sleepCtx,
+	}
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // EnsureDefaults stores the default session settings unless they exist.
@@ -87,6 +109,8 @@ func EnsureDefaults(ctx context.Context, st *store.Store) error {
 	for key, v := range map[string]any{
 		SettingIdleTimeout: DefaultIdleTimeout.String(),
 		SettingMaxLifetime: DefaultMaxLifetime.String(),
+		SettingMaxFailures: DefaultMaxFailures,
+		SettingLockout:     DefaultLockout.String(),
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
@@ -111,6 +135,28 @@ func (s *Service) policy(ctx context.Context) (idle, maxLife time.Duration) {
 	return idle, maxLife
 }
 
+// loginPolicy reads the login protection settings.
+func (s *Service) loginPolicy(ctx context.Context) (maxFailures int, lockout time.Duration) {
+	maxFailures, lockout = DefaultMaxFailures, DefaultLockout
+	var n int
+	if err := s.st.GlobalSetting(ctx, SettingMaxFailures, &n); err == nil {
+		if n >= 1 {
+			maxFailures = n
+		} else {
+			s.log.Warn("invalid login setting, using default", slog.String("setting", SettingMaxFailures))
+		}
+	}
+	var v string
+	if err := s.st.GlobalSetting(ctx, SettingLockout, &v); err == nil {
+		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
+			lockout = d
+		} else {
+			s.log.Warn("invalid login setting, using default", slog.String("setting", SettingLockout))
+		}
+	}
+	return maxFailures, lockout
+}
+
 // MaxLifetime is the configured maximum session lifetime, also used for
 // the cookie.
 func (s *Service) MaxLifetime(ctx context.Context) time.Duration {
@@ -128,16 +174,50 @@ func HashToken(token string) string {
 // session token for the cookie. Every failure returns ErrInvalidCredentials
 // after the same Argon2id work, or password.ErrBusy.
 func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (string, Principal, error) {
+	key := accountKey(pseudonym)
+	maxFailures, lockout := s.loginPolicy(ctx)
+	delay, locked := s.throttle.check(key, c.IP, s.now(), lockout)
+
 	u, err := s.st.Queries.GetLoginUser(ctx, pseudonym)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
+	known := err == nil
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", Principal{}, fmt.Errorf("look up user: %w", err)
+	}
+	if locked > 0 {
+		s.loginDenied(ctx, c, u.ID, u.Pseudonym, "rate_limited", "locked")
+		return "", Principal{}, &LockedError{RetryAfter: locked}
+	}
+	if delay > 0 {
+		if err := s.sleep(ctx, delay); err != nil {
+			return "", Principal{}, err
+		}
+	}
+	fail := func(cause string) (string, Principal, error) {
+		s.loginDenied(ctx, c, u.ID, u.Pseudonym, "unauthenticated", cause)
+		if s.throttle.fail(key, c.IP, s.now(), maxFailures, lockout) {
+			attrs := []any{
+				logging.Event(logging.AuthLockout), slog.String(logging.KeyRequestID, c.RequestID),
+				slog.String(logging.KeyReason, "rate_limited"), slog.String("ip", c.IP.String()),
+				slog.Duration("lockout", lockout),
+			}
+			if u.Pseudonym != "" {
+				attrs = append(attrs, slog.String(logging.KeyUser, u.Pseudonym))
+			}
+			s.log.Warn("login locked for this client", attrs...)
+			s.audit(ctx, audit.Entry{
+				Kind: audit.KindAuth, TargetType: "user", TargetID: u.ID, Action: "lockout",
+				Result: audit.ResultDenied, Reason: "rate_limited",
+				Payload: map[string]string{"ip": c.IP.String(), "duration": lockout.String(), "request_id": c.RequestID},
+			})
+		}
+		return "", Principal{}, ErrInvalidCredentials
+	}
+
+	if !known {
 		if err := s.hasher.VerifyDummy(ctx, pw); err != nil {
 			return "", Principal{}, err
 		}
-		s.loginFailed(ctx, c, "", "", "unknown_user")
-		return "", Principal{}, ErrInvalidCredentials
-	case err != nil:
-		return "", Principal{}, fmt.Errorf("look up user: %w", err)
+		return fail("unknown_user")
 	}
 
 	ok, err := s.hasher.Verify(ctx, u.PasswordHash, pw)
@@ -154,14 +234,14 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 		reason = "emergency_admin_disabled"
 	}
 	if reason != "" {
-		s.loginFailed(ctx, c, u.ID, u.Pseudonym, reason)
-		return "", Principal{}, ErrInvalidCredentials
+		return fail(reason)
 	}
 
 	token, p, err := s.createSession(ctx, u, c)
 	if err != nil {
 		return "", Principal{}, err
 	}
+	s.throttle.success(key)
 	s.log.Info("login", logging.Event(logging.AuthLoginOK),
 		slog.String(logging.KeyRequestID, c.RequestID), slog.String(logging.KeySession, p.SessionRef()),
 		slog.String(logging.KeyUser, p.Pseudonym), slog.String(logging.KeyRole, p.Role))
@@ -214,24 +294,31 @@ func (s *Service) createSession(ctx context.Context, u sqlitedb.GetLoginUserRow,
 	}, nil
 }
 
-// loginFailed logs and audits a failed login. The attempted pseudonym is
-// recorded only for existing users, so a password typed into the name
-// field never lands in log or audit.
-func (s *Service) loginFailed(ctx context.Context, c Client, userID, pseudonym, reason string) {
+// loginDenied logs and audits a refused login with the API reason code and
+// the internal cause. The attempted pseudonym is recorded only for existing
+// users, so a password typed into the name field never lands in log or
+// audit.
+func (s *Service) loginDenied(ctx context.Context, c Client, userID, pseudonym, reason, cause string) {
 	attrs := []any{
 		logging.Event(logging.AuthLoginFailed), slog.String(logging.KeyRequestID, c.RequestID),
-		slog.String(logging.KeyReason, "unauthenticated"), slog.String("cause", reason),
+		slog.String(logging.KeyReason, reason), slog.String("cause", cause),
 	}
 	if pseudonym != "" {
 		attrs = append(attrs, slog.String(logging.KeyUser, pseudonym))
 	}
 	s.log.Info("login failed", attrs...)
-	if _, err := audit.Write(ctx, s.st.DB, audit.Entry{
+	s.audit(ctx, audit.Entry{
 		Kind: audit.KindAuth, TargetType: "user", TargetID: userID, Action: "login",
-		Result: audit.ResultDenied, Reason: "unauthenticated",
-		Payload: map[string]string{"ip": c.IP.String(), "cause": reason, "request_id": c.RequestID},
-	}); err != nil {
-		s.log.Error("audit of failed login not written", slog.Any("err", err))
+		Result: audit.ResultDenied, Reason: reason,
+		Payload: map[string]string{"ip": c.IP.String(), "cause": cause, "request_id": c.RequestID},
+	})
+}
+
+// audit writes an entry outside a transaction; a failure is logged, the
+// login answer stays the same.
+func (s *Service) audit(ctx context.Context, e audit.Entry) {
+	if _, err := audit.Write(ctx, s.st.DB, e); err != nil {
+		s.log.Error("audit entry not written", slog.String("action", e.Action), slog.Any("err", err))
 	}
 }
 

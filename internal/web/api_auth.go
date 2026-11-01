@@ -5,6 +5,7 @@ package web
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"time"
 
@@ -76,7 +77,13 @@ func (s *apiServer) Login(ctx context.Context, req api.LoginRequestObject) (api.
 	token, p, err := s.auth.Login(ctx, req.Body.Pseudonym, req.Body.Password, auth.Client{
 		IP: client.IP, UserAgent: h.r.UserAgent(), RequestID: RequestID(ctx),
 	})
+	var locked *auth.LockedError
 	switch {
+	case errors.As(err, &locked):
+		return nil, &problem{
+			status: http.StatusTooManyRequests, reason: api.ReasonCodeRateLimited, detail: locked.Error(),
+			retryAfter: int(math.Ceil(locked.RetryAfter.Seconds())),
+		}
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		return nil, &problem{status: http.StatusUnauthorized, reason: api.ReasonCodeUnauthenticated, detail: auth.ErrInvalidCredentials.Error()}
 	case errors.Is(err, password.ErrBusy):
