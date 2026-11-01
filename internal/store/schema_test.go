@@ -74,3 +74,44 @@ func TestIdentitySchema(t *testing.T) {
 	mustFail("audit with unknown result",
 		exec(`INSERT INTO audit_log (id, ts, kind, action, result) VALUES ('au1', 't', 'auth', 'login', 'maybe')`))
 }
+
+// TestServerProfileSchema checks migration 00003 (Design 4.2, 7).
+func TestServerProfileSchema(t *testing.T) {
+	s := migrated(t)
+	ctx := context.Background()
+	exec := func(q string, args ...any) error {
+		_, err := s.DB.ExecContext(ctx, q, args...)
+		return err
+	}
+	const profile = `INSERT INTO game_profiles (id, slug, name, protocol, default_port, source_file, content_hash, imported_at)
+		VALUES (?, ?, 'Minecraft', 'source-rcon', ?, 'builtin:minecraft-java.yaml', 'h', 't')`
+	if err := exec(profile, "p1", "minecraft-java", 25575); err != nil {
+		t.Fatal(err)
+	}
+	if exec(profile, "p2", "minecraft-java", 25575) == nil {
+		t.Error("duplicate slug accepted")
+	}
+	if exec(profile, "p3", "bad-port", 70000) == nil {
+		t.Error("port out of range accepted")
+	}
+	if err := exec(`INSERT INTO catalog_commands (id, profile_id, position, path) VALUES ('c1', 'p1', 0, 'list')`); err != nil {
+		t.Fatal(err)
+	}
+	if exec(`INSERT INTO catalog_commands (id, profile_id, position, path) VALUES ('c2', 'p1', 1, 'list')`) == nil {
+		t.Error("duplicate catalog path accepted")
+	}
+	if err := exec(`INSERT INTO servers (id, name, profile_id, host, port, secret, created_at, updated_at)
+		VALUES ('s1', 'mc', 'p1', 'mc.lan', 25575, x'00', 't', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	var protocol string
+	if err := s.DB.QueryRowContext(ctx, `SELECT protocol FROM servers WHERE id = 's1'`).Scan(&protocol); err != nil || protocol != "source-rcon" {
+		t.Errorf("default protocol = %q, %v", protocol, err)
+	}
+	if exec(`INSERT INTO servers (id, name, profile_id, created_at, updated_at) VALUES ('s2', 'x', 'nope', 't', 't')`) == nil {
+		t.Error("unknown profile accepted")
+	}
+	if err := exec(`DELETE FROM game_profiles WHERE id = 'p1'`); err == nil {
+		t.Error("profile in use deleted")
+	}
+}

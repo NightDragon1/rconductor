@@ -33,6 +33,16 @@ type AuditLog struct {
 	ReasonCode sql.NullString
 }
 
+type CatalogCommand struct {
+	ID          string
+	ProfileID   string
+	Position    int64
+	Path        string
+	Description string
+	Params      string
+	Category    sql.NullString
+}
+
 type CommandList struct {
 	ID        string
 	Name      string
@@ -47,6 +57,21 @@ type CommandListEntry struct {
 	CommandListID string
 	Path          string
 	Passable      int64
+}
+
+type GameProfile struct {
+	ID          string
+	Slug        string
+	Name        string
+	Protocol    string
+	DefaultPort int64
+	Rules       string
+	SourceFile  string
+	ContentHash string
+	Overridden  int64
+	ImportedAt  string
+	LastError   sql.NullString
+	LastErrorAt sql.NullString
 }
 
 type Grant struct {
@@ -72,11 +97,19 @@ type Invite struct {
 }
 
 type Server struct {
-	ID        string
-	Name      string
-	CreatedAt string
-	UpdatedAt string
-	DeletedAt sql.NullString
+	ID          string
+	Name        string
+	CreatedAt   string
+	UpdatedAt   string
+	DeletedAt   sql.NullString
+	ProfileID   sql.NullString
+	Protocol    string
+	Host        string
+	Port        int64
+	Secret      []byte
+	AgentID     sql.NullString
+	ContainerID sql.NullString
+	GamePorts   sql.NullString
 }
 
 type ServerGroup struct {
