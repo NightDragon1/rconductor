@@ -23,6 +23,13 @@ docker run -d --name rconductor-panel -p 8080:8080 \
 Released images will be published as `ghcr.io/nightdragon1/rconductor-panel`
 and `ghcr.io/nightdragon1/rconductor-agent` for amd64 and arm64.
 
+On the first start the panel creates the emergency admin `admin` and
+prints a random initial password once to the container log
+(`docker logs rconductor-panel`). The password stays readable in the
+container logs as long as the container and its logs exist. You must
+change it at your first login (profile, change password); the initial
+password is invalid from then on.
+
 Run the panel only in your LAN or behind a VPN. The web port speaks plain
 HTTP; TLS is the job of a reverse proxy.
 
