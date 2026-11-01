@@ -81,6 +81,9 @@ func TestShippedProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
+		if !isProfileFile(e.Name()) {
+			continue
+		}
 		data, err := os.ReadFile("../../profiles/" + e.Name())
 		if err != nil {
 			t.Fatal(err)

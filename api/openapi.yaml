@@ -82,6 +82,23 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthenticated"
 
+  /profiles:
+    get:
+      operationId: listProfiles
+      summary: Game profiles with their command catalog (CAT-001, CAT-002).
+      description: >-
+        The catalog is orientation only and allows or forbids nothing.
+        last_error is shown to the RCON admin only (health overview).
+      tags: [profiles]
+      responses:
+        "200":
+          description: All imported profiles.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
   /users:
     get:
       operationId: listUsers
@@ -836,6 +853,106 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    ProfileParam:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [player, text, choice, number]
+        optional:
+          type: boolean
+        values:
+          type: array
+          items:
+            type: string
+        min:
+          type: integer
+        max:
+          type: integer
+
+    CatalogCommand:
+      type: object
+      required: [path, description, params]
+      properties:
+        path:
+          type: string
+        description:
+          type: string
+        params:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileParam"
+
+    GamePort:
+      type: object
+      required: [port, proto, name]
+      properties:
+        port:
+          type: integer
+        proto:
+          type: string
+          enum: [tcp, udp]
+        name:
+          type: string
+
+    GameProfile:
+      type: object
+      required: [id, slug, name, protocol, default_port, overridden, imported_at, case_sensitive, strip_prefix, max_length, wrappers, game_ports, catalog]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        protocol:
+          type: string
+        default_port:
+          type: integer
+        overridden:
+          type: boolean
+          description: A custom profile replaces the shipped one.
+        imported_at:
+          type: string
+          format: date-time
+        case_sensitive:
+          type: boolean
+        strip_prefix:
+          type: string
+        max_length:
+          type: integer
+        wrappers:
+          type: array
+          items:
+            type: string
+        game_ports:
+          type: array
+          items:
+            $ref: "#/components/schemas/GamePort"
+        catalog:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogCommand"
+        last_error:
+          type: string
+          description: Reason of the last rejected file; RCON admin only.
+        last_error_at:
+          type: string
+          format: date-time
+
+    ProfileList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/GameProfile"
 
     AuditEntry:
       type: object

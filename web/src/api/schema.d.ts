@@ -58,6 +58,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Game profiles with their command catalog (CAT-001, CAT-002).
+         * @description The catalog is orientation only and allows or forbids nothing. last_error is shown to the RCON admin only (health overview).
+         */
+        get: operations["listProfiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -449,6 +469,51 @@ export interface components {
         UserList: {
             items: components["schemas"]["User"][];
         };
+        ProfileParam: {
+            name: string;
+            /** @enum {string} */
+            type: "player" | "text" | "choice" | "number";
+            optional?: boolean;
+            values?: string[];
+            min?: number;
+            max?: number;
+        };
+        CatalogCommand: {
+            path: string;
+            description: string;
+            params: components["schemas"]["ProfileParam"][];
+        };
+        GamePort: {
+            port: number;
+            /** @enum {string} */
+            proto: "tcp" | "udp";
+            name: string;
+        };
+        GameProfile: {
+            /** Format: uuid */
+            id: string;
+            slug: string;
+            name: string;
+            protocol: string;
+            default_port: number;
+            /** @description A custom profile replaces the shipped one. */
+            overridden: boolean;
+            /** Format: date-time */
+            imported_at: string;
+            case_sensitive: boolean;
+            strip_prefix: string;
+            max_length: number;
+            wrappers: string[];
+            game_ports: components["schemas"]["GamePort"][];
+            catalog: components["schemas"]["CatalogCommand"][];
+            /** @description Reason of the last rejected file; RCON admin only. */
+            last_error?: string;
+            /** Format: date-time */
+            last_error_at?: string;
+        };
+        ProfileList: {
+            items: components["schemas"]["GameProfile"][];
+        };
         AuditEntry: {
             /**
              * Format: uuid
@@ -827,6 +892,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All imported profiles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileList"];
                 };
             };
             401: components["responses"]["Unauthenticated"];

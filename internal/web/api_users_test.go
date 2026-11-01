@@ -92,3 +92,19 @@ func TestForcedPasswordChange(t *testing.T) {
 		t.Errorf("GET /me after the change = %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestProfilesAPI(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	mod := f.login(t, "Mod")
+	rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/profiles", cookies: []*http.Cookie{mod}})
+	var list api.ProfileList
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("profiles = %d %s", rec.Code, rec.Body.String())
+	}
+	if len(list.Items) != 1 || list.Items[0].Slug != "minecraft-java" || len(list.Items[0].Catalog) != 5 {
+		t.Errorf("profiles = %+v", list.Items)
+	}
+	if list.Items[0].MaxLength != 1000 || list.Items[0].Wrappers[0] != "execute" || list.Items[0].LastError != nil {
+		t.Errorf("profile details = %+v", list.Items[0])
+	}
+}
