@@ -48,6 +48,9 @@ func TestLoadPanelDefaults(t *testing.T) {
 	if c.Log.Level != slog.LevelInfo || c.Log.Format != "text" {
 		t.Errorf("log = %+v", c.Log)
 	}
+	if c.HashConcurrency != 2 {
+		t.Errorf("hash concurrency = %d, want 2", c.HashConcurrency)
+	}
 }
 
 func TestLoadPanelValues(t *testing.T) {
@@ -61,6 +64,8 @@ func TestLoadPanelValues(t *testing.T) {
 		"RCD_MASTER_KEY_FILE":   "/run/secrets/master",
 		"RCD_LOG_LEVEL":         "DEBUG",
 		"RCD_LOG_FORMAT":        "json",
+
+		"RCD_PASSWORD_HASH_CONCURRENCY": "4",
 	}), filesOf(nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -86,6 +91,9 @@ func TestLoadPanelValues(t *testing.T) {
 	}
 	if c.Log.Level != slog.LevelDebug || c.Log.Format != "json" {
 		t.Errorf("log = %+v", c.Log)
+	}
+	if c.HashConcurrency != 4 {
+		t.Errorf("hash concurrency = %d, want 4", c.HashConcurrency)
 	}
 }
 
@@ -140,6 +148,8 @@ func TestInvalidValuesReportedTogether(t *testing.T) {
 		"RCD_PUBLIC_URL":        "ftp://x",
 		"RCD_LOG_LEVEL":         "loud",
 		"RCD_LOG_FORMAT":        "xml",
+
+		"RCD_PASSWORD_HASH_CONCURRENCY": "0",
 	}), filesOf(nil))
 	if err == nil {
 		t.Fatal("want error")
@@ -147,6 +157,7 @@ func TestInvalidValuesReportedTogether(t *testing.T) {
 	for _, key := range []string{
 		"RCD_HTTP_ADDR", "RCD_AGENT_PUBLIC_ADDR", "RCD_BASE_PATH", "RCD_TRUSTED_PROXIES",
 		"RCD_DB_DRIVER", "RCD_EMERGENCY_ADMIN", "RCD_PUBLIC_URL", "RCD_LOG_LEVEL", "RCD_LOG_FORMAT",
+		"RCD_PASSWORD_HASH_CONCURRENCY",
 	} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error does not mention %s: %v", key, err)

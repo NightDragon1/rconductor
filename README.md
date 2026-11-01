@@ -72,6 +72,7 @@ file, for example a Docker secret.
 | `RCD_BACKUP_DIR` | `/backups` | backups |
 | `RCD_MASTER_KEY_FILE` | empty | read the master key from this file instead of `/secrets/master.key`; it is never replaced |
 | `RCD_EMERGENCY_ADMIN` | `true` | emergency admin enabled |
+| `RCD_PASSWORD_HASH_CONCURRENCY` | `2` | password hashes computed at once (1 to 64); each takes 64 MiB of RAM |
 | `RCD_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `RCD_LOG_FORMAT` | `text` | `text` or `json`; each audit-relevant event carries a fixed event code |
 
