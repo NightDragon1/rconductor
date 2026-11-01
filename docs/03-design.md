@@ -107,7 +107,7 @@ Das Panel löscht den Agent-Schlüssel, sendet revoked und trennt die Verbindung
 | /auth/login, /auth/logout, /auth/session | POST, POST, GET | Anmeldung, Abmeldung, aktuelle Session | alle |
 | /me | GET, PATCH | Eigenes Profil | alle |
 | /me/password | POST | Eigenes Passwort ändern; alle anderen Sessions enden; löscht must\_change\_password | alle |
-| /users/{id}/password-reset | POST | Einmalpasswort für einen verwalteten Benutzer setzen; setzt must\_change\_password und beendet seine Sessions (AUTH-010) | wie /users |
+| /users/{id}/password-reset | POST | Temporäres Passwort für einen verwalteten Benutzer setzen, nur in dieser Antwort enthalten; setzt must\_change\_password und beendet alle seine Sessions (AUTH-010) | wie /users |
 | /me/avatar | PUT, DELETE | Eigenes Profilbild | alle |
 | /users, /users/{id} | GET, PATCH, DELETE | Benutzerverwaltung im eigenen Scope (3.6); Benutzer entstehen nur per Einladung (D-046) | RCON-Admin, Server-Admin, Moderator (nur Supporter) |
 | /users/{id}/assignments | GET, PUT | Rollen, Gruppen und Server eines Benutzers; Vorlage für Schnelleingabe; PUT ersetzt nur Einträge, über die der Aufrufer verfügt (3.6) | wie /users |
@@ -211,7 +211,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 - Wer wen verwaltet: der RCON-Admin alle niedrigeren Rollen; ein Server-Admin die Moderatoren, die er eingeladen hat oder die Mitglied einer seiner Moderatorgruppen sind, deren Supporter und die von ihm eingeladenen Supporter; ein Moderator nur seine Supporter (eingeladen oder zugewiesen), solange die Supporter-Freigabe global und für ihn gilt; ein Supporter niemanden.
 - Zuweisungen: Ein Ersetzen ändert nur die Einträge, über die der Aufrufer verfügt (eigene Gruppen, eigene Moderatoren); Einträge anderer bleiben. Eine Servergruppe darf nur zugewiesen werden, wenn alle ihre Server im Scope liegen.
 - Ein Rollenwechsel entfernt Scopes, Gruppenmitgliedschaften und Grants der alten Rolle.
-- Ein Passwort-Reset setzt ein zufälliges Einmalpasswort, das einmal angezeigt wird, setzt must\_change\_password und beendet die Sessions des Benutzers; nur wer den Benutzer verwaltet, darf ihn auslösen (AUTH-010). Der Notfall-Admin wird nicht zurückgesetzt.
+- Ein Passwort-Reset setzt ein zufälliges temporäres Passwort, setzt must\_change\_password und beendet alle Sessions des Benutzers (wie D-044); nur wer den Benutzer verwaltet, darf ihn auslösen (AUTH-010). Das temporäre Passwort steht genau einmal in der API-Antwort an den Verwaltenden, nie in Log oder Audit; der Audit-Eintrag nennt nur Verwaltenden, Benutzer und Ergebnis. Der Notfall-Admin wird nicht zurückgesetzt.
 - Echtname, Profilbild und Kontaktangaben sehen der Benutzer selbst, der RCON-Admin und wer ihn verwaltet; alle anderen nur das Pseudonym (AUTH-009).
 
 ### 3.7 Login-Schutz

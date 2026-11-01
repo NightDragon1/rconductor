@@ -96,7 +96,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | AUTH-006 | Sessions | Session-Management für alle Benutzer; Zuordnung Session zu Request-ID wird geloggt | Backend | Muss | R1 | 1 |
 | AUTH-007 | Initialpasswort | Beim ersten Start des Containers wird ein zufälliges Passwort für den Notfall-Admin erzeugt und im Container-Log ausgegeben; Änderung in der Oberfläche | Backend | Muss | R1 | 1 |
 | AUTH-008 | Zwei-Faktor | Optionale Zwei-Faktor-Anmeldung (TOTP); RCON-Admin kann sie für alle erzwingen, jeder Benutzer kann sie für sich aktivieren | Backend, UI | Soll | R2 | 1 |
-| AUTH-010 | Erzwungener Passwortwechsel | Benutzer mit must\_change\_password dürfen nur ihr Passwort ändern, sich abmelden und ihre Session abfragen; alles andere wird mit eigenem Grund-Code abgelehnt. Das Flag wird beim Initialpasswort (AUTH-007) und bei einem Passwort-Reset durch einen Verwaltenden gesetzt und mit dem Wechsel gelöscht | Backend, UI | Muss | R1 | 1 |
+| AUTH-010 | Erzwungener Passwortwechsel | Benutzer mit must\_change\_password dürfen nur ihr Passwort ändern, sich abmelden und ihre Session abfragen; alles andere wird mit eigenem Grund-Code abgelehnt. Das Flag wird beim Initialpasswort (AUTH-007) und bei einem Passwort-Reset durch einen Verwaltenden gesetzt und mit dem Wechsel gelöscht; ein Reset beendet alle Sessions des Betroffenen, das temporäre Passwort erhält nur der Verwaltende einmal in der Antwort | Backend, UI | Muss | R1 | 1 |
 | AUTH-009 | Benutzerprofil | Pseudonym als primärer Anzeigename; optional Echtname, Profilbild-Upload und Kontaktangaben (z. B. Telegram, WhatsApp) | Backend, UI, DB | Soll | R1 | 1 |
 
 ### 2.3 Rechteverwaltung
