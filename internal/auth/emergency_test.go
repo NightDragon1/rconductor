@@ -59,7 +59,7 @@ func TestEmergencyAdminOnce(t *testing.T) {
 	f := newFixture(t)
 
 	var console bytes.Buffer
-	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, true, f.log().Module("auth"), &console); err != nil {
+	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, EmergencyOptions{Enabled: true}, f.log().Module("auth"), &console); err != nil {
 		t.Fatal(err)
 	}
 	m := printedPassword.FindStringSubmatch(console.String())
@@ -95,7 +95,7 @@ func TestEmergencyAdminOnce(t *testing.T) {
 
 	// Second start: nothing new.
 	console.Reset()
-	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, true, f.log().Module("auth"), &console); err != nil {
+	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, EmergencyOptions{Enabled: true}, f.log().Module("auth"), &console); err != nil {
 		t.Fatal(err)
 	}
 	if console.Len() != 0 || strings.Count(f.logs.String(), "auth.initial_password.issued") != 1 {
@@ -107,7 +107,7 @@ func TestEmergencyAdminDisabled(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
 	var console bytes.Buffer
-	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, false, f.log().Module("auth"), &console); err != nil {
+	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, EmergencyOptions{}, f.log().Module("auth"), &console); err != nil {
 		t.Fatal(err)
 	}
 	var n int
@@ -133,5 +133,71 @@ func TestRandomPassword(t *testing.T) {
 			t.Fatalf("initial password breaks the length rule: %v", err)
 		}
 		seen[pw] = true
+	}
+}
+
+// TestEmergencyAdminReset covers AUTH-011: a new initial password once,
+// the old one and all sessions invalid, forced change, lock lifted, audit
+// without password and auth.emergency_admin.reset.
+func TestEmergencyAdminReset(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	var console bytes.Buffer
+	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, EmergencyOptions{Enabled: true}, f.log().Module("auth"), &console); err != nil {
+		t.Fatal(err)
+	}
+	oldPw := printedPassword.FindStringSubmatch(console.String())[1]
+	var id string
+	if err := f.st.DB.QueryRowContext(ctx, `SELECT id FROM users WHERE is_emergency = 1`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.st.DB.ExecContext(ctx, `UPDATE users SET must_change_password = 0, disabled_at = 't' WHERE id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.st.DB.ExecContext(ctx, `INSERT INTO sessions VALUES ('aaaaaaaa11', ?, 't', 't', 't', 'ip', 'ua')`, id); err != nil {
+		t.Fatal(err)
+	}
+
+	console.Reset()
+	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, EmergencyOptions{Enabled: true, Reset: true}, f.log().Module("auth"), &console); err != nil {
+		t.Fatal(err)
+	}
+	m := printedPassword.FindAllStringSubmatch(console.String(), -1)
+	if len(m) != 1 || m[0][1] == oldPw {
+		t.Fatalf("new initial password printed %d times:\n%s", len(m), console.String())
+	}
+	newPw := m[0][1]
+	var hash string
+	var must int
+	var disabled any
+	if err := f.st.DB.QueryRowContext(ctx, `SELECT password_hash, must_change_password, disabled_at FROM users WHERE id = ?`, id).Scan(&hash, &must, &disabled); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := f.hasher.Verify(ctx, hash, oldPw); ok {
+		t.Error("old password still valid")
+	}
+	if ok, _ := f.hasher.Verify(ctx, hash, newPw); !ok || must != 1 || disabled != nil {
+		t.Errorf("after reset: verify=%v must=%d disabled=%v", ok, must, disabled)
+	}
+	var sessions, audited int
+	_ = f.st.DB.QueryRowContext(ctx, `SELECT count(*) FROM sessions WHERE user_id = ?`, id).Scan(&sessions)
+	_ = f.st.DB.QueryRowContext(ctx, `SELECT count(*) FROM audit_log WHERE action = 'emergency_admin.reset' AND payload NOT LIKE ?`, "%"+newPw+"%").Scan(&audited)
+	if sessions != 0 || audited != 1 {
+		t.Errorf("sessions=%d audit=%d", sessions, audited)
+	}
+	logs := f.logs.String()
+	for _, want := range []string{`"event":"auth.emergency_admin.reset"`, `"event":"auth.session.revoked"`, "remove RCD_EMERGENCY_ADMIN_RESET"} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("log lacks %s", want)
+		}
+	}
+	if strings.Contains(logs, newPw) || strings.Contains(logs, oldPw) {
+		t.Error("password in the event log")
+	}
+
+	// With the emergency admin disabled the reset does nothing.
+	console.Reset()
+	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, EmergencyOptions{Reset: true}, f.log().Module("auth"), &console); err != nil || console.Len() != 0 {
+		t.Errorf("reset with the flag off: %v %q", err, console.String())
 	}
 }
