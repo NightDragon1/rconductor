@@ -1,5 +1,7 @@
 # Kandidaten für Revision 2.1
 
+> Eingearbeitet in Dokumentversion 2.1 (Gesamtkonzept, Kapitel 10). Diese Datei bleibt als Begründung der Änderungen erhalten.
+
 Stand: Abschluss M1 (01.11.2026). Abweichungen und Lücken, die bei der Umsetzung von M0 und der Planung von M1 aufgefallen sind; die Punkte 10 bis 15 sind bereits entschieden; die Punkte 16 bis 27 sind in M1 so umgesetzt und warten auf Bestätigung. Keiner der Punkte ändert das freigegebene Konzept 2.0; über die Übernahme entscheidet Rob. Verweise auf Commits beziehen sich auf den Stand nach dem Umschreiben der Historie.
 
 | Nr. | Thema | Betroffen |

@@ -1,6 +1,6 @@
 # Abnahmekriterien R1
 
-Freigegeben mit Dokumentversion 2.0. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
+Dokumentversion 2.1 (Entwurf, Freigabe ausstehend); Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
 
 | Prüfart | Bedeutung |
 | --- | --- |
@@ -15,7 +15,7 @@ Freigegeben mit Dokumentversion 2.0. Jede Anforderung mit Target R1 gilt als erf
 | --- | --- | --- |
 | NFR-001 | Das Panel-Image startet mit leerem Volume ohne Umgebungsvariablen, lauscht auf 8080 (Web) und 8443 (Agent) und ist nach dem Start erreichbar | Integration |
 | NFR-002 | Start ohne jede Konfiguration legt /data/rconductor.db an und führt alle Migrationen aus | Integration |
-| NFR-003 | Hinter einem Proxy mit RCD\_BASE\_PATH=/rcon funktionieren Oberfläche, API und WebSocket; X-Forwarded-For wird nur von RCD\_TRUSTED\_PROXIES übernommen | E2E |
+| NFR-003 | Hinter einem Proxy mit RCD\_BASE\_PATH=/rcon funktionieren Oberfläche, API und WebSocket; das Neuladen eines tiefen Pfads lädt alle Assets; X-Forwarded-For wird nur von RCD\_TRUSTED\_PROXIES übernommen | E2E |
 | NFR-004 | Eine Person ohne Vorwissen bringt laut README Panel und Agent in der All-in-One-Variante in unter 15 Minuten zum Laufen | Review |
 | NFR-005 | Cache-Werte tragen ein Alter; nach Ablauf der Frist aus Design 4.6 zeigt die Oberfläche sie als veraltet; bei Agent-Trennung werden Messwerte sofort als veraltet markiert | Integration |
 | NFR-007 | Alle Texte der Oberfläche kommen aus Sprachdateien; eine Testsprache mit veränderten Texten ändert jede sichtbare Beschriftung | Unit, E2E |
@@ -25,7 +25,7 @@ Freigegeben mit Dokumentversion 2.0. Jede Anforderung mit Target R1 gilt als erf
 | NFR-013 | Ein Panel der Version N migriert eine Datenbank der Version N-2 in einem Lauf; ein zweiter gleichzeitiger Start wartet auf die Sperre; vor der Migration liegt ein Backup in /backups | Integration |
 | NFR-014 | Beide Compose-Varianten aus Design 5.4 und 5.5 starten unverändert; in der All-in-One-Variante ist 8443 nicht veröffentlicht | Integration |
 | SEC-001 | Die Doku beschreibt den Betrieb nur im LAN oder per VPN; kein Beispiel veröffentlicht einen RCON-Port | Review |
-| SEC-002 | Panel-Image läuft als Nicht-Root; das Panel hat keinen Zugriff auf den Docker-Socket; jede Rolle hat nur die Rechte aus Haupttab 3 | Review, E2E |
+| SEC-002 | Panel-Image läuft als Nicht-Root mit read-only Root-Dateisystem; das Panel hat keinen Zugriff auf den Docker-Socket; jede Rolle hat nur die Rechte aus Haupttab 3 | Review, E2E, Integration |
 | SEC-003 | Ein Muster mit katastrophalem Backtracking bei anderen Engines endet in unter 1 s; Zeilenlimit und Timeout greifen | Unit |
 | SEC-004 | Nach der eingestellten Zahl von Fehlanmeldungen in Folge (Standard 5) wird jede weitere Anmeldung dieses Kontos verzögert bzw. zeitweise gesperrt und im Audit-Log vermerkt | Integration |
 | SEC-005 | Der Master-Key liegt nur in /secrets; weder Datenbank noch Backup enthalten ihn; RCD\_MASTER\_KEY\_FILE wird gelesen | Integration |
@@ -37,6 +37,7 @@ Freigegeben mit Dokumentversion 2.0. Jede Anforderung mit Target R1 gilt als erf
 | SEC-009 | Jede Antwort trägt die Header laut SEC-009; die Oberfläche läuft ohne CSP-Verletzung in der Browser-Konsole | E2E |
 | SEC-010 | Die Doku enthält ein lauffähiges Beispiel mit Socket-Proxy; alle Agent-Funktionen aus AGT-003 funktionieren damit | Integration, Review |
 | NFR-016 | Jeder Ereigniscode aus Design 8.3 tritt im Testlauf mindestens einmal auf, als gültige JSON-Zeile mit allen Pflichtfeldern aus 8.2 | Integration |
+| SEC-013 | Release-Images für amd64 und arm64 tragen eine cosign-Signatur und eine SBOM-Attestierung, die cosign verify bestätigt; govulncheck ist Pflicht-Check; alle Actions sind auf Commit-SHA gepinnt | Review |
 | SEC-012 | Ein Testlauf auf debug mit bekannten Test-Geheimnissen (Passwort, RCON-Passwort, Token) findet keines davon im Log von Panel und Agent, außer der einmaligen Ausgabe des Initialpassworts | Integration |
 
 ## 2. Benutzer (2.2)
@@ -107,7 +108,7 @@ Freigegeben mit Dokumentversion 2.0. Jede Anforderung mit Target R1 gilt als erf
 
 | ID | Abnahmekriterium | Prüfart |
 | --- | --- | --- |
-| AGT-001 | Nur das Agent-Image bindet den Docker-Socket ein; das Panel-Image enthält keinen Docker-Client | Review |
+| AGT-001 | Nur das Agent-Image bindet den Docker-Socket ein; das Panel-Binary enthält keinen Docker-Client (geprüft mit go version -m bzw. go list -deps ./cmd/panel; Testabhängigkeiten ausgenommen) | Review |
 | AGT-002 | Ein Container ohne Label erscheint nicht im Snapshot; ein Auftrag für ihn wird mit forbidden abgelehnt, auch wenn das Panel ihn schickt | Integration |
 | AGT-003 | Start, Stop, Restart, Status, Messwerte und Logs funktionieren für einen gelabelten Testcontainer | Integration |
 | AGT-004 | Ein manipuliertes Panel kann über das Protokoll keinen Container anlegen, löschen, exec ausführen oder Images und Volumes verändern; unbekannte Typen liefern unsupported | Integration |
