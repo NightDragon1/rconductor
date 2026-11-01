@@ -89,6 +89,9 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err := users.EnsureDefaults(ctx, st); err != nil {
 		return err
 	}
+	if err := users.EnsureAuditDefaults(ctx, st); err != nil {
+		return err
+	}
 
 	params := password.Default
 	if opts.HashParams != nil {
