@@ -128,6 +128,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Groups the caller administers (AUTH-002, ROLE-005).
+         * @description RCON admin all groups, server admin his own.
+         */
+        get: operations["listUserGroups"];
+        put?: never;
+        /** Create a user group or moderator group owned by the caller. */
+        post: operations["createUserGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user-groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupID"];
+            };
+            cookie?: never;
+        };
+        /** A group the caller administers. */
+        get: operations["getUserGroup"];
+        put?: never;
+        post?: never;
+        /** Delete a group (soft delete). */
+        delete: operations["deleteUserGroup"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, set the list, replace members or group-wide grants.
+         * @description Members must be users the caller manages; a moderator group takes only moderators. Grants apply to all members and must lie within the caller's and the owner's scope. Members whose rights change lose their sessions.
+         */
+        patch: operations["updateUserGroup"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -154,6 +199,37 @@ export interface components {
         };
         UserList: {
             items: components["schemas"]["User"][];
+        };
+        /** @enum {string} */
+        GroupKind: "general" | "moderator";
+        UserGroup: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["GroupKind"];
+            /** Format: uuid */
+            owner_id: string;
+            /** Format: uuid */
+            command_list_id?: string;
+            members: string[];
+            /** @description Servers and server groups for all members. */
+            grants: components["schemas"]["Target"][];
+        };
+        UserGroupList: {
+            items: components["schemas"]["UserGroup"][];
+        };
+        UserGroupCreate: {
+            name: string;
+            kind: components["schemas"]["GroupKind"];
+            /** Format: uuid */
+            command_list_id?: string;
+        };
+        UserGroupUpdate: {
+            name?: string;
+            /** @description A list ID, or an empty string to remove the list. */
+            command_list_id?: string;
+            members?: string[];
+            grants?: components["schemas"]["Target"][];
         };
         /** @description Exactly one of server_id or server_group_id. */
         Target: {
@@ -309,6 +385,7 @@ export interface components {
         };
     };
     parameters: {
+        GroupID: string;
         UserID: string;
     };
     requestBodies: never;
@@ -540,6 +617,132 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    listUserGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The groups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserGroupList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    createUserGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserGroupCreate"];
+            };
+        };
+        responses: {
+            /** @description The new group. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserGroup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getUserGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserGroup"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteUserGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateUserGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["GroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserGroupUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserGroup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Invalid"];
         };

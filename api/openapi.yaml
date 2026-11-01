@@ -227,9 +227,117 @@ paths:
           $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/Invalid"
+  /user-groups:
+    get:
+      operationId: listUserGroups
+      summary: Groups the caller administers (AUTH-002, ROLE-005).
+      description: RCON admin all groups, server admin his own.
+      tags: [groups]
+      responses:
+        "200":
+          description: The groups.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGroupList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      operationId: createUserGroup
+      summary: Create a user group or moderator group owned by the caller.
+      tags: [groups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserGroupCreate"
+      responses:
+        "201":
+          description: The new group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGroup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /user-groups/{id}:
+    parameters:
+      - $ref: "#/components/parameters/GroupID"
+    get:
+      operationId: getUserGroup
+      summary: A group the caller administers.
+      tags: [groups]
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGroup"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateUserGroup
+      summary: Rename, set the list, replace members or group-wide grants.
+      description: >-
+        Members must be users the caller manages; a moderator group takes
+        only moderators. Grants apply to all members and must lie within
+        the caller's and the owner's scope. Members whose rights change
+        lose their sessions.
+      tags: [groups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserGroupUpdate"
+      responses:
+        "200":
+          description: The changed group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGroup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteUserGroup
+      summary: Delete a group (soft delete).
+      tags: [groups]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
 components:
   parameters:
+    GroupID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     UserID:
       name: id
       in: path
@@ -281,6 +389,81 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    GroupKind:
+      type: string
+      enum: [general, moderator]
+
+    UserGroup:
+      type: object
+      required: [id, name, kind, owner_id, members, grants]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/GroupKind"
+        owner_id:
+          type: string
+          format: uuid
+        command_list_id:
+          type: string
+          format: uuid
+        members:
+          type: array
+          items:
+            type: string
+            format: uuid
+        grants:
+          type: array
+          description: Servers and server groups for all members.
+          items:
+            $ref: "#/components/schemas/Target"
+
+    UserGroupList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserGroup"
+
+    UserGroupCreate:
+      type: object
+      required: [name, kind]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        kind:
+          $ref: "#/components/schemas/GroupKind"
+        command_list_id:
+          type: string
+          format: uuid
+
+    UserGroupUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        command_list_id:
+          type: string
+          description: A list ID, or an empty string to remove the list.
+        members:
+          type: array
+          items:
+            type: string
+            format: uuid
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Target"
 
     Target:
       type: object

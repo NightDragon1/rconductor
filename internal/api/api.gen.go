@@ -18,6 +18,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for GroupKind.
+const (
+	GroupKindGeneral   GroupKind = "general"
+	GroupKindModerator GroupKind = "moderator"
+)
+
+// Valid indicates whether the value is a known member of the GroupKind enum.
+func (e GroupKind) Valid() bool {
+	switch e {
+	case GroupKindGeneral:
+		return true
+	case GroupKindModerator:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReasonCode.
 const (
 	ReasonCodeInvalid           ReasonCode = "invalid"
@@ -53,22 +71,22 @@ func (e ReasonCode) Valid() bool {
 
 // Defines values for Role.
 const (
-	Moderator   Role = "moderator"
-	RconAdmin   Role = "rcon_admin"
-	ServerAdmin Role = "server_admin"
-	Supporter   Role = "supporter"
+	RoleModerator   Role = "moderator"
+	RoleRconAdmin   Role = "rcon_admin"
+	RoleServerAdmin Role = "server_admin"
+	RoleSupporter   Role = "supporter"
 )
 
 // Valid indicates whether the value is a known member of the Role enum.
 func (e Role) Valid() bool {
 	switch e {
-	case Moderator:
+	case RoleModerator:
 		return true
-	case RconAdmin:
+	case RoleRconAdmin:
 		return true
-	case ServerAdmin:
+	case RoleServerAdmin:
 		return true
-	case Supporter:
+	case RoleSupporter:
 		return true
 	default:
 		return false
@@ -100,6 +118,9 @@ type Grant struct {
 	ServerGroupId *openapi_types.UUID `json:"server_group_id,omitempty"`
 	ServerId      *openapi_types.UUID `json:"server_id,omitempty"`
 }
+
+// GroupKind defines model for GroupKind.
+type GroupKind string
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -183,6 +204,40 @@ type User struct {
 	SupportersAllowed bool `json:"supporters_allowed"`
 }
 
+// UserGroup defines model for UserGroup.
+type UserGroup struct {
+	CommandListId *openapi_types.UUID `json:"command_list_id,omitempty"`
+
+	// Grants Servers and server groups for all members.
+	Grants  []Target             `json:"grants"`
+	Id      openapi_types.UUID   `json:"id"`
+	Kind    GroupKind            `json:"kind"`
+	Members []openapi_types.UUID `json:"members"`
+	Name    string               `json:"name"`
+	OwnerId openapi_types.UUID   `json:"owner_id"`
+}
+
+// UserGroupCreate defines model for UserGroupCreate.
+type UserGroupCreate struct {
+	CommandListId *openapi_types.UUID `json:"command_list_id,omitempty"`
+	Kind          GroupKind           `json:"kind"`
+	Name          string              `json:"name"`
+}
+
+// UserGroupList defines model for UserGroupList.
+type UserGroupList struct {
+	Items []UserGroup `json:"items"`
+}
+
+// UserGroupUpdate defines model for UserGroupUpdate.
+type UserGroupUpdate struct {
+	// CommandListId A list ID, or an empty string to remove the list.
+	CommandListId *string               `json:"command_list_id,omitempty"`
+	Grants        *[]Target             `json:"grants,omitempty"`
+	Members       *[]openapi_types.UUID `json:"members,omitempty"`
+	Name          *string               `json:"name,omitempty"`
+}
+
 // UserList defines model for UserList.
 type UserList struct {
 	Items []User `json:"items"`
@@ -195,6 +250,9 @@ type UserUpdate struct {
 	// Role One of the four fixed roles (ROLE-001).
 	Role *Role `json:"role,omitempty"`
 }
+
+// GroupID defines model for GroupID.
+type GroupID = openapi_types.UUID
 
 // UserID defines model for UserID.
 type UserID = openapi_types.UUID
@@ -231,6 +289,12 @@ type ListUsersParams struct {
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// CreateUserGroupJSONRequestBody defines body for CreateUserGroup for application/json ContentType.
+type CreateUserGroupJSONRequestBody = UserGroupCreate
+
+// UpdateUserGroupJSONRequestBody defines body for UpdateUserGroup for application/json ContentType.
+type UpdateUserGroupJSONRequestBody = UserGroupUpdate
+
 // UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
 type UpdateUserJSONRequestBody = UserUpdate
 
@@ -248,6 +312,21 @@ type ServerInterface interface {
 	// GetSession The current session and its user (AUTH-006).
 	// (GET /auth/session)
 	GetSession(w http.ResponseWriter, r *http.Request)
+	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
+	// (GET /user-groups)
+	ListUserGroups(w http.ResponseWriter, r *http.Request)
+	// CreateUserGroup Create a user group or moderator group owned by the caller.
+	// (POST /user-groups)
+	CreateUserGroup(w http.ResponseWriter, r *http.Request)
+	// DeleteUserGroup Delete a group (soft delete).
+	// (DELETE /user-groups/{id})
+	DeleteUserGroup(w http.ResponseWriter, r *http.Request, id GroupID)
+	// GetUserGroup A group the caller administers.
+	// (GET /user-groups/{id})
+	GetUserGroup(w http.ResponseWriter, r *http.Request, id GroupID)
+	// UpdateUserGroup Rename, set the list, replace members or group-wide grants.
+	// (PATCH /user-groups/{id})
+	UpdateUserGroup(w http.ResponseWriter, r *http.Request, id GroupID)
 	// ListUsers Users the caller manages (Design 2.2, 3.6).
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -310,6 +389,112 @@ func (siw *ServerInterfaceWrapper) GetSession(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUserGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListUserGroups(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUserGroups(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateUserGroup operation middleware
+func (siw *ServerInterfaceWrapper) CreateUserGroup(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateUserGroup(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteUserGroup operation middleware
+func (siw *ServerInterfaceWrapper) DeleteUserGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id GroupID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteUserGroup(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetUserGroup operation middleware
+func (siw *ServerInterfaceWrapper) GetUserGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id GroupID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUserGroup(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateUserGroup operation middleware
+func (siw *ServerInterfaceWrapper) UpdateUserGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id GroupID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateUserGroup(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -624,6 +809,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/users/{id}", wrapper.UpdateUser)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{id}/assignments", wrapper.GetAssignments)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/users/{id}/assignments", wrapper.UpdateAssignments)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/user-groups", wrapper.ListUserGroups)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/user-groups", wrapper.CreateUserGroup)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/user-groups/{id}", wrapper.DeleteUserGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/user-groups/{id}", wrapper.GetUserGroup)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/user-groups/{id}", wrapper.UpdateUserGroup)
 
 	return m
 }
@@ -844,6 +1034,334 @@ func (response GetSession401ApplicationProblemPlusJSONResponse) VisitGetSessionR
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserGroupsRequestObject struct {
+}
+
+type ListUserGroupsResponseObject interface {
+	VisitListUserGroupsResponse(w http.ResponseWriter) error
+}
+
+type ListUserGroups200JSONResponse UserGroupList
+
+func (response ListUserGroups200JSONResponse) VisitListUserGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserGroups401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListUserGroups401ApplicationProblemPlusJSONResponse) VisitListUserGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserGroupRequestObject struct {
+	Body *CreateUserGroupJSONRequestBody
+}
+
+type CreateUserGroupResponseObject interface {
+	VisitCreateUserGroupResponse(w http.ResponseWriter) error
+}
+
+type CreateUserGroup201JSONResponse UserGroup
+
+func (response CreateUserGroup201JSONResponse) VisitCreateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserGroup400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUserGroup400ApplicationProblemPlusJSONResponse) VisitCreateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserGroup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUserGroup401ApplicationProblemPlusJSONResponse) VisitCreateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserGroup403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUserGroup403ApplicationProblemPlusJSONResponse) VisitCreateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserGroup404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUserGroup404ApplicationProblemPlusJSONResponse) VisitCreateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserGroup422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response CreateUserGroup422ApplicationProblemPlusJSONResponse) VisitCreateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserGroupRequestObject struct {
+	Id GroupID `json:"id"`
+}
+
+type DeleteUserGroupResponseObject interface {
+	VisitDeleteUserGroupResponse(w http.ResponseWriter) error
+}
+
+type DeleteUserGroup204Response struct {
+}
+
+func (response DeleteUserGroup204Response) VisitDeleteUserGroupResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteUserGroup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteUserGroup401ApplicationProblemPlusJSONResponse) VisitDeleteUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserGroup404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteUserGroup404ApplicationProblemPlusJSONResponse) VisitDeleteUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserGroupRequestObject struct {
+	Id GroupID `json:"id"`
+}
+
+type GetUserGroupResponseObject interface {
+	VisitGetUserGroupResponse(w http.ResponseWriter) error
+}
+
+type GetUserGroup200JSONResponse UserGroup
+
+func (response GetUserGroup200JSONResponse) VisitGetUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserGroup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetUserGroup401ApplicationProblemPlusJSONResponse) VisitGetUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserGroup404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetUserGroup404ApplicationProblemPlusJSONResponse) VisitGetUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserGroupRequestObject struct {
+	Id   GroupID `json:"id"`
+	Body *UpdateUserGroupJSONRequestBody
+}
+
+type UpdateUserGroupResponseObject interface {
+	VisitUpdateUserGroupResponse(w http.ResponseWriter) error
+}
+
+type UpdateUserGroup200JSONResponse UserGroup
+
+func (response UpdateUserGroup200JSONResponse) VisitUpdateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserGroup400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateUserGroup400ApplicationProblemPlusJSONResponse) VisitUpdateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserGroup401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateUserGroup401ApplicationProblemPlusJSONResponse) VisitUpdateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserGroup404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateUserGroup404ApplicationProblemPlusJSONResponse) VisitUpdateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserGroup422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateUserGroup422ApplicationProblemPlusJSONResponse) VisitUpdateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1259,6 +1777,21 @@ type StrictServerInterface interface {
 	// GetSession The current session and its user (AUTH-006).
 	// (GET /auth/session)
 	GetSession(ctx context.Context, request GetSessionRequestObject) (GetSessionResponseObject, error)
+	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
+	// (GET /user-groups)
+	ListUserGroups(ctx context.Context, request ListUserGroupsRequestObject) (ListUserGroupsResponseObject, error)
+	// CreateUserGroup Create a user group or moderator group owned by the caller.
+	// (POST /user-groups)
+	CreateUserGroup(ctx context.Context, request CreateUserGroupRequestObject) (CreateUserGroupResponseObject, error)
+	// DeleteUserGroup Delete a group (soft delete).
+	// (DELETE /user-groups/{id})
+	DeleteUserGroup(ctx context.Context, request DeleteUserGroupRequestObject) (DeleteUserGroupResponseObject, error)
+	// GetUserGroup A group the caller administers.
+	// (GET /user-groups/{id})
+	GetUserGroup(ctx context.Context, request GetUserGroupRequestObject) (GetUserGroupResponseObject, error)
+	// UpdateUserGroup Rename, set the list, replace members or group-wide grants.
+	// (PATCH /user-groups/{id})
+	UpdateUserGroup(ctx context.Context, request UpdateUserGroupRequestObject) (UpdateUserGroupResponseObject, error)
 	// ListUsers Users the caller manages (Design 2.2, 3.6).
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -1390,6 +1923,146 @@ func (sh *strictHandler) GetSession(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetSessionResponseObject); ok {
 		if err := validResponse.VisitGetSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListUserGroups operation middleware
+func (sh *strictHandler) ListUserGroups(w http.ResponseWriter, r *http.Request) {
+	var request ListUserGroupsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListUserGroups(ctx, request.(ListUserGroupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListUserGroups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListUserGroupsResponseObject); ok {
+		if err := validResponse.VisitListUserGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateUserGroup operation middleware
+func (sh *strictHandler) CreateUserGroup(w http.ResponseWriter, r *http.Request) {
+	var request CreateUserGroupRequestObject
+
+	var body CreateUserGroupJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateUserGroup(ctx, request.(CreateUserGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateUserGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateUserGroupResponseObject); ok {
+		if err := validResponse.VisitCreateUserGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteUserGroup operation middleware
+func (sh *strictHandler) DeleteUserGroup(w http.ResponseWriter, r *http.Request, id GroupID) {
+	var request DeleteUserGroupRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteUserGroup(ctx, request.(DeleteUserGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteUserGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteUserGroupResponseObject); ok {
+		if err := validResponse.VisitDeleteUserGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUserGroup operation middleware
+func (sh *strictHandler) GetUserGroup(w http.ResponseWriter, r *http.Request, id GroupID) {
+	var request GetUserGroupRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUserGroup(ctx, request.(GetUserGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUserGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUserGroupResponseObject); ok {
+		if err := validResponse.VisitGetUserGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateUserGroup operation middleware
+func (sh *strictHandler) UpdateUserGroup(w http.ResponseWriter, r *http.Request, id GroupID) {
+	var request UpdateUserGroupRequestObject
+
+	request.Id = id
+
+	var body UpdateUserGroupJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateUserGroup(ctx, request.(UpdateUserGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateUserGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateUserGroupResponseObject); ok {
+		if err := validResponse.VisitUpdateUserGroupResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
