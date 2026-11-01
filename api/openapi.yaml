@@ -132,7 +132,7 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateUser
-      summary: Change role or lock state of a managed user (ROLE-008).
+      summary: Change role, lock state or supporter release of a managed user (ROLE-006, ROLE-008).
       description: >-
         The new role must stay below the caller's role. A role change
         removes the user's scopes, group memberships and grants, which
@@ -724,6 +724,12 @@ components:
           $ref: "#/components/schemas/Role"
         disabled:
           type: boolean
+        supporters_allowed:
+          type: boolean
+          description: >-
+            Release supporters for a moderator (ROLE-006); only server
+            admins and the RCON admin. Switching off takes the rights of
+            the moderator's supporters.
 
     Role:
       type: string

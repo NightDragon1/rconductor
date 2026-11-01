@@ -162,6 +162,33 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) error {
 	return err
 }
 
+const listSupportersOfModerator = `-- name: ListSupportersOfModerator :many
+SELECT DISTINCT supporter_id FROM supporter_grants WHERE moderator_id = ?
+`
+
+func (q *Queries) ListSupportersOfModerator(ctx context.Context, moderatorID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listSupportersOfModerator, moderatorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var supporter_id string
+		if err := rows.Scan(&supporter_id); err != nil {
+			return nil, err
+		}
+		items = append(items, supporter_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, pseudonym, role, real_name, contacts, CAST(avatar IS NOT NULL AS INTEGER) AS has_avatar,
        disabled_at, is_emergency, supporters_allowed, created_at, last_login_at
@@ -229,6 +256,21 @@ type SetLastLoginParams struct {
 
 func (q *Queries) SetLastLogin(ctx context.Context, arg SetLastLoginParams) error {
 	_, err := q.db.ExecContext(ctx, setLastLogin, arg.LastLoginAt, arg.ID)
+	return err
+}
+
+const setSupportersAllowed = `-- name: SetSupportersAllowed :exec
+UPDATE users SET supporters_allowed = ?, updated_at = ? WHERE id = ?
+`
+
+type SetSupportersAllowedParams struct {
+	SupportersAllowed int64
+	UpdatedAt         string
+	ID                string
+}
+
+func (q *Queries) SetSupportersAllowed(ctx context.Context, arg SetSupportersAllowedParams) error {
+	_, err := q.db.ExecContext(ctx, setSupportersAllowed, arg.SupportersAllowed, arg.UpdatedAt, arg.ID)
 	return err
 }
 

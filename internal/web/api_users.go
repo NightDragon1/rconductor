@@ -87,6 +87,7 @@ func (s *apiServer) UpdateUser(ctx context.Context, req api.UpdateUserRequestObj
 		u.Role = &r
 	}
 	u.Disabled = req.Body.Disabled
+	u.SupportersAllowed = req.Body.SupportersAllowed
 	got, err := s.users.Update(ctx, adminRequest(ctx), req.Id.String(), u)
 	if err != nil {
 		return nil, adminError(err)

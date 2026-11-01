@@ -96,7 +96,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change role or lock state of a managed user (ROLE-008).
+         * Change role, lock state or supporter release of a managed user (ROLE-006, ROLE-008).
          * @description The new role must stay below the caller's role. A role change removes the user's scopes, group memberships and grants, which belong to the old role.
          */
         patch: operations["updateUser"];
@@ -336,6 +336,8 @@ export interface components {
         UserUpdate: {
             role?: components["schemas"]["Role"];
             disabled?: boolean;
+            /** @description Release supporters for a moderator (ROLE-006); only server admins and the RCON admin. Switching off takes the rights of the moderator's supporters. */
+            supporters_allowed?: boolean;
         };
         /**
          * @description One of the four fixed roles (ROLE-001).
