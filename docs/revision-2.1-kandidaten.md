@@ -1,6 +1,6 @@
 # Kandidaten für Revision 2.1
 
-Stand: Abschluss M0 (01.11.2026). Abweichungen und Lücken, die bei der Umsetzung von M0 aufgefallen sind. Keiner der Punkte ändert das freigegebene Konzept 2.0; über die Übernahme entscheidet Rob. Verweise auf Commits beziehen sich auf den Stand nach dem Umschreiben der Historie.
+Stand: Abschluss M0 und Freigabe des Plans M1 (01.11.2026). Abweichungen und Lücken, die bei der Umsetzung von M0 und der Planung von M1 aufgefallen sind; die Punkte 10 bis 13 sind bereits entschieden und werden in M1 so umgesetzt. Keiner der Punkte ändert das freigegebene Konzept 2.0; über die Übernahme entscheidet Rob. Verweise auf Commits beziehen sich auf den Stand nach dem Umschreiben der Historie.
 
 | Nr. | Thema | Betroffen |
 | --- | --- | --- |
@@ -13,6 +13,10 @@ Stand: Abschluss M0 (01.11.2026). Abweichungen und Lücken, die bei der Umsetzun
 | 7 | Anforderung für Lieferkette und CI | D-040, Technologie 4 |
 | 8 | Socket-Zugriff des Agent-Images | Technologie 5.1, AGT-001 |
 | 9 | Verzeichnis scripts/ | Technologie 4 |
+| 10 | Session-Cookie: Secure nur bei HTTPS, __Host-Präfix, SameSite=Lax | Design 2.1, D-011, NFR-003, Plan R1 |
+| 11 | Rechteänderung beendet Sessions | AUTH-006, Design 2.1 und 2.3 |
+| 12 | Sichtbarkeit der Profilfelder | AUTH-009, Haupttab 3, Design 3 |
+| 13 | Profilbild als BLOB in der Datenbank | NFR-010, Design 4.2, AUTH-009 |
 
 ## 1. Reservierte Pfade für Health und Metriken
 
@@ -72,3 +76,31 @@ Stand: Abschluss M0 (01.11.2026). Abweichungen und Lücken, die bei der Umsetzun
 - **Fundstelle:** 04-technologie.md, Kapitel 4 (Repository: cmd/panel, cmd/agent, internal, web, profiles, migrations, api/openapi.yaml). In CLAUDE.md mit Commit 3dc0007 ergänzt; enthält scripts/gh_plan.py (Commit b2403c1).
 - **Vorschlag:** Technologie 4, Zeile Repository, um `scripts` (Hilfsskripte zur Projektpflege, nicht Teil der Images) und `deploy/compose` ergänzen.
 - **Begründung:** Repository-Struktur in Konzept und CLAUDE.md sollen übereinstimmen; deploy/compose steht bisher nur in CLAUDE.md.
+
+## 10. Session-Cookie: Secure nur bei HTTPS, __Host-Präfix, SameSite=Lax
+
+- **Fundstelle:** 03-design.md, Kapitel 2.1 (Cookie mit HttpOnly, Secure, SameSite=Strict); 01-gesamtkonzept.md, D-011 (kein HTTPS für die Weboberfläche) und NFR-003; 06-sicherheit.md, T-001 und T-007; 07-plan-r1.md (NFR-003 in M5).
+- **Entscheidung (M1):** Das Cookie ist immer HttpOnly und SameSite=Lax. Secure und das Präfix `__Host-` werden gesetzt, wenn die Oberfläche per HTTPS erreicht wird: `RCD_PUBLIC_URL` beginnt mit https oder ein vertrauenswürdiger Proxy (`RCD_TRUSTED_PROXIES`) meldet `X-Forwarded-Proto: https`. Ohne HTTPS warnt das Panel beim Start im Log. Die Auswertung von `RCD_TRUSTED_PROXIES` mit `X-Forwarded-For` und `X-Forwarded-Proto` wird aus M5 (NFR-003) nach M1 vorgezogen, weil Cookie, Login-Schutz und Sessions davon abhängen; Basispfad und WebSocket-Upgrade bleiben in M5.
+- **Vorschlag:** Design 2.1 entsprechend anpassen; Plan R1 vermerkt den vorgezogenen Teil von NFR-003.
+- **Begründung:** Browser senden Secure-Cookies nicht über reines HTTP; mit Design 2.1 wäre eine Anmeldung ohne TLS-Proxy unmöglich, obwohl D-011 diesen Betrieb vorsieht. SameSite=Lax statt Strict lässt das Cookie bei einer Navigation von außen (z. B. Link in einem Chat) mitgehen, sodass der Benutzer angemeldet ankommt; CSRF bleibt durch die Origin-Prüfung aller schreibenden Anfragen und beim WebSocket-Aufbau (Design 2.1) abgedeckt, denn Lax schickt das Cookie nur bei sicheren Methoden über Seitengrenzen.
+
+## 11. Rechteänderung beendet Sessions
+
+- **Fundstelle:** 01-gesamtkonzept.md, AUTH-006; 05-abnahme-r1.md, AUTH-006 („Abmelden, Sperren oder Rechteänderung beenden betroffene Sessions sofort“); 03-design.md, Kapitel 2.1 (nur Deaktivierung beendet Sessions, Rechte bei jeder Anfrage neu geprüft) und 2.3 (entzogene Abos enden mit error).
+- **Entscheidung (M1):** Die Anforderung gilt. Ändern sich Rolle, Scope, Gruppenmitgliedschaft oder Zuweisungen eines Benutzers, beendet das Panel alle seine Sessions (`auth.session.revoked`); ab M2 auch seine WebSockets.
+- **Vorschlag:** Design 2.1 an AUTH-006 angleichen.
+- **Begründung:** Anforderung und Design widersprechen sich; die strengere Regel der Anforderung vermeidet, dass eine offene Oberfläche mit veraltetem Stand weiterarbeitet.
+
+## 12. Sichtbarkeit der Profilfelder
+
+- **Fundstelle:** 01-gesamtkonzept.md, AUTH-009 („für andere Rollen nur laut Rechtemodell sichtbar“); Haupttab 3 und Design 3 regeln Profilfelder nicht.
+- **Entscheidung (M1):** Echtname, Profilbild und Kontaktangaben sieht der Benutzer selbst, der RCON-Admin immer und jeder, der den Benutzer verwalten darf (höhere Rolle in dessen Scope, Design 3.6). Alle anderen sehen nur das Pseudonym.
+- **Vorschlag:** In Design 3.6 aufnehmen.
+- **Begründung:** Die Anforderung verweist auf eine Regel, die es nicht gibt. Die gewählte Regel folgt dem Rechtefluss nach unten (ROLE-008) und gibt Kontaktdaten nur an Verantwortliche weiter.
+
+## 13. Profilbild als BLOB in der Datenbank
+
+- **Fundstelle:** 01-gesamtkonzept.md, NFR-010 („/data (SQLite, Profilbilder, eigene Profile)“) und AUTH-009; 03-design.md, Kapitel 4.2 (users.avatar\_path).
+- **Entscheidung (M1):** Das Profilbild liegt als BLOB in der Datenbank statt als Datei unter /data. Beim Hochladen wird es am Inhalt geprüft, auf eine Pixelgrenze geprüft, neu kodiert (Metadaten wie EXIF entfallen) und mit nosniff und restriktiver Content-Security-Policy ausgeliefert.
+- **Vorschlag:** NFR-010 (Profilbilder entfallen aus /data) und Design 4.2 (avatar statt avatar\_path, dazu Medientyp) anpassen; neue Revision von NFR-010 und AUTH-009 nur, falls sich das Abnahmekriterium ändert.
+- **Begründung:** Ein Backup der Datenbank enthält dann alle veränderlichen Daten (NFR-008); es gibt keine zweite Ablage, die beim Wiederherstellen fehlen kann.
