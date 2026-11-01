@@ -192,10 +192,13 @@ func TestPanelImage(t *testing.T) {
 	// The agent port 8443 follows in M3 (NFR-001 partially fulfilled).
 
 	out := logs(ctx, t, first)
-	for _, ev := range []string{"event=app.start", "event=db.migrate.done", "event=key.created", "event=app.ready"} {
+	for _, ev := range []string{"event=app.start", "event=db.migrate.done", "event=key.created", "event=auth.initial_password.issued", "event=app.ready"} {
 		if !strings.Contains(out, ev) {
 			t.Errorf("first start: %s missing in log:\n%s", ev, out)
 		}
+	}
+	if n := strings.Count(out, "password: "); n != 1 {
+		t.Errorf("initial password printed %d times on the first start, want 1", n)
 	}
 	if !strings.Contains(out, "path=/secrets/master.key") {
 		t.Errorf("master key not created in /secrets:\n%s", out)
@@ -226,6 +229,10 @@ func TestPanelImage(t *testing.T) {
 	out = logs(ctx, t, second)
 	if !strings.Contains(out, "event=key.loaded") || strings.Contains(out, "event=key.created") {
 		t.Errorf("second start must load the existing key:\n%s", out)
+	}
+	// AUTH-007: the initial password is printed exactly once over two starts.
+	if strings.Contains(out, "password: ") || strings.Contains(out, "auth.initial_password.issued") {
+		t.Errorf("second start issued the initial password again:\n%s", out)
 	}
 	stop(ctx, t, second)
 	if got := bytes.TrimSpace(copyOut(ctx, t, second, "/secrets/master.key")); !bytes.Equal(got, key) {
