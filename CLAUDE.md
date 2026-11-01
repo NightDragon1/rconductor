@@ -67,7 +67,9 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 ## Tests und Prüfung
 - Go: go test ./..., Integrationstests mit testcontainers-go.
 - Oberfläche: Vitest, Abläufe mit Playwright.
-- Vor jedem Commit: golangci-lint, ESLint, Prettier, alle Tests grün.
+- Vor jedem Commit: make check (golangci-lint, ESLint, Prettier, generierter Code,
+  alle Tests grün). Der Pre-Commit-Hook in .githooks ruft es auf; einmal je Klon
+  aktivieren mit git config core.hooksPath .githooks.
 - Nach jedem Meilenstein: kurze Zusammenfassung, welche Anforderungs-IDs
   erledigt sind und welche Ereigniscodes neu sind.
 
