@@ -100,7 +100,9 @@ func events(t *testing.T, logs string) []string {
 				t.Errorf("line without %s: %s", k, sc.Text())
 			}
 		}
-		if e, ok := m[logging.KeyEvent].(string); ok {
+		// The clean-up runs concurrently with the start; its place in the
+		// sequence varies.
+		if e, ok := m[logging.KeyEvent].(string); ok && e != string(logging.AuditPurge) {
 			out = append(out, e)
 		}
 	}

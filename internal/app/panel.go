@@ -19,6 +19,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/ops/backup"
+	"github.com/NightDragon1/rconductor/internal/ops/cleanup"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -116,6 +117,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	wg.Go(func() { backup.Schedule(ctx, st, backups) })
+	wg.Go(func() { cleanup.Schedule(ctx, st, logs.Module("audit")) })
 
 	webLog := logs.Module("web")
 	proxies := web.Proxies{Trusted: cfg.TrustedProxies, PublicURL: cfg.PublicURL}
