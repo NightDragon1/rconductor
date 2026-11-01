@@ -4,6 +4,104 @@
 
 package sqlitedb
 
+import (
+	"database/sql"
+)
+
+type AdminScope struct {
+	ID            string
+	UserID        string
+	ServerGroupID sql.NullString
+	ServerID      sql.NullString
+	AssignedBy    string
+	CreatedAt     string
+}
+
+type AuditLog struct {
+	ID         string
+	Ts         string
+	Kind       string
+	ActorID    sql.NullString
+	ActorRole  sql.NullString
+	SessionID  sql.NullString
+	ServerID   sql.NullString
+	TargetType sql.NullString
+	TargetID   sql.NullString
+	Action     string
+	Payload    string
+	Result     string
+	ReasonCode sql.NullString
+}
+
+type CommandList struct {
+	ID        string
+	Name      string
+	OwnerID   string
+	CreatedAt string
+	UpdatedAt string
+	DeletedAt sql.NullString
+}
+
+type CommandListEntry struct {
+	ID            string
+	CommandListID string
+	Path          string
+	Passable      int64
+}
+
+type Grant struct {
+	ID            string
+	UserGroupID   string
+	UserID        sql.NullString
+	ServerGroupID sql.NullString
+	ServerID      sql.NullString
+	GrantedBy     string
+	CreatedAt     string
+}
+
+type Invite struct {
+	ID             string
+	TokenHash      string
+	CreatedBy      string
+	Role           string
+	TemplateUserID sql.NullString
+	CreatedAt      string
+	ExpiresAt      string
+	UsedAt         sql.NullString
+	UsedBy         sql.NullString
+}
+
+type Server struct {
+	ID        string
+	Name      string
+	CreatedAt string
+	UpdatedAt string
+	DeletedAt sql.NullString
+}
+
+type ServerGroup struct {
+	ID        string
+	Name      string
+	CreatedAt string
+	UpdatedAt string
+	DeletedAt sql.NullString
+}
+
+type ServerGroupMember struct {
+	ServerGroupID string
+	ServerID      string
+}
+
+type Session struct {
+	IDHash     string
+	UserID     string
+	CreatedAt  string
+	LastSeenAt string
+	ExpiresAt  string
+	Ip         string
+	UserAgent  string
+}
+
 type Setting struct {
 	ID        string
 	Key       string
@@ -11,4 +109,51 @@ type Setting struct {
 	ScopeType string
 	ScopeID   string
 	UpdatedAt string
+}
+
+type SupporterGrant struct {
+	ID          string
+	SupporterID string
+	ModeratorID string
+	ServerID    string
+	GrantedBy   string
+	CreatedAt   string
+}
+
+type User struct {
+	ID                string
+	Pseudonym         string
+	RealName          sql.NullString
+	Contacts          string
+	Avatar            []byte
+	AvatarType        sql.NullString
+	Role              string
+	AuthSource        string
+	PasswordHash      string
+	IsEmergency       int64
+	SupportersAllowed int64
+	CreatedBy         sql.NullString
+	CreatedAt         string
+	UpdatedAt         string
+	LastLoginAt       sql.NullString
+	DisabledAt        sql.NullString
+	DeletedAt         sql.NullString
+}
+
+type UserGroup struct {
+	ID            string
+	Name          string
+	Kind          string
+	OwnerID       string
+	CommandListID sql.NullString
+	CreatedAt     string
+	UpdatedAt     string
+	DeletedAt     sql.NullString
+}
+
+type UserGroupMember struct {
+	UserGroupID string
+	UserID      string
+	AddedBy     string
+	CreatedAt   string
 }
