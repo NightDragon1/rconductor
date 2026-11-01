@@ -52,6 +52,7 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - migrations/sqlite, migrations/postgres
 - profiles/              mitgelieferte Spielprofile
 - deploy/compose/        Compose-Dateien (ab M5)
+- scripts/               Hilfsskripte für Projektpflege (z. B. gh_plan.py für Milestones und Issues)
 - docs/                  Konzept, nicht verändern
 
 ## Sicherheit (nicht verhandelbar)
