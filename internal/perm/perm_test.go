@@ -291,3 +291,57 @@ func TestCacheAndInvalidate(t *testing.T) {
 		t.Errorf("after invalidate: %v", got)
 	}
 }
+
+func TestManaged(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	// Supporters invited: one by m, one by sa; one invited by sa2's moderator.
+	w.ids["sup2"] = storetest.CreateUser(t, w.st, storetest.User{Pseudonym: "sup2", Role: "supporter", CreatedBy: w.ids["m"]})
+	w.ids["sup3"] = storetest.CreateUser(t, w.st, storetest.User{Pseudonym: "sup3", Role: "supporter", CreatedBy: w.ids["sa"]})
+	w.ids["m3"] = storetest.CreateUser(t, w.st, storetest.User{Pseudonym: "m3", Role: "moderator", CreatedBy: w.ids["sa2"]})
+	w.ids["sa3"] = storetest.CreateUser(t, w.st, storetest.User{Pseudonym: "sa3", Role: "server_admin", CreatedBy: w.ids["admin"]})
+
+	managed := func(actor string) []string {
+		t.Helper()
+		m, err := w.c.Managed(ctx, Actor{ID: w.ids[actor], Role: w.rights(actor).Role})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var names []string
+		for name, id := range w.ids {
+			if m[id] {
+				names = append(names, name)
+			}
+		}
+		slices.Sort(names)
+		return names
+	}
+	cases := map[string][]string{
+		"admin": {"m", "m2", "m3", "sa", "sa2", "sa3", "sup", "sup2", "sup3"},
+		"sa":    {"m", "m2", "sup", "sup2", "sup3"}, // m, m2 via his groups, their supporters, sup3 invited
+		"sa2":   {"m", "m3", "sup", "sup2"},         // m via mg3 with his supporters, m3 invited
+		"sup":   nil,
+	}
+	for actor, want := range cases {
+		if got := managed(actor); !slices.Equal(got, want) {
+			t.Errorf("%s manages %v, want %v", actor, got, want)
+		}
+	}
+	// A moderator manages supporters only with both switches on (ROLE-006).
+	if got := managed("m"); got != nil {
+		t.Errorf("m manages %v with supporters disabled", got)
+	}
+	w.change(`UPDATE settings SET value = 'true' WHERE key = ?`, SettingSupportersEnabled)
+	if got := managed("m"); got != nil {
+		t.Errorf("m manages %v without his own release", got)
+	}
+	w.change(`UPDATE users SET supporters_allowed = 1 WHERE id = ?`, w.ids["m"])
+	if got := managed("m"); !slices.Equal(got, []string{"sup", "sup2"}) {
+		t.Errorf("m manages %v", got)
+	}
+	// Deleted users are never managed.
+	w.change(`UPDATE users SET deleted_at = 't' WHERE id = ?`, w.ids["sup2"])
+	if got := managed("m"); !slices.Equal(got, []string{"sup"}) {
+		t.Errorf("after deleting sup2: %v", got)
+	}
+}
