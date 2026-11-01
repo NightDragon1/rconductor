@@ -1,6 +1,6 @@
 # Kandidaten für Revision 2.1
 
-Stand: Abschluss M0 und Freigabe des Plans M1 (01.11.2026). Abweichungen und Lücken, die bei der Umsetzung von M0 und der Planung von M1 aufgefallen sind; die Punkte 10 bis 13 sind bereits entschieden und werden in M1 so umgesetzt. Keiner der Punkte ändert das freigegebene Konzept 2.0; über die Übernahme entscheidet Rob. Verweise auf Commits beziehen sich auf den Stand nach dem Umschreiben der Historie.
+Stand: Abschluss M1 (01.11.2026). Abweichungen und Lücken, die bei der Umsetzung von M0 und der Planung von M1 aufgefallen sind; die Punkte 10 bis 15 sind bereits entschieden; die Punkte 16 bis 27 sind in M1 so umgesetzt und warten auf Bestätigung. Keiner der Punkte ändert das freigegebene Konzept 2.0; über die Übernahme entscheidet Rob. Verweise auf Commits beziehen sich auf den Stand nach dem Umschreiben der Historie.
 
 | Nr. | Thema | Betroffen |
 | --- | --- | --- |
@@ -17,6 +17,20 @@ Stand: Abschluss M0 und Freigabe des Plans M1 (01.11.2026). Abweichungen und Lü
 | 11 | Rechteänderung beendet Sessions | AUTH-006, Design 2.1 und 2.3 |
 | 12 | Sichtbarkeit der Profilfelder | AUTH-009, Haupttab 3, Design 3 |
 | 13 | Profilbild als BLOB in der Datenbank | NFR-010, Design 4.2, AUTH-009 |
+| 14 | Tabelle grants: Moderatorgruppe immer genannt | Design 4.2, 4.3 |
+| 15 | Benutzer nur per Einladung, kein POST /users | Design 2.2, UI-008 |
+| 16 | Wer verwaltet wen | Design 3.6, ROLE-008 |
+| 17 | Zuweisungen: nur eigene Einträge ersetzen, Servergruppe nur ganz im Scope | Design 2.2, 3.6, ROLE-004 |
+| 18 | Rollenwechsel entfernt die Zuweisungen | ROLE-008, Design 3.6 |
+| 19 | Grenze von W2: Listenänderung beendet keine Sessions | AUTH-006, Punkt 11 |
+| 20 | Login-Schutz: Zähler im Speicher, Ablauf | SEC-004 |
+| 21 | Neue Variable RCD\_PASSWORD\_HASH\_CONCURRENCY | Design 5.2 |
+| 22 | Initialpasswort auf stderr | Design 8.1, AUTH-007 |
+| 23 | Neue Laufzeit-Einstellungen und Standardwerte | Design 5.1, 3.4, 4.4 |
+| 24 | Grund-Codes außerhalb von Befehlen | Design 3.5, 8.2 |
+| 25 | Zusätzliche API-Pfade | Design 2.2 |
+| 26 | Profilbild: nur PNG und JPEG, Verkleinerung auf 512 Pixel | AUTH-009, Punkt 13 |
+| 27 | Teilabnahmen in M1 ohne Umhängen | ROLE-003, AUD-001, Plan R1 |
 
 ## 1. Reservierte Pfade für Health und Metriken
 
@@ -104,3 +118,101 @@ Stand: Abschluss M0 und Freigabe des Plans M1 (01.11.2026). Abweichungen und Lü
 - **Entscheidung (M1):** Das Profilbild liegt als BLOB in der Datenbank statt als Datei unter /data. Beim Hochladen wird es am Inhalt geprüft, auf eine Pixelgrenze geprüft, neu kodiert (Metadaten wie EXIF entfallen) und mit nosniff und restriktiver Content-Security-Policy ausgeliefert.
 - **Vorschlag:** NFR-010 (Profilbilder entfallen aus /data) und Design 4.2 (avatar statt avatar\_path, dazu Medientyp) anpassen; neue Revision von NFR-010 und AUTH-009 nur, falls sich das Abnahmekriterium ändert.
 - **Begründung:** Ein Backup der Datenbank enthält dann alle veränderlichen Daten (NFR-008); es gibt keine zweite Ablage, die beim Wiederherstellen fehlen kann.
+
+## 14. Tabelle grants: Moderatorgruppe immer genannt
+
+- **Fundstelle:** 03-design.md, Kapitel 4.2 („genau eines von user\_id oder user\_group\_id“) gegen Kapitel 4.3 („Ein direkter Grant auf einen Moderator nennt deshalb immer auch die Moderatorgruppe“). Umsetzung: migrations/sqlite/00002\_identity.sql.
+- **Entscheidung (M1):** user\_group\_id ist Pflicht (Quelle der Liste, Eigentümer = zuständiger Server-Admin); user\_id leer bedeutet alle Mitglieder, gesetzt nur dieses Mitglied, das Mitglied der Gruppe sein muss.
+- **Vorschlag:** Design 4.2 an 4.3 angleichen.
+- **Begründung:** Die beiden Stellen widersprechen sich; 4.3 beschreibt die nötige Information.
+
+## 15. Benutzer nur per Einladung, kein POST /users
+
+- **Fundstelle:** 03-design.md, Kapitel 2.2 (/users mit POST); 01-gesamtkonzept.md, UI-008 („neue Benutzer per Einladungslink … statt Passwortvergabe“).
+- **Entscheidung (M1):** Benutzer entstehen nur beim Einlösen einer Einladung, dazu der Notfall-Admin; POST /users entfällt in R1.
+- **Vorschlag:** Design 2.2 ohne POST bei /users; /invites als einziger Weg.
+- **Begründung:** Zwei Wege mit fast gleicher Wirkung; die Einladung vermeidet, dass jemand ein Passwort für andere vergibt.
+
+## 16. Wer verwaltet wen
+
+- **Fundstelle:** 03-design.md, Kapitel 3.6 („nur Benutzer mit niedrigerer Rolle in seinem Scope“), ohne Definition des Scopes für Benutzer. Umsetzung: internal/perm/manage.go.
+- **Umsetzung (M1):** RCON-Admin alle niedrigeren Rollen; Server-Admin die Moderatoren, die er eingeladen hat oder die in einer seiner Moderatorgruppen sind, deren Supporter und die von ihm eingeladenen Supporter; Moderator nur seine Supporter (eingeladen oder zugewiesen) und nur bei eingeschalteter Supporter-Freigabe; Supporter niemanden.
+- **Vorschlag:** In Design 3.6 aufnehmen.
+- **Begründung:** Ohne diese Regel ist ROLE-008 nicht prüfbar; sie folgt der Zuweisungskette aus Haupttab 3.
+
+## 17. Zuweisungen: nur eigene Einträge ersetzen, Servergruppe nur ganz im Scope
+
+- **Fundstelle:** 03-design.md, Kapitel 2.2 (/users/{id}/assignments PUT) und 3.6 („Zuweisungen an andere sind immer eine Teilmenge des eigenen Scopes“).
+- **Umsetzung (M1):** Ein PUT ersetzt je Abschnitt nur die Einträge, über die der Aufrufer verfügt (eigene Gruppen, eigene Moderatoren); Einträge anderer bleiben. Eine Servergruppe darf nur zugewiesen werden, wenn alle ihre Server im Scope liegen.
+- **Vorschlag:** In Design 2.2 und 3.6 aufnehmen.
+- **Begründung:** Sonst könnte ein Server-Admin die Zuweisungen eines anderen löschen oder über eine teilweise fremde Servergruppe mehr vergeben, als er hat.
+
+## 18. Rollenwechsel entfernt die Zuweisungen
+
+- **Fundstelle:** 01-gesamtkonzept.md, ROLE-008; 03-design.md, Kapitel 3.6. Umsetzung: internal/users/users.go.
+- **Umsetzung (M1):** Ändert sich die Rolle eines Benutzers, entfallen seine Scopes, Gruppenmitgliedschaften und Grants; seine Sessions enden.
+- **Vorschlag:** In Design 3.6 aufnehmen.
+- **Begründung:** Zuweisungen gehören zu einer Rolle (Scopes nur für Server-Admins, Grants nur für Moderatoren); stehen gelassene Reste würden nach einem Rückwechsel unbemerkt wieder wirken.
+
+## 19. Grenze von W2: Listenänderung beendet keine Sessions
+
+- **Fundstelle:** Punkt 11; 01-gesamtkonzept.md, AUTH-006.
+- **Umsetzung (M1):** Änderungen an Rolle, Scope, Gruppenmitgliedschaft, Grants, Supporter-Freigabe und Sperre beenden Sessions; Änderungen am Inhalt einer Befehlsliste wirken ab der nächsten Anfrage, ohne Abmeldung.
+- **Vorschlag:** In AUTH-006 bzw. Design 2.1 festhalten, was als Rechteänderung zählt.
+- **Begründung:** Sonst meldet jede Listenpflege alle Moderatoren ab.
+
+## 20. Login-Schutz: Zähler im Speicher, Ablauf
+
+- **Fundstelle:** 01-gesamtkonzept.md, SEC-004; 05-abnahme-r1.md, SEC-004. Umsetzung: internal/auth/throttle.go.
+- **Umsetzung (M1):** Verzögerung ab dem dritten Fehlversuch eines Kontos (1, 2, 4 s); Sperre 15 min je (Konto, Client-Adresse) nach 5 Fehlversuchen; unbekannte Pseudonyme zählen wie echte; Zähler im Speicher (höchstens 10 000 Einträge), sie enden nach der Sperrdauer ohne Fehlversuch, mit erfolgreicher Anmeldung und beim Neustart.
+- **Vorschlag:** In SEC-004 bzw. Design aufnehmen, auch dass ein Neustart die Zähler leert.
+- **Begründung:** Werte und Verhalten waren nur als „Verzögerung bzw. zeitweise Sperre“ beschrieben.
+
+## 21. Neue Variable RCD\_PASSWORD\_HASH\_CONCURRENCY
+
+- **Fundstelle:** 03-design.md, Kapitel 5.2. Umsetzung: internal/config, internal/auth/password.
+- **Umsetzung (M1):** Höchstzahl gleichzeitiger Argon2id-Berechnungen (Standard 2, 1 bis 64); wer länger als 5 s auf einen Platz wartet, erhält 503 mit Retry-After.
+- **Vorschlag:** In Design 5.2 aufnehmen.
+- **Begründung:** Jede Berechnung braucht 64 MiB; ohne Grenze reicht eine Login-Flut für Speichermangel, besonders auf kleinen Hosts.
+
+## 22. Initialpasswort auf stderr
+
+- **Fundstelle:** 03-design.md, Kapitel 8.1 („außerhalb der Ereignisfelder“); 01-gesamtkonzept.md, AUTH-007.
+- **Umsetzung (M1):** Das Passwort steht einmal als Hinweisblock auf stderr; auf stdout erscheint nur auth.initial\_password.issued ohne Passwort.
+- **Vorschlag:** In Design 8.1 so festhalten.
+- **Begründung:** stdout bleibt reines JSON und lässt sich ohne Sonderfall auswerten; im Container-Log stehen beide Ströme.
+
+## 23. Neue Laufzeit-Einstellungen und Standardwerte
+
+- **Fundstelle:** 03-design.md, Kapitel 5.1 (Laufzeit-Einstellungen in settings), ohne Schlüsselliste.
+- **Umsetzung (M1):** session.idle\_timeout (12 h), session.max\_lifetime (7 Tage), login.max\_failures (5), login.lockout\_duration (15 min), invite.lifetime (72 h), supporters.enabled (aus), audit.retention\_days (90); dazu die Backup-Schlüssel aus M0. Änderbar nur durch den RCON-Admin über /settings, mit Typ- und Bereichsprüfung.
+- **Vorschlag:** Schlüsselliste mit Standardwerten in Design 5 aufnehmen.
+- **Begründung:** Die Namen sind Teil der Schnittstelle von /settings.
+
+## 24. Grund-Codes außerhalb von Befehlen
+
+- **Fundstelle:** 03-design.md, Kapitel 3.5 (Grund-Codes nur für Befehle) und 8.2 (reason wie in der API).
+- **Umsetzung (M1):** Verwaltungs-Ablehnungen antworten 403 ohne Grund-Code bzw. 404 mit not\_found; perm.denied und das Audit tragen reason forbidden; 503 bei ausgelasteter Passwortberechnung ohne Grund-Code; 403 bei fehlender Origin ohne Grund-Code.
+- **Vorschlag:** Grund-Code forbidden (und ggf. busy) in Design 3.5 ergänzen.
+- **Begründung:** Log und Audit brauchen einen festen Wert; derzeit ist forbidden nur im Log und Audit definiert.
+
+## 25. Zusätzliche API-Pfade
+
+- **Fundstelle:** 03-design.md, Kapitel 2.2.
+- **Umsetzung (M1):** /user-groups/{id}, /command-lists/{id}, /invites/{id}, /invites/redeem, /me/password, /me/avatar, /users/{id}/avatar.
+- **Vorschlag:** Tabelle in Design 2.2 ergänzen; api/openapi.yaml ist die Quelle.
+- **Begründung:** Einzelzugriff, Einlösen und Passwortwechsel brauchen eigene Pfade.
+
+## 26. Profilbild: nur PNG und JPEG, Verkleinerung auf 512 Pixel
+
+- **Fundstelle:** Punkt 13; 01-gesamtkonzept.md, AUTH-009.
+- **Umsetzung (M1):** PNG und JPEG, höchstens 1 MiB und 4096 × 4096 Pixel; gespeichert verkleinert auf höchstens 512 × 512.
+- **Vorschlag:** WebP erst mit golang.org/x/image (BSD-3-Clause) als neuer Abhängigkeit, falls gewünscht.
+- **Begründung:** Die Standardbibliothek dekodiert kein WebP; die Verkleinerung hält die BLOBs und damit die Backups klein.
+
+## 27. Teilabnahmen in M1 ohne Umhängen
+
+- **Fundstelle:** 05-abnahme-r1.md, ROLE-003 („Server außerhalb liefern 404“) und AUD-001 („Befehle, … Agent-Aktionen … erzeugen je einen Eintrag“); 07-plan-r1.md, M1.
+- **Stand (M1):** Scope-Berechnung und Audit-Grundgerüst sind fertig und getestet; Server-Endpunkte (M2), Befehle (M2) und Agent-Aktionen (M3) fehlen noch.
+- **Vorschlag:** Wie bei NFR-001: Issues ROLE-003 nach M2 und AUD-001 nach M3 umhängen, oder im Plan R1 als teilweise in M1 vermerken.
+- **Begründung:** Die Abnahmekriterien setzen spätere Meilensteine voraus.
