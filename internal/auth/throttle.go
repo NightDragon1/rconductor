@@ -52,7 +52,7 @@ type pairKey struct {
 // throttle counts consecutive login failures in memory: per account for
 // the delay, per account and client address for the lockout, so that an
 // attacker cannot lock a user out from everywhere. Unknown pseudonyms are
-// counted like real ones, so the behaviour reveals nothing about which
+// counted like real ones, so the behavior reveals nothing about which
 // accounts exist. Counters end after the lockout duration without failures
 // and with a successful login. A restart forgets them.
 type throttle struct {
