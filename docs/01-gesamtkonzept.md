@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.1, Stand 01.11.2026, Status Entwurf (Freigabe durch Rob ausstehend); Änderungen gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.1, Stand 01.11.2026, Status freigegeben; Änderungen gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -96,6 +96,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | AUTH-006 | Sessions | Session-Management für alle Benutzer; Zuordnung Session zu Request-ID wird geloggt | Backend | Muss | R1 | 1 |
 | AUTH-007 | Initialpasswort | Beim ersten Start des Containers wird ein zufälliges Passwort für den Notfall-Admin erzeugt und im Container-Log ausgegeben; Änderung in der Oberfläche | Backend | Muss | R1 | 1 |
 | AUTH-008 | Zwei-Faktor | Optionale Zwei-Faktor-Anmeldung (TOTP); RCON-Admin kann sie für alle erzwingen, jeder Benutzer kann sie für sich aktivieren | Backend, UI | Soll | R2 | 1 |
+| AUTH-011 | Wiederherstellung Notfall-Admin | Mit RCD\_EMERGENCY\_ADMIN\_RESET=true erhält der Notfall-Admin beim Start ein neues Initialpasswort (Ausgabe wie AUTH-007) mit must\_change\_password; alle seine Sessions enden; Audit-Eintrag und Ereigniscode | Backend | Muss | R1 | 1 |
 | AUTH-010 | Erzwungener Passwortwechsel | Benutzer mit must\_change\_password dürfen nur ihr Passwort ändern, sich abmelden und ihre Session abfragen; alles andere wird mit eigenem Grund-Code abgelehnt. Das Flag wird beim Initialpasswort (AUTH-007) und bei einem Passwort-Reset durch einen Verwaltenden gesetzt und mit dem Wechsel gelöscht; ein Reset beendet alle Sessions des Betroffenen, das temporäre Passwort erhält nur der Verwaltende einmal in der Antwort | Backend, UI | Muss | R1 | 1 |
 | AUTH-009 | Benutzerprofil | Pseudonym als primärer Anzeigename; optional Echtname, Profilbild-Upload und Kontaktangaben (z. B. Telegram, WhatsApp) | Backend, UI, DB | Soll | R1 | 1 |
 
@@ -415,7 +416,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 1.4 | 01.11.2026 | Design 7 Spielprofile; Tabs Abnahme R1, Sicherheit (Bedrohungsmodell) und Plan R1 angelegt; SEC-006 bis SEC-011 und D-041 neu; Revision 2 für SRV-002 (Master-Key in /secrets) und CAT-001 |
 | 1.5 | 01.11.2026 | Testbarkeit über Ereignis-Logs: Design 8, Abnahme R1 Abschnitt 9, NFR-016, SEC-012, D-042 |
 | 2.0 | 01.11.2026 | Freigabe durch Rob; Basis für R1. Änderungen ab jetzt nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
-| 2.1 | 01.11.2026 | Entwurf: Erkenntnisse aus M0 und M1 eingearbeitet (Kapitel 10); Revision 2 für NFR-010; AUTH-010, SEC-013 und D-043 bis D-046 neu |
+| 2.1 | 01.11.2026 | Freigabe durch Rob: Erkenntnisse aus M0 und M1 eingearbeitet (Kapitel 10); Revision 2 für NFR-010; AUTH-010, AUTH-011, SEC-013 und D-043 bis D-046 neu. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 
 ## 10. Änderungen in Version 2.1
 
@@ -452,3 +453,4 @@ Eingearbeitet aus den Kandidaten nach M0 und M1 (bisher docs/revision-2.1-kandid
 | 27 | Teilabnahmen über Meilensteine | Plan R1, Kapitel 3 |
 | 28 | Neue Anforderung AUTH-010: erzwungener Passwortwechsel mit Grund-Code password\_change\_required; Passwort-Reset durch Verwaltende | 2.2 AUTH-010, Design 2.2, 3.5, 3.6, 4.2, Abnahme, Plan M2 |
 | 29 | Ratenlimits als Einstellungen ratelimit.<rolle>.per\_minute und .burst | Design 3.4, 5.6 |
+| 30 | Neue Anforderung AUTH-011: Wiederherstellung des Notfall-Admins per RCD\_EMERGENCY\_ADMIN\_RESET, Ereigniscode auth.emergency\_admin.reset; Verdrängung im Login-Schutz festgelegt | 2.2 AUTH-011, Design 3.6, 3.7, 5.2, 8.3, Abnahme, Plan M2 |

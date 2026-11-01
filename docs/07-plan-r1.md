@@ -1,6 +1,6 @@
 # Arbeitspakete R1
 
-Dokumentversion 2.1 (Entwurf, Freigabe ausstehend); Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
+Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
 
 ## 1. Ablauf
 
@@ -14,9 +14,9 @@ M2 ist hervorgehoben, weil der Durchstich dort entsteht. M4 baut zuerst gegen At
 | --- | --- | --- | --- |
 | M0 Fundament | Repository-Struktur, CI mit Lint, Tests, govulncheck; Multi-Arch-Build und signierte Images; Konfiguration per Env; JSON-Logging mit Ereigniscodes und Schwärzung von Geheimnissen; Datenbank mit goose und sqlc; Master-Key; Backups; OpenAPI-Gerüst | NFR-001, NFR-002, NFR-008, NFR-010, NFR-013, SEC-005, SEC-012, SEC-013, NFR-016, PRJ-001, PRJ-002 | – |
 | M1 Identität und Rechte | Benutzer, Gruppen, Sessions, vertrauenswürdige Proxys (Teil von NFR-003), Login-Schutz, Notfall-Admin mit Initialpasswort, Rollen und Scope-Berechnung, Einladungen, Audit-Grundgerüst mit Aufbewahrung | AUTH-001, AUTH-002, AUTH-003, AUTH-006, AUTH-007, AUTH-009, ROLE-001 bis ROLE-008, ROLE-010, SEC-004, AUD-001, AUD-003, AUD-004 | M0 |
-| M2 RCON-Kern | Erzwungener Passwortwechsel; Profil-Import mit Hot Reload; Server und Servergruppen; Verbindungsmanager mit Source-RCON-Adapter; Befehlspipeline mit Bereinigung, Token-Abgleich, Wrapper-Sperre, Ratenlimit; Ereignisbus und WebSocket; Durchstich | AUTH-010, CAT-001, CAT-002, CAT-003, CAT-005, SRV-001 bis SRV-006, PROT-001, PROT-002, CMD-002, CMD-004 bis CMD-007, CMD-019, SEC-003, SEC-006 | M1 |
+| M2 RCON-Kern | Erzwungener Passwortwechsel, Wiederherstellung des Notfall-Admins; WebSocket-Grenzen (aus M4 vorgezogen); Profil-Import mit Hot Reload; Server und Servergruppen; Verbindungsmanager mit Source-RCON-Adapter; Befehlspipeline mit Bereinigung, Token-Abgleich, Wrapper-Sperre, Ratenlimit; Ereignisbus und WebSocket; Durchstich | AUTH-010, AUTH-011, CAT-001, CAT-002, CAT-003, CAT-005, SRV-001 bis SRV-006, PROT-001, PROT-002, CMD-002, CMD-004 bis CMD-007, CMD-019, SEC-003, SEC-006, SEC-008 | M1 |
 | M3 Agent | Agent-Binary; Protokoll aus Design 1; Kopplung über Token und Fingerprint; Pinning und Widerruf; Docker-Operationen, Messwerte, Logs; Versionsregel; Cache mit Altersangabe; Neustart ohne Agent | AGT-001 bis AGT-005, AGT-008, AGT-009, AGT-011 bis AGT-013, NFR-005, SEC-007, SEC-010 | M1 |
-| M4 Oberfläche | Grundgerüst mit Navigation, hell und dunkel, Englisch; Landingpages und Karten; Serverseite mit Konsole; Befehlsseite; Verwaltung mit Schnelleingabe; Handy-Ansicht; Sicherheitsheader | UI-001 bis UI-004, UI-006 bis UI-009, UI-011, UI-012, CMD-001, CMD-003, CMD-012 bis CMD-015, NFR-007, SEC-008, SEC-009 | M1; Live-Teile mit M2 und M3 |
+| M4 Oberfläche | Grundgerüst mit Navigation, hell und dunkel, Englisch; Landingpages und Karten; Serverseite mit Konsole; Befehlsseite; Verwaltung mit Schnelleingabe; Handy-Ansicht; Sicherheitsheader | UI-001 bis UI-004, UI-006 bis UI-009, UI-011, UI-012, CMD-001, CMD-003, CMD-012 bis CMD-015, NFR-007, SEC-009 | M1; Live-Teile mit M2 und M3 |
 | M5 Auslieferung | Beide Compose-Varianten, README mit Pfaden und Betrieb, E2E-Testlauf aller Abnahmekriterien, Review des Bedrohungsmodells, Release 1.0.0 | NFR-003, NFR-004, NFR-014, SEC-001, SEC-002, NFR-009 | M2, M3, M4 |
 
 ## 3. Teilabnahmen
@@ -32,6 +32,8 @@ Einige Anforderungen werden in einem Meilenstein umgesetzt, ihr Abnahmekriterium
 | ROLE-003, ROLE-005, ROLE-007, AUTH-006 | M1 | M2 | Server-API, Befehlspipeline, WebSocket |
 | AUD-001 | M1 | M3 | Einträge für Befehle und Agent-Aktionen |
 | ROLE-002, AUTH-009 | M1 | M4 | E2E in der Oberfläche |
+| SEC-013 | M0 | M5 | erstes Release mit Signatur und SBOM |
+| SRV-001 | M2 | M4 | Auswahl von Agent und Container, E2E |
 
 ## 4. Regeln
 

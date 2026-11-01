@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.1 (Entwurf, Freigabe ausstehend); Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -92,7 +92,7 @@ Das Panel löscht den Agent-Schlüssel, sendet revoked und trennt die Verbindung
 | Live-Daten | Ein WebSocket je Browser-Tab mit Abos (2.3) |
 | Session | Serverseitig; Session-ID im Cookie, immer HttpOnly und SameSite=Lax; über HTTPS (RCD\_PUBLIC\_URL mit https oder X-Forwarded-Proto: https von einem vertrauenswürdigen Proxy) zusätzlich Secure und mit Präfix \_\_Host-, sonst ohne Secure und mit Warnung beim Start; in der DB nur als Hash gespeichert. Inaktivität und Höchstdauer laut 5.6 (D-043) |
 | Rechte | Bei jeder Anfrage neu geprüft, nie aus der Session übernommen. Sperre, Löschen und jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants oder Supporter-Freigabe eines Benutzers beenden seine Sessions sofort (AUTH-006, D-044). Änderungen am Inhalt einer Befehlsliste wirken ab der nächsten Anfrage, ohne Abmeldung |
-| CSRF | SameSite=Strict plus Prüfung des Origin-Headers bei allen schreibenden Anfragen und beim WebSocket-Aufbau |
+| CSRF | SameSite=Lax (D-043) plus Prüfung des Origin-Headers bei allen schreibenden Anfragen und beim WebSocket-Aufbau |
 | Proxy | X-Forwarded-For und X-Forwarded-Proto werden nur von konfigurierten vertrauenswürdigen Proxys übernommen; Client ist die rechteste Adresse in X-Forwarded-For, die kein vertrauenswürdiger Proxy ist |
 | Reservierte Pfade | /api (jede Version), /healthz und /metrics werden nie von der Oberfläche beantwortet; /healthz und /metrics werden mit NFR-006 (R2) befüllt |
 | HAProxy | Normales HTTP/1.1, kein HTTP/2 nötig; für den WebSocket genügt ein ausreichendes timeout tunnel |
@@ -211,6 +211,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 - Wer wen verwaltet: der RCON-Admin alle niedrigeren Rollen; ein Server-Admin die Moderatoren, die er eingeladen hat oder die Mitglied einer seiner Moderatorgruppen sind, deren Supporter und die von ihm eingeladenen Supporter; ein Moderator nur seine Supporter (eingeladen oder zugewiesen), solange die Supporter-Freigabe global und für ihn gilt; ein Supporter niemanden.
 - Zuweisungen: Ein Ersetzen ändert nur die Einträge, über die der Aufrufer verfügt (eigene Gruppen, eigene Moderatoren); Einträge anderer bleiben. Eine Servergruppe darf nur zugewiesen werden, wenn alle ihre Server im Scope liegen.
 - Ein Rollenwechsel entfernt Scopes, Gruppenmitgliedschaften und Grants der alten Rolle.
+- Wiederherstellung des Notfall-Admins (AUTH-011): Mit RCD\_EMERGENCY\_ADMIN\_RESET=true erzeugt das Panel beim Start ein neues Initialpasswort, ausgegeben wie in AUTH-007, setzt must\_change\_password, beendet alle Sessions des Notfall-Admins, schreibt einen Audit-Eintrag ohne Passwort und auth.emergency\_admin.reset. Gesperrt (disabled) bleibt er nicht; die Variable wirkt bei jedem Start, solange sie gesetzt ist, deshalb warnt das Panel dabei.
 - Ein Passwort-Reset setzt ein zufälliges temporäres Passwort, setzt must\_change\_password und beendet alle Sessions des Benutzers (wie D-044); nur wer den Benutzer verwaltet, darf ihn auslösen (AUTH-010). Das temporäre Passwort steht genau einmal in der API-Antwort an den Verwaltenden, nie in Log oder Audit; der Audit-Eintrag nennt nur Verwaltenden, Benutzer und Ergebnis. Der Notfall-Admin wird nicht zurückgesetzt.
 - Echtname, Profilbild und Kontaktangaben sehen der Benutzer selbst, der RCON-Admin und wer ihn verwaltet; alle anderen nur das Pseudonym (AUTH-009).
 
@@ -221,7 +222,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | Verzögerung | Je Konto ab dem dritten Fehlversuch in Folge 1 s, dann 2 s, dann 4 s vor der Passwortprüfung |
 | Sperre | Je Konto und Client-Adresse nach login.max\_failures (Standard 5) Fehlversuchen für login.lockout\_duration (Standard 15 min); auch das richtige Passwort wird dann mit 429 abgelehnt |
 | Unbekannte Benutzer | Zählen wie bekannte; gleiche Antwort, gleiche Fehlermeldung, gleiche Argon2id-Arbeit über einen Ersatz-Hash |
-| Zähler | Im Arbeitsspeicher, höchstens 10 000 Einträge; enden nach der Sperrdauer ohne Fehlversuch, mit erfolgreicher Anmeldung und beim Neustart |
+| Zähler | Im Arbeitsspeicher, höchstens 10 000 Einträge; enden nach der Sperrdauer ohne Fehlversuch, mit erfolgreicher Anmeldung und beim Neustart. Ist die Tabelle voll, wird der älteste nicht gesperrte Eintrag verdrängt; gesperrte Einträge werden nie verdrängt; ist sie ganz mit Sperren gefüllt, gilt für neue Versuche die höchste Verzögerung (4 s) |
 | Passwortberechnung | Argon2id mit t=3, 64 MiB, p=4; höchstens RCD\_PASSWORD\_HASH\_CONCURRENCY Berechnungen gleichzeitig, sonst nach 5 s Wartezeit 503 busy |
 | Passwörter | 12 bis 128 Zeichen |
 
@@ -304,6 +305,7 @@ Ein täglicher Job entfernt Audit-Einträge nach Ablauf der Frist (Standard 90 T
 | RCD\_BACKUP\_DIR | /backups | Sicherungen |
 | RCD\_MASTER\_KEY\_FILE | leer | Master-Key aus einer anderen Datei, z. B. Docker-Secret; leer: /secrets, beim ersten Start erzeugt |
 | RCD\_EMERGENCY\_ADMIN | true | Notfall-Admin aktiv |
+| RCD\_EMERGENCY\_ADMIN\_RESET | false | true: beim Start neues Initialpasswort für den Notfall-Admin (AUTH-011); danach wieder entfernen |
 | RCD\_PASSWORD\_HASH\_CONCURRENCY | 2 | Gleichzeitige Passwortberechnungen (1 bis 64), je 64 MiB |
 | RCD\_LOG\_LEVEL | info | debug, info, warn, error |
 | RCD\_LOG\_FORMAT | text | text oder json |
@@ -610,7 +612,7 @@ Die Zahlenwerte im Beispiel (z. B. max\_length) werden beim ersten Profil gegen 
 | Bereich | Codes |
 | --- | --- |
 | Betrieb | app.start, app.ready, db.migrate.start, db.migrate.done, db.migrate.lock\_wait, key.created, key.loaded, backup.done, backup.failed, audit.purge |
-| Anmeldung | auth.login.ok, auth.login.failed, auth.lockout, auth.logout, auth.session.revoked, auth.initial\_password.issued, auth.invite.used |
+| Anmeldung | auth.login.ok, auth.login.failed, auth.lockout, auth.logout, auth.session.revoked, auth.initial\_password.issued, auth.invite.used, auth.emergency\_admin.reset |
 | Rechte | perm.denied (reason), perm.recomputed |
 | Befehle | cmd.accepted, cmd.denied (reason: not\_in\_list, wrapper\_blocked, rate\_limited, invalid), cmd.sent, cmd.response, cmd.timeout |
 | RCON | rcon.connected, rcon.auth\_failed, rcon.disconnected, rcon.reconnect |

@@ -1,6 +1,6 @@
 # Abnahmekriterien R1
 
-Dokumentversion 2.1 (Entwurf, Freigabe ausstehend); Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
+Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
 
 | Prüfart | Bedeutung |
 | --- | --- |
@@ -49,6 +49,7 @@ Dokumentversion 2.1 (Entwurf, Freigabe ausstehend); Änderungen gegenüber 2.0 s
 | AUTH-003 | Der Notfall-Admin meldet sich ohne externe Identitätsquelle an; mit RCD\_EMERGENCY\_ADMIN=false ist keine Anmeldung möglich | Integration |
 | AUTH-006 | Jede Anfrage ist einer Session zugeordnet; Abmelden, Sperren oder Rechteänderung beenden betroffene Sessions sofort, auch offene WebSockets | Integration, E2E |
 | AUTH-007 | Beim ersten Start steht ein zufälliges Passwort genau einmal im Container-Log; es lässt sich in der Oberfläche ändern, danach ist es ungültig | Integration |
+| AUTH-011 | Mit RCD\_EMERGENCY\_ADMIN\_RESET=true steht nach dem Start ein neues Initialpasswort genau einmal im Container-Log; das alte Passwort und alle Sessions des Notfall-Admins sind ungültig; must\_change\_password ist gesetzt; auth.emergency\_admin.reset und ein Audit-Eintrag ohne Passwort liegen vor | Integration |
 | AUTH-010 | Nach dem ersten Start und nach einem Passwort-Reset liefert jede Anfrage außer /me/password, /auth/logout und /auth/session 403 mit password\_change\_required; nach dem Wechsel ist alles erlaubt, was die Rolle erlaubt; ein Reset beendet alle Sessions des Betroffenen, und das temporäre Passwort steht nur in der Antwort an den Verwaltenden, weder in Log noch Audit | Integration |
 | AUTH-009 | Pseudonym ist Pflicht und eindeutig; Echtname, Bild und Kontakte sind optional und für andere Rollen nur laut Rechtemodell sichtbar | E2E |
 
