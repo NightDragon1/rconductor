@@ -283,6 +283,9 @@ type UserUpdate struct {
 
 	// Role One of the four fixed roles (ROLE-001).
 	Role *Role `json:"role,omitempty"`
+
+	// SupportersAllowed Release supporters for a moderator (ROLE-006); only server admins and the RCON admin. Switching off takes the rights of the moderator's supporters.
+	SupportersAllowed *bool `json:"supporters_allowed,omitempty"`
 }
 
 // CommandListID defines model for CommandListID.
@@ -394,7 +397,7 @@ type ServerInterface interface {
 	// GetUser A user the caller manages.
 	// (GET /users/{id})
 	GetUser(w http.ResponseWriter, r *http.Request, id UserID)
-	// UpdateUser Change role or lock state of a managed user (ROLE-008).
+	// UpdateUser Change role, lock state or supporter release of a managed user (ROLE-006, ROLE-008).
 	// (PATCH /users/{id})
 	UpdateUser(w http.ResponseWriter, r *http.Request, id UserID)
 	// GetAssignments Role, scopes, groups and grants of a managed user.
@@ -2297,7 +2300,7 @@ type StrictServerInterface interface {
 	// GetUser A user the caller manages.
 	// (GET /users/{id})
 	GetUser(ctx context.Context, request GetUserRequestObject) (GetUserResponseObject, error)
-	// UpdateUser Change role or lock state of a managed user (ROLE-008).
+	// UpdateUser Change role, lock state or supporter release of a managed user (ROLE-006, ROLE-008).
 	// (PATCH /users/{id})
 	UpdateUser(ctx context.Context, request UpdateUserRequestObject) (UpdateUserResponseObject, error)
 	// GetAssignments Role, scopes, groups and grants of a managed user.

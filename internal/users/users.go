@@ -177,6 +177,9 @@ func (s *Service) deniedOn(ctx context.Context, req Request, action, targetType,
 type Update struct {
 	Role     *perm.Role
 	Disabled *bool
+	// SupportersAllowed releases supporters for a moderator; only a server
+	// admin or the RCON admin sets it (ROLE-006).
+	SupportersAllowed *bool
 }
 
 // Update changes role or lock state of a managed user. A new role must
@@ -195,6 +198,20 @@ func (s *Service) Update(ctx context.Context, req Request, id string, u Update) 
 		return User{}, ErrForbidden
 	}
 
+	affected := []string{id}
+	if u.SupportersAllowed != nil && *u.SupportersAllowed != cur.SupportersAllowed {
+		if cur.Role != perm.Moderator || (req.Actor.Role != perm.ServerAdmin && req.Actor.Role != perm.RCONAdmin) {
+			s.denied(ctx, req, "user.update", id, "forbidden", map[string]bool{"supporters_allowed": *u.SupportersAllowed})
+			return User{}, ErrForbidden
+		}
+		// Switching off takes the rights of the moderator's supporters.
+		sups, err := s.st.Queries.ListSupportersOfModerator(ctx, id)
+		if err != nil {
+			return User{}, err
+		}
+		affected = append(affected, sups...)
+	}
+
 	changes := map[string]any{}
 	tx, err := s.st.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -203,6 +220,16 @@ func (s *Service) Update(ctx context.Context, req Request, id string, u Update) 
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	now := store.Now()
+	if u.SupportersAllowed != nil && *u.SupportersAllowed != cur.SupportersAllowed {
+		v := int64(0)
+		if *u.SupportersAllowed {
+			v = 1
+		}
+		if err := q.SetSupportersAllowed(ctx, sqlitedb.SetSupportersAllowedParams{SupportersAllowed: v, UpdatedAt: now, ID: id}); err != nil {
+			return User{}, err
+		}
+		changes["supporters_allowed"] = *u.SupportersAllowed
+	}
 	if u.Role != nil && *u.Role != cur.Role {
 		if err := q.SetUserRole(ctx, sqlitedb.SetUserRoleParams{Role: string(*u.Role), UpdatedAt: now, ID: id}); err != nil {
 			return User{}, err
@@ -228,7 +255,7 @@ func (s *Service) Update(ctx context.Context, req Request, id string, u Update) 
 	if err := tx.Commit(); err != nil {
 		return User{}, fmt.Errorf("update user: %w", err)
 	}
-	if err := s.rightsChanged(ctx, req, "user.update", id); err != nil {
+	if err := s.rightsChanged(ctx, req, "user.update", affected...); err != nil {
 		return User{}, err
 	}
 	return s.load(ctx, id)

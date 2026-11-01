@@ -31,6 +31,12 @@ UPDATE users SET role = ?, updated_at = ? WHERE id = ?;
 -- name: SetUserDisabled :exec
 UPDATE users SET disabled_at = ?, updated_at = ? WHERE id = ?;
 
+-- name: SetSupportersAllowed :exec
+UPDATE users SET supporters_allowed = ?, updated_at = ? WHERE id = ?;
+
+-- name: ListSupportersOfModerator :many
+SELECT DISTINCT supporter_id FROM supporter_grants WHERE moderator_id = ?;
+
 -- name: SoftDeleteUser :exec
 UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?;
 

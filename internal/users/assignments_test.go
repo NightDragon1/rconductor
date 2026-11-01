@@ -163,3 +163,42 @@ func TestSupporterGrants(t *testing.T) {
 		t.Errorf("for another moderator: %v", err)
 	}
 }
+
+// TestSupporterRelease covers ROLE-006 per moderator: only a server admin
+// releases supporters for his moderator; switching off takes the
+// supporters' rights and sessions.
+func TestSupporterRelease(t *testing.T) {
+	f := withMore(t)
+	ctx := context.Background()
+	f.exec(`UPDATE settings SET value = 'true' WHERE key = ?`, perm.SettingSupportersEnabled)
+	on, off := true, false
+
+	if _, err := f.svc.Update(ctx, f.as("sa"), f.ids["sa2"], Update{SupportersAllowed: &on}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("release for a server admin: %v", err)
+	}
+	if _, err := f.svc.Update(ctx, f.as("admin"), f.ids["sa"], Update{SupportersAllowed: &on}); !errors.Is(err, ErrForbidden) {
+		t.Errorf("release for a non-moderator: %v", err)
+	}
+	u, err := f.svc.Update(ctx, f.as("sa"), f.ids["m"], Update{SupportersAllowed: &on})
+	if err != nil || !u.SupportersAllowed {
+		t.Fatalf("release: %+v %v", u, err)
+	}
+	grant := []SupporterGrant{{ModeratorID: f.ids["m"], ServerID: "s1"}}
+	if _, err := f.svc.UpdateAssignments(ctx, f.as("m"), f.ids["sup"], AssignmentsUpdate{SupporterGrants: &grant}); err != nil {
+		t.Fatal(err)
+	}
+	f.revoked = nil
+	if _, err := f.svc.Update(ctx, f.as("sa"), f.ids["m"], Update{SupportersAllowed: &off}); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := f.checker.For(ctx, f.ids["sup"]); len(r.ServerIDs()) != 0 {
+		t.Errorf("supporter keeps rights after the release ended: %v", r.ServerIDs())
+	}
+	if !slices.Contains(f.revoked, f.ids["sup"]) {
+		t.Error("supporter's sessions not ended")
+	}
+	// The moderator cannot assign supporters any more.
+	if _, err := f.svc.UpdateAssignments(ctx, f.as("m"), f.ids["sup"], AssignmentsUpdate{SupporterGrants: &grant}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("assign after the release ended: %v", err)
+	}
+}
