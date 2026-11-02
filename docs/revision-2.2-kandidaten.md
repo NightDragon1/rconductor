@@ -9,6 +9,7 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 | 3 | Sichtbarkeit der Serverfelder je Rolle | Design 2.2, 6.3 |
 | 4 | Änderung von Servergruppen beendet keine Sessions | AUTH-006, Design 2.1 (D-044) |
 | 5 | Agent und Container am Server erst ab M3 setzbar | SRV-001, Plan R1 |
+| 6 | Eigener Source-RCON-Adapter statt gorcon/rcon | Technologie 2, PROT-001 |
 
 ## 1. Beispielprofil in Design 7.4 auf Englisch
 
@@ -43,3 +44,11 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 - **Umsetzung (M2):** Die Felder agent\_id und container\_id sind vorhanden und werden gelesen, aber erst mit den Agents in M3 schreibbar.
 - **Vorschlag:** Im Plan R1 bei SRV-001 vermerken.
 - **Begründung:** Ohne Agents gibt es nichts Gültiges auszuwählen; freie Werte müssten in M3 bereinigt werden.
+
+## 6. Eigener Source-RCON-Adapter statt gorcon/rcon
+
+- **Fundstelle:** 04-technologie.md, Kapitel 2 (Source RCON: gorcon/rcon hinter eigener Adapter-Schnittstelle; „Austausch ohne Umbau möglich“); 05-abnahme-r1.md, PROT-001 (Antworten über 4 KB). Umsetzung: internal/rcon/source.
+- **Befund (M2):** gorcon/rcon v1.4.0 liest je Befehl genau ein Paket mit fester Paket-ID, kennt kein Endmarker-Verfahren und begrenzt Befehle künstlich auf 1000 Zeichen. Antworten über 4 KB, die Minecraft auf mehrere Pakete ohne Endmarke verteilt, kämen unvollständig an.
+- **Umsetzung (M2, nach Vorgabe):** eigener Adapter hinter der vorgesehenen Schnittstelle: nach jedem Befehl ein leeres Paket als Endmarker, Sammeln bis zu dessen Antwort, Pakete mit fremder ID werden verworfen; Grenzen 64 KiB je Paket und 1 MiB je Antwort (SEC-006). gorcon/rcon wird nicht eingebunden.
+- **Vorschlag:** Technologie 2, Zeile Source RCON: „eigener Adapter (Endmarker-Verfahren)“ statt gorcon/rcon.
+- **Begründung:** Erfüllt PROT-001 ohne Fremdcode; der Austausch war über die Adapter-Schnittstelle ohnehin vorgesehen.
