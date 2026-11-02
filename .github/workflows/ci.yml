@@ -118,7 +118,11 @@ jobs:
         with:
           path: .cache/minecraft
           key: minecraft-server-${{ hashFiles('scripts/minecraft-server.sh') }}
+      # Running the test server means accepting the Minecraft EULA
+      # (https://aka.ms/MinecraftEULA), see README.
       - run: make test-minecraft
+        env:
+          MINECRAFT_ACCEPT_EULA: "true"
 
   images:
     name: Images (amd64, arm64)
