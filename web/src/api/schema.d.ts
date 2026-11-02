@@ -78,6 +78,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/servers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Servers in the caller's scope (ROLE-003).
+         * @description RCON admin and server admins see connection fields and the state of the credentials; moderators and supporters see name, profile and groups. The password is never returned.
+         */
+        get: operations["listServers"];
+        put?: never;
+        /** Add a game server; RCON admin only (SRV-001). */
+        post: operations["createServer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/servers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        /** A server in the caller's scope; others answer 404 (Design 3.1). */
+        get: operations["getServer"];
+        put?: never;
+        post?: never;
+        /** Delete a server (soft delete); RCON admin only. */
+        delete: operations["deleteServer"];
+        options?: never;
+        head?: never;
+        /** Change a server; a password replaces the stored one; RCON admin only. */
+        patch: operations["updateServer"];
+        trace?: never;
+    };
+    "/server-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Server groups; RCON admin all, server admin those fully in his scope (SRV-003). */
+        get: operations["listServerGroups"];
+        put?: never;
+        /** Add a server group; RCON admin only. */
+        post: operations["createServerGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/server-groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerGroupID"];
+            };
+            cookie?: never;
+        };
+        /** A server group the caller may see. */
+        get: operations["getServerGroup"];
+        put?: never;
+        post?: never;
+        /** Delete a server group (soft delete); RCON admin only. */
+        delete: operations["deleteServerGroup"];
+        options?: never;
+        head?: never;
+        /** Rename a group or replace its servers; RCON admin only. */
+        patch: operations["updateServerGroup"];
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -469,6 +550,62 @@ export interface components {
         UserList: {
             items: components["schemas"]["User"][];
         };
+        Server: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            profile_id?: string;
+            groups: string[];
+            /** @description Admins only. */
+            protocol?: string;
+            /** @description Admins only. */
+            host?: string;
+            /** @description Admins only. */
+            port?: number;
+            /**
+             * @description Admins only. reenter: the credentials were encrypted with another master key and must be entered again (SRV-002).
+             * @enum {string}
+             */
+            credentials?: "ok" | "missing" | "reenter";
+            /** @description Admins only; set with the agents in M3. */
+            agent_id?: string;
+            /** @description Admins only; set with the agents in M3. */
+            container_id?: string;
+            /** @description Admins only; the override of the server or the profile's ports (SRV-005). */
+            game_ports?: components["schemas"]["GamePort"][];
+            game_ports_override?: boolean;
+        };
+        ServerList: {
+            items: components["schemas"]["Server"][];
+        };
+        ServerInput: {
+            name?: string;
+            /** Format: uuid */
+            profile_id?: string;
+            host?: string;
+            port?: number;
+            /**
+             * Format: password
+             * @description RCON password; stored encrypted, never returned.
+             */
+            password?: string;
+            /** @description Overrides the profile's game ports; an empty list returns to them. */
+            game_ports?: components["schemas"]["GamePort"][];
+        };
+        ServerGroup: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            server_ids: string[];
+        };
+        ServerGroupList: {
+            items: components["schemas"]["ServerGroup"][];
+        };
+        ServerGroupInput: {
+            name?: string;
+            server_ids?: string[];
+        };
         ProfileParam: {
             name: string;
             /** @enum {string} */
@@ -816,6 +953,8 @@ export interface components {
         };
     };
     parameters: {
+        ServerID: string;
+        ServerGroupID: string;
         InviteID: string;
         CommandListID: string;
         GroupID: string;
@@ -916,6 +1055,260 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listServers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The servers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    createServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerInput"];
+            };
+        };
+        responses: {
+            /** @description The new server. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Server"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The server. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Server"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerInput"];
+            };
+        };
+        responses: {
+            /** @description The changed server. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Server"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    listServerGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The server groups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerGroupList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    createServerGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerGroupInput"];
+            };
+        };
+        responses: {
+            /** @description The new group. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerGroup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getServerGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerGroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerGroup"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteServerGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerGroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateServerGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerGroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerGroupInput"];
+            };
+        };
+        responses: {
+            /** @description The changed group. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerGroup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
         };
     };
     listUsers: {
