@@ -44,6 +44,14 @@ type Prober interface {
 	Alive() error
 }
 
+// Pinger is implemented by connections that can send a probe the server
+// must answer; the connection manager uses it while idle, because a
+// half-open connection after a host crash or network loss gives no sign
+// to a read (SRV-004, Design 3.8).
+type Pinger interface {
+	Ping(ctx context.Context) error
+}
+
 // Registry maps protocol names of the game profiles to adapters.
 type Registry map[string]Adapter
 

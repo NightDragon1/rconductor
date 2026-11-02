@@ -23,7 +23,8 @@ import (
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
-// Timeout bounds the wait for a game server's answer.
+// Timeout bounds a command from its acceptance to the answer, including
+// the wait in the server's queue (Design 3.8).
 const Timeout = 10 * time.Second
 
 // MaxStoredResponse bounds the answer kept in the audit log, which is
@@ -87,6 +88,8 @@ var (
 	ErrUnavailable = errors.New("no rcon connection to the game server")
 	// ErrTimeout means the game server did not answer in time.
 	ErrTimeout = errors.New("the game server did not answer in time")
+	// ErrBusy means the server's queue is full (Design 3.5 busy).
+	ErrBusy = errors.New("too many commands waiting for this game server")
 )
 
 // Result is a sent command with its answer, marked with its request ID
@@ -121,6 +124,8 @@ type Service struct {
 	log     *slog.Logger
 	limiter *limiter
 	now     func() time.Time
+	// timeout overrides Timeout, for tests.
+	timeout time.Duration
 	// Publish, if set, receives every finished or refused command for
 	// the live console (event bus).
 	Publish func(serverID string, e Entry)
@@ -128,7 +133,7 @@ type Service struct {
 
 // NewService returns the command pipeline.
 func NewService(st *store.Store, c *perm.Checker, exec Executor, log *slog.Logger) *Service {
-	return &Service{st: st, perm: c, exec: exec, log: log, limiter: newLimiter(), now: time.Now}
+	return &Service{st: st, perm: c, exec: exec, log: log, limiter: newLimiter(), now: time.Now, timeout: Timeout}
 }
 
 type payload struct {
@@ -235,6 +240,8 @@ func (s *Service) publish(serverID string, e Entry) {
 // Send runs one command through the pipeline of Design 3.3 and returns the
 // game server's answer.
 func (s *Service) Send(ctx context.Context, req users.Request, serverID, input string) (Result, error) {
+	// The time limit counts from the acceptance, queue included.
+	deadline := time.Now().Add(s.timeout)
 	// 1 and 2: session and role are checked by the web layer; scope here.
 	rights, err := s.perm.For(ctx, req.Actor.ID)
 	if err != nil {
@@ -280,7 +287,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 		return Result{}, err
 	}
 	// 11: one connection, one queue per server.
-	ectx, cancel := context.WithTimeout(ctx, Timeout)
+	ectx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	s.log.Info("command sent", append(s.attrs(req, serverID), logging.Event(logging.CmdSent))...)
 	start := s.now()
@@ -296,6 +303,10 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 		outcome, reason = ResultTimeout, ReasonTimeout
 		s.log.Warn("command timed out", append(s.attrs(req, serverID), logging.Event(logging.CmdTimeout))...)
 		err = ErrTimeout
+	case errors.Is(err, connmgr.ErrQueueFull):
+		outcome, reason = ResultError, "busy"
+		s.log.Warn("command queue full", s.attrs(req, serverID)...)
+		err = ErrBusy
 	case errors.Is(err, connmgr.ErrUnavailable), errors.Is(err, connmgr.ErrUnknownServer):
 		outcome, reason = ResultError, "server_unavailable"
 		err = ErrUnavailable

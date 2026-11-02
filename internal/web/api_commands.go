@@ -30,6 +30,8 @@ func commandError(err error) error {
 		}
 	case errors.Is(err, commands.ErrUnavailable):
 		return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeServerUnavailable}
+	case errors.Is(err, commands.ErrBusy):
+		return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeBusy, retryAfter: 1}
 	case errors.Is(err, commands.ErrTimeout):
 		return &problem{status: http.StatusGatewayTimeout, reason: api.ReasonCodeTimeout, detail: err.Error()}
 	}

@@ -56,8 +56,14 @@ type Source interface {
 
 // Options tune the manager; zero values take the defaults.
 type Options struct {
-	// ProbeInterval is how often an idle connection is checked.
+	// ProbeInterval is how often an idle connection is checked with a
+	// read that sends nothing.
 	ProbeInterval time.Duration
+	// IdleProbe is the idle time after which a probe packet is sent; it
+	// finds half-open connections a read cannot see (Design 3.8).
+	IdleProbe time.Duration
+	// ProbeTimeout bounds the wait for the probe's answer.
+	ProbeTimeout time.Duration
 	// MaxBackoff caps the wait between reconnect attempts; SRV-004 asks
 	// for a change to be visible within 10 s.
 	MaxBackoff time.Duration
@@ -72,6 +78,12 @@ type Options struct {
 func (o *Options) defaults() {
 	if o.ProbeInterval <= 0 {
 		o.ProbeInterval = 2 * time.Second
+	}
+	if o.IdleProbe <= 0 {
+		o.IdleProbe = 30 * time.Second
+	}
+	if o.ProbeTimeout <= 0 {
+		o.ProbeTimeout = 5 * time.Second
 	}
 	if o.MaxBackoff <= 0 {
 		o.MaxBackoff = 5 * time.Second
@@ -394,6 +406,7 @@ func (w *worker) run(ctx context.Context) {
 func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 	probe := time.NewTicker(w.m.opts.ProbeInterval)
 	defer probe.Stop()
+	used := time.Now() // last traffic with an answer
 	for {
 		select {
 		case <-ctx.Done():
@@ -426,11 +439,21 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 			if err != nil && !errors.Is(err, rcon.ErrTooLarge) {
 				return "connection_error"
 			}
+			used = time.Now()
 		case <-probe.C:
 			if p, ok := conn.(rcon.Prober); ok {
 				if err := p.Alive(); err != nil {
 					return "closed_by_server"
 				}
+			}
+			if p, ok := conn.(rcon.Pinger); ok && time.Since(used) >= w.m.opts.IdleProbe {
+				pctx, cancel := context.WithTimeout(ctx, w.m.opts.ProbeTimeout)
+				err := p.Ping(pctx)
+				cancel()
+				if err != nil {
+					return "no_answer"
+				}
+				used = time.Now()
 			}
 		}
 	}

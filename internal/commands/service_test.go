@@ -86,6 +86,8 @@ func newWorld(t *testing.T) *world {
 		switch cmd {
 		case "big":
 			return strings.Repeat("x", MaxStoredResponse+100)
+		case "slow 1", "slow 2":
+			time.Sleep(250 * time.Millisecond)
 		case "html":
 			return "<b>hi</b><script>alert(1)</script>\x1b[31m\r\nline\x00 2 \u00a7c\xff"
 		}
@@ -437,5 +439,59 @@ func TestAuditAppendOnly(t *testing.T) {
 	_ = w.st.DB.QueryRowContext(context.Background(), `SELECT count(*) FROM audit_log WHERE kind = 'command' AND (id = ? OR target_id = ?)`, req.RequestID, req.RequestID).Scan(&n)
 	if n != 2 {
 		t.Errorf("entries for one command = %d, want cmd.sent and cmd.result", n)
+	}
+}
+
+// TestTimeoutIncludesQueue covers Design 3.8: the time limit runs from the
+// acceptance, the wait in the queue included; a command whose time ran out
+// while waiting is never sent.
+func TestTimeoutIncludesQueue(t *testing.T) {
+	w := newWorld(t)
+	w.svc.timeout = 100 * time.Millisecond
+	// A command with more time holds the connection for 250 ms.
+	blocker := NewService(w.st, w.c, w.svc.exec, w.svc.log)
+	done := make(chan error, 1)
+	go func() { _, err := blocker.Send(context.Background(), w.as("admin"), w.server, "slow 1"); done <- err }()
+	for !slices.Contains(w.gameReceived(), "slow 1") {
+		time.Sleep(5 * time.Millisecond)
+	}
+	start := time.Now()
+	if _, err := w.send("admin", "late"); !errors.Is(err, ErrTimeout) {
+		t.Errorf("queued command: %v, want timeout", err)
+	}
+	if d := time.Since(start); d > 200*time.Millisecond {
+		t.Errorf("timeout after %v, want 100 ms from the acceptance", d)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("blocker: %v", err)
+	}
+	if _, err := w.send("admin", "next"); err != nil {
+		t.Errorf("after the timeout: %v", err)
+	}
+	if slices.Contains(w.gameReceived(), "late") {
+		t.Error("a command whose time ran out in the queue reached the game server")
+	}
+}
+
+type fullQueue struct{}
+
+func (fullQueue) Execute(context.Context, string, string) (string, error) {
+	return "", connmgr.ErrQueueFull
+}
+
+// TestQueueFullIsBusy: a full queue answers busy at once (Design 3.5) and
+// the audit records the error.
+func TestQueueFullIsBusy(t *testing.T) {
+	w := newWorld(t)
+	svc := NewService(w.st, w.c, fullQueue{}, w.svc.log)
+	req := w.as("admin")
+	if _, err := svc.Send(context.Background(), req, w.server, "list"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("err = %v, want ErrBusy", err)
+	}
+	var result, payload string
+	if err := w.st.DB.QueryRowContext(context.Background(),
+		`SELECT result, reason_code FROM audit_log WHERE action = 'cmd.result' AND target_id = ?`, req.RequestID,
+	).Scan(&result, &payload); err != nil || result != "error" || payload != "busy" {
+		t.Errorf("cmd.result = %s %s %v", result, payload, err)
 	}
 }

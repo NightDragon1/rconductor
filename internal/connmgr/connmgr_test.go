@@ -95,6 +95,7 @@ func newFixture(t *testing.T, password string, handler func(string) string) *fix
 	f := &fixture{srv: srv, src: src, logs: logs}
 	m := New(rcon.Registry{"source-rcon": source.Adapter{}}, src, log, Options{
 		ProbeInterval: 50 * time.Millisecond, MaxBackoff: 200 * time.Millisecond,
+		IdleProbe: 100 * time.Millisecond, ProbeTimeout: 300 * time.Millisecond,
 		OnStatus: func(_ string, s Status) {
 			f.mu.Lock()
 			f.changes = append(f.changes, s)
@@ -256,5 +257,26 @@ func TestCommandTimeoutKeepsConnection(t *testing.T) {
 	}
 	if n := f.srv.Connections(); n != 1 {
 		t.Errorf("connections = %d", n)
+	}
+}
+
+// TestHalfOpenConnection covers the idle probe of Design 3.8 for SRV-004:
+// a game server that goes silent without closing the connection, as after
+// a host crash, shows offline once the probe gets no answer; the panel
+// reconnects when the server is back.
+func TestHalfOpenConnection(t *testing.T) {
+	f := newFixture(t, "secret", nil)
+	f.waitStatus(t, Connected)
+	f.srv.Freeze()
+	if d := f.waitStatus(t, Offline); d > 2*time.Second {
+		t.Errorf("offline after %v", d)
+	}
+	if !strings.Contains(f.logs.String(), `"event":"rcon.disconnected","reason":"no_answer"`) {
+		t.Errorf("rcon.disconnected with no_answer missing:\n%s", f.logs.String())
+	}
+	f.srv.Thaw()
+	f.waitStatus(t, Connected)
+	if got, err := f.m.Execute(context.Background(), "s1", "after"); err != nil || got != "after" {
+		t.Errorf("after the outage: %q %v", got, err)
 	}
 }

@@ -133,7 +133,7 @@ export interface paths {
         put?: never;
         /**
          * Send a command over the server's one RCON connection (Design 3.3).
-         * @description RCON admin and server admin may send any command (CMD-002); moderators and supporters only commands of the list that applies to them on this server, never wrappers (CMD-004, CMD-005). The answer comes synchronously and as event to the console; the request ID is also the ID of the audit entry (CMD-007).
+         * @description RCON admin and server admin may send any command (CMD-002); moderators and supporters only commands of the list that applies to them on this server, never wrappers (CMD-004, CMD-005). The answer comes synchronously and as event to the console; the request ID is also the ID of the first audit entry (CMD-007). The command has 10 s from its acceptance, the wait in the server's queue included, then 504 timeout; a full queue answers 503 busy at once, no RCON connection 503 server_unavailable (Design 3.8).
          */
         post: operations["sendCommand"];
         delete?: never;
@@ -1051,7 +1051,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description The panel is busy (for example all password hashing slots are in use); retry after Retry-After seconds. */
+        /** @description The panel is busy (for example all password hashing slots are in use or the game server's command queue is full); retry after Retry-After seconds. */
         Busy: {
             headers: {
                 "Retry-After"?: number;

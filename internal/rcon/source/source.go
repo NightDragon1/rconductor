@@ -50,6 +50,11 @@ type Adapter struct{}
 
 var _ rcon.Adapter = Adapter{}
 
+var (
+	_ rcon.Prober = (*Conn)(nil)
+	_ rcon.Pinger = (*Conn)(nil)
+)
+
 // Conn is an authenticated Source RCON connection.
 type Conn struct {
 	mu     sync.Mutex
@@ -58,9 +63,13 @@ type Conn struct {
 	nextID int32
 }
 
+// KeepAlive is the TCP keepalive of every connection (Design 3.8): the
+// kernel notices a dead peer after about 19 s without traffic.
+var KeepAlive = net.KeepAliveConfig{Enable: true, Idle: 10 * time.Second, Interval: 3 * time.Second, Count: 3}
+
 // Dial connects and authenticates.
 func (Adapter) Dial(ctx context.Context, addr string, password logging.Secret) (rcon.Conn, error) {
-	var d net.Dialer
+	d := net.Dialer{KeepAliveConfig: KeepAlive}
 	nc, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, err
@@ -155,6 +164,27 @@ func (c *Conn) Execute(ctx context.Context, command string) (string, error) {
 		default:
 			// Late answers to earlier markers (Source servers send two)
 			// or unrelated packets are dropped.
+		}
+	}
+}
+
+// Ping sends an empty packet, as the end marker, and waits for its answer
+// until ctx ends; other packets are dropped (Design 3.8).
+func (c *Conn) Ping(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.deadline(ctx)
+	id := c.id()
+	if err := c.write(id, typeResponseValue, ""); err != nil {
+		return err
+	}
+	for {
+		pid, _, _, err := c.read()
+		if err != nil {
+			return err
+		}
+		if pid == id {
+			return nil
 		}
 	}
 }
