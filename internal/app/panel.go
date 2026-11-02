@@ -158,7 +158,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		},
 	})
 	runtime = cache.New(st, conns, logs.Module("cache"))
-	hub = eventbus.NewHub(checker, runtime, authSvc, logs.Module("ws"), eventbus.DefaultLimits)
+	hub = eventbus.NewHub(checker, runtime, authSvc, logs.Module("ws"), eventbus.SettingsLimits(st))
 	authSvc.OnSessionsEnded(hub.CloseSessions)
 	serverSvc.SetConnections(conns)
 	if err := conns.Start(ctx); err != nil {

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -24,16 +25,37 @@ import (
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/store"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
-// Limits of the WebSocket per session (SEC-008, revision 2.2 candidate 10).
+// Limits of the WebSocket (SEC-008, revision 2.2 candidate 10): sockets
+// per session and subscriptions per socket.
 type Limits struct {
-	ConnsPerSession int
-	SubsPerSession  int
+	SocketsPerSession int
+	SubsPerSocket     int
 }
 
-// DefaultLimits are 4 connections and 32 subscriptions per session.
-var DefaultLimits = Limits{ConnsPerSession: 4, SubsPerSession: 32}
+// LimitsFunc returns the limits in force; they are read again for every
+// new socket and subscription, so a changed setting applies at once.
+type LimitsFunc func(ctx context.Context) Limits
+
+// SettingsLimits reads the limits from the global settings
+// ws.max_sockets_per_session and ws.max_subscriptions_per_socket, which
+// only the RCON admin changes.
+func SettingsLimits(st *store.Store) LimitsFunc {
+	return func(ctx context.Context) Limits {
+		l := Limits{SocketsPerSession: users.DefaultWSMaxSockets, SubsPerSocket: users.DefaultWSMaxSubs}
+		var n int
+		if err := st.GlobalSetting(ctx, users.SettingWSMaxSockets, &n); err == nil && n > 0 {
+			l.SocketsPerSession = n
+		}
+		if err := st.GlobalSetting(ctx, users.SettingWSMaxSubs, &n); err == nil && n > 0 {
+			l.SubsPerSocket = n
+		}
+		return l
+	}
+}
 
 // Timing and sizes of a connection.
 const (
@@ -50,6 +72,7 @@ const (
 	ReasonInvalid     = "invalid"
 	ReasonLimit       = "limit"
 	ReasonRevoked     = "revoked"
+	ReasonReplaced    = "replaced"
 )
 
 // Viewer is told while someone views a server, so that its runtime data
@@ -78,6 +101,7 @@ type subscription struct {
 }
 
 type client struct {
+	opened    time.Time
 	conn      *websocket.Conn
 	p         auth.Principal
 	requestID string
@@ -92,7 +116,7 @@ type Hub struct {
 	viewer   Viewer
 	sessions Sessions
 	log      *slog.Logger
-	limits   Limits
+	limits   LimitsFunc
 	ping     time.Duration
 
 	mu        sync.Mutex
@@ -102,7 +126,7 @@ type Hub struct {
 
 // NewHub returns the event bus; it checks subscriptions again after every
 // change of rights.
-func NewHub(c *perm.Checker, viewer Viewer, sessions Sessions, log *slog.Logger, limits Limits) *Hub {
+func NewHub(c *perm.Checker, viewer Viewer, sessions Sessions, log *slog.Logger, limits LimitsFunc) *Hub {
 	h := &Hub{
 		perm: c, viewer: viewer, sessions: sessions, log: log, limits: limits, ping: PingInterval,
 		clients: map[*client]bool{}, bySession: map[string]map[*client]bool{},
@@ -138,15 +162,25 @@ func (c *client) send(m message) bool {
 func (h *Hub) Serve(ctx context.Context, conn *websocket.Conn, p auth.Principal, requestID string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c := &client{conn: conn, p: p, requestID: requestID, out: make(chan []byte, sendBuffer), cancel: cancel, subs: map[string]*subscription{}}
+	c := &client{opened: time.Now(), conn: conn, p: p, requestID: requestID, out: make(chan []byte, sendBuffer), cancel: cancel, subs: map[string]*subscription{}}
 	conn.SetReadLimit(maxMessage)
+	limit := h.limits(ctx).SocketsPerSession
 
 	h.mu.Lock()
-	if len(h.bySession[p.SessionHash]) >= h.limits.ConnsPerSession {
-		h.mu.Unlock()
-		h.log.Info("websocket refused", append(h.attrs(c), logging.Event(logging.WSSubscribeDenied), slog.String(logging.KeyReason, ReasonLimit))...)
-		_ = conn.Close(websocket.StatusPolicyViolation, "too many connections")
-		return
+	// Over the limit the oldest sockets of the session give way to the
+	// new one, so a reloaded browser tab never locks itself out.
+	var replaced []*client
+	for len(h.bySession[p.SessionHash])-len(replaced) >= limit {
+		var oldest *client
+		for other := range h.bySession[p.SessionHash] {
+			if !slices.Contains(replaced, other) && (oldest == nil || other.opened.Before(oldest.opened)) {
+				oldest = other
+			}
+		}
+		if oldest == nil {
+			break
+		}
+		replaced = append(replaced, oldest)
 	}
 	h.clients[c] = true
 	if h.bySession[p.SessionHash] == nil {
@@ -155,6 +189,10 @@ func (h *Hub) Serve(ctx context.Context, conn *websocket.Conn, p auth.Principal,
 	h.bySession[p.SessionHash][c] = true
 	h.mu.Unlock()
 	defer h.remove(c)
+	for _, old := range replaced {
+		h.log.Info("websocket replaced by a newer one", append(h.attrs(old), slog.String(logging.KeyReason, ReasonReplaced))...)
+		h.closeWith(old, ReasonReplaced)
+	}
 
 	go h.writeLoop(ctx, c)
 	go h.pingLoop(ctx, c)
@@ -291,17 +329,15 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 		// that ends it always finds the release.
 		s.release = h.viewer.Watch(ctx, server)
 	}
+	limit := h.limits(ctx).SubsPerSocket
 	h.mu.Lock()
 	_, exists := c.subs[topic]
-	n := 0
-	for other := range h.bySession[c.p.SessionHash] {
-		n += len(other.subs)
-	}
-	if !exists && n < h.limits.SubsPerSession {
+	n := len(c.subs)
+	if !exists && n < limit {
 		c.subs[topic] = s
 	}
 	h.mu.Unlock()
-	if exists || n >= h.limits.SubsPerSession {
+	if exists || n >= limit {
 		if s.release != nil {
 			s.release()
 		}
@@ -359,6 +395,17 @@ func (h *Hub) Recheck() {
 			c.send(message{Type: "error", Topic: s.topic, Reason: ReasonRevoked})
 		}
 	}
+}
+
+// closeWith sends an error with reason and closes the socket; the message
+// is written before the close frame.
+func (h *Hub) closeWith(c *client, reason string) {
+	b, _ := json.Marshal(message{Type: "error", Reason: reason})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = c.conn.Write(ctx, websocket.MessageText, b)
+	_ = c.conn.Close(websocket.StatusPolicyViolation, reason)
+	c.cancel()
 }
 
 // CloseSessions closes the sockets of ended sessions at once (AUTH-006).

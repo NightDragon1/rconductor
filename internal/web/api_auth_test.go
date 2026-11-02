@@ -104,7 +104,10 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hub := events.NewHub(checker, nil, svc, log, events.Limits{ConnsPerSession: 2, SubsPerSession: 3})
+	if err := users.EnsureAuditDefaults(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	hub := events.NewHub(checker, nil, svc, log, events.SettingsLimits(st))
 	svc.OnSessionsEnded(hub.CloseSessions)
 	h := NewHandler(Options{
 		Log: log, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies, Hub: hub,

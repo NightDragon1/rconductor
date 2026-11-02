@@ -264,36 +264,112 @@ func TestSessionEndClosesSocket(t *testing.T) {
 	}
 }
 
-// TestWebSocketLimits covers SEC-008: over the subscription limit the
-// session gets an error instead of another subscription; over the
-// connection limit the socket is closed.
-func TestWebSocketLimits(t *testing.T) {
+func (w *wsFixture) setLimits(t *testing.T, admin *http.Cookie, body string) int {
+	t.Helper()
+	return w.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: "http://panel.lan", body: body}).Code
+}
+
+// TestWebSocketLimitSettings: only the RCON admin changes the limits,
+// within their ranges (SEC-008, revision 2.2 candidate 10).
+func TestWebSocketLimitSettings(t *testing.T) {
 	w := newWSFixture(t)
 	admin := w.login(t, "Boss")
+	rec := w.do(t, call{method: http.MethodGet, path: "/api/v1/settings", cookies: []*http.Cookie{admin}})
+	if !strings.Contains(rec.Body.String(), `"ws.max_sockets_per_session":20`) || !strings.Contains(rec.Body.String(), `"ws.max_subscriptions_per_socket":16`) {
+		t.Errorf("defaults = %s", rec.Body.String())
+	}
+	for body, want := range map[string]int{
+		`{"ws.max_sockets_per_session":0}`:       http.StatusUnprocessableEntity,
+		`{"ws.max_sockets_per_session":101}`:     http.StatusUnprocessableEntity,
+		`{"ws.max_subscriptions_per_socket":65}`: http.StatusUnprocessableEntity,
+		`{"ws.max_subscriptions_per_socket":64}`: http.StatusOK,
+		`{"ws.max_sockets_per_session":100}`:     http.StatusOK,
+	} {
+		if got := w.setLimits(t, admin, body); got != want {
+			t.Errorf("%s = %d, want %d", body, got, want)
+		}
+	}
+	w.grantModerator(t)
+	mod := w.login(t, "Mod")
+	if got := w.setLimits(t, mod, `{"ws.max_sockets_per_session":1}`); got != http.StatusForbidden {
+		t.Errorf("moderator changes the limit: %d", got)
+	}
+}
+
+// TestSubscriptionLimitPerSocket: over the limit a socket gets error limit
+// instead of another subscription; another socket of the same session
+// has its own allowance (SEC-008).
+func TestSubscriptionLimitPerSocket(t *testing.T) {
+	w := newWSFixture(t)
+	admin := w.login(t, "Boss")
+	if got := w.setLimits(t, admin, `{"ws.max_subscriptions_per_socket":2}`); got != http.StatusOK {
+		t.Fatalf("set limit = %d", got)
+	}
 	c, _, err := w.dial(t, admin, w.origin())
 	if err != nil {
 		t.Fatal(err)
 	}
-	topics := []string{"servers.overview", "server." + w.server + ".status", "server." + w.server + ".console"}
-	for _, tp := range topics {
+	for _, tp := range []string{"servers.overview", "server." + w.server + ".status"} {
 		send(t, c, "subscribe", tp)
 		w.subscribed(t, tp, 1)
+	}
+	console := "server." + w.server + ".console"
+	send(t, c, "subscribe", console)
+	if m, err := next(t, c, 5*time.Second); err != nil || m.Type != "error" || m.Reason != "limit" || m.Topic != console {
+		t.Errorf("third subscription on one socket: %+v %v", m, err)
+	}
+	if !strings.Contains(w.logs.String(), `"reason":"limit"`) {
+		t.Error("ws.subscribe.denied with limit missing")
 	}
 	c2, _, err := w.dial(t, admin, w.origin())
 	if err != nil {
 		t.Fatal(err)
 	}
-	send(t, c2, "subscribe", "servers.overview")
-	if m, err := next(t, c2, 5*time.Second); err != nil || m.Type != "error" || m.Reason != "limit" {
-		t.Errorf("fourth subscription of the session: %+v %v", m, err)
+	send(t, c2, "subscribe", console)
+	w.subscribed(t, console, 2) // the refusal above names the topic once
+	w.hub.PublishConsole(w.server, commands.Entry{RequestID: "r", UserID: w.adminID, Command: "list", Result: "ok"})
+	if m, err := next(t, c2, 5*time.Second); err != nil || m.Type != "event" {
+		t.Errorf("second socket: %+v %v", m, err)
 	}
-	if !strings.Contains(w.logs.String(), `"reason":"limit"`) {
-		t.Error("ws.subscribe.denied with limit missing")
+}
+
+// TestOldestSocketReplaced: over the socket limit the oldest socket of the
+// session closes with error replaced and the new one works.
+func TestOldestSocketReplaced(t *testing.T) {
+	w := newWSFixture(t)
+	admin := w.login(t, "Boss")
+	if got := w.setLimits(t, admin, `{"ws.max_sockets_per_session":2}`); got != http.StatusOK {
+		t.Fatalf("set limit = %d", got)
 	}
-	c3, _, err := w.dial(t, admin, w.origin())
-	if err == nil {
-		if _, err := next(t, c3, 5*time.Second); websocket.CloseStatus(err) != websocket.StatusPolicyViolation {
-			t.Errorf("third socket: %v", err)
+	first, _, err := w.dial(t, admin, w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	send(t, first, "subscribe", "servers.overview")
+	w.subscribed(t, "servers.overview", 1)
+	second, _, err := w.dial(t, admin, w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	third, _, err := w.dial(t, admin, w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := next(t, first, 5*time.Second)
+	if err != nil || m.Type != "error" || m.Reason != "replaced" {
+		t.Fatalf("oldest socket: %+v %v", m, err)
+	}
+	if _, err := next(t, first, 5*time.Second); websocket.CloseStatus(err) != websocket.StatusPolicyViolation {
+		t.Errorf("oldest socket not closed: %v", err)
+	}
+	for _, c := range []*websocket.Conn{second, third} {
+		send(t, c, "subscribe", "server."+w.server+".status")
+	}
+	w.subscribed(t, "server."+w.server+".status", 2)
+	w.hub.PublishStatus(w.server, connmgr.Offline, time.Now())
+	for name, c := range map[string]*websocket.Conn{"second": second, "third": third} {
+		if m, err := next(t, c, 5*time.Second); err != nil || m.Type != "event" {
+			t.Errorf("%s socket after the replacement: %+v %v", name, m, err)
 		}
 	}
 }

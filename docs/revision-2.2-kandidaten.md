@@ -81,6 +81,13 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 ## 10. WebSocket: Grenzwerte, Abo-Bestätigung, Themen bis M3
 
 - **Fundstelle:** 01-gesamtkonzept.md, SEC-008 (Höchstzahl an Verbindungen und Abos je Session, ohne Werte); 03-design.md, Kapitel 2.3 (Nachrichten subscribe, unsubscribe, event, error; Themen; Ping 30 s). Umsetzung: internal/events, internal/web (M2 Schritt 10).
-- **Umsetzung (M2):** Höchstens 4 WebSockets und 32 Abos je Session; ein weiteres Abo erhält error mit reason limit (ws.subscribe.denied), ein weiterer Socket wird mit Policy Violation geschlossen. Nachrichten des Browsers höchstens 4 KiB; ein Browser, der 64 Nachrichten nicht abholt, wird getrennt. Ping alle 30 s, ohne Pong binnen 30 s gilt die Verbindung als getrennt; bei jedem Ping wird geprüft, ob die Session noch gilt. Ein erfolgreiches Abo wird nicht bestätigt. server.{id}.metrics und server.{id}.logs antworten bis M3 mit error unsupported.
-- **Vorschlag:** Grenzwerte und Verhalten in Design 2.3 aufnehmen; eine Bestätigungsnachricht subscribed ergänzen, damit die Oberfläche ein Abo von einem noch laufenden unterscheiden kann.
+- **Umsetzung (M2):** Höchstens 20 WebSockets je Session (Setting ws.max\_sockets\_per\_session, Bereich 1–100) und 16 Abos je Socket (Setting ws.max\_subscriptions\_per\_socket, Bereich 1–64); beide ändert nur der RCON-Admin über /settings. Ein weiteres Abo auf demselben Socket erhält error mit reason limit (ws.subscribe.denied). Öffnet eine Session einen Socket über der Grenze, wird ihr ältester Socket mit error reason replaced und Policy Violation geschlossen; der neue Socket bleibt. Nachrichten des Browsers höchstens 4 KiB; ein Browser, der 64 Nachrichten nicht abholt, wird getrennt. Ping alle 30 s, ohne Pong binnen 30 s gilt die Verbindung als getrennt; bei jedem Ping wird geprüft, ob die Session noch gilt. Ein erfolgreiches Abo wird nicht bestätigt. server.{id}.metrics und server.{id}.logs antworten bis M3 mit error unsupported.
+- **Vorschlag:** Grenzwerte und Verhalten in Design 2.3 aufnehmen; in Design 5.6 zwei Zeilen ergänzen:
+
+  | Schlüssel | Standard | Zweck |
+  | --- | --- | --- |
+  | ws.max\_sockets\_per\_session | 20 (1–100) | WebSockets je Session (SEC-008); darüber wird der älteste Socket mit error replaced geschlossen |
+  | ws.max\_subscriptions\_per\_socket | 16 (1–64) | Abos je WebSocket (SEC-008); darüber error limit |
+
+  Außerdem eine Bestätigungsnachricht subscribed ergänzen, damit die Oberfläche ein Abo von einem noch laufenden unterscheiden kann.
 - **Begründung:** SEC-008 nennt keine Werte; ohne Bestätigung kann die Oberfläche nach einem Wiederverbinden nicht sicher wissen, ab wann Ereignisse ankommen.

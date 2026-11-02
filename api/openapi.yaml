@@ -416,8 +416,10 @@ paths:
         (server.{id}.metrics and .logs follow with the agent). Rights are
         checked on subscribe and after every change; withdrawn
         subscriptions end with reason revoked. Ended sessions close the
-        socket. At most 4 sockets and 32 subscriptions per session
-        (SEC-008). Ping every 30 s.
+        socket. Limits (SEC-008): ws.max_sockets_per_session sockets per
+        session (default 20); a socket over the limit closes the oldest one
+        with reason replaced. ws.max_subscriptions_per_socket subscriptions
+        per socket (default 16); more get reason limit. Ping every 30 s.
       tags: [live]
       responses:
         "101":
