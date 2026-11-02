@@ -1,6 +1,6 @@
 # Arbeitspakete R1
 
-Dokumentversion 2.3, zur Freigabe vorgelegt; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
+Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
 
 ## 1. Ablauf
 

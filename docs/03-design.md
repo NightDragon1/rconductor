@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.3, zur Freigabe vorgelegt; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -41,9 +41,9 @@ Der Agent speichert seinen Schlüssel und den gepinnten Panel-Schlüssel in sein
 
 ### 1.3 Verbindungsaufbau
 
-1. TLS-Handshake; beide Seiten prüfen den gepinnten Schlüssel der Gegenseite.
+1. TLS-Handshake. Der Agent prüft den gepinnten Panel-Schlüssel (bei Weg B ohne Pin beim ersten Kontakt). Das Panel lässt im Handshake jeden Ed25519-Schlüssel eines Agents zu, auch unbekannte, weil ein Agent vor der Kopplung (Weg A oder B) noch nicht bekannt ist; die Entscheidung über den Agent fällt im hello.
 2. Agent sendet hello mit Agent-ID, Release-Version, Backend (docker) und Fähigkeitsliste.
-3. Panel antwortet mit welcome samt Agent-ID oder reject samt Grund (version, revoked, unknown, pending, invalid). Ein fremder Schlüssel scheitert schon beim TLS-Handshake; dann gibt es kein reject, beide Seiten loggen agent.rejected mit pin\_mismatch.
+3. Panel antwortet mit welcome samt Agent-ID oder reject samt Grund (version, revoked, unknown, pending, invalid). pin\_mismatch gibt es nur, wenn ein Agent eine bekannte Agent-ID mit einem fremden Schlüssel nennt: Das Panel lehnt mit reject unknown ab und loggt agent.rejected mit pin\_mismatch. Zeigt das Panel einen anderen als den gepinnten Schlüssel, bricht der Agent den TLS-Handshake ab; dann gibt es kein reject, beide Seiten loggen agent.rejected mit pin\_mismatch.
 4. Agent sendet einen Snapshot aller freigegebenen Container.
 5. Danach laufen Ereignisse, Messwerte und Aufträge über dieselbe Verbindung.
 
@@ -85,7 +85,8 @@ Grenzen (SEC-007):
 
 | Grenze | Wert |
 | --- | --- |
-| Nachricht vom Agent | höchstens 1 MiB; darüber trennt das Panel die Verbindung |
+| Nachricht vom Agent | bis zum welcome höchstens 16 KiB, danach höchstens 1 MiB; darüber trennt das Panel die Verbindung (agent.limit mit reason message\_size) |
+| hello | binnen 10 s nach dem TLS-Handshake, sonst trennt das Panel die Verbindung (agent.disconnected mit reason timeout) |
 | Auftrag vom Panel | höchstens 64 KiB |
 | log.lines | höchstens 500 Zeilen und 512 KiB Nutzdaten je Nachricht, sonst gekürzt mit truncated; je Zeile höchstens 8 KiB |
 | Verbindungsaufbau je Quelladresse | 10 je Minute, 5 am Stück |

@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.3, Stand 02.11.2026, Status zur Freigabe vorgelegt; Änderungen gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.3, Stand 03.11.2026, Status freigegeben; Änderungen gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -418,7 +418,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 2.0 | 01.11.2026 | Freigabe durch Rob; Basis für R1. Änderungen ab jetzt nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.1 | 01.11.2026 | Freigabe durch Rob: Erkenntnisse aus M0 und M1 eingearbeitet (Kapitel 10); Revision 2 für NFR-010; AUTH-010, AUTH-011, SEC-013 und D-043 bis D-046 neu. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.2 | 02.11.2026 | Freigabe durch Rob: Erkenntnisse aus M2 eingearbeitet (Kapitel 11); Revision 2 für SEC-006, SEC-008 und SRV-001; Design 3.8 (RCON-Verbindung) neu; Einstellungen profiles.poll\_interval, ws.max\_sockets\_per\_session, ws.max\_subscriptions\_per\_socket; Grund-Code timeout. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
-| 2.3 | 02.11.2026 | Zur Freigabe vorgelegt: Erkenntnisse aus M3 eingearbeitet (Kapitel 12); Design 1.6 mit den Grenzen von SEC-007, Containername statt Container-ID, Fremdschlüssel servers.agent\_id, Einstellung agents.fingerprint\_pairing, Ereigniscode agent.disconnected, Grund-Codes agent\_unavailable und action\_failed |
+| 2.3 | 03.11.2026 | Freigabe durch Rob: Erkenntnisse aus M3 eingearbeitet (Kapitel 12); Design 1.6 mit den Grenzen von SEC-007, Containername statt Container-ID, Fremdschlüssel servers.agent\_id, Einstellung agents.fingerprint\_pairing, Ereigniscode agent.disconnected, Grund-Codes agent\_unavailable und action\_failed, Grenzen bis zum welcome. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 
 ## 10. Änderungen in Version 2.1
 
@@ -478,7 +478,7 @@ Eingearbeitet aus den Kandidaten nach M2 (docs/revision-2.2-kandidaten.md, Nr. 1
 
 ## 12. Änderungen in Version 2.3
 
-Eingearbeitet aus den Kandidaten von M3 (docs/revision-2.3-kandidaten.md, Nr. 1 bis 12, Nummern wie dort).
+Eingearbeitet aus den Kandidaten von M3 (docs/revision-2.3-kandidaten.md, Nr. 1 bis 12, Nummern wie dort); Nr. 13 aus dem Review.
 
 | Nr. | Änderung | Fundstelle in 2.3 |
 | --- | --- | --- |
@@ -494,4 +494,5 @@ Eingearbeitet aus den Kandidaten von M3 (docs/revision-2.3-kandidaten.md, Nr. 1 
 | 10 | Fremdschlüssel servers.agent\_id mit ON DELETE SET NULL; Widerruf löst Server vom Agent | Design 1.7, 4.2 |
 | 11 | Socket-Proxy: ALLOW\_RESTARTS erlaubt auch kill (Restrisiko) | Sicherheit T-022 |
 | 12 | WebSocket-Themen metrics und logs: Rechte, Startwert, Logs nur bei Abo | Design 2.3 |
+| 13 | TLS-Handshake lässt unbekannte Agent-Schlüssel zu, Entscheidung im hello, pin\_mismatch nur bei bekannter Agent-ID; bis zum welcome höchstens 16 KiB je Nachricht und hello binnen 10 s | Design 1.3, 1.6 |
 
