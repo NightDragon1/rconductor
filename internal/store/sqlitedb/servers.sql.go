@@ -285,6 +285,38 @@ func (q *Queries) ListServers(ctx context.Context) ([]ListServersRow, error) {
 	return items, nil
 }
 
+const listServersByContainer = `-- name: ListServersByContainer :many
+SELECT id FROM servers WHERE agent_id = ? AND container_name = ? AND deleted_at IS NULL
+`
+
+type ListServersByContainerParams struct {
+	AgentID       sql.NullString
+	ContainerName sql.NullString
+}
+
+func (q *Queries) ListServersByContainer(ctx context.Context, arg ListServersByContainerParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listServersByContainer, arg.AgentID, arg.ContainerName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const renameServerGroup = `-- name: RenameServerGroup :exec
 UPDATE server_groups SET name = ?, updated_at = ? WHERE id = ?
 `

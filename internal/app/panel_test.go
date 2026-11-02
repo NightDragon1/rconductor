@@ -70,6 +70,7 @@ func startPanel(t *testing.T, cfg config.Panel, out, console *syncBuffer) (addr 
 	go func() {
 		errc <- RunPanel(ctx, cfg, out, PanelOptions{
 			Ready: func(a net.Addr) { ready <- a }, Console: console, HashParams: &fastHash,
+			AgentReady: func(a net.Addr) { agentAddrs.Store(cfg.SecretsDir, a.String()) },
 		})
 	}()
 	select {
@@ -84,6 +85,9 @@ func startPanel(t *testing.T, cfg config.Panel, out, console *syncBuffer) (addr 
 	}
 	return "", nil
 }
+
+// agentAddrs holds the bound agent port per panel (by secrets directory).
+var agentAddrs sync.Map
 
 var fastHash = password.Params{Time: 1, MemoryKiB: 64, Threads: 1, SaltLen: 16, KeyLen: 32}
 

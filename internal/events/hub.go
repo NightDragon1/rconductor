@@ -73,12 +73,22 @@ const (
 	ReasonLimit       = "limit"
 	ReasonRevoked     = "revoked"
 	ReasonReplaced    = "replaced"
+	ReasonForbidden   = "forbidden"
 )
 
 // Viewer is told while someone views a server, so that its runtime data
 // stays fresh (Overview 4.6); the cache implements it.
 type Viewer interface {
 	Watch(ctx context.Context, serverID string) func()
+}
+
+// AgentViews provides the agent data of a server: the current value for a
+// new subscription, and live logs while someone follows them (UI-009).
+type AgentViews interface {
+	// Current returns the last metrics or log lines of the server.
+	Current(ctx context.Context, serverID, kind string) (any, bool)
+	// FollowLogs keeps the logs of the server streaming until release.
+	FollowLogs(ctx context.Context, serverID string) (release func())
 }
 
 // Sessions tells whether a session may still be used.
@@ -112,17 +122,22 @@ type client struct {
 
 // Hub holds the open sockets.
 type Hub struct {
-	perm     *perm.Checker
-	viewer   Viewer
-	sessions Sessions
-	log      *slog.Logger
-	limits   LimitsFunc
-	ping     time.Duration
+	perm   *perm.Checker
+	viewer Viewer
+	// agentViews serves server.<id>.metrics and .logs; nil until set.
+	agentViews AgentViews
+	sessions   Sessions
+	log        *slog.Logger
+	limits     LimitsFunc
+	ping       time.Duration
 
 	mu        sync.Mutex
 	clients   map[*client]bool
 	bySession map[string]map[*client]bool
 }
+
+// SetAgentViews connects the agent data for the metrics and logs topics.
+func (h *Hub) SetAgentViews(v AgentViews) { h.agentViews = v }
 
 // NewHub returns the event bus; it checks subscriptions again after every
 // change of rights.
@@ -300,8 +315,7 @@ func parseTopic(topic string) (server, kind string, err error) {
 	case "status", "console":
 		return parts[1], parts[2], nil
 	case "metrics", "logs":
-		// Agent data follows with M3.
-		return "", "", errors.New(ReasonUnsupported)
+		return parts[1], parts[2], nil
 	}
 	return "", "", errors.New(ReasonInvalid)
 }
@@ -324,15 +338,30 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 			h.deny(c, topic, ReasonInvalid)
 			return
 		}
-		if _, ok := rights.Server(server); !ok {
+		sr, ok := rights.Server(server)
+		if !ok {
 			h.deny(c, topic, ReasonNotFound)
+			return
+		}
+		// Metrics and logs are agent functions: RCON admin and server
+		// admin only (AGT-008, T-014).
+		if agentKind(kind) && !sr.Agent {
+			h.deny(c, topic, ReasonForbidden)
+			return
+		}
+		if agentKind(kind) && h.agentViews == nil {
+			h.deny(c, topic, ReasonUnsupported)
 			return
 		}
 	}
 	s := &subscription{topic: topic, server: server, kind: kind}
-	if server != "" && h.viewer != nil {
+	switch {
+	case kind == "logs":
 		// Registered before the subscription is visible, so a recheck
 		// that ends it always finds the release.
+		s.release = h.agentViews.FollowLogs(ctx, server)
+	case kind == "metrics":
+	case server != "" && h.viewer != nil:
 		s.release = h.viewer.Watch(ctx, server)
 	}
 	limit := h.limits(ctx).SubsPerSocket
@@ -353,6 +382,21 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 		return
 	}
 	h.log.Info("subscribed", append(h.attrs(c), logging.Event(logging.WSSubscribe), slog.String("topic", topic))...)
+	if agentKind(kind) {
+		if v, ok := h.agentViews.Current(ctx, server, kind); ok {
+			c.send(message{Type: "event", Topic: topic, Data: v})
+		}
+	}
+}
+
+func agentKind(kind string) bool { return kind == "metrics" || kind == "logs" }
+
+// PublishAgentData sends metrics or log lines of a server to the
+// subscribers of server.<id>.metrics or .logs.
+func (h *Hub) PublishAgentData(serverID, kind string, data any) {
+	h.each(kind, serverID, func(c *client, s *subscription) {
+		c.send(message{Type: "event", Topic: s.topic, Data: data})
+	})
 }
 
 func (h *Hub) unsubscribe(c *client, topic string) {
@@ -387,7 +431,7 @@ func (h *Hub) Recheck() {
 			if s.server == "" {
 				continue
 			}
-			if _, ok := rights.Server(s.server); !ok {
+			if sr, ok := rights.Server(s.server); !ok || (agentKind(s.kind) && !sr.Agent) {
 				delete(c.subs, topic)
 				gone = append(gone, s)
 			}
