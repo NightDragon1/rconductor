@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
@@ -21,6 +22,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
+	eventbus "github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/ops/backup"
 	"github.com/NightDragon1/rconductor/internal/ops/cleanup"
@@ -144,14 +146,20 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	// RCON connections before serving (Architecture 5.4); they keep
 	// reconnecting in the background.
 	var runtime *cache.Cache
+	var hub *eventbus.Hub
 	conns := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}}, serverSvc, logs.Module("rcon"), connmgr.Options{
 		OnStatus: func(id string, s connmgr.Status) {
 			if s != connmgr.Connected && runtime != nil {
 				runtime.Invalidate(id, "rcon_"+string(s))
 			}
+			if hub != nil {
+				hub.PublishStatus(id, s, time.Now())
+			}
 		},
 	})
 	runtime = cache.New(st, conns, logs.Module("cache"))
+	hub = eventbus.NewHub(checker, runtime, authSvc, logs.Module("ws"), eventbus.DefaultLimits)
+	authSvc.OnSessionsEnded(hub.CloseSessions)
 	serverSvc.SetConnections(conns)
 	if err := conns.Start(ctx); err != nil {
 		return err
@@ -161,6 +169,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		return err
 	}
 	cmdSvc := commands.NewService(st, checker, conns, logs.Module("cmd"))
+	cmdSvc.Publish = hub.PublishConsole
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -174,7 +183,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
 			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
 	}
-	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Auth: authSvc, Perm: checker, Users: userSvc,
+	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc,
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
 	})
 	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,

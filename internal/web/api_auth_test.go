@@ -22,10 +22,12 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/servers"
+	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 	"github.com/NightDragon1/rconductor/internal/users"
@@ -42,6 +44,9 @@ type apiFixture struct {
 	adminID string
 	proxies Proxies
 	logs    *lockedBuffer
+	st      *store.Store
+	checker *perm.Checker
+	hub     *events.Hub
 }
 
 // lockedBuffer collects log output of concurrent requests.
@@ -99,12 +104,14 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	hub := events.NewHub(checker, nil, svc, log, events.Limits{ConnsPerSession: 2, SubsPerSession: 3})
+	svc.OnSessionsEnded(hub.CloseSessions)
 	h := NewHandler(Options{
-		Log: log, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies,
+		Log: log, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies, Hub: hub,
 		Servers:  servers.NewService(st, checker, box, log),
 		Profiles: users.NewProfiles(us, hasher, svc.RevokeOtherSessions),
 	})
-	return &apiFixture{h: h, userID: id, adminID: adminID, proxies: proxies, logs: logs}
+	return &apiFixture{h: h, userID: id, adminID: adminID, proxies: proxies, logs: logs, st: st, checker: checker, hub: hub}
 }
 
 type call struct {

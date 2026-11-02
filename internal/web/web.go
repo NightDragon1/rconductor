@@ -18,6 +18,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/cache"
 	"github.com/NightDragon1/rconductor/internal/commands"
+	"github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -40,6 +41,8 @@ type Options struct {
 	UI http.Handler
 	// Proxies decide which forwarding headers are trusted.
 	Proxies Proxies
+	// Hub serves the live WebSockets.
+	Hub *events.Hub
 	// Cache holds runtime data such as player lists.
 	Cache *cache.Cache
 	// Commands runs the command pipeline.
@@ -72,7 +75,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
+	srv := &apiServer{hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,

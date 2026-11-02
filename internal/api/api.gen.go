@@ -1029,6 +1029,9 @@ type ServerInterface interface {
 	// ResetPassword Set a temporary password for a managed user (AUTH-010).
 	// (POST /users/{id}/password-reset)
 	ResetPassword(w http.ResponseWriter, r *http.Request, id UserID)
+	// OpenWebSocket WebSocket for live data (Design 2.3).
+	// (GET /ws)
+	OpenWebSocket(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -2093,6 +2096,20 @@ func (siw *ServerInterfaceWrapper) ResetPassword(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// OpenWebSocket operation middleware
+func (siw *ServerInterfaceWrapper) OpenWebSocket(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OpenWebSocket(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2230,6 +2247,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/server-groups/{id}", wrapper.DeleteServerGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{id}", wrapper.GetServerGroup)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/server-groups/{id}", wrapper.UpdateServerGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/ws", wrapper.OpenWebSocket)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}", wrapper.DeleteUser)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{id}", wrapper.GetUser)
@@ -5520,6 +5538,53 @@ func (response ResetPassword503ApplicationProblemPlusJSONResponse) VisitResetPas
 	return err
 }
 
+type OpenWebSocketRequestObject struct {
+}
+
+type OpenWebSocketResponseObject interface {
+	VisitOpenWebSocketResponse(w http.ResponseWriter) error
+}
+
+type OpenWebSocket101Response struct {
+}
+
+func (response OpenWebSocket101Response) VisitOpenWebSocketResponse(w http.ResponseWriter) error {
+	w.WriteHeader(101)
+	return nil
+}
+
+type OpenWebSocket401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response OpenWebSocket401ApplicationProblemPlusJSONResponse) VisitOpenWebSocketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type OpenWebSocket403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response OpenWebSocket403ApplicationProblemPlusJSONResponse) VisitOpenWebSocketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// ListAudit Audit log, newest first (AUD-001, AUD-004).
@@ -5663,6 +5728,9 @@ type StrictServerInterface interface {
 	// ResetPassword Set a temporary password for a managed user (AUTH-010).
 	// (POST /users/{id}/password-reset)
 	ResetPassword(ctx context.Context, request ResetPasswordRequestObject) (ResetPasswordResponseObject, error)
+	// OpenWebSocket WebSocket for live data (Design 2.3).
+	// (GET /ws)
+	OpenWebSocket(ctx context.Context, request OpenWebSocketRequestObject) (OpenWebSocketResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -6999,6 +7067,30 @@ func (sh *strictHandler) ResetPassword(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ResetPasswordResponseObject); ok {
 		if err := validResponse.VisitResetPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// OpenWebSocket operation middleware
+func (sh *strictHandler) OpenWebSocket(w http.ResponseWriter, r *http.Request) {
+	var request OpenWebSocketRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.OpenWebSocket(ctx, request.(OpenWebSocketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "OpenWebSocket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(OpenWebSocketResponseObject); ok {
+		if err := validResponse.VisitOpenWebSocketResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

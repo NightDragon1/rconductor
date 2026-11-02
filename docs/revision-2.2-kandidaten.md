@@ -13,6 +13,7 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 | 7 | RCON-Verbindung: Prüfung im Leerlauf und Backoff höchstens 5 s | SRV-004, PROT-002, Design 1.1 |
 | 8 | Audit eines Befehls nur anhängend; 504 mit Grund-Code timeout | Design 3.3, 3.5, 4.1, 4.2 |
 | 9 | Unicode-Format- und Bidi-Zeichen in Fremddaten entfernen | SEC-006, Abnahme SEC-006 |
+| 10 | WebSocket: Grenzwerte, Abo-Bestätigung, Themen bis M3 | SEC-008, Design 2.3 |
 
 ## 1. Beispielprofil in Design 7.4 auf Englisch
 
@@ -76,3 +77,10 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 - **Umsetzung (M2):** Aus Spielernamen werden neben Steuerzeichen (Unicode-Kategorie Cc) auch Formatzeichen (Kategorie Cf) entfernt, darunter Bidi-Steuerzeichen wie U+202E (Schreibrichtung umkehren), Zero-Width-Zeichen und U+FEFF.
 - **Vorschlag:** SEC-006 ergänzen: „Steuer- und Formatzeichen (Unicode Cc und Cf, u. a. Bidi-Steuerzeichen) werden aus Bezeichnern wie Spielernamen und Container-Namen entfernt“; Abnahme SEC-006 um einen Spielernamen mit U+202E erweitern, der ohne Umkehrung erscheint. Für längere Freitexte wie RCON-Antworten bleibt es beim Escaping und der Oberfläche überlassen, Bidi-Zeichen zu isolieren.
 - **Begründung:** Escaping verhindert Code, aber nicht Täuschung: Ein Name mit Bidi-Steuerzeichen kann in Listen und im Audit als ein anderer erscheinen (gleiche Technik wie „Trojan Source“). Für Bezeichner haben diese Zeichen keinen legitimen Zweck.
+
+## 10. WebSocket: Grenzwerte, Abo-Bestätigung, Themen bis M3
+
+- **Fundstelle:** 01-gesamtkonzept.md, SEC-008 (Höchstzahl an Verbindungen und Abos je Session, ohne Werte); 03-design.md, Kapitel 2.3 (Nachrichten subscribe, unsubscribe, event, error; Themen; Ping 30 s). Umsetzung: internal/events, internal/web (M2 Schritt 10).
+- **Umsetzung (M2):** Höchstens 4 WebSockets und 32 Abos je Session; ein weiteres Abo erhält error mit reason limit (ws.subscribe.denied), ein weiterer Socket wird mit Policy Violation geschlossen. Nachrichten des Browsers höchstens 4 KiB; ein Browser, der 64 Nachrichten nicht abholt, wird getrennt. Ping alle 30 s, ohne Pong binnen 30 s gilt die Verbindung als getrennt; bei jedem Ping wird geprüft, ob die Session noch gilt. Ein erfolgreiches Abo wird nicht bestätigt. server.{id}.metrics und server.{id}.logs antworten bis M3 mit error unsupported.
+- **Vorschlag:** Grenzwerte und Verhalten in Design 2.3 aufnehmen; eine Bestätigungsnachricht subscribed ergänzen, damit die Oberfläche ein Abo von einem noch laufenden unterscheiden kann.
+- **Begründung:** SEC-008 nennt keine Werte; ohne Bestätigung kann die Oberfläche nach einem Wiederverbinden nicht sicher wissen, ab wann Ereignisse ankommen.
