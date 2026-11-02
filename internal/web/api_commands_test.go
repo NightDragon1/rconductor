@@ -26,7 +26,7 @@ func TestCommandErrors(t *testing.T) {
 		"invalid":      {&commands.DeniedError{Reason: commands.ReasonInvalid}, http.StatusUnprocessableEntity, api.ReasonCodeInvalid, 0},
 		"rate limited": {&commands.DeniedError{Reason: commands.ReasonRateLimited, RetryAfter: 2100 * time.Millisecond}, http.StatusTooManyRequests, api.ReasonCodeRateLimited, 3},
 		"unavailable":  {commands.ErrUnavailable, http.StatusServiceUnavailable, api.ReasonCodeServerUnavailable, 0},
-		"timeout":      {commands.ErrTimeout, http.StatusGatewayTimeout, "", 0},
+		"timeout":      {commands.ErrTimeout, http.StatusGatewayTimeout, api.ReasonCodeTimeout, 0},
 	} {
 		var p *problem
 		if !errors.As(commandError(tc.err), &p) || p.status != tc.status || p.reason != tc.reason || p.retryAfter != tc.retry {

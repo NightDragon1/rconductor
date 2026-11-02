@@ -161,6 +161,7 @@ const (
 	ReasonCodePasswordChangeRequired ReasonCode = "password_change_required"
 	ReasonCodeRateLimited            ReasonCode = "rate_limited"
 	ReasonCodeServerUnavailable      ReasonCode = "server_unavailable"
+	ReasonCodeTimeout                ReasonCode = "timeout"
 	ReasonCodeUnauthenticated        ReasonCode = "unauthenticated"
 	ReasonCodeWrapperBlocked         ReasonCode = "wrapper_blocked"
 )
@@ -183,6 +184,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeRateLimited:
 		return true
 	case ReasonCodeServerUnavailable:
+		return true
+	case ReasonCodeTimeout:
 		return true
 	case ReasonCodeUnauthenticated:
 		return true

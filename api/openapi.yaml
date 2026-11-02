@@ -1918,6 +1918,7 @@ components:
         - forbidden
         - busy
         - password_change_required
+        - timeout
 
     Problem:
       type: object

@@ -7,11 +7,11 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 | 1 | Beispielprofil in Design 7.4 auf Englisch | Design 7.4, CLAUDE.md (Oberflächentexte Englisch) |
 | 2 | Hot Reload mit Polling-Fallback, Einstellung profiles.poll\_interval | CAT-003, Design 5.6, 7.1 |
 | 3 | Sichtbarkeit der Serverfelder je Rolle | Design 2.2, 6.3 |
-| 4 | Änderung von Servergruppen beendet keine Sessions | AUTH-006, Design 2.1 (D-044) |
+| 4 | Änderung von Servergruppen beendet keine Sessions, Abos werden neu geprüft | AUTH-006, Design 2.1 (D-044), 2.3 |
 | 5 | Agent und Container am Server erst ab M3 setzbar | SRV-001, Plan R1 |
 | 6 | Eigener Source-RCON-Adapter statt gorcon/rcon | Technologie 2, PROT-001 |
 | 7 | RCON-Verbindung: Prüfung im Leerlauf und Backoff höchstens 5 s | SRV-004, PROT-002, Design 1.1 |
-| 8 | Zeitüberschreitung eines Befehls und Audit vor dem Senden | Design 3.3, 3.5, 4.2 |
+| 8 | Audit eines Befehls nur anhängend; 504 mit Grund-Code timeout | Design 3.3, 3.5, 4.1, 4.2 |
 
 ## 1. Beispielprofil in Design 7.4 auf Englisch
 
@@ -36,7 +36,7 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 ## 4. Änderung von Servergruppen beendet keine Sessions
 
 - **Fundstelle:** 03-design.md, Kapitel 2.1 (Zeile Rechte, D-044).
-- **Umsetzung (M2):** Ändert der RCON-Admin die Server einer Servergruppe oder löscht er sie, wirken Scopes und Grants auf diese Gruppe ab der nächsten Anfrage; Sessions bleiben, weil sich keine Zuweisung eines Benutzers geändert hat (wie bei Listenänderungen).
+- **Umsetzung (M2):** Ändert der RCON-Admin die Server einer Servergruppe oder löscht er sie, wirken Scopes und Grants auf diese Gruppe ab der nächsten Anfrage; Sessions bleiben, weil sich keine Zuweisung eines Benutzers geändert hat (wie bei Listenänderungen). Offene WebSocket-Abos werden bei jeder Änderung von Servergruppen, Scopes oder Grants sofort neu geprüft; entzogene Abos beendet das Panel mit error, auch wenn die Session bleibt (Design 2.3).
 - **Vorschlag:** In Design 2.1 neben den Listen nennen.
 - **Begründung:** Sonst würde jede Pflege einer Servergruppe alle betroffenen Admins und Moderatoren abmelden.
 
@@ -58,13 +58,13 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 ## 7. RCON-Verbindung: Prüfung im Leerlauf und Backoff höchstens 5 s
 
 - **Fundstelle:** 05-abnahme-r1.md, SRV-004 (Wechsel binnen 10 s sichtbar) und PROT-002 (Panel verbindet sich nach Spielneustart selbst); 03-design.md, Kapitel 1.1 (Backoff 1 s, Faktor 1,6, ±20 %, höchstens 120 s – für den Agent) und 4.6 (RCON-Erreichbarkeit „bei Verbindungsereignis“). Umsetzung: internal/connmgr, internal/rcon/source.
-- **Umsetzung (M2):** Eine ruhende Verbindung wird alle 2 s geprüft, ohne einen Befehl an das Spiel zu senden (kurzer Lesevorgang: Zeitüberschreitung heißt verbunden, Verbindungsende heißt offline). Nach einem Abbruch wird sofort neu verbunden, danach mit Backoff wie Design 1.1, aber höchstens 5 s.
+- **Umsetzung (M2):** Eine ruhende Verbindung wird alle 2 s geprüft, ohne einen Befehl an das Spiel zu senden (kurzer Lesevorgang: Zeitüberschreitung heißt verbunden, Verbindungsende heißt offline). Nach einem Abbruch wird sofort neu verbunden, danach mit Backoff wie Design 1.1 (Start 1 s, Faktor 1,6, Zufallsanteil ±20 % je Wartezeit), aber höchstens 5 s. Der Zufallsanteil verhindert, dass nach einem Netzausfall alle Server im Gleichschritt neu verbinden.
 - **Vorschlag:** In Design 4.6 bzw. einem neuen Abschnitt zum Verbindungsmanager festhalten; Design 1.1 ausdrücklich nur auf den Agent beziehen.
 - **Begründung:** Ohne Prüfung im Leerlauf fiele ein gestoppter Spielserver erst beim nächsten Befehl auf; mit 120 s Backoff wäre der Wechsel nach einem Neustart nicht binnen 10 s sichtbar.
 
-## 8. Zeitüberschreitung eines Befehls und Audit vor dem Senden
+## 8. Audit eines Befehls nur anhängend; Zeitüberschreitung mit Grund-Code timeout
 
-- **Fundstelle:** 03-design.md, Kapitel 3.3 (Schritt 10: Audit-Eintrag vor dem Senden; Schritt 12: Ergebnis im Audit), 3.5 (keine Antwort für eine Zeitüberschreitung) und 4.2 (audit\_log.result: ok, denied, error, timeout). Umsetzung: internal/commands.
-- **Umsetzung (M2):** Der Eintrag vor dem Senden trägt result error mit reason\_code not\_answered und wird mit der Antwort auf ok, timeout oder error gesetzt; so bleibt ein Absturz zwischen Senden und Antwort als nicht beantwortet sichtbar. Eine Zeitüberschreitung (10 s) beantwortet die API mit 504 ohne Grund-Code; Log cmd.timeout, Audit timeout.
-- **Vorschlag:** In Design 3.5 eine Zeile 504 timeout ergänzen (Grund-Code timeout) und in 3.3 festhalten, mit welchem Ergebnis der Eintrag vor dem Senden entsteht.
-- **Begründung:** Beides ist für Oberfläche und Auswertung des Audits nötig und bisher nicht festgelegt.
+- **Fundstelle:** 03-design.md, Kapitel 3.3 (Schritt 10: Audit-Eintrag vor dem Senden; Schritt 12: Ergebnis im Audit), 3.5 (keine Antwort für eine Zeitüberschreitung), 4.1 (Request-ID ist die ID des Audit-Eintrags) und 4.2 (audit\_log). Umsetzung: internal/commands.
+- **Umsetzung (M2, nach Vorgabe):** Das Audit-Log ist nur anhängend; kein Eintrag wird nachträglich geändert. Vor dem Senden entsteht cmd.sent (ID = Request-ID, Ergebnis ok), nach der Antwort cmd.result mit eigener ID, Verweis auf die Request-ID (target\_type command), Ergebnis ok, error oder timeout und Dauer in Millisekunden. Eine Ablehnung ist ein einzelner Eintrag cmd.denied. Der Verlauf verbindet cmd.sent und cmd.result; fehlt das Ergebnis, zeigt er error mit not\_answered. Die Ereigniscodes im Log bleiben cmd.sent, cmd.response und cmd.timeout (Design 8.3). Eine Zeitüberschreitung (10 s) beantwortet die API mit 504 und Grund-Code timeout.
+- **Vorschlag:** Design 3.3 Schritte 10 und 12 so fassen; Design 3.5 um 504 timeout ergänzen; Design 4.1 um den Satz ergänzen, dass Folgeeinträge eines Befehls auf seine Request-ID verweisen.
+- **Begründung:** Ein unveränderliches Audit-Log ist nachvollziehbar und Grundlage der späteren Hash-Kette (SEC-011); die Request-ID bleibt ID des ersten Eintrags.

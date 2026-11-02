@@ -31,7 +31,7 @@ func commandError(err error) error {
 	case errors.Is(err, commands.ErrUnavailable):
 		return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeServerUnavailable}
 	case errors.Is(err, commands.ErrTimeout):
-		return &problem{status: http.StatusGatewayTimeout, detail: err.Error()}
+		return &problem{status: http.StatusGatewayTimeout, reason: api.ReasonCodeTimeout, detail: err.Error()}
 	}
 	return adminError(err)
 }
