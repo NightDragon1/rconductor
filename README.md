@@ -147,6 +147,50 @@ socket narrows the API further (see below).
 | `RCD_SECRETS_DIR` | `/secrets` | agent key (`agent.key`) and pairing (`panel.json`) |
 | `RCD_LOG_LEVEL`, `RCD_LOG_FORMAT` | `info`, `text` | as for the panel |
 
+### Agent behind a socket proxy
+
+A socket proxy lets the agent reach only the parts of the Docker API it
+needs: listing and inspecting containers, events, logs, stats, start, stop
+and restart. This example uses
+[linuxserver/socket-proxy](https://github.com/linuxserver/docker-socket-proxy)
+(GPL-3.0, a separate image); the integration tests run every agent function
+through it.
+
+```yaml
+services:
+  socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:3.4.7   # pin by digest in production
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/run]
+    environment:
+      CONTAINERS: "1"      # list, inspect, logs and stats of containers
+      EVENTS: "1"          # status changes
+      ALLOW_START: "1"
+      ALLOW_STOP: "1"
+      ALLOW_RESTARTS: "1"  # also allows kill, which the agent never calls
+      ALLOW_LOGS: "1"
+      POST: "0"            # no other changing call: no create, exec, images, volumes
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  rconductor-agent:
+    image: ghcr.io/nightdragon1/rconductor-agent:1
+    restart: unless-stopped
+    environment:
+      RCD_PAIRING_TOKEN: "rcd1...."
+      RCD_DOCKER_HOST: tcp://socket-proxy:2375
+    volumes:
+      - rconductor-agent-secrets:/secrets
+    depends_on: [socket-proxy]
+
+volumes:
+  rconductor-agent-secrets:
+```
+
+The agent then needs neither the socket nor `group_add`. Do not publish the
+proxy's port; only the agent may reach it.
+
 ## Development
 
 Requirements: Go (see `go.mod`), Node.js 22 or newer, Docker with buildx.
