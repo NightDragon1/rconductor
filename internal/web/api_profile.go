@@ -98,3 +98,26 @@ func (s *apiServer) ResetPassword(ctx context.Context, req api.ResetPasswordRequ
 	httpOf(ctx).w.Header().Set("Cache-Control", "no-store")
 	return api.ResetPassword200JSONResponse(api.PasswordReset{Password: pw}), nil
 }
+
+func (s *apiServer) GetFavorites(ctx context.Context, _ api.GetFavoritesRequestObject) (api.GetFavoritesResponseObject, error) {
+	ids, err := s.users.Favorites(ctx, adminRequest(ctx))
+	if err != nil {
+		return nil, adminError(err)
+	}
+	return api.GetFavorites200JSONResponse(api.Favorites{ServerIds: uuids(ids)}), nil
+}
+
+func (s *apiServer) SetFavorites(ctx context.Context, req api.SetFavoritesRequestObject) (api.SetFavoritesResponseObject, error) {
+	if req.Body == nil {
+		return nil, bodyRequired()
+	}
+	in := make([]string, 0, len(req.Body.ServerIds))
+	for _, id := range req.Body.ServerIds {
+		in = append(in, id.String())
+	}
+	ids, err := s.users.SetFavorites(ctx, adminRequest(ctx), in)
+	if err != nil {
+		return nil, adminError(err)
+	}
+	return api.SetFavorites200JSONResponse(api.Favorites{ServerIds: uuids(ids)}), nil
+}

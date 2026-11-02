@@ -448,3 +448,26 @@ func TestOverviewRuntimeReduced(t *testing.T) {
 		t.Errorf("moderator got %+v %v", m, err)
 	}
 }
+
+// TestFavorites covers revision 2.4 candidate 6 for CMD-001: favorites
+// hold only servers in the caller's scope and come back in order.
+func TestFavorites(t *testing.T) {
+	w := newWSFixture(t)
+	admin := w.login(t, "Boss")
+	mod := w.login(t, "Mod")
+	body := `{"server_ids":["` + w.server + `","` + w.server + `"]}`
+	rec := w.do(t, call{method: http.MethodPut, path: "/api/v1/me/favorites", cookies: []*http.Cookie{admin}, origin: "http://panel.lan", body: body})
+	if rec.Code != http.StatusOK || rec.Body.String() != `{"server_ids":["`+w.server+`"]}`+"\n" {
+		t.Errorf("admin = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := w.do(t, call{method: http.MethodPut, path: "/api/v1/me/favorites", cookies: []*http.Cookie{mod}, origin: "http://panel.lan", body: body}); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("moderator outside the scope = %d", rec.Code)
+	}
+	w.grantModerator(t)
+	if rec := w.do(t, call{method: http.MethodPut, path: "/api/v1/me/favorites", cookies: []*http.Cookie{mod}, origin: "http://panel.lan", body: body}); rec.Code != http.StatusOK {
+		t.Errorf("moderator in scope = %d", rec.Code)
+	}
+	if rec := w.do(t, call{method: http.MethodGet, path: "/api/v1/me/favorites", cookies: []*http.Cookie{mod}}); !strings.Contains(rec.Body.String(), w.server) {
+		t.Errorf("moderator get = %s", rec.Body.String())
+	}
+}
