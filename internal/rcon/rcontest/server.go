@@ -41,6 +41,7 @@ type Server struct {
 	conns    map[net.Conn]bool
 	accepted atomic.Int64
 	commands atomic.Int64
+	frozen   atomic.Bool
 }
 
 // Start listens on a free local port.
@@ -61,6 +62,14 @@ func (s *Server) Connections() int64 { return s.accepted.Load() }
 
 // Commands counts executed commands.
 func (s *Server) Commands() int64 { return s.commands.Load() }
+
+// Freeze makes the server go silent without closing anything: it still
+// reads, but answers nothing, like a host that crashed or lost its
+// network behind an open connection (half-open, no FIN or RST).
+func (s *Server) Freeze() { s.frozen.Store(true) }
+
+// Thaw ends Freeze.
+func (s *Server) Thaw() { s.frozen.Store(false) }
 
 // DropConnections closes all open connections, as a game server restart
 // does.
@@ -145,6 +154,9 @@ func (s *Server) serve(c net.Conn) {
 		id := int32(binary.LittleEndian.Uint32(rest[0:4]))  //nolint:gosec // wire format
 		typ := int32(binary.LittleEndian.Uint32(rest[4:8])) //nolint:gosec // wire format
 		body := string(rest[8 : len(rest)-2])
+		if s.frozen.Load() {
+			continue
+		}
 		switch {
 		case typ == 3: // auth
 			if body != s.Password {

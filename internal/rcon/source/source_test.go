@@ -163,3 +163,36 @@ func TestAlive(t *testing.T) {
 		t.Error("closed connection reported alive")
 	}
 }
+
+// TestPing covers the idle probe of Design 3.8: both server styles answer
+// it and commands work afterwards; a silent server (half-open connection)
+// lets it fail when the context ends, where Alive still sees nothing wrong.
+func TestPing(t *testing.T) {
+	for name, style := range map[string]rcontest.MarkerStyle{"minecraft": rcontest.Minecraft, "source": rcontest.SourceEngine} {
+		s := start(t, style, nil)
+		c := dial(t, s).(*Conn)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		if err := c.Ping(ctx); err != nil {
+			t.Errorf("%s: ping: %v", name, err)
+		}
+		cancel()
+		if got, err := c.Execute(context.Background(), "a"); err != nil || got != "a" {
+			t.Errorf("%s: after ping: %q %v", name, got, err)
+		}
+		s.Freeze()
+		if err := c.Alive(); err != nil {
+			t.Errorf("%s: a read alone noticed the silence: %v", name, err)
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), 200*time.Millisecond)
+		if err := c.Ping(ctx); err == nil {
+			t.Errorf("%s: silent server answered the ping", name)
+		}
+		cancel()
+	}
+}
+
+func TestKeepAlive(t *testing.T) {
+	if !KeepAlive.Enable || KeepAlive.Idle != 10*time.Second || KeepAlive.Interval != 3*time.Second || KeepAlive.Count != 3 {
+		t.Errorf("keepalive = %+v, want idle 10 s, interval 3 s, 3 probes (Design 3.8)", KeepAlive)
+	}
+}
