@@ -1,6 +1,6 @@
 # Kandidaten für Revision 2.3
 
-Stand: Beginn M3 (02.11.2026). Abweichungen, Lücken und Festlegungen, die nach der Freigabe von Dokumentversion 2.2 aufgefallen sind. Keiner der Punkte ändert das freigegebene Konzept 2.2; über die Übernahme entscheidet Rob. Nr. 1 bis 9 sind von Rob für M3 entschieden (Freigabe des M3-Plans).
+Stand: Beginn M3 (02.11.2026). Abweichungen, Lücken und Festlegungen, die nach der Freigabe von Dokumentversion 2.2 aufgefallen sind. Keiner der Punkte ändert das freigegebene Konzept 2.2; über die Übernahme entscheidet Rob. Nr. 1 bis 9 sind von Rob für M3 entschieden (Freigabe des M3-Plans), Nr. 10 und 11 nach dem Abschluss von M3.
 
 | Nr. | Thema | Betroffen |
 | --- | --- | --- |
@@ -13,6 +13,8 @@ Stand: Beginn M3 (02.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 | 7 | Socket-Zugriff des Agents und Socket-Proxy | AGT-001, SEC-010, Technologie 5 |
 | 8 | Verweise und Release-Angaben im Cache-Kapitel | NFR-005, Gesamtkonzept 4.6, Design 1.5 |
 | 9 | Teilabnahme AGT-005 in M4 | Plan R1 Kapitel 3, Abnahme AGT-005 |
+| 10 | Fremdschlüssel servers.agent\_id, Widerruf löst Server vom Agent | Design 4.2, 1.7 |
+| 11 | Socket-Proxy: ALLOW\_RESTARTS erlaubt auch kill | Sicherheit T-022, SEC-010 |
 
 ## 1. Container über den Namen statt über die ID zuordnen
 
@@ -92,3 +94,18 @@ Stand: Beginn M3 (02.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Begründung:** Die Prüfart E2E setzt die Oberfläche voraus.
 
 Außerdem für W5 (keine Konzeptänderung): Ein falscher Schlüssel scheitert beim TLS-Handshake; es gibt dann keine reject-Nachricht. Beide Seiten loggen agent.rejected mit reason pin\_mismatch.
+
+## 10. Fremdschlüssel servers.agent\_id, Widerruf löst Server vom Agent
+
+- **Fundstelle:** 03-design.md, Kapitel 4.2 (servers mit agent\_id) und 1.7 (Widerruf); migrations/sqlite/00003 (agent\_id ohne Fremdschlüssel, „folgt mit den Agents in M3“).
+- **Umsetzung (nach M3, nach Vorgabe):** Migration 00007 baut servers neu auf, mit agent\_id REFERENCES agents ON DELETE SET NULL; ein Trigger leert dabei auch container\_name, weil Agent und Container zusammengehören. Während des Neuaufbaus sind die Fremdschlüssel aus (sonst liefe das Löschen der alten Tabelle als Kaskade in Mitgliedschaften, Scopes und Grants), danach prüft PRAGMA foreign\_key\_check vor dem Commit. Weil das Pragma je Verbindung gilt und in Transaktionen nicht wirkt, ist 00007 eine goose-Migration in Go auf einer einzigen Verbindung (migrations/sqlite\_go.go). Verweise auf nicht vorhandene Agents werden dabei geleert. Ein Widerruf setzt agent\_id und container\_name der Server des Agents ebenfalls auf NULL (Audit: servers\_detached).
+- **Vorschlag:** Design 4.2: servers.agent\_id mit Fremdschlüssel, ON DELETE SET NULL; Design 1.7: der Widerruf löst die Server vom Agent.
+- **Begründung:** Ohne Fremdschlüssel konnten Server auf gelöschte Agents zeigen; ein widerrufener Agent darf keine Aktionen mehr erhalten, und eine neue Kopplung soll die Zuordnung bewusst neu setzen.
+
+## 11. Socket-Proxy: ALLOW\_RESTARTS erlaubt auch kill
+
+- **Fundstelle:** 06-sicherheit.md, T-022 (kompromittierter Agent, Socket-Proxy als Minderung) und SEC-010.
+- **Befund (M3):** Beim Socket-Proxy aus dem README-Beispiel (linuxserver/socket-proxy) gibt ALLOW\_RESTARTS die Endpunkte stop, restart und kill frei. Der Agent ruft kill nie auf (seine Docker-Schnittstelle kennt es nicht), ein kompromittierter Agent könnte es über den Proxy aber.
+- **Vorschlag:** In T-022 als Restrisiko vermerken: kill ist gleichwertig zu stop (ein freigegebener Container wird beendet, nichts angelegt, gelöscht oder ausgeführt) und bleibt damit im Rahmen dessen, was der Agent ohnehin darf.
+- **Begründung:** Die Minderung durch den Proxy soll ehrlich beschrieben sein.
+

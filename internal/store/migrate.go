@@ -50,10 +50,12 @@ func (s *Store) Migrate(ctx context.Context, log *slog.Logger, opts MigrateOptio
 
 func (s *Store) migrateLocked(ctx context.Context, log *slog.Logger, opts MigrateOptions) (MigrateResult, error) {
 	fsys := opts.FS
+	var popts []goose.ProviderOption
 	if fsys == nil {
 		fsys = migrations.SQLite()
+		popts = append(popts, goose.WithGoMigrations(migrations.SQLiteGo()...))
 	}
-	p, err := goose.NewProvider(goose.DialectSQLite3, s.DB, fsys)
+	p, err := goose.NewProvider(goose.DialectSQLite3, s.DB, fsys, popts...)
 	if err != nil {
 		return MigrateResult{}, fmt.Errorf("load migrations: %w", err)
 	}

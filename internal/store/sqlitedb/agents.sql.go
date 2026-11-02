@@ -59,6 +59,23 @@ func (q *Queries) DeleteStalePendingAgents(ctx context.Context, createdAt string
 	return err
 }
 
+const detachServersFromAgent = `-- name: DetachServersFromAgent :execrows
+UPDATE servers SET agent_id = NULL, updated_at = ? WHERE agent_id = ?
+`
+
+type DetachServersFromAgentParams struct {
+	UpdatedAt string
+	AgentID   sql.NullString
+}
+
+func (q *Queries) DetachServersFromAgent(ctx context.Context, arg DetachServersFromAgentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, detachServersFromAgent, arg.UpdatedAt, arg.AgentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getAgent = `-- name: GetAgent :one
 SELECT id, name, public_key, fingerprint, status, version, capabilities, remote, paired_by, created_at, last_seen_at, revoked_at FROM agents WHERE id = ?
 `
