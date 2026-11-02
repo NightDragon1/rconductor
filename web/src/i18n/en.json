@@ -1,0 +1,45 @@
+{
+  "app": {
+    "name": "RCONductor",
+    "loading": "Loading…",
+    "error": "Something went wrong. Please try again."
+  },
+  "login": {
+    "title": "Sign in",
+    "pseudonym": "Pseudonym",
+    "password": "Password",
+    "submit": "Sign in",
+    "failed": "Pseudonym or password is wrong.",
+    "locked": "Too many attempts. Please wait and try again.",
+    "busy": "The panel is busy. Please try again in a moment."
+  },
+  "password": {
+    "title": "Choose a new password",
+    "explain": "You signed in with a temporary password. Choose your own password to continue.",
+    "current": "Current password",
+    "new": "New password",
+    "repeat": "Repeat the new password",
+    "submit": "Change password",
+    "mismatch": "The two new passwords differ.",
+    "length": "Use 12 to 128 characters.",
+    "failed": "The password was not changed. Check the current password."
+  },
+  "nav": {
+    "logout": "Sign out",
+    "theme": "Switch between dark and light design"
+  },
+  "home": {
+    "title": "Overview",
+    "welcome": "Signed in as {{name}} ({{role}})."
+  },
+  "role": {
+    "rcon_admin": "RCON admin",
+    "server_admin": "Server admin",
+    "moderator": "Moderator",
+    "supporter": "Supporter"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "back": "Back to the overview"
+  }
+}

@@ -24,4 +24,10 @@ export default tseslint.config(
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    // Playwright fixtures call use(), which is no React hook.
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+    rules: { 'react-hooks/rules-of-hooks': 'off' },
+  },
 );
