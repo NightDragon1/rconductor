@@ -3,7 +3,9 @@
 // Package rcontest is a Source RCON server for tests: it checks the
 // password, answers commands through a handler, splits long answers into
 // 4096-byte packets like real servers and answers the end marker either
-// like Minecraft or like Source engine servers.
+// like Minecraft or like Source engine servers. In the Minecraft style it
+// also drops connections that send several packets at once, as Minecraft
+// does.
 package rcontest
 
 import (
@@ -103,6 +105,29 @@ func write(w io.Writer, id, typ int32, body string) error {
 	return err
 }
 
+// readPacket reads one packet. Like Minecraft, the Minecraft style takes
+// one packet per read and drops the connection when a read brings more,
+// for example a command and its end marker together.
+func (s *Server) readPacket(c net.Conn) ([]byte, bool) {
+	if s.Style == Minecraft {
+		buf := make([]byte, 4110)
+		n, err := c.Read(buf)
+		if err != nil || n < 14 || int(binary.LittleEndian.Uint32(buf[:4])) != n-4 {
+			return nil, false
+		}
+		return buf[4:n], true
+	}
+	var head [4]byte
+	if _, err := io.ReadFull(c, head[:]); err != nil {
+		return nil, false
+	}
+	rest := make([]byte, binary.LittleEndian.Uint32(head[:]))
+	if _, err := io.ReadFull(c, rest); err != nil {
+		return nil, false
+	}
+	return rest, true
+}
+
 func (s *Server) serve(c net.Conn) {
 	defer s.wg.Done()
 	defer func() {
@@ -113,12 +138,8 @@ func (s *Server) serve(c net.Conn) {
 	}()
 	authed := false
 	for {
-		var head [4]byte
-		if _, err := io.ReadFull(c, head[:]); err != nil {
-			return
-		}
-		rest := make([]byte, binary.LittleEndian.Uint32(head[:]))
-		if _, err := io.ReadFull(c, rest); err != nil {
+		rest, ok := s.readPacket(c)
+		if !ok {
 			return
 		}
 		id := int32(binary.LittleEndian.Uint32(rest[0:4]))  //nolint:gosec // wire format
