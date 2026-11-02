@@ -14,6 +14,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
+	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
@@ -288,8 +289,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	outcome, reason := ResultOK, ""
 	switch {
 	case err == nil:
-		res.Response = truncate(answer, MaxStoredResponse)
-		res.Truncated = len(answer) > len(res.Response)
+		res.Response, res.Truncated = foreign.Text(answer, MaxStoredResponse)
 		s.log.Info("command answered", append(s.attrs(req, serverID), logging.Event(logging.CmdResponse),
 			slog.Int("bytes", len(answer)), logging.Duration(s.now().Sub(start)))...)
 	case errors.Is(err, context.DeadlineExceeded):

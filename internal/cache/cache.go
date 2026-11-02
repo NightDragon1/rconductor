@@ -14,8 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
+	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/pattern"
 	"github.com/NightDragon1/rconductor/internal/profiles"
@@ -198,8 +198,8 @@ func (c *Cache) playerConfig(ctx context.Context, serverID string) (*profiles.Pl
 }
 
 // parsePlayers takes the first capture group of the profile's pattern and
-// splits it at the separator; names are foreign data: control and format
-// characters go, length and count are bounded (SEC-006).
+// splits it at the separator; names are foreign data, cleaned and bounded
+// in length and count (SEC-006).
 func parsePlayers(ctx context.Context, answer string, cfg *profiles.Players) ([]string, error) {
 	p, err := pattern.Compile(cfg.Pattern, 1)
 	if err != nil {
@@ -218,19 +218,9 @@ func parsePlayers(ctx context.Context, answer string, cfg *profiles.Players) ([]
 		sep = ","
 	}
 	for raw := range strings.SplitSeq(m[0], sep) {
-		name := strings.Map(func(r rune) rune {
-			// Control and format characters (such as bidi overrides that
-			// reverse the display) are dropped.
-			if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-				return -1
-			}
-			return r
-		}, strings.TrimSpace(raw))
+		name := foreign.Name(raw, MaxPlayerName)
 		if name == "" {
 			continue
-		}
-		if r := []rune(name); len(r) > MaxPlayerName {
-			name = string(r[:MaxPlayerName])
 		}
 		names = append(names, name)
 		if len(names) == MaxPlayers {

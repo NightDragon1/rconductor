@@ -83,8 +83,11 @@ func newWorld(t *testing.T) *world {
 		w.mu.Lock()
 		w.received = append(w.received, cmd)
 		w.mu.Unlock()
-		if cmd == "big" {
+		switch cmd {
+		case "big":
 			return strings.Repeat("x", MaxStoredResponse+100)
+		case "html":
+			return "<b>hi</b><script>alert(1)</script>\x1b[31m\r\nline\x00 2 \u00a7c\xff"
 		}
 		return "ok: " + cmd
 	})
@@ -308,6 +311,25 @@ func TestMarking(t *testing.T) {
 		if !found {
 			t.Errorf("%s without request ID, session, user and role", ev)
 		}
+	}
+}
+
+// TestAnswerIsForeignData covers the command part of SEC-006: HTML stays
+// text, control characters and invalid UTF-8 go, color codes stay for the
+// interface, in the answer, the history and the audit alike.
+func TestAnswerIsForeignData(t *testing.T) {
+	w := newWorld(t)
+	r, err := w.svc.Send(context.Background(), w.as("admin"), w.server, "html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "<b>hi</b><script>alert(1)</script>[31m\nline 2 \u00a7c\uFFFD"
+	if r.Response != want || r.Truncated {
+		t.Errorf("response = %q, %v; want %q", r.Response, r.Truncated, want)
+	}
+	h, _, err := w.svc.History(context.Background(), w.as("admin"), w.server, 10, "")
+	if err != nil || len(h) == 0 || h[0].Response != want {
+		t.Errorf("history = %+v, %v", h, err)
 	}
 }
 
