@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.2, zur Freigabe vorgelegt; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -204,7 +204,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | 504 | timeout | Der Spieleserver hat nicht binnen 10 s geantwortet |
 | 403 | forbidden | Verwaltungsaktion nicht erlaubt, z. B. Rolle auf eigene Stufe heben (3.6) |
 | 403 | password\_change\_required | Passwortwechsel erzwungen; erlaubt sind nur /me/password, /auth/logout und /auth/session (AUTH-010) |
-| 503 | busy | Panel ausgelastet, z. B. alle Plätze der Passwortberechnung belegt; mit Retry-After |
+| 503 | busy | Panel ausgelastet, z. B. alle Plätze der Passwortberechnung belegt oder die Warteschlange eines Spieleservers voll (3.8); mit Retry-After |
 
 ### 3.6 Verwaltungsrechte
 
@@ -234,10 +234,10 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 
 | Punkt | Festlegung |
 | --- | --- |
-| Verbindung | Genau eine je Spieleserver (PROT-002); Befehle aller Benutzer laufen nacheinander über eine Warteschlange (höchstens 64 wartende), Antworten gehen per Request-ID an ihren Absender |
-| Prüfung im Leerlauf | Alle 2 s, ohne einen Befehl an das Spiel zu senden: ein kurzer Lesevorgang, Zeitüberschreitung heißt verbunden, Verbindungsende heißt offline (SRV-004) |
+| Verbindung | Genau eine je Spieleserver (PROT-002); Befehle aller Benutzer laufen nacheinander über eine Warteschlange, Antworten gehen per Request-ID an ihren Absender. Höchstens 64 Befehle warten je Server; ist die Warteschlange voll, antwortet die API sofort mit 503 busy (3.5) |
+| Prüfung im Leerlauf | TCP-Keepalive auf jeder RCON-Verbindung (Leerlauf 10 s, Intervall 3 s, 3 Proben). Zusätzlich alle 2 s ein kurzer Lesevorgang ohne Senden, der ein vom Spieleserver geschlossenes Ende sofort erkennt, und im Leerlauf alle 30 s ein leeres Paket als Probe wie der Endmarker; ohne Antwort binnen 5 s gilt der Server als offline und die Verbindung wird neu aufgebaut. Halboffene Verbindungen nach Host-Absturz oder Netzausfall liefern kein FIN oder RST; ein Lesevorgang allein erkennt sie nicht (SRV-004) |
 | Wiederverbindung | Nach einem Abbruch sofort, danach Backoff wie 1.1 (Start 1 s, Faktor 1,6, Zufallsanteil ±20 % je Wartezeit), aber höchstens 5 s, damit ein Wechsel binnen 10 s sichtbar ist. Der Zufallsanteil verhindert, dass nach einem Netzausfall alle Server im Gleichschritt neu verbinden |
-| Zeitüberschreitung | 10 s je Befehl, Antwort 504 timeout (3.5); die Verbindung bleibt, eine späte Antwort wird an ihrer Paket-ID erkannt und verworfen |
+| Zeitüberschreitung | 10 s je Befehl ab seiner Annahme, einschließlich der Wartezeit in der Warteschlange; danach Antwort 504 timeout (3.5). Ein Befehl, dessen Frist in der Warteschlange abläuft, wird nicht mehr gesendet. Die Verbindung bleibt, eine späte Antwort wird an ihrer Paket-ID erkannt und verworfen |
 | Source RCON | Eigener Adapter (Technologie 2): Lange Antworten kommen in mehreren Paketen ohne Endmarke. Nach dem ersten Antwortpaket eines Befehls sendet der Adapter ein leeres Paket als Endmarker und sammelt bis zu dessen Antwort; Pakete mit fremder ID werden verworfen. Befehl und Marker gehen nie zusammen hinaus, weil Minecraft nur ein Paket je Lesevorgang verarbeitet und die Verbindung sonst trennt. Grenzen: 64 KiB je Paket, 1 MiB je Antwort (SEC-006) |
 
 ## 4. Datenmodell
