@@ -79,6 +79,7 @@ const (
 // Limits (SEC-007, revision 2.3 candidate 2).
 const (
 	MaxAgentMessage = 1 << 20  // from the agent; above it the panel disconnects
+	MaxHelloMessage = 16 << 10 // from the agent until welcome (revision 2.3 no. 13)
 	MaxPanelMessage = 64 << 10 // orders from the panel
 	MaxLogLines     = 500
 	MaxLogBytes     = 512 << 10
