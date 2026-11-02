@@ -1,6 +1,6 @@
 # Abnahmekriterien R1
 
-Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
+Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
 
 | Prüfart | Bedeutung |
 | --- | --- |
@@ -17,7 +17,7 @@ Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept
 | NFR-002 | Start ohne jede Konfiguration legt /data/rconductor.db an und führt alle Migrationen aus | Integration |
 | NFR-003 | Hinter einem Proxy mit RCD\_BASE\_PATH=/rcon funktionieren Oberfläche, API und WebSocket; das Neuladen eines tiefen Pfads lädt alle Assets; X-Forwarded-For wird nur von RCD\_TRUSTED\_PROXIES übernommen | E2E |
 | NFR-004 | Eine Person ohne Vorwissen bringt laut README Panel und Agent in der All-in-One-Variante in unter 15 Minuten zum Laufen | Review |
-| NFR-005 | Cache-Werte tragen ein Alter; nach Ablauf der Frist aus Design 4.6 zeigt die Oberfläche sie als veraltet; bei Agent-Trennung werden Messwerte sofort als veraltet markiert | Integration |
+| NFR-005 | Cache-Werte tragen ein Alter; nach Ablauf der Frist aus Gesamtkonzept 4.6 zeigt die Oberfläche sie als veraltet; bei Agent-Trennung werden Messwerte sofort als veraltet markiert | Integration |
 | NFR-007 | Alle Texte der Oberfläche kommen aus Sprachdateien; eine Testsprache mit veränderten Texten ändert jede sichtbare Beschriftung | Unit, E2E |
 | NFR-008 | Ein Backup erzeugt eine konsistente Kopie der Datenbank in /backups, die sich in eine leere Installation einspielen lässt; der Master-Key ist nicht enthalten | Integration |
 | NFR-009 | Die Erweiterungspunkte aus Architektur 7 sind als Go-Interfaces umgesetzt, jedes mit mindestens einer Test-Implementierung | Review |
@@ -170,6 +170,6 @@ Diese Kriterien lassen sich ganz oder zum Teil über die Ereigniscodes aus Desig
 | AGT-013 | agent.rejected mit version in Panel- und Agent-Log | voll |
 | UI-009 | logs.follow.start beim Öffnen, logs.follow.stop beim Verlassen | voll |
 | AUD-003 | audit.purge mit Anzahl entfernter Einträge | teilweise |
-| NFR-005 | cache.stale nach Agent-Trennung | teilweise |
+| NFR-005 | cache.stale und agent.disconnected nach Agent-Trennung | teilweise |
 
 Voll heißt: Der Log-Nachweis genügt für die Abnahme. Teilweise heißt: Das Log belegt den Ablauf, das Ergebnis (z. B. Inhalt einer Sicherung) wird zusätzlich geprüft.

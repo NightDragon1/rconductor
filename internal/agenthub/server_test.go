@@ -72,6 +72,11 @@ type fixture struct {
 
 func newFixture(t *testing.T, throttle ThrottleOptions) *fixture {
 	t.Helper()
+	return newFixtureWith(t, Options{Throttle: throttle})
+}
+
+func newFixtureWith(t *testing.T, opts Options) *fixture {
+	t.Helper()
 	logs := &lockedBuf{}
 	log := logging.New(logs, "panel", config.Log{Format: "json"}).Module("agent")
 	panel, err := keys.LoadOrCreateIdentity(log, filepath.Join(t.TempDir(), keys.PanelKeyFile))
@@ -79,7 +84,8 @@ func newFixture(t *testing.T, throttle ThrottleOptions) *fixture {
 		t.Fatal(err)
 	}
 	known := &admitKnown{keys: map[string]string{}}
-	h := New(panel, log, Options{Registry: known, Throttle: throttle})
+	opts.Registry = known
+	h := New(panel, log, opts)
 	ctx, cancel := context.WithCancel(context.Background())
 	ready := make(chan net.Addr, 1)
 	done := make(chan error, 1)
@@ -359,5 +365,57 @@ func TestMessagesAndDisconnect(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("no disconnect reported")
+	}
+}
+
+// TestBeforeWelcome covers revision 2.3 no. 13: until welcome a message
+// may have at most 16 KiB, and the hello must come within the deadline
+// after the TLS handshake.
+func TestBeforeWelcome(t *testing.T) {
+	f := newFixtureWith(t, Options{HelloTimeout: 300 * time.Millisecond})
+	agent := agentKey(t)
+	f.known.keys[agent.Fingerprint()] = "agent-1"
+
+	c, err := f.dial(t, agent, f.panel.Fingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	big, _ := agentproto.Encode(agentproto.TypeHello, "", agentproto.Hello{AgentID: "agent-1", Name: strings.Repeat("x", agentproto.MaxHelloMessage)})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = c.Write(ctx, websocket.MessageText, big)
+	if _, _, err := c.Read(ctx); err == nil {
+		t.Error("oversized hello accepted")
+	}
+	f.waitLog(t, `"event":"agent.limit","reason":"message_size"`)
+
+	c, err = f.dial(t, agent, f.panel.Fingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if _, _, err := c.Read(ctx); err == nil {
+		t.Error("connection without hello kept open")
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("closed after %v, want about 300 ms", d)
+	}
+	f.waitLog(t, `"event":"agent.disconnected","reason":"timeout"`)
+
+	// A normal hello still fits, and after welcome the 1 MiB limit holds.
+	c, err = f.dial(t, agent, f.panel.Fingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := hello(t, c, agentproto.Hello{AgentID: "agent-1"}); e.Type != agentproto.TypeWelcome {
+		t.Fatalf("hello = %+v", e)
+	}
+	snap, _ := agentproto.Encode(agentproto.TypeSnapshot, "", agentproto.Snapshot{Containers: []agentproto.Container{{Name: strings.Repeat("y", 100<<10)}}})
+	if err := c.Write(ctx, websocket.MessageText, snap); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if !f.hub.Connected("agent-1") {
+		t.Error("a 100 KiB message after welcome ended the session")
 	}
 }

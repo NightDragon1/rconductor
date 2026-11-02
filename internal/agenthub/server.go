@@ -31,8 +31,13 @@ const (
 	PingInterval     = 30 * time.Second
 	pongTimeout      = 30 * time.Second // no pong 60 s after the last one: gone
 	handshakeTimeout = 10 * time.Second
-	helloTimeout     = 10 * time.Second
+	// helloTimeout counts from the end of the TLS handshake (revision 2.3
+	// no. 13).
+	helloTimeout = 10 * time.Second
 )
+
+// handshakeDone holds when the TLS handshake of a connection ended.
+type handshakeDone struct{}
 
 // Disconnect reasons of agent.disconnected (revision 2.3 candidate 5).
 const (
@@ -86,6 +91,8 @@ type Options struct {
 	Throttle ThrottleOptions
 	// Ping overrides PingInterval, for tests.
 	Ping time.Duration
+	// HelloTimeout overrides the 10 s for the hello, for tests.
+	HelloTimeout time.Duration
 }
 
 // Hub runs the agent port.
@@ -95,6 +102,7 @@ type Hub struct {
 	registry Registry
 	throttle *throttle
 	ping     time.Duration
+	hello    time.Duration
 
 	mu       sync.Mutex
 	sessions map[string]*Session
@@ -131,8 +139,11 @@ func New(id *keys.Identity, log *slog.Logger, opts Options) *Hub {
 	if opts.Ping <= 0 {
 		opts.Ping = PingInterval
 	}
+	if opts.HelloTimeout <= 0 {
+		opts.HelloTimeout = helloTimeout
+	}
 	return &Hub{
-		id: id, log: log, registry: opts.Registry, throttle: newThrottle(opts.Throttle), ping: opts.Ping,
+		id: id, log: log, registry: opts.Registry, throttle: newThrottle(opts.Throttle), ping: opts.Ping, hello: opts.HelloTimeout,
 		sessions: map[string]*Session{},
 	}
 }
@@ -160,6 +171,11 @@ func (h *Hub) Serve(ctx context.Context, addr string, ready func(net.Addr)) erro
 		ReadHeaderTimeout: 10 * time.Second,
 		ErrorLog:          slog.NewLogLogger(h.log.Handler(), slog.LevelDebug),
 		BaseContext:       func(net.Listener) context.Context { return ctx },
+		// The listener hands out connections right after their TLS
+		// handshake; the hello deadline starts there.
+		ConnContext: func(ctx context.Context, _ net.Conn) context.Context {
+			return context.WithValue(ctx, handshakeDone{}, time.Now())
+		},
 	}
 	if ready != nil {
 		ready(ln.Addr())
@@ -263,9 +279,14 @@ func (h *Hub) handle(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	conn.SetReadLimit(agentproto.MaxAgentMessage)
+	// Until welcome only a small hello may come (revision 2.3 no. 13).
+	conn.SetReadLimit(agentproto.MaxHelloMessage)
 	remote := hostOf(stringAddr(r.RemoteAddr))
-	h.session(r.Context(), conn, key, remote)
+	since, ok := r.Context().Value(handshakeDone{}).(time.Time)
+	if !ok {
+		since = time.Now()
+	}
+	h.session(r.Context(), conn, key, remote, since.Add(h.hello))
 }
 
 type stringAddr string
@@ -275,13 +296,20 @@ func (a stringAddr) String() string  { return string(a) }
 
 // session admits the agent with its hello and then serves it until the
 // connection ends.
-func (h *Hub) session(ctx context.Context, conn *websocket.Conn, key ed25519.PublicKey, remote string) {
+func (h *Hub) session(ctx context.Context, conn *websocket.Conn, key ed25519.PublicKey, remote string, helloBy time.Time) {
 	fp := keys.Fingerprint(key)
 	attrs := []any{slog.String("remote", remote), slog.String("fingerprint", fp)}
-	hctx, cancel := context.WithTimeout(ctx, helloTimeout)
+	hctx, cancel := context.WithDeadline(ctx, helloBy)
 	_, data, err := conn.Read(hctx)
+	late := hctx.Err() != nil
 	cancel()
 	if err != nil {
+		if late && ctx.Err() == nil {
+			h.log.Warn("no hello in time", append(attrs, logging.Event(logging.AgentDisconnected),
+				slog.String(logging.KeyReason, ReasonTimeout))...)
+			_ = conn.Close(websocket.StatusPolicyViolation, "no hello in time")
+			return
+		}
 		h.closeRead(conn, err, attrs)
 		return
 	}
@@ -325,6 +353,7 @@ func (h *Hub) session(ctx context.Context, conn *websocket.Conn, key ed25519.Pub
 	if adm.Paired {
 		h.log.Info("agent paired", append(attrs, logging.Event(logging.AgentPaired), slog.String("agent_id", adm.AgentID))...)
 	}
+	conn.SetReadLimit(agentproto.MaxAgentMessage)
 	h.register(s)
 	defer h.unregister(s)
 	if !h.send(ctx, conn, agentproto.TypeWelcome, e.ID, agentproto.Welcome{AgentID: adm.AgentID}) {
