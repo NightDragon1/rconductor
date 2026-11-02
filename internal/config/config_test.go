@@ -167,7 +167,23 @@ func TestInvalidValuesReportedTogether(t *testing.T) {
 
 func TestLoadAgent(t *testing.T) {
 	c, err := LoadAgent(envOf(map[string]string{"RCD_LOG_FORMAT": "json"}), filesOf(nil))
-	if err != nil || c.Log.Format != "json" {
-		t.Fatalf("got %+v, %v", c, err)
+	if err != nil || c.Log.Format != "json" || c.LabelKey != "rcon.manage" || c.LabelValue != "true" ||
+		c.DockerHost != "unix:///var/run/docker.sock" || c.SecretsDir != "/secrets" || c.PairingToken != "" {
+		t.Fatalf("defaults: %+v, %v", c, err)
+	}
+	// The token also comes from a file (D-033, revision 2.3 candidate 4).
+	c, err = LoadAgent(envOf(map[string]string{"RCD_PAIRING_TOKEN_FILE": "/run/secrets/token", "RCD_LABEL": "game=yes", "RCD_PANEL_ADDR": "panel:8443"}),
+		filesOf(map[string]string{"/run/secrets/token": "rcd1.abc\n"}))
+	if err != nil || c.PairingToken != "rcd1.abc" || c.LabelKey != "game" || c.LabelValue != "yes" || c.PanelAddr != "panel:8443" {
+		t.Fatalf("file token: %+v, %v", c, err)
+	}
+	for name, env := range map[string]map[string]string{
+		"label":      {"RCD_LABEL": "novalue"},
+		"panel addr": {"RCD_PANEL_ADDR": "panel"},
+		"both":       {"RCD_PAIRING_TOKEN": "a", "RCD_PAIRING_TOKEN_FILE": "/x"},
+	} {
+		if _, err := LoadAgent(envOf(env), filesOf(map[string]string{"/x": "b"})); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

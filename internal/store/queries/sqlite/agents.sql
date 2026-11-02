@@ -28,6 +28,14 @@ UPDATE agents SET status = 'active', paired_by = ? WHERE id = ? AND status = 'pe
 -- name: RevokeAgent :execrows
 UPDATE agents SET status = 'revoked', revoked_at = ? WHERE id = ? AND status = 'active';
 
+-- name: RepairAgent :execrows
+UPDATE agents SET status = 'active', paired_by = ?, revoked_at = NULL, name = ?, version = ?, capabilities = ?, remote = ?, last_seen_at = ?
+WHERE id = ? AND status = 'revoked';
+
+-- name: RequestRepairAgent :execrows
+UPDATE agents SET status = 'pending', paired_by = NULL, revoked_at = NULL, created_at = ?, last_seen_at = ?
+WHERE id = ? AND status = 'revoked';
+
 -- name: TouchAgent :exec
 UPDATE agents SET name = ?, version = ?, capabilities = ?, remote = ?, last_seen_at = ? WHERE id = ?;
 

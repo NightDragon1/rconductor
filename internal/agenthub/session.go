@@ -4,6 +4,7 @@ package agenthub
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
+	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/logging"
 )
 
@@ -26,12 +28,14 @@ type Session struct {
 	conn   *websocket.Conn
 	cancel context.CancelFunc
 
-	mu     sync.Mutex
-	reason string // why the session ends, set by close
+	mu      sync.Mutex
+	reason  string // why the session ends, set by close
+	pending map[string]chan agentproto.Result
+	done    chan struct{} // closed when run ends
 }
 
 func newSession(h *Hub, conn *websocket.Conn, agentID string, hello agentproto.Hello, remote string) *Session {
-	return &Session{AgentID: agentID, Hello: hello, Remote: remote, h: h, conn: conn, cancel: func() {}}
+	return &Session{AgentID: agentID, Hello: hello, Remote: remote, h: h, conn: conn, cancel: func() {}, pending: map[string]chan agentproto.Result{}, done: make(chan struct{})}
 }
 
 // run reads messages until the connection ends and returns the reason.
@@ -41,6 +45,7 @@ func (s *Session) run(ctx context.Context) string {
 	s.cancel = cancel
 	s.mu.Unlock()
 	defer cancel()
+	defer close(s.done)
 	go s.pingLoop(ctx)
 	for {
 		_, data, err := s.conn.Read(ctx)
@@ -122,8 +127,76 @@ func (s *Session) close(code websocket.StatusCode, reason string) {
 	cancel()
 }
 
-// dispatch handles a message of an admitted agent; the cache and the
-// orders follow in later steps.
+// request sends an order and waits for its result until ctx ends.
+func (s *Session) request(ctx context.Context, typ string, payload any) (agentproto.Result, error) {
+	e, err := agentproto.New(typ, "", payload)
+	if err != nil {
+		return agentproto.Result{}, err
+	}
+	data, err := json.Marshal(e)
+	if err != nil {
+		return agentproto.Result{}, err
+	}
+	if len(data) > agentproto.MaxPanelMessage {
+		return agentproto.Result{}, errors.New("order over the size limit")
+	}
+	ch := make(chan agentproto.Result, 1)
+	s.mu.Lock()
+	if len(s.pending) >= maxPending {
+		s.mu.Unlock()
+		return agentproto.Result{}, ErrBusy
+	}
+	s.pending[e.ID] = ch
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.pending, e.ID)
+		s.mu.Unlock()
+	}()
+	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	err = s.conn.Write(wctx, websocket.MessageText, data)
+	cancel()
+	if err != nil {
+		return agentproto.Result{}, ErrNotConnected
+	}
+	select {
+	case r := <-ch:
+		return r, nil
+	case <-s.done:
+		return agentproto.Result{}, ErrNotConnected
+	case <-ctx.Done():
+		return agentproto.Result{}, ctx.Err()
+	}
+}
+
+// result hands a result to the order waiting for it; results nobody
+// waits for are dropped.
+func (s *Session) result(e agentproto.Envelope) {
+	r, err := agentproto.Payload[agentproto.Result](e)
+	if err != nil {
+		return
+	}
+	r.Code = foreign.Name(r.Code, 32)
+	r.Message = foreign.Name(r.Message, 512)
+	s.mu.Lock()
+	ch := s.pending[e.Ref]
+	s.mu.Unlock()
+	if ch != nil {
+		select {
+		case ch <- r:
+		default:
+		}
+	}
+}
+
+// dispatch handles a message of an admitted agent.
 func (h *Hub) dispatch(s *Session, e agentproto.Envelope) {
-	h.log.Debug("agent message", slog.String("agent_id", s.AgentID), slog.String("type", e.Type))
+	switch e.Type {
+	case agentproto.TypeResult:
+		s.result(e)
+	default:
+		if h.onMessage != nil {
+			h.onMessage(s.AgentID, e)
+		}
+	}
 }
