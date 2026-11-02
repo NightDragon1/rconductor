@@ -1,6 +1,6 @@
 # Technologie
 
-Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
+Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. Abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
 
 ## 1. Grundsätze
 
@@ -19,7 +19,7 @@ Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept
 | WebSocket | coder/websocket (Nachfolger von nhooyr/websocket) | Browser und Agent über dieselbe Bibliothek, Kontext-basiert, gepflegt | R1 |
 | Agent-Port | crypto/tls mit TLS 1.3, selbstsignierte Ed25519-Zertifikate, Pinning über eigene Zertifikatsprüfung | erfüllt D-005 und D-019 ohne CA | R1 |
 | Docker | github.com/moby/moby/client (offizielles SDK) | einziger offizieller Weg zur Docker-API; github.com/docker/docker ist seit Docker v29 veraltet | R1 |
-| Source RCON | gorcon/rcon (MIT) hinter eigener Adapter-Schnittstelle | erprobte Umsetzung des Source-Protokolls; Austausch ohne Umbau möglich | R1 |
+| Source RCON | eigener Adapter mit Endmarker-Verfahren hinter der Adapter-Schnittstelle (Design 3.8) | gorcon/rcon liest je Befehl nur ein Paket und vervollständigt Antworten über 4 KB nicht (PROT-001); kein Fremdcode nötig | R1 |
 | Weitere Protokolle | eigene Adapter oder Bibliotheken je Protokoll | HTTP-API ab R2, BattlEye, WebRCON und Telnet ab R3 | R2, R3 |
 | Datenbankzugriff | database/sql mit sqlc, je Datenbank ein eigener Satz Abfragen | typsicher, SQL bleibt sichtbar, kein ORM-Overhead | R1 |
 | SQLite | modernc.org/sqlite | reines Go ohne CGO, dadurch statisches Binary | R1 |
@@ -29,7 +29,7 @@ Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept
 | Verschlüsselung | AES-256-GCM und HKDF aus der Standardbibliothek | D-030 | R1 |
 | IDs | UUIDv7 mit google/uuid | D-027 | R1 |
 | Regex | regexp der Standardbibliothek (RE2) | lineare Laufzeit, SEC-003 | R1 |
-| Spielprofile | YAML mit goccy/go-yaml, Dateiänderungen über fsnotify | Hot Reload nach CAT-003 | R1 |
+| Spielprofile | YAML mit goccy/go-yaml, Dateiänderungen über fsnotify, zusätzlich Abgleich in festem Intervall (Design 7.1) | Hot Reload nach CAT-003, auch auf Netzlaufwerken | R1 |
 | Logging | log/slog | Text oder JSON nach RCD\_LOG\_FORMAT | R1 |
 | Zwei-Faktor | pquerna/otp (TOTP) | verbreitet, RFC 6238 | R2 |
 | Keycloak | coreos/go-oidc mit golang.org/x/oauth2 | Standard-OIDC, nur Authentifizierung (D-007) | R2 |
@@ -75,5 +75,5 @@ SvelteKit (bisher D-002) bringt kleinere Bundles und weniger Code. Bei einer ins
 ## Quellen
 
 - [moby/moby](https://github.com/moby/moby): Go-Client als eigenes Modul, github.com/docker/docker seit v29 veraltet
-- [gorcon/rcon](https://github.com/gorcon/rcon/blob/master/README.md): Source RCON in Go, MIT
+- [gorcon/rcon](https://github.com/gorcon/rcon/blob/master/README.md): Source RCON in Go, MIT; geprüft und nicht verwendet (Design 3.8)
 - [coder/websocket](https://github.com/nhooyr/ws): Nachfolger von nhooyr/websocket

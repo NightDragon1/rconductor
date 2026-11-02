@@ -1,5 +1,7 @@
 # Kandidaten für Revision 2.2
 
+> Eingearbeitet in Dokumentversion 2.2 (Gesamtkonzept, Kapitel 11). Diese Datei bleibt als Begründung der Änderungen erhalten.
+
 Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Dokumentversion 2.1 aufgefallen sind. Keiner der Punkte ändert das freigegebene Konzept 2.1; über die Übernahme entscheidet Rob.
 
 | Nr. | Thema | Betroffen |
@@ -53,7 +55,7 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 
 - **Fundstelle:** 04-technologie.md, Kapitel 2 (Source RCON: gorcon/rcon hinter eigener Adapter-Schnittstelle; „Austausch ohne Umbau möglich“); 05-abnahme-r1.md, PROT-001 (Antworten über 4 KB). Umsetzung: internal/rcon/source.
 - **Befund (M2):** gorcon/rcon v1.4.0 liest je Befehl genau ein Paket mit fester Paket-ID, kennt kein Endmarker-Verfahren und begrenzt Befehle künstlich auf 1000 Zeichen. Antworten über 4 KB, die Minecraft auf mehrere Pakete ohne Endmarke verteilt, kämen unvollständig an.
-- **Umsetzung (M2, nach Vorgabe):** eigener Adapter hinter der vorgesehenen Schnittstelle: nach jedem Befehl ein leeres Paket als Endmarker, Sammeln bis zu dessen Antwort, Pakete mit fremder ID werden verworfen; Grenzen 64 KiB je Paket und 1 MiB je Antwort (SEC-006). gorcon/rcon wird nicht eingebunden.
+- **Umsetzung (M2, nach Vorgabe):** eigener Adapter hinter der vorgesehenen Schnittstelle: nach dem ersten Antwortpaket eines Befehls ein leeres Paket als Endmarker (Commit 5eb5f9b; Minecraft 26.3 trennt die Verbindung, wenn Befehl und Marker zusammen ankommen), Sammeln bis zu dessen Antwort, Pakete mit fremder ID werden verworfen; Grenzen 64 KiB je Paket und 1 MiB je Antwort (SEC-006). gorcon/rcon wird nicht eingebunden.
 - **Vorschlag:** Technologie 2, Zeile Source RCON: „eigener Adapter (Endmarker-Verfahren)“ statt gorcon/rcon.
 - **Begründung:** Erfüllt PROT-001 ohne Fremdcode; der Austausch war über die Adapter-Schnittstelle ohnehin vorgesehen.
 
@@ -74,7 +76,7 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 ## 9. Unicode-Format- und Bidi-Zeichen in Fremddaten entfernen
 
 - **Fundstelle:** 01-gesamtkonzept.md, SEC-006 („escaped dargestellt und in der Größe begrenzt“); 05-abnahme-r1.md, SEC-006; 06-sicherheit.md, T-008. Umsetzung: internal/cache (Spielernamen, Commit a0fba0a).
-- **Umsetzung (M2):** Aus Spielernamen werden neben Steuerzeichen (Unicode-Kategorie Cc) auch Formatzeichen (Kategorie Cf) entfernt, darunter Bidi-Steuerzeichen wie U+202E (Schreibrichtung umkehren), Zero-Width-Zeichen und U+FEFF.
+- **Umsetzung (M2):** Aus Spielernamen werden neben Steuerzeichen (Unicode-Kategorie Cc) auch Formatzeichen (Kategorie Cf) entfernt, darunter Bidi-Steuerzeichen wie U+202E (Schreibrichtung umkehren), Zero-Width-Zeichen und U+FEFF. Aus RCON-Antworten werden Steuerzeichen außer Zeilenumbruch und Tabulator entfernt; ungültiges UTF-8 wird ersetzt (internal/foreign, Commit c8220d4).
 - **Vorschlag:** SEC-006 ergänzen: „Steuer- und Formatzeichen (Unicode Cc und Cf, u. a. Bidi-Steuerzeichen) werden aus Bezeichnern wie Spielernamen und Container-Namen entfernt“; Abnahme SEC-006 um einen Spielernamen mit U+202E erweitern, der ohne Umkehrung erscheint. Für längere Freitexte wie RCON-Antworten bleibt es beim Escaping und der Oberfläche überlassen, Bidi-Zeichen zu isolieren.
 - **Begründung:** Escaping verhindert Code, aber nicht Täuschung: Ein Name mit Bidi-Steuerzeichen kann in Listen und im Audit als ein anderer erscheinen (gleiche Technik wie „Trojan Source“). Für Bezeichner haben diese Zeichen keinen legitimen Zweck.
 

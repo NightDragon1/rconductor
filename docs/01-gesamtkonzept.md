@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.1, Stand 01.11.2026, Status freigegeben; Änderungen gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.2, Stand 02.11.2026, Status freigegeben; Änderungen gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -73,9 +73,9 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | SEC-003 | Regex-Sicherheit | Muster mit RE2-Semantik (lineare Laufzeit), Zeilenlimit und Timeout | Agent | Muss | R1 | 1 |
 | SEC-004 | Login-Schutz | Verzögerung und zeitweise Sperre nach wiederholten Fehlanmeldungen | Backend | Muss | R1 | 1 |
 | SEC-005 | Key-Trennung | Master-Key liegt nur in /secrets, nie in der Datenbank oder im Datenbank-Backup; optional per Docker-Secret übergebbar; ab R2 kann der RCON-Admin einen mit Passphrase geschützten Recovery-Export herunterladen | Backend, UI | Muss | R1 | 1 |
-| SEC-006 | Fremddaten | Daten von Spieleservern und Agents (Antworten, Spielernamen, Logs, Versionen, Container-Namen) werden escaped dargestellt und in der Größe begrenzt; Farbcodes nur in eine feste Liste erlaubter Stile | Backend, UI | Muss | R1 | 1 |
+| SEC-006 | Fremddaten | Daten von Spieleservern und Agents (Antworten, Spielernamen, Logs, Versionen, Container-Namen) werden escaped dargestellt und in der Größe begrenzt; Farbcodes nur in eine feste Liste erlaubter Stile. Steuer- und Formatzeichen (Unicode Cc und Cf, u. a. Bidi-Steuerzeichen) werden aus Bezeichnern wie Spielernamen und Container-Namen entfernt, Steuerzeichen außer Zeilenumbruch und Tabulator auch aus Freitext | Backend, UI | Muss | R1 | 2 |
 | SEC-007 | Grenzen Agent-Port | Höchstgröße je Nachricht, begrenzte Logzeilen je Nachricht, Rate für Verbindungsaufbau je Quelladresse, Obergrenze für wartende Kopplungen | Backend, Agent | Muss | R1 | 1 |
-| SEC-008 | WebSocket-Grenzen | Höchstzahl an WebSocket-Verbindungen und Abos je Session | Backend | Soll | R1 | 1 |
+| SEC-008 | WebSocket-Grenzen | Höchstzahl an WebSocket-Verbindungen je Session und an Abos je Verbindung, als Einstellungen des RCON-Admins (Design 2.3, 5.6) | Backend | Soll | R1 | 2 |
 | SEC-009 | Sicherheitsheader | Content-Security-Policy ohne Inline-Skripte, X-Content-Type-Options, Referrer-Policy, frame-ancestors none | Backend | Muss | R1 | 1 |
 | SEC-010 | Socket-Proxy | Doku empfiehlt einen Socket-Proxy vor dem Docker-Socket, der nur die vom Agent benötigten Endpunkte durchlässt; der Agent funktioniert damit unverändert | Agent, Doku | Kann | R1 | 1 |
 | SEC-011 | Audit-Hash-Kette | Manipulationssichere Verkettung der Audit-Einträge mit Prüffunktion | Backend, DB | Kann | Backlog | 1 |
@@ -119,7 +119,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 
 | ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
 | --- | --- | --- | --- | --- | --- | --- |
-| SRV-001 | Server anlegen | Name, Spielprofil, Protokoll, Host, Port, Zugangsdaten, Agent und Container | Backend, UI | Muss | R1 | 1 |
+| SRV-001 | Server anlegen | Name, Spielprofil, Protokoll, Host, Port, Zugangsdaten, Agent und Container (Agent und Container setzbar ab M3) | Backend, UI | Muss | R1 | 2 |
 | SRV-002 | Zugangsdaten verschlüsselt | RCON-Zugangsdaten mit AES-256-GCM verschlüsselt; der Master-Key wird beim ersten Start automatisch erzeugt und als Datei in /secrets abgelegt, getrennt von Datenbank und Backups (D-015, SEC-005), ohne Zutun des Betreibers; bei Verlust müssen die Zugangsdaten neu eingetragen werden | Backend, DB | Muss | R1 | 2 |
 | SRV-003 | Servergruppen | RCON-Admin legt Servergruppen an und ordnet Server zu | Backend, UI | Muss | R1 | 1 |
 | SRV-004 | Erreichbarkeit | Status je Server: verbunden, Auth-Fehler, offline | Backend | Muss | R1 | 1 |
@@ -417,6 +417,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 1.5 | 01.11.2026 | Testbarkeit über Ereignis-Logs: Design 8, Abnahme R1 Abschnitt 9, NFR-016, SEC-012, D-042 |
 | 2.0 | 01.11.2026 | Freigabe durch Rob; Basis für R1. Änderungen ab jetzt nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.1 | 01.11.2026 | Freigabe durch Rob: Erkenntnisse aus M0 und M1 eingearbeitet (Kapitel 10); Revision 2 für NFR-010; AUTH-010, AUTH-011, SEC-013 und D-043 bis D-046 neu. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
+| 2.2 | 02.11.2026 | Freigabe durch Rob: Erkenntnisse aus M2 eingearbeitet (Kapitel 11); Revision 2 für SEC-006, SEC-008 und SRV-001; Design 3.8 (RCON-Verbindung) neu; Einstellungen profiles.poll\_interval, ws.max\_sockets\_per\_session, ws.max\_subscriptions\_per\_socket; Grund-Code timeout. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 
 ## 10. Änderungen in Version 2.1
 
@@ -454,3 +455,22 @@ Eingearbeitet aus den Kandidaten nach M0 und M1 (bisher docs/revision-2.1-kandid
 | 28 | Neue Anforderung AUTH-010: erzwungener Passwortwechsel mit Grund-Code password\_change\_required; Passwort-Reset durch Verwaltende | 2.2 AUTH-010, Design 2.2, 3.5, 3.6, 4.2, Abnahme, Plan M2 |
 | 29 | Ratenlimits als Einstellungen ratelimit.<rolle>.per\_minute und .burst | Design 3.4, 5.6 |
 | 30 | Neue Anforderung AUTH-011: Wiederherstellung des Notfall-Admins per RCD\_EMERGENCY\_ADMIN\_RESET, Ereigniscode auth.emergency\_admin.reset; Verdrängung im Login-Schutz festgelegt | 2.2 AUTH-011, Design 3.6, 3.7, 5.2, 8.3, Abnahme, Plan M2 |
+
+## 11. Änderungen in Version 2.2
+
+Eingearbeitet aus den Kandidaten nach M2 (docs/revision-2.2-kandidaten.md, Nr. 1 bis 10, Nummern wie dort); Nr. 11 ergibt sich aus dem Abschluss von M2, Nr. 12 aus dem Review.
+
+| Nr. | Änderung | Fundstelle in 2.2 |
+| --- | --- | --- |
+| 1 | Beispielprofil Minecraft auf Englisch wie das ausgelieferte Profil | Design 7.4 |
+| 2 | Hot Reload mit Abgleich in festem Intervall, Einstellung profiles.poll\_interval | Design 5.6, 7.1, Technologie 2 |
+| 3 | Sichtbarkeit der Serverfelder je Rolle | Design 2.2 |
+| 4 | Änderungen an Servergruppen beenden keine Sessions; WebSocket-Abos werden sofort neu geprüft | Design 2.1, 2.3 |
+| 5 | Revision 2 von SRV-001: Agent und Container am Server erst ab M3 setzbar | 2.4 SRV-001, Design 2.2, Plan R1 Kapitel 3 |
+| 6 | Eigener Source-RCON-Adapter statt gorcon/rcon; Endmarker erst nach dem ersten Antwortpaket | Design 3.8, Technologie 2 |
+| 7 | RCON-Verbindung: Prüfung im Leerlauf alle 2 s, Backoff höchstens 5 s; Design 1.1 gilt für den Agent | Design 1.1, 3.8 |
+| 8 | Audit eines Befehls nur anhängend (cmd.sent, cmd.result); 504 mit Grund-Code timeout | Design 3.3, 3.5, 3.8, 4.1 |
+| 9 | Revision 2 von SEC-006: Steuer- und Formatzeichen aus Bezeichnern, Steuerzeichen aus Freitext entfernt | 2.1 SEC-006, Design 3.3, Sicherheit 4, Abnahme SEC-006 |
+| 10 | Revision 2 von SEC-008: Sockets je Session und Abos je Socket als Einstellungen, ältester Socket weicht; Abo-Bestätigung subscribed | 2.1 SEC-008, Design 2.3, 5.6, Sicherheit T-018 und 4, Abnahme SEC-008 |
+| 11 | Teilabnahmen aus M2: SEC-006, SRV-003 und AUTH-006 mit E2E-Anteil werden in M4 abgenommen | Plan R1, Kapitel 3 |
+| 12 | RCON-Verbindung: TCP-Keepalive und Probe im Leerlauf alle 30 s gegen halboffene Verbindungen; Zeitlimit 10 s ab Annahme einschließlich Warteschlange, volle Warteschlange 503 busy | Design 3.5, 3.8 |

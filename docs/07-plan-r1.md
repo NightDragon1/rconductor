@@ -1,6 +1,6 @@
 # Arbeitspakete R1
 
-Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
+Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
 
 ## 1. Ablauf
 
@@ -29,11 +29,13 @@ Einige Anforderungen werden in einem Meilenstein umgesetzt, ihr Abnahmekriterium
 | NFR-016, SEC-012 | M0 | M5 | Testlauf aller Ereigniscodes und Geheimnisse |
 | PRJ-001, PRJ-002 | M0 | M5 | Veröffentlichung, Review vor dem Release |
 | NFR-003 (Proxys) | M1 | M5 | Basispfad und WebSocket-Upgrade |
-| ROLE-003, ROLE-005, ROLE-007, AUTH-006 | M1 | M2 | Server-API, Befehlspipeline, WebSocket |
+| ROLE-003, ROLE-005, ROLE-007 | M1 | M2 | Server-API, Befehlspipeline |
 | AUD-001 | M1 | M3 | Einträge für Befehle und Agent-Aktionen |
 | ROLE-002, AUTH-009 | M1 | M4 | E2E in der Oberfläche |
 | SEC-013 | M0 | M5 | erstes Release mit Signatur und SBOM |
-| SRV-001 | M2 | M4 | Auswahl von Agent und Container, E2E |
+| SRV-001 | M2 | M4 | Auswahl von Agent und Container (setzbar ab M3), E2E |
+| SEC-006, SRV-003 | M2 | M4 | E2E in der Oberfläche (Darstellung, Farbcodes, Servergruppen) |
+| AUTH-006 | M1, M2 | M4 | E2E: Abmelden beendet offene WebSockets in der Oberfläche |
 
 ## 4. Regeln
 

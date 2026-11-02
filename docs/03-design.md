@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -15,7 +15,7 @@ Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept
 | Format | JSON, ein Nachrichtenumschlag für alle Typen (1.5) |
 | Aufbau | Immer vom Agent (D-016) |
 | Lebenszeichen | WebSocket-Ping alle 30 s; ohne Pong nach 60 s gilt die Verbindung als getrennt |
-| Wiederverbindung | Exponentielles Backoff: Start 1 s, Faktor 1,6, Zufallsanteil ±20 %, höchstens 120 s |
+| Wiederverbindung | Exponentielles Backoff: Start 1 s, Faktor 1,6, Zufallsanteil ±20 %, höchstens 120 s. Gilt für den Agent; RCON-Verbindungen siehe 3.8 |
 
 Grundlage: Socket.IO pingt standardmäßig alle 25 s und wartet 20 s auf Antwort ([Socket.IO](https://socket.io/zh-CN/docs/v4/server-options/)); das Chat-Beispiel von gorilla/websocket wartet 60 s auf ein Pong und pingt nach 54 s ([gorilla/websocket](https://chromium.googlesource.com/external/github.com/gorilla/websocket/+/v1.2.0/examples/chat/client.go)). Das Backoff übernimmt die Standardwerte von gRPC: 1 s, Faktor 1,6, Jitter 0,2, höchstens 120 s ([grpc-go](https://github.com/grpc/grpc-go/blob/e90fd41673eabe322f7e825312a5511c660fb241/backoff/backoff.go)). Die Token-Laufzeit von 24 h entspricht dem Standard für Bootstrap-Tokens in kubeadm ([Kubernetes](https://kubernetes.io/docs/reference/setup-tools/kubeadm/generated/kubeadm_token_create)).
 
@@ -91,7 +91,7 @@ Das Panel löscht den Agent-Schlüssel, sendet revoked und trennt die Verbindung
 | Stil | REST mit JSON, Basis /api/v1, Version im Pfad |
 | Live-Daten | Ein WebSocket je Browser-Tab mit Abos (2.3) |
 | Session | Serverseitig; Session-ID im Cookie, immer HttpOnly und SameSite=Lax; über HTTPS (RCD\_PUBLIC\_URL mit https oder X-Forwarded-Proto: https von einem vertrauenswürdigen Proxy) zusätzlich Secure und mit Präfix \_\_Host-, sonst ohne Secure und mit Warnung beim Start; in der DB nur als Hash gespeichert. Inaktivität und Höchstdauer laut 5.6 (D-043) |
-| Rechte | Bei jeder Anfrage neu geprüft, nie aus der Session übernommen. Sperre, Löschen und jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants oder Supporter-Freigabe eines Benutzers beenden seine Sessions sofort (AUTH-006, D-044). Änderungen am Inhalt einer Befehlsliste wirken ab der nächsten Anfrage, ohne Abmeldung |
+| Rechte | Bei jeder Anfrage neu geprüft, nie aus der Session übernommen. Sperre, Löschen und jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants oder Supporter-Freigabe eines Benutzers beenden seine Sessions sofort (AUTH-006, D-044). Änderungen am Inhalt einer Befehlsliste und an den Servern einer Servergruppe (auch ihr Löschen) wirken ab der nächsten Anfrage, ohne Abmeldung, weil sich keine Zuweisung eines Benutzers ändert; offene WebSocket-Abos werden dabei sofort neu geprüft (2.3) |
 | CSRF | SameSite=Lax (D-043) plus Prüfung des Origin-Headers bei allen schreibenden Anfragen und beim WebSocket-Aufbau |
 | Proxy | X-Forwarded-For und X-Forwarded-Proto werden nur von konfigurierten vertrauenswürdigen Proxys übernommen; Client ist die rechteste Adresse in X-Forwarded-For, die kein vertrauenswürdiger Proxy ist |
 | Reservierte Pfade | /api (jede Version), /healthz und /metrics werden nie von der Oberfläche beantwortet; /healthz und /metrics werden mit NFR-006 (R2) befüllt |
@@ -129,13 +129,16 @@ Das Panel löscht den Agent-Schlüssel, sendet revoked und trennt die Verbindung
 | /backups | GET, POST | Sicherungen anzeigen und auslösen | RCON-Admin |
 | /ws | GET (Upgrade) | WebSocket für Live-Daten | alle |
 
+Felder eines Servers je Rolle: RCON-Admin und Server-Admin sehen Protokoll, Host, Port, Zustand der Zugangsdaten (ok, missing, reenter), Agent, Container und Spielports; Moderatoren und Supporter nur Name, Profil und die Servergruppen in ihrem Scope. Das RCON-Passwort gibt die API nie zurück. Agent und Container sind erst mit den Agents (M3) setzbar.
+
 ### 2.3 WebSocket
 
 - Aufbau über /api/v1/ws mit dem Session-Cookie; Origin wird geprüft.
-- Nachrichten vom Browser: subscribe und unsubscribe mit einem Thema. Nachrichten vom Panel: event mit Thema und Daten, error mit Grund.
-- Themen: servers.overview, server.{id}.status, server.{id}.metrics, server.{id}.console, server.{id}.logs; notifications ab R2.
-- Rechte werden beim Abonnieren geprüft und bei jeder Rechteänderung neu bewertet; entzogene Abos beendet das Panel mit error.
-- Lebenszeichen per Ping alle 30 s. Nach einer Wiederverbindung holt die Oberfläche den aktuellen Stand per REST und abonniert neu.
+- Nachrichten vom Browser: subscribe und unsubscribe mit einem Thema, höchstens 4 KiB je Nachricht. Nachrichten vom Panel: subscribed mit Thema als Bestätigung eines Abos, event mit Thema und Daten, error mit Thema und Grund.
+- Themen: servers.overview, server.{id}.status, server.{id}.metrics, server.{id}.console, server.{id}.logs; notifications ab R2. server.{id}.metrics und server.{id}.logs antworten bis zu den Agents (M3) mit error unsupported.
+- Rechte werden beim Abonnieren geprüft und bei jeder Änderung von Rechten, Servergruppen, Scopes oder Grants sofort neu bewertet; entzogene Abos beendet das Panel mit error revoked, auch wenn die Session bleibt. Endet die Session, schließt das Panel ihre Sockets.
+- Grenzen (SEC-008): höchstens ws.max\_sockets\_per\_session WebSockets je Session (Standard 20) und ws.max\_subscriptions\_per\_socket Abos je WebSocket (Standard 16), beide in 5.6. Ein weiteres Abo erhält error limit (ws.subscribe.denied). Öffnet eine Session einen Socket über der Grenze, schließt das Panel ihren ältesten Socket mit error replaced; der neue bleibt. Ein Browser, der 64 Nachrichten nicht abholt, wird getrennt.
+- Lebenszeichen per Ping alle 30 s; ohne Pong binnen 30 s gilt die Verbindung als getrennt, bei jedem Ping wird die Session geprüft. Nach einer Wiederverbindung holt die Oberfläche den aktuellen Stand per REST und abonniert neu.
 
 ## 3. Rechteprüfung und Befehlspipeline
 
@@ -168,9 +171,9 @@ Verkleinert sich ein Scope oben, verkleinert er sich sofort für alle darunter. 
 7. Liste: Token-Pfad-Abgleich gegen die für diesen Server geltende Liste (3.2). Ein Eintrag erlaubt nur ganze Tokens und alles danach; Vergleich mit Groß-/Kleinschreibung laut Spielprofil, Standard ohne. Argument-Einschränkung folgt in R2.
 8. Ratenlimit (3.4).
 9. Markierung mit Request-ID, Session, Benutzer und Rolle.
-10. Audit-Eintrag vor dem Senden; Ablehnungen werden mit Grund protokolliert.
+10. Audit-Eintrag cmd.sent vor dem Senden (ID = Request-ID); eine Ablehnung ist ein einzelner Eintrag cmd.denied mit Grund.
 11. Warteschlange je Server, Versand über die eine RCON-Verbindung, Zuordnung der Antwort per Request-ID.
-12. Antwort im Response, als Ereignis an alle Abonnenten der Konsole und als Ergebnis im Audit.
+12. Antwort im Response und als Ereignis an alle Abonnenten der Konsole; das Ergebnis (ok, error oder timeout, Dauer in Millisekunden) ist ein zweiter, angehängter Audit-Eintrag cmd.result mit Verweis auf die Request-ID. Das Audit-Log ist nur anhängend, kein Eintrag wird nachträglich geändert. Der Verlauf verbindet beide Einträge; fehlt das Ergebnis, zeigt er error mit not\_answered. Die Antwort ist Fremddaten (SEC-006): Steuerzeichen außer Zeilenumbruch und Tabulator werden entfernt, gespeichert und verteilt werden höchstens 64 KiB.
 
 ### 3.4 Ratenlimit
 
@@ -198,9 +201,10 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | 422 | invalid | Leerer oder zu langer Befehl nach der Bereinigung |
 | 429 | rate\_limited | Ratenlimit erreicht |
 | 503 | server\_unavailable | Keine RCON-Verbindung zum Spieleserver |
+| 504 | timeout | Der Spieleserver hat nicht binnen 10 s geantwortet |
 | 403 | forbidden | Verwaltungsaktion nicht erlaubt, z. B. Rolle auf eigene Stufe heben (3.6) |
 | 403 | password\_change\_required | Passwortwechsel erzwungen; erlaubt sind nur /me/password, /auth/logout und /auth/session (AUTH-010) |
-| 503 | busy | Panel ausgelastet, z. B. alle Plätze der Passwortberechnung belegt; mit Retry-After |
+| 503 | busy | Panel ausgelastet, z. B. alle Plätze der Passwortberechnung belegt oder die Warteschlange eines Spieleservers voll (3.8); mit Retry-After |
 
 ### 3.6 Verwaltungsrechte
 
@@ -226,13 +230,23 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | Passwortberechnung | Argon2id mit t=3, 64 MiB, p=4; höchstens RCD\_PASSWORD\_HASH\_CONCURRENCY Berechnungen gleichzeitig, sonst nach 5 s Wartezeit 503 busy |
 | Passwörter | 12 bis 128 Zeichen |
 
+### 3.8 RCON-Verbindung
+
+| Punkt | Festlegung |
+| --- | --- |
+| Verbindung | Genau eine je Spieleserver (PROT-002); Befehle aller Benutzer laufen nacheinander über eine Warteschlange, Antworten gehen per Request-ID an ihren Absender. Höchstens 64 Befehle warten je Server; ist die Warteschlange voll, antwortet die API sofort mit 503 busy (3.5) |
+| Prüfung im Leerlauf | TCP-Keepalive auf jeder RCON-Verbindung (Leerlauf 10 s, Intervall 3 s, 3 Proben). Zusätzlich alle 2 s ein kurzer Lesevorgang ohne Senden, der ein vom Spieleserver geschlossenes Ende sofort erkennt, und im Leerlauf alle 30 s ein leeres Paket als Probe wie der Endmarker; ohne Antwort binnen 5 s gilt der Server als offline und die Verbindung wird neu aufgebaut. Halboffene Verbindungen nach Host-Absturz oder Netzausfall liefern kein FIN oder RST; ein Lesevorgang allein erkennt sie nicht (SRV-004) |
+| Wiederverbindung | Nach einem Abbruch sofort, danach Backoff wie 1.1 (Start 1 s, Faktor 1,6, Zufallsanteil ±20 % je Wartezeit), aber höchstens 5 s, damit ein Wechsel binnen 10 s sichtbar ist. Der Zufallsanteil verhindert, dass nach einem Netzausfall alle Server im Gleichschritt neu verbinden |
+| Zeitüberschreitung | 10 s je Befehl ab seiner Annahme, einschließlich der Wartezeit in der Warteschlange; danach Antwort 504 timeout (3.5). Ein Befehl, dessen Frist in der Warteschlange abläuft, wird nicht mehr gesendet. Die Verbindung bleibt, eine späte Antwort wird an ihrer Paket-ID erkannt und verworfen |
+| Source RCON | Eigener Adapter (Technologie 2): Lange Antworten kommen in mehreren Paketen ohne Endmarke. Nach dem ersten Antwortpaket eines Befehls sendet der Adapter ein leeres Paket als Endmarker und sammelt bis zu dessen Antwort; Pakete mit fremder ID werden verworfen. Befehl und Marker gehen nie zusammen hinaus, weil Minecraft nur ein Paket je Lesevorgang verarbeitet und die Verbindung sonst trennt. Grenzen: 64 KiB je Paket, 1 MiB je Antwort (SEC-006) |
+
 ## 4. Datenmodell
 
 ### 4.1 Grundsätze
 
 | Punkt | Festlegung |
 | --- | --- |
-| IDs | UUIDv7 für alle Datensätze; die Request-ID eines Befehls ist zugleich die ID seines Audit-Eintrags |
+| IDs | UUIDv7 für alle Datensätze; die Request-ID eines Befehls ist zugleich die ID seines ersten Audit-Eintrags; Folgeeinträge desselben Befehls verweisen auf sie (3.3) |
 | Zeit | Alle Zeitstempel in UTC |
 | Löschen | Soft-Delete über deleted\_at für users, servers, server\_groups, user\_groups, command\_lists; endgültiges Entfernen erst nach Ablauf der Audit-Frist. Eindeutige Namen gelten nur für nicht gelöschte Datensätze |
 | Geheimnisse | AES-256-GCM; jeder Wert speichert Key-ID, Nonce und Chiffrat. Der Schlüssel je Key-ID wird per HKDF aus dem Master-Key abgeleitet. Tabelle, Datensatz-ID und Spalte gehen als zusätzliche Authentisierungsdaten ein, damit verschlüsselte Werte nicht zwischen Datensätzen vertauscht werden können |
@@ -413,6 +427,9 @@ Globale Einstellungen in settings; nur der RCON-Admin liest und ändert sie übe
 | supporters.enabled | aus | Globale Supporter-Freigabe (ROLE-006); Abschalten beendet die Sessions aller Supporter |
 | audit.retention\_days | 90 | Aufbewahrung des Audit-Logs (AUD-003) |
 | ratelimit.<rolle>.per\_minute, ratelimit.<rolle>.burst | laut 3.4 (z. B. ratelimit.moderator: 20 und 5) | Ratenlimit je Rolle (CMD-019); <rolle> ist rcon\_admin, server\_admin, moderator oder supporter |
+| profiles.poll\_interval | 30 s (1 s bis 1 h) | Abgleich der Profildateien zusätzlich zu Dateiereignissen (CAT-003, 7.1) |
+| ws.max\_sockets\_per\_session | 20 (1 bis 100) | WebSockets je Session (SEC-008); darüber wird der älteste Socket mit error replaced geschlossen |
+| ws.max\_subscriptions\_per\_socket | 16 (1 bis 64) | Abos je WebSocket (SEC-008); darüber error limit |
 
 Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in die Volumes. Die Compose-Dateien setzen read\_only: true.
 
@@ -494,6 +511,7 @@ Die Seitenleiste wird zum Menü, Start, Stopp und Neustart wandern ins Menü im 
 
 - Ein Profil je Spiel als YAML-Datei. Mitgelieferte Profile liegen im Repository unter profiles/ und sind ins Panel-Image eingebettet; eigene Profile liegen in /data/profiles.
 - Ein eigenes Profil mit derselben id ersetzt das mitgelieferte und wird in der Oberfläche als angepasst markiert.
+- Änderungen kommen über Dateiereignisse; zusätzlich gleicht das Panel alle profiles.poll\_interval (5.6) Änderungszeit und Inhalts-Hash ab, weil Netzlaufwerke (NFS, SMB) und gemountete Host-Verzeichnisse unter Docker Desktop keine Ereignisse liefern. Dort gilt die 5-s-Grenze von CAT-003 nur mit entsprechend kurzem Intervall.
 - Jede Datei trägt eine Schemaversion. Eine ungültige Datei wird nicht importiert; der zuletzt gültige Stand bleibt aktiv, der Fehler steht im Log und in der Gesundheitsübersicht.
 - Der Katalog erlaubt oder verbietet nichts (CAT-002). Er liefert Autovervollständigung, Beschreibungen und die Parameterfelder der Befehlsseite.
 
@@ -542,7 +560,7 @@ protocol:
   default_port: 25575
 ports:
   game:
-    - { port: 25565, proto: tcp, name: Spiel }
+    - { port: 25565, proto: tcp, name: game }
 syntax:
   case_sensitive: false
   strip_prefix: "/"
@@ -559,27 +577,27 @@ version:
 formatting: minecraft
 catalog:
   - path: list
-    description: Spieler online anzeigen
+    description: Show players online
   - path: whitelist add
-    description: Spieler auf die Whitelist setzen
+    description: Add a player to the whitelist
     params:
-      - { name: spieler, type: player }
+      - { name: player, type: player }
   - path: kick
-    description: Spieler vom Server werfen
+    description: Kick a player from the server
     params:
-      - { name: spieler, type: player }
-      - { name: grund, type: text, optional: true }
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
   - path: time set
-    description: Tageszeit setzen
+    description: Set the time of day
     params:
-      - { name: zeit, type: choice, values: [day, night] }
+      - { name: time, type: choice, values: [day, night] }
   - path: say
-    description: Nachricht an alle Spieler
+    description: Message to all players
     params:
       - { name: text, type: text }
 ```
 
-Die Zahlenwerte im Beispiel (z. B. max\_length) werden beim ersten Profil gegen das Spiel geprüft.
+Die Zahlenwerte im Beispiel (z. B. max\_length) werden beim ersten Profil gegen das Spiel geprüft. Beschreibungen und Parameternamen sind englisch wie die Oberfläche in R1 (NFR-007); Übersetzungen kommen ab R2 über die Sprachdateien, nicht über das Profil.
 
 ## 8. Diagnose und Testbarkeit
 
