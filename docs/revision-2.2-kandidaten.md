@@ -12,6 +12,7 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 | 6 | Eigener Source-RCON-Adapter statt gorcon/rcon | Technologie 2, PROT-001 |
 | 7 | RCON-Verbindung: Prüfung im Leerlauf und Backoff höchstens 5 s | SRV-004, PROT-002, Design 1.1 |
 | 8 | Audit eines Befehls nur anhängend; 504 mit Grund-Code timeout | Design 3.3, 3.5, 4.1, 4.2 |
+| 9 | Unicode-Format- und Bidi-Zeichen in Fremddaten entfernen | SEC-006, Abnahme SEC-006 |
 
 ## 1. Beispielprofil in Design 7.4 auf Englisch
 
@@ -68,3 +69,10 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 - **Umsetzung (M2, nach Vorgabe):** Das Audit-Log ist nur anhängend; kein Eintrag wird nachträglich geändert. Vor dem Senden entsteht cmd.sent (ID = Request-ID, Ergebnis ok), nach der Antwort cmd.result mit eigener ID, Verweis auf die Request-ID (target\_type command), Ergebnis ok, error oder timeout und Dauer in Millisekunden. Eine Ablehnung ist ein einzelner Eintrag cmd.denied. Der Verlauf verbindet cmd.sent und cmd.result; fehlt das Ergebnis, zeigt er error mit not\_answered. Die Ereigniscodes im Log bleiben cmd.sent, cmd.response und cmd.timeout (Design 8.3). Eine Zeitüberschreitung (10 s) beantwortet die API mit 504 und Grund-Code timeout.
 - **Vorschlag:** Design 3.3 Schritte 10 und 12 so fassen; Design 3.5 um 504 timeout ergänzen; Design 4.1 um den Satz ergänzen, dass Folgeeinträge eines Befehls auf seine Request-ID verweisen.
 - **Begründung:** Ein unveränderliches Audit-Log ist nachvollziehbar und Grundlage der späteren Hash-Kette (SEC-011); die Request-ID bleibt ID des ersten Eintrags.
+
+## 9. Unicode-Format- und Bidi-Zeichen in Fremddaten entfernen
+
+- **Fundstelle:** 01-gesamtkonzept.md, SEC-006 („escaped dargestellt und in der Größe begrenzt“); 05-abnahme-r1.md, SEC-006; 06-sicherheit.md, T-008. Umsetzung: internal/cache (Spielernamen, Commit a0fba0a).
+- **Umsetzung (M2):** Aus Spielernamen werden neben Steuerzeichen (Unicode-Kategorie Cc) auch Formatzeichen (Kategorie Cf) entfernt, darunter Bidi-Steuerzeichen wie U+202E (Schreibrichtung umkehren), Zero-Width-Zeichen und U+FEFF.
+- **Vorschlag:** SEC-006 ergänzen: „Steuer- und Formatzeichen (Unicode Cc und Cf, u. a. Bidi-Steuerzeichen) werden aus Bezeichnern wie Spielernamen und Container-Namen entfernt“; Abnahme SEC-006 um einen Spielernamen mit U+202E erweitern, der ohne Umkehrung erscheint. Für längere Freitexte wie RCON-Antworten bleibt es beim Escaping und der Oberfläche überlassen, Bidi-Zeichen zu isolieren.
+- **Begründung:** Escaping verhindert Code, aber nicht Täuschung: Ein Name mit Bidi-Steuerzeichen kann in Listen und im Audit als ein anderer erscheinen (gleiche Technik wie „Trojan Source“). Für Bezeichner haben diese Zeichen keinen legitimen Zweck.
