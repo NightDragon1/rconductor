@@ -46,6 +46,7 @@ func testConfig(t *testing.T, root string) config.Panel {
 	cfg, err := config.LoadPanel(func(k string) (string, bool) {
 		v, ok := map[string]string{
 			"RCD_HTTP_ADDR":   "127.0.0.1:0",
+			"RCD_AGENT_ADDR":  "127.0.0.1:0",
 			"RCD_DATA_DIR":    filepath.Join(root, "data"),
 			"RCD_SECRETS_DIR": filepath.Join(root, "secrets"),
 			"RCD_BACKUP_DIR":  filepath.Join(root, "backups"),
@@ -129,7 +130,7 @@ func TestPanelStartupSequence(t *testing.T) {
 	}
 
 	got := strings.Join(events(t, first.String()), " ")
-	want := "app.start db.migrate.start db.migrate.done key.created profile.imported auth.initial_password.issued app.ready"
+	want := "app.start db.migrate.start db.migrate.done key.created profile.imported auth.initial_password.issued key.created app.ready"
 	if got != want {
 		t.Errorf("first start events = %q, want %q", got, want)
 	}
@@ -144,7 +145,7 @@ func TestPanelStartupSequence(t *testing.T) {
 		t.Fatalf("stop: %v", err)
 	}
 	got = strings.Join(events(t, second.String()), " ")
-	if want := "app.start db.migrate.done key.loaded app.ready"; got != want {
+	if want := "app.start db.migrate.done key.loaded key.loaded app.ready"; got != want {
 		t.Errorf("second start events = %q, want %q", got, want)
 	}
 	// AUTH-007: the initial password appears exactly once over two starts.

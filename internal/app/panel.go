@@ -6,6 +6,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/agenthub"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
@@ -45,6 +47,8 @@ type PanelOptions struct {
 	UI http.Handler
 	// Ready is called with the bound web address once the panel serves.
 	Ready func(httpAddr net.Addr)
+	// AgentReady is called with the bound agent port before Ready.
+	AgentReady func(agentAddr net.Addr)
 	// Console receives the one-time initial password of the emergency
 	// admin (AUTH-007), apart from the event log; nil means os.Stderr.
 	Console io.Writer
@@ -177,6 +181,25 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	wg.Go(func() { cleanup.Schedule(ctx, st, logs.Module("audit")) })
 	wg.Go(func() { importer.Watch(ctx) })
 
+	// Agent port with the panel's own key pair (Design 1.1, NFR-001).
+	panelKey, err := keys.LoadOrCreateIdentity(logs.Module("keys"), filepath.Join(cfg.SecretsDir, keys.PanelKeyFile))
+	if err != nil {
+		return err
+	}
+	agents := agenthub.New(panelKey, logs.Module("agent"), agenthub.Options{})
+	agentAddr := make(chan net.Addr, 1)
+	agentErr := make(chan error, 1)
+	wg.Go(func() { agentErr <- agents.Serve(ctx, cfg.AgentAddr, func(a net.Addr) { agentAddr <- a }) })
+	var boundAgent net.Addr
+	select {
+	case boundAgent = <-agentAddr:
+	case err := <-agentErr:
+		return fmt.Errorf("agent port %s: %w", cfg.AgentAddr, err)
+	}
+	if opts.AgentReady != nil {
+		opts.AgentReady(boundAgent)
+	}
+
 	webLog := logs.Module("web")
 	proxies := web.Proxies{Trusted: cfg.TrustedProxies, PublicURL: cfg.PublicURL}
 	if !proxies.HTTPSKnown() {
@@ -189,7 +212,8 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,
 		func(addr net.Addr) {
 			logs.Root().Info("ready", logging.Event(logging.AppReady),
-				slog.String(logging.KeyVersion, buildinfo.Version), slog.String("http_addr", addr.String()))
+				slog.String(logging.KeyVersion, buildinfo.Version), slog.String("http_addr", addr.String()),
+				slog.String("agent_addr", boundAgent.String()), slog.String("panel_fingerprint", panelKey.Fingerprint()))
 			if opts.Ready != nil {
 				opts.Ready(addr)
 			}

@@ -10,10 +10,12 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,6 +28,9 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	_ "modernc.org/sqlite"
+
+	"github.com/NightDragon1/rconductor/internal/agentproto"
+	"github.com/NightDragon1/rconductor/internal/ops/keys"
 )
 
 const nonRootUser = "65532:65532"
@@ -66,7 +71,7 @@ func newVolumes(t *testing.T) volumes {
 func startPanel(ctx context.Context, t *testing.T, v volumes) *testcontainers.DockerContainer {
 	t.Helper()
 	ctr, err := testcontainers.Run(ctx, panelImage(),
-		testcontainers.WithExposedPorts("8080/tcp"),
+		testcontainers.WithExposedPorts("8080/tcp", "8443/tcp"),
 		testcontainers.WithMounts(
 			testcontainers.VolumeMount(v.data, "/data"),
 			testcontainers.VolumeMount(v.secrets, "/secrets"),
@@ -189,7 +194,30 @@ func TestPanelImage(t *testing.T) {
 			t.Errorf("GET %s = %d, want %d", target, resp.StatusCode, want)
 		}
 	}
-	// The agent port 8443 follows in M3 (NFR-001 partially fulfilled).
+	// NFR-001: the agent port 8443 speaks TLS 1.3 with the panel key.
+	agentPort, err := first.PortEndpoint(ctx, "8443/tcp", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentKey, err := keys.LoadOrCreateIdentity(slog.New(slog.DiscardHandler), filepath.Join(t.TempDir(), keys.AgentKeyFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tlsCfg, err := agentproto.ClientConfig(agentKey, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := tls.Dialer{Config: tlsCfg}
+	conn, err := d.DialContext(ctx, "tcp", agentPort)
+	if err != nil {
+		t.Fatalf("agent port: %v", err)
+	}
+	state := conn.(*tls.Conn).ConnectionState()
+	_ = conn.Close()
+	panelKey, err := agentproto.PeerKey(state)
+	if state.Version != tls.VersionTLS13 || err != nil {
+		t.Errorf("agent port: TLS %x, key %v", state.Version, err)
+	}
 
 	out := logs(ctx, t, first)
 	for _, ev := range []string{"event=app.start", "event=db.migrate.done", "event=key.created", "event=auth.initial_password.issued", "event=app.ready"} {
@@ -199,6 +227,9 @@ func TestPanelImage(t *testing.T) {
 	}
 	if n := strings.Count(out, "password: "); n != 1 {
 		t.Errorf("initial password printed %d times on the first start, want 1", n)
+	}
+	if !strings.Contains(out, "path=/secrets/panel.key") || !strings.Contains(out, "panel_fingerprint="+keys.Fingerprint(panelKey)) {
+		t.Errorf("panel key not created in /secrets or not the key of the agent port:\n%s", out)
 	}
 	if !strings.Contains(out, "path=/secrets/master.key") {
 		t.Errorf("master key not created in /secrets:\n%s", out)

@@ -144,7 +144,9 @@ func TestCodesUniqueAndWellFormed(t *testing.T) {
 			t.Errorf("malformed code %s", c)
 		}
 	}
-	if len(AllCodes) != 46 {
-		t.Errorf("AllCodes has %d entries, Design 8.3 (revision 2.1) lists 46", len(AllCodes))
+	// Design 8.3 (revision 2.2) lists 46; agent.disconnected comes with
+	// revision 2.3 candidate 5.
+	if len(AllCodes) != 47 {
+		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected", len(AllCodes))
 	}
 }

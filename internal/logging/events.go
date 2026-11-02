@@ -70,6 +70,8 @@ const (
 	AgentPaired    Code = "agent.paired"
 	AgentRevoked   Code = "agent.revoked"
 	AgentLimit     Code = "agent.limit"
+	// AgentDisconnected is new in revision 2.3 candidate 5.
+	AgentDisconnected Code = "agent.disconnected"
 )
 
 // Agent itself.
@@ -99,7 +101,7 @@ var AllCodes = []Code{
 	CmdAccepted, CmdDenied, CmdSent, CmdResponse, CmdTimeout,
 	RCONConnected, RCONAuthFailed, RCONDisconnected, RCONReconnect,
 	ProfileImported, ProfileRejected, ProfileOverridden,
-	AgentConnected, AgentRejected, AgentPaired, AgentRevoked, AgentLimit,
+	AgentConnected, AgentRejected, AgentPaired, AgentRevoked, AgentLimit, AgentDisconnected,
 	AgentHandshake, AgentForbidden, AgentUnsupported, DockerAction,
 	LogsFollowStart, LogsFollowStop,
 	WSSubscribe, WSSubscribeDenied, CacheStale,
