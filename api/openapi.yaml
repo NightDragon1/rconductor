@@ -200,6 +200,88 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /servers/{id}/commands:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    post:
+      operationId: sendCommand
+      summary: Send a command over the server's one RCON connection (Design 3.3).
+      description: >-
+        RCON admin and server admin may send any command (CMD-002);
+        moderators and supporters only commands of the list that applies
+        to them on this server, never wrappers (CMD-004, CMD-005). The
+        answer comes synchronously and as event to the console; the
+        request ID is also the ID of the audit entry (CMD-007).
+      tags: [commands]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandInput"
+      responses:
+        "200":
+          description: The game server's answer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+        "504":
+          description: The game server did not answer in time.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /servers/{id}/history:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: getHistory
+      summary: Command history of a server, newest first (Design 2.2).
+      description: >-
+        RCON admin and server admin see all commands; moderators and
+        supporters only their own in R1.
+      tags: [commands]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 256
+      responses:
+        "200":
+          description: A page of the history.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryPage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
   /server-groups:
     get:
       operationId: listServerGroups
@@ -1065,6 +1147,75 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    CommandInput:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+          minLength: 1
+          maxLength: 10000
+
+    CommandResult:
+      type: object
+      required: [request_id, ts, command, response, truncated]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        ts:
+          type: string
+          format: date-time
+        command:
+          type: string
+          description: The command as sent, after cleaning.
+        response:
+          type: string
+          description: Foreign data from the game server (SEC-006).
+        truncated:
+          type: boolean
+          description: The answer was longer than 64 KiB and is cut.
+
+    HistoryEntry:
+      type: object
+      required: [request_id, ts, command, result]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        ts:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+          format: uuid
+        pseudonym:
+          type: string
+        role:
+          type: string
+        command:
+          type: string
+        response:
+          type: string
+        truncated:
+          type: boolean
+        result:
+          type: string
+          enum: [ok, denied, error, timeout]
+        reason:
+          type: string
+
+    HistoryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryEntry"
+        next_cursor:
+          type: string
 
     Server:
       type: object

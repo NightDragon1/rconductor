@@ -103,6 +103,30 @@ func (e GroupKind) Valid() bool {
 	}
 }
 
+// Defines values for HistoryEntryResult.
+const (
+	HistoryEntryResultDenied  HistoryEntryResult = "denied"
+	HistoryEntryResultError   HistoryEntryResult = "error"
+	HistoryEntryResultOk      HistoryEntryResult = "ok"
+	HistoryEntryResultTimeout HistoryEntryResult = "timeout"
+)
+
+// Valid indicates whether the value is a known member of the HistoryEntryResult enum.
+func (e HistoryEntryResult) Valid() bool {
+	switch e {
+	case HistoryEntryResultDenied:
+		return true
+	case HistoryEntryResultError:
+		return true
+	case HistoryEntryResultOk:
+		return true
+	case HistoryEntryResultTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProfileParamType.
 const (
 	Choice ProfileParamType = "choice"
@@ -318,6 +342,11 @@ type CatalogCommand struct {
 	Path        string         `json:"path"`
 }
 
+// CommandInput defines model for CommandInput.
+type CommandInput struct {
+	Command string `json:"command"`
+}
+
 // CommandList defines model for CommandList.
 type CommandList struct {
 	Entries []CommandListEntry `json:"entries"`
@@ -350,6 +379,20 @@ type CommandListList struct {
 type CommandListUpdate struct {
 	Entries *[]CommandListEntry `json:"entries,omitempty"`
 	Name    *string             `json:"name,omitempty"`
+}
+
+// CommandResult defines model for CommandResult.
+type CommandResult struct {
+	// Command The command as sent, after cleaning.
+	Command   string             `json:"command"`
+	RequestId openapi_types.UUID `json:"request_id"`
+
+	// Response Foreign data from the game server (SEC-006).
+	Response string `json:"response"`
+
+	// Truncated The answer was longer than 64 KiB and is cut.
+	Truncated bool      `json:"truncated"`
+	Ts        time.Time `json:"ts"`
 }
 
 // GamePort defines model for GamePort.
@@ -394,6 +437,29 @@ type Grant struct {
 
 // GroupKind defines model for GroupKind.
 type GroupKind string
+
+// HistoryEntry defines model for HistoryEntry.
+type HistoryEntry struct {
+	Command   string              `json:"command"`
+	Pseudonym *string             `json:"pseudonym,omitempty"`
+	Reason    *string             `json:"reason,omitempty"`
+	RequestId openapi_types.UUID  `json:"request_id"`
+	Response  *string             `json:"response,omitempty"`
+	Result    HistoryEntryResult  `json:"result"`
+	Role      *string             `json:"role,omitempty"`
+	Truncated *bool               `json:"truncated,omitempty"`
+	Ts        time.Time           `json:"ts"`
+	UserId    *openapi_types.UUID `json:"user_id,omitempty"`
+}
+
+// HistoryEntryResult defines model for HistoryEntry.Result.
+type HistoryEntryResult string
+
+// HistoryPage defines model for HistoryPage.
+type HistoryPage struct {
+	Items      []HistoryEntry `json:"items"`
+	NextCursor *string        `json:"next_cursor,omitempty"`
+}
 
 // Invite defines model for Invite.
 type Invite struct {
@@ -741,6 +807,12 @@ type ListAuditParams struct {
 // ListAuditParamsKind defines parameters for ListAudit.
 type ListAuditParamsKind string
 
+// GetHistoryParams defines parameters for GetHistory.
+type GetHistoryParams struct {
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
 	Role *Role `form:"role,omitempty" json:"role,omitempty"`
@@ -781,6 +853,9 @@ type CreateServerJSONRequestBody = ServerInput
 
 // UpdateServerJSONRequestBody defines body for UpdateServer for application/json ContentType.
 type UpdateServerJSONRequestBody = ServerInput
+
+// SendCommandJSONRequestBody defines body for SendCommand for application/json ContentType.
+type SendCommandJSONRequestBody = CommandInput
 
 // UpdateSettingsJSONRequestBody defines body for UpdateSettings for application/json ContentType.
 type UpdateSettingsJSONRequestBody = Settings
@@ -886,6 +961,12 @@ type ServerInterface interface {
 	// UpdateServer Change a server; a password replaces the stored one; RCON admin only.
 	// (PATCH /servers/{id})
 	UpdateServer(w http.ResponseWriter, r *http.Request, id ServerID)
+	// SendCommand Send a command over the server's one RCON connection (Design 3.3).
+	// (POST /servers/{id}/commands)
+	SendCommand(w http.ResponseWriter, r *http.Request, id ServerID)
+	// GetHistory Command history of a server, newest first (Design 2.2).
+	// (GET /servers/{id}/history)
+	GetHistory(w http.ResponseWriter, r *http.Request, id ServerID, params GetHistoryParams)
 	// GetSettings Global settings (Design 5.1); RCON admin only.
 	// (GET /settings)
 	GetSettings(w http.ResponseWriter, r *http.Request)
@@ -1526,6 +1607,87 @@ func (siw *ServerInterfaceWrapper) UpdateServer(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// SendCommand operation middleware
+func (siw *ServerInterfaceWrapper) SendCommand(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ServerID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendCommand(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHistory operation middleware
+func (siw *ServerInterfaceWrapper) GetHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ServerID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetHistoryParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHistory(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -2017,6 +2179,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/servers/{id}", wrapper.DeleteServer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}", wrapper.GetServer)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/servers/{id}", wrapper.UpdateServer)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers/{id}/commands", wrapper.SendCommand)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/history", wrapper.GetHistory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups", wrapper.ListServerGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/server-groups", wrapper.CreateServerGroup)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/server-groups/{id}", wrapper.DeleteServerGroup)
@@ -3977,6 +4141,232 @@ func (response UpdateServer422ApplicationProblemPlusJSONResponse) VisitUpdateSer
 	return err
 }
 
+type SendCommandRequestObject struct {
+	Id   ServerID `json:"id"`
+	Body *SendCommandJSONRequestBody
+}
+
+type SendCommandResponseObject interface {
+	VisitSendCommandResponse(w http.ResponseWriter) error
+}
+
+type SendCommand200JSONResponse CommandResult
+
+func (response SendCommand200JSONResponse) VisitSendCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendCommand400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SendCommand400ApplicationProblemPlusJSONResponse) VisitSendCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendCommand401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SendCommand401ApplicationProblemPlusJSONResponse) VisitSendCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendCommand403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SendCommand403ApplicationProblemPlusJSONResponse) VisitSendCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendCommand404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response SendCommand404ApplicationProblemPlusJSONResponse) VisitSendCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendCommand422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response SendCommand422ApplicationProblemPlusJSONResponse) VisitSendCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendCommand429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response SendCommand429ApplicationProblemPlusJSONResponse) VisitSendCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendCommand503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response SendCommand503ApplicationProblemPlusJSONResponse) VisitSendCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendCommand504ApplicationProblemPlusJSONResponse Problem
+
+func (response SendCommand504ApplicationProblemPlusJSONResponse) VisitSendCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHistoryRequestObject struct {
+	Id     ServerID `json:"id"`
+	Params GetHistoryParams
+}
+
+type GetHistoryResponseObject interface {
+	VisitGetHistoryResponse(w http.ResponseWriter) error
+}
+
+type GetHistory200JSONResponse HistoryPage
+
+func (response GetHistory200JSONResponse) VisitGetHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHistory401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetHistory401ApplicationProblemPlusJSONResponse) VisitGetHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHistory404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetHistory404ApplicationProblemPlusJSONResponse) VisitGetHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHistory422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response GetHistory422ApplicationProblemPlusJSONResponse) VisitGetHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSettingsRequestObject struct {
 }
 
@@ -5102,6 +5492,12 @@ type StrictServerInterface interface {
 	// UpdateServer Change a server; a password replaces the stored one; RCON admin only.
 	// (PATCH /servers/{id})
 	UpdateServer(ctx context.Context, request UpdateServerRequestObject) (UpdateServerResponseObject, error)
+	// SendCommand Send a command over the server's one RCON connection (Design 3.3).
+	// (POST /servers/{id}/commands)
+	SendCommand(ctx context.Context, request SendCommandRequestObject) (SendCommandResponseObject, error)
+	// GetHistory Command history of a server, newest first (Design 2.2).
+	// (GET /servers/{id}/history)
+	GetHistory(ctx context.Context, request GetHistoryRequestObject) (GetHistoryResponseObject, error)
 	// GetSettings Global settings (Design 5.1); RCON admin only.
 	// (GET /settings)
 	GetSettings(ctx context.Context, request GetSettingsRequestObject) (GetSettingsResponseObject, error)
@@ -5980,6 +6376,66 @@ func (sh *strictHandler) UpdateServer(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateServerResponseObject); ok {
 		if err := validResponse.VisitUpdateServerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendCommand operation middleware
+func (sh *strictHandler) SendCommand(w http.ResponseWriter, r *http.Request, id ServerID) {
+	var request SendCommandRequestObject
+
+	request.Id = id
+
+	var body SendCommandJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendCommand(ctx, request.(SendCommandRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendCommand")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendCommandResponseObject); ok {
+		if err := validResponse.VisitSendCommandResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetHistory operation middleware
+func (sh *strictHandler) GetHistory(w http.ResponseWriter, r *http.Request, id ServerID, params GetHistoryParams) {
+	var request GetHistoryRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetHistory(ctx, request.(GetHistoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetHistory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetHistoryResponseObject); ok {
+		if err := validResponse.VisitGetHistoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

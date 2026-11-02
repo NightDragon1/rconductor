@@ -71,6 +71,15 @@ var settingRules = map[string]rule{
 	profiles.SettingPollInterval:  durationRule(profiles.MinPollInterval, time.Hour),
 }
 
+// Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and
+// ratelimit.<role>.burst; the defaults come from the command pipeline.
+func init() {
+	for _, r := range perm.Roles {
+		settingRules["ratelimit."+string(r)+".per_minute"] = intRule(1, 10000)
+		settingRules["ratelimit."+string(r)+".burst"] = intRule(1, 1000)
+	}
+}
+
 // EnsureAuditDefaults stores the default audit retention unless it exists.
 func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 	_, err := st.EnsureDefault(ctx, SettingAuditRetentionDays, DefaultAuditRetentionDays)

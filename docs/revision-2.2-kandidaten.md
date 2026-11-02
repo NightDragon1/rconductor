@@ -11,6 +11,7 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 | 5 | Agent und Container am Server erst ab M3 setzbar | SRV-001, Plan R1 |
 | 6 | Eigener Source-RCON-Adapter statt gorcon/rcon | Technologie 2, PROT-001 |
 | 7 | RCON-Verbindung: Prüfung im Leerlauf und Backoff höchstens 5 s | SRV-004, PROT-002, Design 1.1 |
+| 8 | Zeitüberschreitung eines Befehls und Audit vor dem Senden | Design 3.3, 3.5, 4.2 |
 
 ## 1. Beispielprofil in Design 7.4 auf Englisch
 
@@ -60,3 +61,10 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 - **Umsetzung (M2):** Eine ruhende Verbindung wird alle 2 s geprüft, ohne einen Befehl an das Spiel zu senden (kurzer Lesevorgang: Zeitüberschreitung heißt verbunden, Verbindungsende heißt offline). Nach einem Abbruch wird sofort neu verbunden, danach mit Backoff wie Design 1.1, aber höchstens 5 s.
 - **Vorschlag:** In Design 4.6 bzw. einem neuen Abschnitt zum Verbindungsmanager festhalten; Design 1.1 ausdrücklich nur auf den Agent beziehen.
 - **Begründung:** Ohne Prüfung im Leerlauf fiele ein gestoppter Spielserver erst beim nächsten Befehl auf; mit 120 s Backoff wäre der Wechsel nach einem Neustart nicht binnen 10 s sichtbar.
+
+## 8. Zeitüberschreitung eines Befehls und Audit vor dem Senden
+
+- **Fundstelle:** 03-design.md, Kapitel 3.3 (Schritt 10: Audit-Eintrag vor dem Senden; Schritt 12: Ergebnis im Audit), 3.5 (keine Antwort für eine Zeitüberschreitung) und 4.2 (audit\_log.result: ok, denied, error, timeout). Umsetzung: internal/commands.
+- **Umsetzung (M2):** Der Eintrag vor dem Senden trägt result error mit reason\_code not\_answered und wird mit der Antwort auf ok, timeout oder error gesetzt; so bleibt ein Absturz zwischen Senden und Antwort als nicht beantwortet sichtbar. Eine Zeitüberschreitung (10 s) beantwortet die API mit 504 ohne Grund-Code; Log cmd.timeout, Audit timeout.
+- **Vorschlag:** In Design 3.5 eine Zeile 504 timeout ergänzen (Grund-Code timeout) und in 3.3 festhalten, mit welchem Ergebnis der Eintrag vor dem Senden entsteht.
+- **Begründung:** Beides ist für Oberfläche und Auswertung des Audits nötig und bisher nicht festgelegt.
