@@ -20,7 +20,7 @@ protocol:
   default_port: 25575
 ports:
   game:
-    - { port: 25565, proto: tcp, name: Spiel }
+    - { port: 25565, proto: tcp, name: game }
 syntax:
   case_sensitive: false
   strip_prefix: "/"
@@ -37,22 +37,22 @@ version:
 formatting: minecraft
 catalog:
   - path: list
-    description: Spieler online anzeigen
+    description: Show players online
   - path: whitelist add
-    description: Spieler auf die Whitelist setzen
+    description: Add a player to the whitelist
     params:
-      - { name: spieler, type: player }
+      - { name: player, type: player }
   - path: kick
-    description: Spieler vom Server werfen
+    description: Kick a player from the server
     params:
-      - { name: spieler, type: player }
-      - { name: grund, type: text, optional: true }
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
   - path: time set
-    description: Tageszeit setzen
+    description: Set the time of day
     params:
-      - { name: zeit, type: choice, values: [day, night] }
+      - { name: time, type: choice, values: [day, night] }
   - path: say
-    description: Nachricht an alle Spieler
+    description: Message to all players
     params:
       - { name: text, type: text }
 `
@@ -110,7 +110,7 @@ func TestRejected(t *testing.T) {
 		"wrong schema":          {"schema: 1", "schema: 2", "schema must be 1"},
 		"unknown field":         {"formatting: minecraft", "formating: minecraft", "formating"},
 		"bad pattern":           {`"players online: (.*)$"`, `"players online: (?=x)"`, "players.pattern"},
-		"text not last":         {"      - { name: grund, type: text, optional: true }", "      - { name: grund, type: text, optional: true }\n      - { name: extra, type: player, optional: true }", "text is allowed only as last"},
+		"text not last":         {"      - { name: reason, type: text, optional: true }", "      - { name: reason, type: text, optional: true }\n      - { name: extra, type: player, optional: true }", "text is allowed only as last"},
 		"choice without values": {"type: choice, values: [day, night]", "type: choice", "choice needs values"},
 		"duplicate path":        {"  - path: say", "  - path: list", "listed twice"},
 		"unknown param type":    {"{ name: text, type: text }", "{ name: text, type: color }", "type must be"},
