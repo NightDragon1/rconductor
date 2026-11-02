@@ -19,6 +19,27 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AgentStatus.
+const (
+	Active  AgentStatus = "active"
+	Pending AgentStatus = "pending"
+	Revoked AgentStatus = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the AgentStatus enum.
+func (e AgentStatus) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	case Pending:
+		return true
+	case Revoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AuditEntryKind.
 const (
 	AuditEntryKindAdmin   AuditEntryKind = "admin"
@@ -284,6 +305,50 @@ func (e ListAuditParamsKind) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Agent defines model for Agent.
+type Agent struct {
+	Capabilities []string  `json:"capabilities"`
+	Connected    bool      `json:"connected"`
+	CreatedAt    time.Time `json:"created_at"`
+
+	// Fingerprint SHA256:<base64> of the agent key.
+	Fingerprint string             `json:"fingerprint"`
+	Id          openapi_types.UUID `json:"id"`
+	LastSeenAt  *time.Time         `json:"last_seen_at,omitempty"`
+
+	// Name Foreign data from the agent (SEC-006).
+	Name     string              `json:"name"`
+	PairedBy *openapi_types.UUID `json:"paired_by,omitempty"`
+
+	// Remote Source address of the last connection.
+	Remote    *string     `json:"remote,omitempty"`
+	RevokedAt *time.Time  `json:"revoked_at,omitempty"`
+	Status    AgentStatus `json:"status"`
+	Version   string      `json:"version"`
+}
+
+// AgentStatus defines model for Agent.Status.
+type AgentStatus string
+
+// AgentList defines model for AgentList.
+type AgentList struct {
+	Items []Agent `json:"items"`
+}
+
+// AgentToken defines model for AgentToken.
+type AgentToken struct {
+	// Compose Compose service for the agent with the token filled in.
+	Compose   string    `json:"compose"`
+	ExpiresAt time.Time `json:"expires_at"`
+
+	// PanelAddr RCD_AGENT_PUBLIC_ADDR; empty when not configured.
+	PanelAddr        *string `json:"panel_addr,omitempty"`
+	PanelFingerprint string  `json:"panel_fingerprint"`
+
+	// Token Shown only once; stored only as hash.
+	Token string `json:"token"`
 }
 
 // Assignments defines model for Assignments.
@@ -771,6 +836,9 @@ type UserUpdate struct {
 	SupportersAllowed *bool `json:"supporters_allowed,omitempty"`
 }
 
+// AgentID defines model for AgentID.
+type AgentID = openapi_types.UUID
+
 // CommandListID defines model for CommandListID.
 type CommandListID = openapi_types.UUID
 
@@ -888,6 +956,21 @@ type UpdateAssignmentsJSONRequestBody = AssignmentsUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListAgents Paired, pending and revoked agents (Design 1.2); RCON admin only.
+	// (GET /agents)
+	ListAgents(w http.ResponseWriter, r *http.Request)
+	// CreateAgentToken Create a pairing token (way A, AGT-005); RCON admin only.
+	// (POST /agents/tokens)
+	CreateAgentToken(w http.ResponseWriter, r *http.Request)
+	// DeleteAgent Revoke an agent or turn down a pending pairing (Design 1.7); RCON admin only.
+	// (DELETE /agents/{id})
+	DeleteAgent(w http.ResponseWriter, r *http.Request, id AgentID)
+	// GetAgent One agent; RCON admin only.
+	// (GET /agents/{id})
+	GetAgent(w http.ResponseWriter, r *http.Request, id AgentID)
+	// ApproveAgent Approve a pending pairing by fingerprint (way B); RCON admin only.
+	// (POST /agents/{id}/approve)
+	ApproveAgent(w http.ResponseWriter, r *http.Request, id AgentID)
 	// ListAudit Audit log, newest first (AUD-001, AUD-004).
 	// (GET /audit)
 	ListAudit(w http.ResponseWriter, r *http.Request, params ListAuditParams)
@@ -1042,6 +1125,112 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAgents operation middleware
+func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgents(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAgentToken operation middleware
+func (siw *ServerInterfaceWrapper) CreateAgentToken(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAgentToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAgent operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAgent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgent operation middleware
+func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveAgent operation middleware
+func (siw *ServerInterfaceWrapper) ApproveAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveAgent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListAudit operation middleware
 func (siw *ServerInterfaceWrapper) ListAudit(w http.ResponseWriter, r *http.Request) {
@@ -2247,6 +2436,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/server-groups/{id}", wrapper.DeleteServerGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{id}", wrapper.GetServerGroup)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/server-groups/{id}", wrapper.UpdateServerGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/tokens", wrapper.CreateAgentToken)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{id}", wrapper.DeleteAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{id}", wrapper.GetAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{id}/approve", wrapper.ApproveAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/ws", wrapper.OpenWebSocket)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}", wrapper.DeleteUser)
@@ -2309,6 +2503,316 @@ type RateLimitedApplicationProblemPlusJSONResponse struct {
 }
 
 type UnauthenticatedApplicationProblemPlusJSONResponse Problem
+
+type ListAgentsRequestObject struct {
+}
+
+type ListAgentsResponseObject interface {
+	VisitListAgentsResponse(w http.ResponseWriter) error
+}
+
+type ListAgents200JSONResponse AgentList
+
+func (response ListAgents200JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgents401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListAgents401ApplicationProblemPlusJSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgents403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListAgents403ApplicationProblemPlusJSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgentTokenRequestObject struct {
+}
+
+type CreateAgentTokenResponseObject interface {
+	VisitCreateAgentTokenResponse(w http.ResponseWriter) error
+}
+
+type CreateAgentToken201JSONResponse AgentToken
+
+func (response CreateAgentToken201JSONResponse) VisitCreateAgentTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgentToken401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateAgentToken401ApplicationProblemPlusJSONResponse) VisitCreateAgentTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgentToken403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateAgentToken403ApplicationProblemPlusJSONResponse) VisitCreateAgentTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgentRequestObject struct {
+	Id AgentID `json:"id"`
+}
+
+type DeleteAgentResponseObject interface {
+	VisitDeleteAgentResponse(w http.ResponseWriter) error
+}
+
+type DeleteAgent204Response struct {
+}
+
+func (response DeleteAgent204Response) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAgent401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAgent401ApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgent403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAgent403ApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgent404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAgent404ApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentRequestObject struct {
+	Id AgentID `json:"id"`
+}
+
+type GetAgentResponseObject interface {
+	VisitGetAgentResponse(w http.ResponseWriter) error
+}
+
+type GetAgent200JSONResponse Agent
+
+func (response GetAgent200JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgent401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetAgent401ApplicationProblemPlusJSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgent403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetAgent403ApplicationProblemPlusJSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgent404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetAgent404ApplicationProblemPlusJSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveAgentRequestObject struct {
+	Id AgentID `json:"id"`
+}
+
+type ApproveAgentResponseObject interface {
+	VisitApproveAgentResponse(w http.ResponseWriter) error
+}
+
+type ApproveAgent200JSONResponse Agent
+
+func (response ApproveAgent200JSONResponse) VisitApproveAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveAgent401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ApproveAgent401ApplicationProblemPlusJSONResponse) VisitApproveAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveAgent403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ApproveAgent403ApplicationProblemPlusJSONResponse) VisitApproveAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveAgent404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ApproveAgent404ApplicationProblemPlusJSONResponse) VisitApproveAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListAuditRequestObject struct {
 	Params ListAuditParams
@@ -5587,6 +6091,21 @@ func (response OpenWebSocket403ApplicationProblemPlusJSONResponse) VisitOpenWebS
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListAgents Paired, pending and revoked agents (Design 1.2); RCON admin only.
+	// (GET /agents)
+	ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error)
+	// CreateAgentToken Create a pairing token (way A, AGT-005); RCON admin only.
+	// (POST /agents/tokens)
+	CreateAgentToken(ctx context.Context, request CreateAgentTokenRequestObject) (CreateAgentTokenResponseObject, error)
+	// DeleteAgent Revoke an agent or turn down a pending pairing (Design 1.7); RCON admin only.
+	// (DELETE /agents/{id})
+	DeleteAgent(ctx context.Context, request DeleteAgentRequestObject) (DeleteAgentResponseObject, error)
+	// GetAgent One agent; RCON admin only.
+	// (GET /agents/{id})
+	GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error)
+	// ApproveAgent Approve a pending pairing by fingerprint (way B); RCON admin only.
+	// (POST /agents/{id}/approve)
+	ApproveAgent(ctx context.Context, request ApproveAgentRequestObject) (ApproveAgentResponseObject, error)
 	// ListAudit Audit log, newest first (AUD-001, AUD-004).
 	// (GET /audit)
 	ListAudit(ctx context.Context, request ListAuditRequestObject) (ListAuditResponseObject, error)
@@ -5770,6 +6289,132 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListAgents operation middleware
+func (sh *strictHandler) ListAgents(w http.ResponseWriter, r *http.Request) {
+	var request ListAgentsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAgents(ctx, request.(ListAgentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAgents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAgentsResponseObject); ok {
+		if err := validResponse.VisitListAgentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAgentToken operation middleware
+func (sh *strictHandler) CreateAgentToken(w http.ResponseWriter, r *http.Request) {
+	var request CreateAgentTokenRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAgentToken(ctx, request.(CreateAgentTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAgentToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAgentTokenResponseObject); ok {
+		if err := validResponse.VisitCreateAgentTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAgent operation middleware
+func (sh *strictHandler) DeleteAgent(w http.ResponseWriter, r *http.Request, id AgentID) {
+	var request DeleteAgentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAgent(ctx, request.(DeleteAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAgentResponseObject); ok {
+		if err := validResponse.VisitDeleteAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAgent operation middleware
+func (sh *strictHandler) GetAgent(w http.ResponseWriter, r *http.Request, id AgentID) {
+	var request GetAgentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgent(ctx, request.(GetAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentResponseObject); ok {
+		if err := validResponse.VisitGetAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApproveAgent operation middleware
+func (sh *strictHandler) ApproveAgent(w http.ResponseWriter, r *http.Request, id AgentID) {
+	var request ApproveAgentRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApproveAgent(ctx, request.(ApproveAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApproveAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApproveAgentResponseObject); ok {
+		if err := validResponse.VisitApproveAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListAudit operation middleware

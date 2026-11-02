@@ -137,7 +137,7 @@ func (h *Hub) Serve(ctx context.Context, addr string, ready func(net.Addr)) erro
 		_ = srv.Shutdown(sctx)
 		h.closeAll()
 	}()
-	if err := srv.Serve(tl); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := srv.Serve(tl); err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
 		return err
 	}
 	return nil
@@ -337,8 +337,9 @@ func (h *Hub) register(s *Session) {
 	h.sessions[s.AgentID] = s
 	h.mu.Unlock()
 	if old != nil {
-		// A reconnect replaces the older session of the same agent.
-		old.close(websocket.StatusPolicyViolation, "replaced")
+		// A reconnect replaces the older session of the same agent; the
+		// close handshake must not hold up the new session.
+		go old.close(websocket.StatusPolicyViolation, "replaced")
 	}
 }
 
@@ -348,6 +349,21 @@ func (h *Hub) unregister(s *Session) {
 		delete(h.sessions, s.AgentID)
 	}
 	h.mu.Unlock()
+}
+
+// Revoke tells a connected agent that its pairing is revoked and ends
+// its session (Design 1.7).
+func (h *Hub) Revoke(agentID string) {
+	h.mu.Lock()
+	s := h.sessions[agentID]
+	h.mu.Unlock()
+	if s == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = s.Send(ctx, agentproto.TypeRevoked, "", struct{}{})
+	go s.close(websocket.StatusPolicyViolation, ReasonRevoked)
 }
 
 // Connected reports whether an agent has a session.

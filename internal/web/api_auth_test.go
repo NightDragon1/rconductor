@@ -18,12 +18,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/agenthub"
+	"github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/servers"
@@ -109,8 +112,14 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	}
 	hub := events.NewHub(checker, nil, svc, log, events.SettingsLimits(st))
 	svc.OnSessionsEnded(hub.CloseSessions)
+	panelKey, err := keys.LoadOrCreateIdentity(log, filepath.Join(t.TempDir(), keys.PanelKeyFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentSvc := agents.NewService(st, log, "panel.lan:8443")
+	agentSvc.SetHub(agenthub.New(panelKey, log, agenthub.Options{Registry: agentSvc}))
 	h := NewHandler(Options{
-		Log: log, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies, Hub: hub,
+		Log: log, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies, Hub: hub, Agents: agentSvc,
 		Servers:  servers.NewService(st, checker, box, log),
 		Profiles: users.NewProfiles(us, hasher, svc.RevokeOtherSessions),
 	})

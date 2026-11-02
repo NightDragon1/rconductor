@@ -23,6 +23,14 @@ const (
 	DefaultWSMaxSubs    = 16
 )
 
+// SettingFingerprintPairing opens pairing by fingerprint (way B, AGT-005);
+// off by default, it closes itself after PairingWindow (revision 2.3
+// candidate 3).
+const (
+	SettingFingerprintPairing = "agents.fingerprint_pairing"
+	PairingWindow             = 30 * time.Minute
+)
+
 // Settings key of the audit retention and its default (AUD-003).
 const (
 	SettingAuditRetentionDays = "audit.retention_days"
@@ -80,6 +88,7 @@ var settingRules = map[string]rule{
 	SettingWSMaxSockets:           intRule(1, 100),
 	SettingWSMaxSubs:              intRule(1, 64),
 	profiles.SettingPollInterval:  durationRule(profiles.MinPollInterval, time.Hour),
+	SettingFingerprintPairing:     boolRule,
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and
@@ -102,7 +111,8 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 			return err
 		}
 	}
-	return nil
+	_, err := st.EnsureDefault(ctx, SettingFingerprintPairing, false)
+	return err
 }
 
 // Settings returns the global settings; only the RCON admin reads them.

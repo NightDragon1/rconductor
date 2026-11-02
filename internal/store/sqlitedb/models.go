@@ -17,6 +17,31 @@ type AdminScope struct {
 	CreatedAt     string
 }
 
+type Agent struct {
+	ID           string
+	Name         string
+	PublicKey    []byte
+	Fingerprint  string
+	Status       string
+	Version      string
+	Capabilities string
+	Remote       string
+	PairedBy     sql.NullString
+	CreatedAt    string
+	LastSeenAt   sql.NullString
+	RevokedAt    sql.NullString
+}
+
+type AgentToken struct {
+	ID        string
+	TokenHash []byte
+	CreatedBy string
+	CreatedAt string
+	ExpiresAt string
+	UsedAt    sql.NullString
+	AgentID   sql.NullString
+}
+
 type AuditLog struct {
 	ID         string
 	Ts         string

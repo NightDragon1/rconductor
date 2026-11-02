@@ -27,6 +27,23 @@ func (q *Queries) GetSetting(ctx context.Context, arg GetSettingParams) (string,
 	return value, err
 }
 
+const getSettingWithTime = `-- name: GetSettingWithTime :one
+SELECT value, updated_at FROM settings
+WHERE key = ? AND scope_type = 'global' AND scope_id = ''
+`
+
+type GetSettingWithTimeRow struct {
+	Value     string
+	UpdatedAt string
+}
+
+func (q *Queries) GetSettingWithTime(ctx context.Context, key string) (GetSettingWithTimeRow, error) {
+	row := q.db.QueryRowContext(ctx, getSettingWithTime, key)
+	var i GetSettingWithTimeRow
+	err := row.Scan(&i.Value, &i.UpdatedAt)
+	return i, err
+}
+
 const insertSettingIfMissing = `-- name: InsertSettingIfMissing :execrows
 INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at)
 VALUES (?, ?, ?, ?, ?, ?)
