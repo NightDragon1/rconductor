@@ -570,8 +570,10 @@ paths:
       description: >-
         Upgrade with the session cookie; the Origin is checked. Messages
         from the browser: {"type":"subscribe"|"unsubscribe","topic":...}.
-        Messages from the panel: {"type":"event","topic":...,"data":...}
-        and {"type":"error","topic":...,"reason":...}. Topics:
+        Messages from the panel: {"type":"subscribed","topic":...} once a
+        subscription is in place, before its first event;
+        {"type":"event","topic":...,"data":...} and
+        {"type":"error","topic":...,"reason":...}. Topics:
         servers.overview, server.{id}.status, server.{id}.console,
         server.{id}.metrics and server.{id}.logs. Metrics and logs are
         agent functions for RCON admin and server admin only; a new
