@@ -41,7 +41,7 @@ LABEL org.opencontainers.image.title="RCONductor panel" \
 COPY --from=build --chown=65532:65532 /out/panel-root/ /
 COPY --from=build /out/panel /usr/local/bin/rconductor-panel
 USER 65532:65532
-# Web port and agent port (D-032); the agent port follows in M3.
+# Web port and agent port (D-032).
 EXPOSE 8080 8443
 VOLUME ["/data", "/secrets", "/backups"]
 ENTRYPOINT ["/usr/local/bin/rconductor-panel"]
@@ -54,8 +54,9 @@ LABEL org.opencontainers.image.title="RCONductor agent" \
       org.opencontainers.image.version="$VERSION"
 COPY --from=build --chown=65532:65532 /out/agent-root/ /
 COPY --from=build /out/agent /usr/local/bin/rconductor-agent
-# Stub until M3; access to the Docker socket (root or docker group) is
-# decided there.
+# Non-root; the Docker socket is reached through its group (group_add with
+# the socket's GID) or a socket proxy (revision 2.3 candidate 7). The agent
+# opens no port (AGT-011).
 USER 65532:65532
 VOLUME ["/secrets"]
 ENTRYPOINT ["/usr/local/bin/rconductor-agent"]

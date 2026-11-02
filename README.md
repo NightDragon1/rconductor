@@ -4,15 +4,15 @@ RCONductor is a self-hosted web panel for RCON-capable game servers with
 fine-grained roles and permissions. Containers are controlled only by a small
 agent per game host; the panel never touches the Docker socket.
 
-> Status: under development (release 1 in progress). The foundation is in
-> place: configuration, logging, database with migrations, master key,
-> backups and the embedded web UI. Users, game servers and the agent follow.
-> Compose files and the full operations guide come with release 1.0.0.
+> Status: under development (release 1 in progress). Users and rights,
+> game servers with RCON, the console over the API and the host agent work;
+> the web UI follows. Compose files and the full operations guide come with
+> release 1.0.0.
 
 ## Running the panel
 
-The panel is one container with a web port (8080) and an agent port (8443,
-not served yet). It starts without any configuration:
+The panel is one container with a web port (8080) and an agent port
+(8443). It starts without any configuration:
 
 ```sh
 docker run -d --name rconductor-panel -p 8080:8080 \
@@ -94,6 +94,58 @@ file, for example a Docker secret.
 All variables are read and checked at start-up; an invalid configuration
 stops the panel with exit code 2. Variables of features that are not built
 yet are accepted but have no effect.
+
+## Running an agent
+
+One agent runs on each game host. It is the only part with access to the
+Docker socket, connects out to the panel's agent port (it opens no port
+itself) and manages only containers with the label `rcon.manage=true`:
+start, stop, restart, status, metrics and logs. It cannot create, remove
+or change containers, run commands in them or touch images and volumes.
+
+Pairing needs the RCON admin. Either create a pairing token in the panel
+(`POST /api/v1/agents/tokens`, valid once for 24 hours); the answer
+contains a ready Compose service:
+
+```yaml
+services:
+  rconductor-agent:
+    image: ghcr.io/nightdragon1/rconductor-agent:1
+    restart: unless-stopped
+    group_add: ["DOCKER_GID"]   # stat -c %g /var/run/docker.sock
+    environment:
+      RCD_PAIRING_TOKEN: "rcd1...."
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - rconductor-agent-secrets:/secrets
+volumes:
+  rconductor-agent-secrets:
+```
+
+Or, without a token, set only `RCD_PANEL_ADDR` and switch on pairing by
+fingerprint in the panel (setting `agents.fingerprint_pairing`; it closes
+itself after 30 minutes). The agent then writes its own fingerprint and the
+panel's to its log; compare them with the RCON admin, who approves the
+agent (`POST /api/v1/agents/{id}/approve`). The agent pins the panel key
+and keeps its pairing in `/secrets`; the token is ignored afterwards and
+may stay in the file. After a revocation the agent stops reconnecting
+until it is paired again with a new token or by fingerprint.
+
+The agent runs as a non-root user (65532) and reaches the socket through
+the socket's group (`group_add` with its GID). Be aware that access to the
+Docker socket is equivalent to root on the host: non-root only limits what
+a flaw in the agent process itself can do. A socket proxy in front of the
+socket narrows the API further (see below).
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RCD_PAIRING_TOKEN` / `_FILE` | empty | pairing token (way A) |
+| `RCD_PANEL_ADDR` | empty | panel agent port, `host:port`; for way B or to override the token's address |
+| `RCD_AGENT_NAME` | host name | name shown in the panel |
+| `RCD_LABEL` | `rcon.manage=true` | label that allows a container |
+| `RCD_DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker API, also a socket proxy such as `tcp://socket-proxy:2375` |
+| `RCD_SECRETS_DIR` | `/secrets` | agent key (`agent.key`) and pairing (`panel.json`) |
+| `RCD_LOG_LEVEL`, `RCD_LOG_FORMAT` | `info`, `text` | as for the panel |
 
 ## Development
 
