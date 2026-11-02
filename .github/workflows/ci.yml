@@ -62,7 +62,7 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/go.sum
-      - run: go tool -modfile=tools/go.mod govulncheck -tags integration ./...
+      - run: go tool -modfile=tools/go.mod govulncheck -tags integration,minecraft ./...
 
   web:
     name: Web lint, test and build
@@ -101,6 +101,24 @@ jobs:
           go-version-file: go.mod
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - run: make test-integration
+
+  minecraft:
+    name: Minecraft walking skeleton
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # The server JAR is pinned by version and SHA-1 in the script; the
+      # cache key follows the script, so a new pin downloads again.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/minecraft
+          key: minecraft-server-${{ hashFiles('scripts/minecraft-server.sh') }}
+      - run: make test-minecraft
 
   images:
     name: Images (amd64, arm64)

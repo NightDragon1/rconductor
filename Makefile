@@ -7,7 +7,7 @@ SQLC_VERSION := 1.31.1
 SQLC ?= sqlc
 export CGO_ENABLED := 0
 
-.PHONY: all build web panel agent images test test-integration lint vuln generate check
+.PHONY: all build web panel agent images test test-integration test-minecraft lint vuln generate check
 
 all: lint test web build
 
@@ -36,6 +36,11 @@ images:
 
 test-integration: images
 	RCD_PANEL_IMAGE=$(PANEL_IMAGE) go test -tags integration -count=1 ./...
+
+# Walking skeleton against a real Minecraft server (pinned version, JAR
+# cached in .cache/minecraft).
+test-minecraft:
+	jar=$$(scripts/minecraft-server.sh .cache/minecraft) && RCD_MINECRAFT_JAR=$$jar go test -tags minecraft -count=1 -run TestMinecraft ./internal/app/
 
 # Full pre-commit gate (also run by the hook in .githooks).
 check:
