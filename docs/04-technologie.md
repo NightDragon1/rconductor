@@ -1,6 +1,6 @@
 # Technologie
 
-Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. Abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
+Dokumentversion 2.3, zur Freigabe vorgelegt; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
 
 ## 1. Grundsätze
 
@@ -19,6 +19,7 @@ Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept
 | WebSocket | coder/websocket (Nachfolger von nhooyr/websocket) | Browser und Agent über dieselbe Bibliothek, Kontext-basiert, gepflegt | R1 |
 | Agent-Port | crypto/tls mit TLS 1.3, selbstsignierte Ed25519-Zertifikate, Pinning über eigene Zertifikatsprüfung | erfüllt D-005 und D-019 ohne CA | R1 |
 | Docker | github.com/moby/moby/client (offizielles SDK) | einziger offizieller Weg zur Docker-API; github.com/docker/docker ist seit Docker v29 veraltet | R1 |
+| Socket-Zugriff des Agents | Nicht-Root (65532) mit group\_add auf die GID des Sockets; empfohlen ein Socket-Proxy (linuxserver/socket-proxy, eigenes Image) | Defense-in-Depth; Zugriff auf den Socket bleibt root-äquivalent (Sicherheit T-022) | R1 |
 | Source RCON | eigener Adapter mit Endmarker-Verfahren hinter der Adapter-Schnittstelle (Design 3.8) | gorcon/rcon liest je Befehl nur ein Paket und vervollständigt Antworten über 4 KB nicht (PROT-001); kein Fremdcode nötig | R1 |
 | Weitere Protokolle | eigene Adapter oder Bibliotheken je Protokoll | HTTP-API ab R2, BattlEye, WebRCON und Telnet ab R3 | R2, R3 |
 | Datenbankzugriff | database/sql mit sqlc, je Datenbank ein eigener Satz Abfragen | typsicher, SQL bleibt sichtbar, kein ORM-Overhead | R1 |
@@ -69,8 +70,7 @@ SvelteKit (bisher D-002) bringt kleinere Bundles und weniger Code. Bei einer ins
 
 ## 5. Offene Punkte
 
-1. Agent-Image: Zugriff auf den Docker-Socket als Root oder über die docker-Gruppe des Hosts; wird in M3 festgelegt. Bis dahin ist der Agent ein Stub als Nicht-Root-Benutzer. Zu prüfen: Nicht-Root mit group\_add auf die GID des Sockets; Root nur als dokumentierte Ausnahme; mit Socket-Proxy (SEC-010) entfällt der direkte Zugriff.
-2. Vorgehen bei Lizenzprüfung neuer Abhängigkeiten (z. B. automatisiert in der CI).
+1. Vorgehen bei Lizenzprüfung neuer Abhängigkeiten (z. B. automatisiert in der CI).
 
 ## Quellen
 

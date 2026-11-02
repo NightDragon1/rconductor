@@ -1,6 +1,6 @@
 # Arbeitspakete R1
 
-Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
+Dokumentversion 2.3, zur Freigabe vorgelegt; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
 
 ## 1. Ablauf
 
@@ -34,6 +34,7 @@ Einige Anforderungen werden in einem Meilenstein umgesetzt, ihr Abnahmekriterium
 | ROLE-002, AUTH-009 | M1 | M4 | E2E in der Oberfläche |
 | SEC-013 | M0 | M5 | erstes Release mit Signatur und SBOM |
 | SRV-001 | M2 | M4 | Auswahl von Agent und Container (setzbar ab M3), E2E |
+| AGT-005 | M3 | M4 | Kopplungsdialog, E2E |
 | SEC-006, SRV-003 | M2 | M4 | E2E in der Oberfläche (Darstellung, Farbcodes, Servergruppen) |
 | AUTH-006 | M1, M2 | M4 | E2E: Abmelden beendet offene WebSockets in der Oberfläche |
 

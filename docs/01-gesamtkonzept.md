@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.2, Stand 02.11.2026, Status freigegeben; Änderungen gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.3, Stand 02.11.2026, Status zur Freigabe vorgelegt; Änderungen gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -319,10 +319,10 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | Daten | Quelle | Aktualisierung | Gilt als veraltet nach | Invalidierung |
 | --- | --- | --- | --- | --- |
 | Containerstatus | Agent (Docker-Events) | sofort bei Ereignis | – | Agent getrennt → Status „unbekannt“ |
-| CPU, RAM, Netz | Agent | alle 10 s | 30 s | Agent getrennt, Container gestoppt |
+| CPU, RAM, Netz, Disk-I/O | Agent | alle 10 s | 30 s | Agent getrennt, Container gestoppt |
 | RCON-Erreichbarkeit | Panel | bei Verbindungsereignis | – | Verbindungsabbruch |
 | Spielerliste | RCON-Befehl bzw. Agent | alle 60 s, nur solange jemand die Server ansieht; sofort bei Bedarf | 120 s | Server-Neustart, RCON-Abbruch |
-| Spielversion | Agent (Logmuster) | einmal nach Containerstart | bis zum nächsten Start | Container-Neustart, Image-Wechsel |
+| Spielversion (ab R2, AGT-006) | Agent (Logmuster) | einmal nach Containerstart | bis zum nächsten Start | Container-Neustart, Image-Wechsel |
 | Volume-Größen | Agent | alle 2 h | 6 h | Agent getrennt |
 | Letzte Logzeilen | Agent | Ringpuffer der letzten 50 Zeilen | – | Container-Neustart |
 
@@ -418,6 +418,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 2.0 | 01.11.2026 | Freigabe durch Rob; Basis für R1. Änderungen ab jetzt nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.1 | 01.11.2026 | Freigabe durch Rob: Erkenntnisse aus M0 und M1 eingearbeitet (Kapitel 10); Revision 2 für NFR-010; AUTH-010, AUTH-011, SEC-013 und D-043 bis D-046 neu. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.2 | 02.11.2026 | Freigabe durch Rob: Erkenntnisse aus M2 eingearbeitet (Kapitel 11); Revision 2 für SEC-006, SEC-008 und SRV-001; Design 3.8 (RCON-Verbindung) neu; Einstellungen profiles.poll\_interval, ws.max\_sockets\_per\_session, ws.max\_subscriptions\_per\_socket; Grund-Code timeout. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
+| 2.3 | 02.11.2026 | Zur Freigabe vorgelegt: Erkenntnisse aus M3 eingearbeitet (Kapitel 12); Design 1.6 mit den Grenzen von SEC-007, Containername statt Container-ID, Fremdschlüssel servers.agent\_id, Einstellung agents.fingerprint\_pairing, Ereigniscode agent.disconnected, Grund-Codes agent\_unavailable und action\_failed |
 
 ## 10. Änderungen in Version 2.1
 
@@ -474,3 +475,23 @@ Eingearbeitet aus den Kandidaten nach M2 (docs/revision-2.2-kandidaten.md, Nr. 1
 | 10 | Revision 2 von SEC-008: Sockets je Session und Abos je Socket als Einstellungen, ältester Socket weicht; Abo-Bestätigung subscribed | 2.1 SEC-008, Design 2.3, 5.6, Sicherheit T-018 und 4, Abnahme SEC-008 |
 | 11 | Teilabnahmen aus M2: SEC-006, SRV-003 und AUTH-006 mit E2E-Anteil werden in M4 abgenommen | Plan R1, Kapitel 3 |
 | 12 | RCON-Verbindung: TCP-Keepalive und Probe im Leerlauf alle 30 s gegen halboffene Verbindungen; Zeitlimit 10 s ab Annahme einschließlich Warteschlange, volle Warteschlange 503 busy | Design 3.5, 3.8 |
+
+## 12. Änderungen in Version 2.3
+
+Eingearbeitet aus den Kandidaten von M3 (docs/revision-2.3-kandidaten.md, Nr. 1 bis 12, Nummern wie dort).
+
+| Nr. | Änderung | Fundstelle in 2.3 |
+| --- | --- | --- |
+| 1 | Container über den Namen statt über die ID; Label-Prüfung bei jeder Auflösung | Design 1.6, 4.2 |
+| 2 | Zahlenwerte der Agent-Grenzen; Fehlercodes rate\_limited und error | Design 1.5, 1.6 |
+| 3 | Schalter agents.fingerprint\_pairing mit Selbstabschaltung nach 30 min und Audit | Design 1.2, 5.6 |
+| 4 | Token-Format rcd1., \_FILE-Variante, Agent-ID vom Panel, reject pending und invalid | Design 1.2, 1.3 |
+| 5 | Ereigniscode agent.disconnected | Design 8.3 |
+| 6 | Grund-Codes agent\_unavailable (503) und action\_failed (502); Aktionen im Audit | Design 2.2, 3.5 |
+| 7 | Agent als Nicht-Root mit group\_add, Socket-Proxy linuxserver/socket-proxy | Technologie 2, 5; Sicherheit T-022 |
+| 8 | Cache-Kapitel: Spielversion ab R2, Disk-I/O bei den Messwerten; Verweis der Abnahme NFR-005 | 4.6, Abnahme NFR-005 |
+| 9 | Teilabnahme AGT-005 in M4 | Plan R1, Kapitel 3 |
+| 10 | Fremdschlüssel servers.agent\_id mit ON DELETE SET NULL; Widerruf löst Server vom Agent | Design 1.7, 4.2 |
+| 11 | Socket-Proxy: ALLOW\_RESTARTS erlaubt auch kill (Restrisiko) | Sicherheit T-022 |
+| 12 | WebSocket-Themen metrics und logs: Rechte, Startwert, Logs nur bei Abo | Design 2.3 |
+

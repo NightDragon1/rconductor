@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.2, freigegeben; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.3, zur Freigabe vorgelegt; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -25,15 +25,17 @@ Zwei Wege, beide enden im selben Zustand: Beide Seiten kennen und pinnen den öf
 
 | Schritt | Weg A: Token | Weg B: Freigabe |
 | --- | --- | --- |
-| 1 | Admin erzeugt im Panel ein Einmal-Token; es enthält Panel-Adresse und Panel-Fingerprint und läuft nach 24 h ab | Host-Betreiber setzt im Agent nur die Panel-Adresse |
+| 1 | Admin erzeugt im Panel ein Einmal-Token; es enthält Panel-Adresse und Panel-Fingerprint und läuft nach 24 h ab. Format: rcd1. + base64url(Adresse, Fingerprint, 32 Byte Zufall); das Panel speichert nur den SHA-256 des Geheimnisses | Host-Betreiber setzt im Agent nur die Panel-Adresse |
 | 2 | Host-Betreiber setzt das Token per Umgebungsvariable im Agent-Compose | Agent verbindet sich und schreibt den Fingerprint des Panels und seinen eigenen ins Log |
-| 3 | Agent prüft den Panel-Fingerprint aus dem Token und sendet seinen öffentlichen Schlüssel mit Token-Nachweis | Panel führt den Agent als wartend mit seinem Fingerprint |
+| 3 | Agent prüft den Panel-Fingerprint aus dem Token beim TLS-Handshake und sendet danach im hello das Geheimnis des Tokens; seinen öffentlichen Schlüssel zeigt er im Handshake | Panel führt den Agent als wartend mit seinem Fingerprint |
 | 4 | Panel speichert den Agent-Schlüssel, das Token ist verbraucht | Admin vergleicht den Fingerprint mit dem Host-Betreiber und gibt frei oder lehnt ab |
 | Absicherung | Panel-Identität ist durch das Token gesichert | Panel-Identität beim ersten Kontakt übernommen (Trust on First Use); Host-Betreiber sollte den Panel-Fingerprint vergleichen. Wartende Anfragen begrenzt und nach 24 h verworfen |
 
 Der Agent speichert seinen Schlüssel und den gepinnten Panel-Schlüssel in seinem Volume /secrets.
 
-- Weg A ist immer verfügbar. Weg B ist standardmäßig aus und wird vom RCON-Admin im Panel eingeschaltet.
+- Weg A ist immer verfügbar. Weg B ist standardmäßig aus und wird vom RCON-Admin im Panel eingeschaltet (agents.fingerprint\_pairing, 5.6); er schaltet sich nach 30 min selbst ab. Ein- und Ausschalten, auch das automatische, stehen im Audit. Wartende Agents beantwortet das Panel mit reject pending; der Agent versucht es mit Backoff erneut. Der Agent pinnt den Panel-Schlüssel schon beim ersten Kontakt.
+- Ein Token wird nach der Kopplung ignoriert, auch wenn es weiter in der Umgebung steht; RCD\_PAIRING\_TOKEN\_FILE liest es aus einer Datei (D-033).
+- Die Agent-ID vergibt das Panel bei der Kopplung; der Agent speichert sie mit dem gepinnten Panel-Schlüssel in /secrets und sendet sie im hello.
 - Koppeln und Widerrufen darf nur der RCON-Admin. Server-Admins nutzen gekoppelte Agents nur in ihrem Scope.
 - In der All-in-One-Variante ist der Agent-Port nur im Docker-Netz erreichbar. Für entfernte Agents muss er bewusst veröffentlicht werden.
 
@@ -41,7 +43,7 @@ Der Agent speichert seinen Schlüssel und den gepinnten Panel-Schlüssel in sein
 
 1. TLS-Handshake; beide Seiten prüfen den gepinnten Schlüssel der Gegenseite.
 2. Agent sendet hello mit Agent-ID, Release-Version, Backend (docker) und Fähigkeitsliste.
-3. Panel antwortet mit welcome oder reject samt Grund (version, revoked, unknown).
+3. Panel antwortet mit welcome samt Agent-ID oder reject samt Grund (version, revoked, unknown, pending, invalid). Ein fremder Schlüssel scheitert schon beim TLS-Handshake; dann gibt es kein reject, beide Seiten loggen agent.rejected mit pin\_mismatch.
 4. Agent sendet einen Snapshot aller freigegebenen Container.
 5. Danach laufen Ereignisse, Messwerte und Aufträge über dieselbe Verbindung.
 
@@ -69,7 +71,7 @@ Umschlag: `{"type": "…", "id": "…", "ref": "…", "ts": "…", "payload": {}
 | result | Agent → Panel | Ergebnis eines Auftrags: ok oder Fehlercode |
 | revoked | Panel → Agent | Kopplung widerrufen, Verbindung wird getrennt |
 
-Fehlercodes: forbidden (Container nicht freigegeben oder Operation nicht erlaubt), not\_found, invalid, timeout, unsupported.
+Fehlercodes: forbidden (Container nicht freigegeben oder Operation nicht erlaubt), not\_found, invalid, timeout, unsupported, rate\_limited (Rate je Container überschritten), error (Docker hat die Aktion abgelehnt). version.detect und volumes.size kommen mit R2; bis dahin antwortet der Agent mit unsupported.
 
 ### 1.6 Regeln im Agent
 
@@ -77,10 +79,23 @@ Fehlercodes: forbidden (Container nicht freigegeben oder Operation nicht erlaubt
 - Nur die Operationen aus 1.5 sind möglich; unbekannte Typen werden mit unsupported beantwortet.
 - Regex nur RE2, mit Zeilenlimit und Timeout; zurück geht nur der Treffer.
 - Aufträge je Container sind in der Rate begrenzt.
+- Container werden über ihren Namen angesprochen; der Agent löst Namen bei jedem Auftrag neu auf und prüft dabei das Label. Ein Container ohne Label existiert für ihn nicht.
+
+Grenzen (SEC-007):
+
+| Grenze | Wert |
+| --- | --- |
+| Nachricht vom Agent | höchstens 1 MiB; darüber trennt das Panel die Verbindung |
+| Auftrag vom Panel | höchstens 64 KiB |
+| log.lines | höchstens 500 Zeilen und 512 KiB Nutzdaten je Nachricht, sonst gekürzt mit truncated; je Zeile höchstens 8 KiB |
+| Verbindungsaufbau je Quelladresse | 10 je Minute, 5 am Stück |
+| Wartende Kopplungen (Weg B) | höchstens 10, verworfen nach 24 h |
+| Aufträge je Container im Agent | 10 je Minute, 3 am Stück, darüber rate\_limited |
+| Laufende Logs je Agent | höchstens 16 Container gleichzeitig |
 
 ### 1.7 Widerruf
 
-Das Panel löscht den Agent-Schlüssel, sendet revoked und trennt die Verbindung. Der Agent schreibt den Widerruf ins Log und verbindet sich nicht mehr automatisch; eine neue Kopplung braucht Weg A oder B.
+Das Panel markiert den Agent als widerrufen, löst seine Server von ihm (agent\_id und container\_name werden leer), sendet revoked und trennt die Verbindung. Der Agent schreibt den Widerruf ins Log und verbindet sich nicht mehr automatisch; eine neue Kopplung braucht Weg A oder B und setzt den bestehenden Datensatz wieder aktiv.
 
 ## 2. API zwischen Browser und Panel
 
@@ -120,10 +135,11 @@ Das Panel löscht den Agent-Schlüssel, sendet revoked und trennt die Verbindung
 | /servers, /servers/{id} | GET, POST, PATCH, DELETE | Spieleserver und RCON-Zugangsdaten | RCON-Admin; übrige lesend im Scope |
 | /servers/{id}/commands | POST | Befehl senden; Antwort synchron mit Timeout, zusätzlich als Ereignis an alle Abonnenten | alle im Scope, gefiltert |
 | /servers/{id}/history | GET | Befehlsverlauf | im Scope, laut Verlaufssichtbarkeit |
-| /servers/{id}/actions | POST | start, stop, restart über den Agent | RCON-Admin, Server-Admin |
+| /servers/{id}/actions | POST | start, stop, restart über den Agent; ohne Agent nur restart über den stop-Befehl des Profils (AGT-009); jede Aktion im Audit | RCON-Admin, Server-Admin |
 | /profiles | GET | Spielprofile und Befehlskatalog | alle |
 | /agents, /agents/{id} | GET, DELETE | Gekoppelte Agents, Widerruf | RCON-Admin |
-| /agents/tokens | POST | Kopplungs-Token erzeugen | RCON-Admin |
+| /agents/tokens | POST | Kopplungs-Token erzeugen, mit fertigem Compose-Ausschnitt | RCON-Admin |
+| /agents/{id}/approve | POST | Wartende Kopplung über Fingerprint freigeben (Weg B) | RCON-Admin |
 | /audit | GET | Audit-Log | RCON-Admin; Server-Admin im Scope |
 | /settings | GET, PATCH | Globale Einstellungen | RCON-Admin |
 | /backups | GET, POST | Sicherungen anzeigen und auslösen | RCON-Admin |
@@ -135,7 +151,7 @@ Felder eines Servers je Rolle: RCON-Admin und Server-Admin sehen Protokoll, Host
 
 - Aufbau über /api/v1/ws mit dem Session-Cookie; Origin wird geprüft.
 - Nachrichten vom Browser: subscribe und unsubscribe mit einem Thema, höchstens 4 KiB je Nachricht. Nachrichten vom Panel: subscribed mit Thema als Bestätigung eines Abos, event mit Thema und Daten, error mit Thema und Grund.
-- Themen: servers.overview, server.{id}.status, server.{id}.metrics, server.{id}.console, server.{id}.logs; notifications ab R2. server.{id}.metrics und server.{id}.logs antworten bis zu den Agents (M3) mit error unsupported.
+- Themen: servers.overview, server.{id}.status, server.{id}.metrics, server.{id}.console, server.{id}.logs; notifications ab R2. server.{id}.metrics und server.{id}.logs sind Agent-Funktionen: nur RCON-Admin und Server-Admin im Scope, sonst error forbidden. Ein neues Abo erhält zuerst den aktuellen Stand (letzter Messwert mit Zeit und Kennzeichen veraltet bzw. die letzten 50 Logzeilen); Logs werden nur übertragen, solange jemand sie abonniert (UI-009). Bei Agent-Trennung kommen die Messwerte sofort als veraltet mit Status unknown.
 - Rechte werden beim Abonnieren geprüft und bei jeder Änderung von Rechten, Servergruppen, Scopes oder Grants sofort neu bewertet; entzogene Abos beendet das Panel mit error revoked, auch wenn die Session bleibt. Endet die Session, schließt das Panel ihre Sockets.
 - Grenzen (SEC-008): höchstens ws.max\_sockets\_per\_session WebSockets je Session (Standard 20) und ws.max\_subscriptions\_per\_socket Abos je WebSocket (Standard 16), beide in 5.6. Ein weiteres Abo erhält error limit (ws.subscribe.denied). Öffnet eine Session einen Socket über der Grenze, schließt das Panel ihren ältesten Socket mit error replaced; der neue bleibt. Ein Browser, der 64 Nachrichten nicht abholt, wird getrennt.
 - Lebenszeichen per Ping alle 30 s; ohne Pong binnen 30 s gilt die Verbindung als getrennt, bei jedem Ping wird die Session geprüft. Nach einer Wiederverbindung holt die Oberfläche den aktuellen Stand per REST und abonniert neu.
@@ -201,7 +217,9 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | 422 | invalid | Leerer oder zu langer Befehl nach der Bereinigung |
 | 429 | rate\_limited | Ratenlimit erreicht |
 | 503 | server\_unavailable | Keine RCON-Verbindung zum Spieleserver |
-| 504 | timeout | Der Spieleserver hat nicht binnen 10 s geantwortet |
+| 504 | timeout | Der Spieleserver hat nicht binnen 10 s geantwortet, oder der Agent nicht rechtzeitig |
+| 503 | agent\_unavailable | Server ohne verbundenen Agent; start und stop ohne Agent |
+| 502 | action\_failed | Agent oder Docker hat die Aktion abgelehnt, z. B. Container ohne Label |
 | 403 | forbidden | Verwaltungsaktion nicht erlaubt, z. B. Rolle auf eigene Stufe heben (3.6) |
 | 403 | password\_change\_required | Passwortwechsel erzwungen; erlaubt sind nur /me/password, /auth/logout und /auth/session (AUTH-010) |
 | 503 | busy | Panel ausgelastet, z. B. alle Plätze der Passwortberechnung belegt oder die Warteschlange eines Spieleservers voll (3.8); mit Retry-After |
@@ -264,7 +282,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | invites | token\_hash, created\_by, role, template\_user\_id, expires\_at, used\_at | R1 |
 | user\_groups | name, kind (allgemein oder Moderatorgruppe), owner\_id, command\_list\_id (nur Moderatorgruppe), deleted\_at | R1 |
 | user\_group\_members | user\_group\_id, user\_id | R1 |
-| servers | name, profile\_id, protocol, host, port, secret (verschlüsselt), agent\_id, container\_id, deleted\_at | R1 |
+| servers | name, profile\_id, protocol, host, port, secret (verschlüsselt), agent\_id (Fremdschlüssel auf agents, ON DELETE SET NULL), container\_name, deleted\_at. Gespeichert wird der Containername, weil Docker beim Neuanlegen eine neue ID vergibt; agent\_id und container\_name sind nur gemeinsam gesetzt | R1 |
 | server\_groups | name, deleted\_at | R1 |
 | server\_group\_members | server\_group\_id, server\_id | R1 |
 | admin\_scopes | user\_id (Server-Admin), genau eines von server\_group\_id oder server\_id, assigned\_by | R1 |
@@ -430,6 +448,7 @@ Globale Einstellungen in settings; nur der RCON-Admin liest und ändert sie übe
 | profiles.poll\_interval | 30 s (1 s bis 1 h) | Abgleich der Profildateien zusätzlich zu Dateiereignissen (CAT-003, 7.1) |
 | ws.max\_sockets\_per\_session | 20 (1 bis 100) | WebSockets je Session (SEC-008); darüber wird der älteste Socket mit error replaced geschlossen |
 | ws.max\_subscriptions\_per\_socket | 16 (1 bis 64) | Abos je WebSocket (SEC-008); darüber error limit |
+| agents.fingerprint\_pairing | aus | Kopplung über Fingerprint (Weg B, 1.2); schaltet sich nach 30 min selbst ab, mit Audit-Eintrag |
 
 Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in die Volumes. Die Compose-Dateien setzen read\_only: true.
 
@@ -635,7 +654,7 @@ Die Zahlenwerte im Beispiel (z. B. max\_length) werden beim ersten Profil gegen 
 | Befehle | cmd.accepted, cmd.denied (reason: not\_in\_list, wrapper\_blocked, rate\_limited, invalid), cmd.sent, cmd.response, cmd.timeout |
 | RCON | rcon.connected, rcon.auth\_failed, rcon.disconnected, rcon.reconnect |
 | Profile | profile.imported, profile.rejected (reason), profile.overridden |
-| Agent im Panel | agent.connected, agent.rejected (reason: version, revoked, unknown, pin\_mismatch), agent.paired, agent.revoked, agent.limit (reason) |
+| Agent im Panel | agent.connected, agent.rejected (reason: version, revoked, unknown, pending, invalid, pin\_mismatch), agent.paired, agent.revoked, agent.limit (reason: connection\_rate, message\_size, pending\_pairings), agent.disconnected (reason: closed, timeout, revoked, too\_large, protocol) |
 | Agent selbst | agent.handshake, agent.forbidden (Container ohne Label oder Operation nicht erlaubt), agent.unsupported, docker.action, logs.follow.start, logs.follow.stop |
 | Live-Daten | ws.subscribe, ws.subscribe.denied, cache.stale |
 

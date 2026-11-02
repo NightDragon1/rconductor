@@ -1,5 +1,7 @@
 # Kandidaten für Revision 2.3
 
+> Eingearbeitet in Dokumentversion 2.3 (Gesamtkonzept, Kapitel 12). Diese Datei bleibt als Begründung der Änderungen erhalten.
+
 Stand: Beginn M3 (02.11.2026). Abweichungen, Lücken und Festlegungen, die nach der Freigabe von Dokumentversion 2.2 aufgefallen sind. Keiner der Punkte ändert das freigegebene Konzept 2.2; über die Übernahme entscheidet Rob. Nr. 1 bis 9 sind von Rob für M3 entschieden (Freigabe des M3-Plans), Nr. 10 und 11 nach dem Abschluss von M3.
 
 | Nr. | Thema | Betroffen |
@@ -15,6 +17,7 @@ Stand: Beginn M3 (02.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 | 9 | Teilabnahme AGT-005 in M4 | Plan R1 Kapitel 3, Abnahme AGT-005 |
 | 10 | Fremdschlüssel servers.agent\_id, Widerruf löst Server vom Agent | Design 4.2, 1.7 |
 | 11 | Socket-Proxy: ALLOW\_RESTARTS erlaubt auch kill | Sicherheit T-022, SEC-010 |
+| 12 | WebSocket-Themen metrics und logs | Design 2.3, UI-009, NFR-005 |
 
 ## 1. Container über den Namen statt über die ID zuordnen
 
@@ -108,4 +111,11 @@ Außerdem für W5 (keine Konzeptänderung): Ein falscher Schlüssel scheitert be
 - **Befund (M3):** Beim Socket-Proxy aus dem README-Beispiel (linuxserver/socket-proxy) gibt ALLOW\_RESTARTS die Endpunkte stop, restart und kill frei. Der Agent ruft kill nie auf (seine Docker-Schnittstelle kennt es nicht), ein kompromittierter Agent könnte es über den Proxy aber.
 - **Vorschlag:** In T-022 als Restrisiko vermerken: kill ist gleichwertig zu stop (ein freigegebener Container wird beendet, nichts angelegt, gelöscht oder ausgeführt) und bleibt damit im Rahmen dessen, was der Agent ohnehin darf.
 - **Begründung:** Die Minderung durch den Proxy soll ehrlich beschrieben sein.
+
+## 12. WebSocket-Themen metrics und logs
+
+- **Fundstelle:** 03-design.md, Kapitel 2.3 („server.{id}.metrics und server.{id}.logs antworten bis zu den Agents (M3) mit error unsupported“).
+- **Umsetzung (M3, Commit 03f99e9):** Beide Themen sind Agent-Funktionen für RCON-Admin und Server-Admin im Scope (AGT-008, T-014), sonst error forbidden, auch bei der Neuprüfung. Ein neues Abo erhält zuerst den aktuellen Stand. Der erste Betrachter startet logs.follow, der letzte sendet logs.stop (UI-009); nach einer Wiederverbindung des Agents läuft das Verfolgen weiter. Jede Zustandsänderung, auch die Trennung des Agents, sendet die Messwerte mit stale und Status (NFR-005).
+- **Vorschlag:** Design 2.3 entsprechend fassen.
+- **Begründung:** Der Satz in 2.3 war bis M3 befristet.
 
