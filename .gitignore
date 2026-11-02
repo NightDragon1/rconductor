@@ -28,3 +28,8 @@ coverage.out
 *.swp
 .DS_Store
 Thumbs.db
+
+# Playwright
+/web/e2e/.state-*.json
+/web/test-results/
+/web/playwright-report/

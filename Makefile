@@ -9,7 +9,7 @@ SQLC_VERSION := 1.31.1
 SQLC ?= sqlc
 export CGO_ENABLED := 0
 
-.PHONY: all build web panel agent images test test-integration test-minecraft lint vuln generate check
+.PHONY: all build web panel agent images test test-integration test-minecraft test-e2e lint vuln generate check
 
 all: lint test web build
 
@@ -43,6 +43,12 @@ test-integration: images
 # cached in .cache/minecraft).
 test-minecraft:
 	jar=$$(scripts/minecraft-server.sh .cache/minecraft) && RCD_MINECRAFT_JAR=$$jar go test -tags minecraft -count=1 -run TestMinecraft ./internal/app/
+
+# End-to-end tests of the web interface with Playwright against the e2e
+# stack (internal/e2e/stack); builds the UI first. Only the browser is
+# downloaded (into the user's cache); CI installs its system libraries.
+test-e2e:
+	cd web && npm ci --no-audit --no-fund && npm run build && npx playwright install chromium && npx playwright test
 
 # Full pre-commit gate (also run by the hook in .githooks).
 check:

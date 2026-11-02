@@ -17,6 +17,14 @@ missing=$(git ls-files |
       internal/store/queries/*.sql | internal/store/queries/*/*.sql) lines=$(tail -n 3 "$f") ;;
       *) lines=$(head -n 5 "$f") ;;
     esac
+    # Copied third-party code keeps its MIT license; only the files listed
+    # in THIRD_PARTY_NOTICES.md may (PRJ-002).
+    case "$f" in
+      web/src/components/ui/* | web/src/lib/utils.ts)
+        echo "$lines" | grep -q 'SPDX-License-Identifier: MIT' && echo "$lines" | grep -q 'THIRD_PARTY_NOTICES' || echo "$f"
+        continue
+        ;;
+    esac
     echo "$lines" | grep -q 'SPDX-License-Identifier: AGPL-3.0-or-later' || echo "$f"
   done)
 if [ -n "$missing" ]; then

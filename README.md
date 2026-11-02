@@ -203,6 +203,7 @@ Requirements: Go (see `go.mod`), Node.js 22 or newer, Docker with buildx.
 | `make images` | local images `rconductor-panel:dev` and `rconductor-agent:dev` |
 | `make test-integration` | build the images and run the integration tests against them |
 | `MINECRAFT_ACCEPT_EULA=true make test-minecraft` | walking skeleton against a real Minecraft server (see below) |
+| `make test-e2e` | build the UI and run the Playwright tests against a test panel (`internal/e2e/stack`) |
 | `make lint`, `make vuln` | golangci-lint and govulncheck |
 | `make generate` | regenerate sqlc and oapi-codegen code |
 | `cd web && npm run lint && npm run format:check && npm test` | UI checks |
