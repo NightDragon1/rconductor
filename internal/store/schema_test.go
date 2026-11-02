@@ -6,6 +6,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+
+	"github.com/NightDragon1/rconductor/migrations"
 )
 
 // migrated returns a store with all embedded migrations applied.
@@ -113,5 +115,66 @@ func TestServerProfileSchema(t *testing.T) {
 	}
 	if err := exec(`DELETE FROM game_profiles WHERE id = 'p1'`); err == nil {
 		t.Error("profile in use deleted")
+	}
+}
+
+// TestServersAgentFK covers migration 00007 (revision 2.3): rebuilding
+// servers keeps every row that depends on it, and deleting an agent sets
+// agent_id and container_name of its servers to NULL.
+func TestServersAgentFK(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "data"))
+	ctx := context.Background()
+	var logs syncBuffer
+	// Up to 00006 only: the SQL files without the Go migration.
+	if _, err := s.Migrate(ctx, testLogger(&logs), MigrateOptions{FS: migrations.SQLite()}); err != nil {
+		t.Fatal(err)
+	}
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := s.DB.ExecContext(ctx, q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`INSERT INTO users (id, pseudonym, role, password_hash, created_at, updated_at) VALUES ('u', 'admin', 'rcon_admin', 'h', 't', 't')`)
+	exec(`INSERT INTO agents (id, name, public_key, fingerprint, status, created_at) VALUES ('a1', 'host', x'00', 'fp1', 'active', 't')`)
+	exec(`INSERT INTO servers (id, name, created_at, updated_at, agent_id, container_name) VALUES ('s1', 'mc', 't', 't', 'a1', 'mc')`)
+	exec(`INSERT INTO servers (id, name, created_at, updated_at, agent_id, container_name) VALUES ('s2', 'gone', 't', 't', 'nope', 'x')`)
+	exec(`INSERT INTO server_groups (id, name, created_at, updated_at) VALUES ('g', 'g', 't', 't')`)
+	exec(`INSERT INTO server_group_members (server_group_id, server_id) VALUES ('g', 's1')`)
+	exec(`INSERT INTO admin_scopes (id, user_id, server_id, assigned_by, created_at) VALUES ('as', 'u', 's1', 'u', 't')`)
+
+	res, err := s.Migrate(ctx, testLogger(&logs), MigrateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.To < 7 {
+		t.Fatalf("migrated to %d", res.To)
+	}
+	count := func(q string) int {
+		t.Helper()
+		var n int
+		if err := s.DB.QueryRowContext(ctx, q).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if count(`SELECT COUNT(*) FROM server_group_members`) != 1 || count(`SELECT COUNT(*) FROM admin_scopes`) != 1 {
+		t.Error("rows that depend on servers were lost in the rebuild")
+	}
+	if count(`SELECT COUNT(*) FROM servers WHERE id = 's2' AND agent_id IS NULL AND container_name IS NULL`) != 1 {
+		t.Error("a dangling agent_id survived the migration")
+	}
+	if count(`SELECT COUNT(*) FROM pragma_foreign_key_list('servers') WHERE "table" = 'agents' AND on_delete = 'SET NULL'`) != 1 {
+		t.Error("no foreign key on agents")
+	}
+	if count(`SELECT COUNT(*) FROM pragma_foreign_key_check`) != 0 {
+		t.Error("foreign key violations after the migration")
+	}
+	exec(`DELETE FROM agents WHERE id = 'a1'`)
+	if count(`SELECT COUNT(*) FROM servers WHERE id = 's1' AND agent_id IS NULL AND container_name IS NULL`) != 1 {
+		t.Error("deleting the agent left agent_id or container_name")
+	}
+	if count(`SELECT COUNT(*) FROM server_group_members`) != 1 {
+		t.Error("deleting the agent touched the memberships")
 	}
 }

@@ -28,6 +28,9 @@ UPDATE agents SET status = 'active', paired_by = ? WHERE id = ? AND status = 'pe
 -- name: RevokeAgent :execrows
 UPDATE agents SET status = 'revoked', revoked_at = ? WHERE id = ? AND status = 'active';
 
+-- name: DetachServersFromAgent :execrows
+UPDATE servers SET agent_id = NULL, updated_at = ? WHERE agent_id = ?;
+
 -- name: RepairAgent :execrows
 UPDATE agents SET status = 'active', paired_by = ?, revoked_at = NULL, name = ?, version = ?, capabilities = ?, remote = ?, last_seen_at = ?
 WHERE id = ? AND status = 'revoked';

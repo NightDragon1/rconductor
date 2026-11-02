@@ -302,6 +302,7 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 		return err
 	}
 	action := "agent.revoke"
+	var detached int64
 	switch r.Status {
 	case StatusPending:
 		action = "agent.reject"
@@ -312,10 +313,17 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 		if _, err := q.RevokeAgent(ctx, sqlitedb.RevokeAgentParams{RevokedAt: sql.NullString{String: store.Now(), Valid: true}, ID: id}); err != nil {
 			return err
 		}
+		// Its servers lose agent and container, as when the agent row
+		// goes (ON DELETE SET NULL, revision 2.3).
+		if detached, err = q.DetachServersFromAgent(ctx, sqlitedb.DetachServersFromAgentParams{
+			UpdatedAt: store.Now(), AgentID: sql.NullString{String: id, Valid: true},
+		}); err != nil {
+			return err
+		}
 	default:
 		return users.ErrNotFound
 	}
-	if err := s.auditOK(ctx, tx, req, action, id, map[string]string{"name": r.Name, "fingerprint": r.Fingerprint}); err != nil {
+	if err := s.auditOK(ctx, tx, req, action, id, map[string]any{"name": r.Name, "fingerprint": r.Fingerprint, "servers_detached": detached}); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {

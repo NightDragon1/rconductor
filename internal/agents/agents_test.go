@@ -5,6 +5,7 @@ package agents
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net"
@@ -271,8 +272,18 @@ func TestRevoke(t *testing.T) {
 	if err := f.svc.Delete(ctx, f.sa, w.AgentID); !errors.Is(err, users.ErrForbidden) {
 		t.Fatalf("server admin revokes: %v", err)
 	}
+	if _, err := f.st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, created_at, updated_at, agent_id, container_name) VALUES ('s1', 'mc', 't', 't', ?, 'mc')`, w.AgentID); err != nil {
+		t.Fatal(err)
+	}
 	if err := f.svc.Delete(ctx, f.admin, w.AgentID); err != nil {
 		t.Fatal(err)
+	}
+	var agentID, container sql.NullString
+	if err := f.st.DB.QueryRowContext(ctx, `SELECT agent_id, container_name FROM servers WHERE id = 's1'`).Scan(&agentID, &container); err != nil {
+		t.Fatal(err)
+	}
+	if agentID.Valid || container.Valid {
+		t.Errorf("server keeps agent %v and container %v after the revocation", agentID, container)
 	}
 	rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
