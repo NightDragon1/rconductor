@@ -102,3 +102,32 @@ func TestLogRing(t *testing.T) {
 		t.Error("gone container kept")
 	}
 }
+
+// TestRestartLoop covers UI-003: three starts within ten minutes mark a
+// restart loop; older starts do not count.
+func TestRestartLoop(t *testing.T) {
+	d, _, now := newAgentData(t)
+	start := func(at time.Time) {
+		c := running("1", "mc")
+		c.StartedAt = at
+		d.Event("a1", agentproto.ContainerEvent{Container: c})
+	}
+	start(now.Add(-20 * time.Minute))
+	start(now.Add(-8 * time.Minute))
+	start(now.Add(-4 * time.Minute))
+	if c, _ := d.Container("a1", "mc"); c.RestartLoop {
+		t.Error("two recent starts are a loop")
+	}
+	start(now.Add(-4 * time.Minute)) // the same start again
+	if c, _ := d.Container("a1", "mc"); c.RestartLoop {
+		t.Error("a repeated start counted twice")
+	}
+	start(*now)
+	if c, _ := d.Container("a1", "mc"); !c.RestartLoop {
+		t.Error("three starts in ten minutes are no loop")
+	}
+	*now = now.Add(9 * time.Minute)
+	if c, _ := d.Container("a1", "mc"); c.RestartLoop {
+		t.Error("the loop did not end when the starts got old")
+	}
+}

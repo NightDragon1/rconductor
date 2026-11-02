@@ -74,6 +74,7 @@ const (
 	CapContainerAction = "container.action"
 	CapLogs            = "logs"
 	CapMetrics         = "metrics"
+	CapRestartInfo     = "restart_info"
 )
 
 // Limits (SEC-007, revision 2.3 candidate 2).
@@ -134,8 +135,12 @@ type Container struct {
 	Image     string    `json:"image"`
 	State     string    `json:"state"`
 	StartedAt time.Time `json:"started_at,omitzero"`
-	Ports     []Port    `json:"ports,omitempty"`
-	Volumes   []string  `json:"volumes,omitempty"`
+	// RestartCount counts restarts by the restart policy; with StartedAt
+	// it is new within major version 1 (capability restart_info, revision
+	// 2.4 candidate 2).
+	RestartCount int      `json:"restart_count,omitempty"`
+	Ports        []Port   `json:"ports,omitempty"`
+	Volumes      []string `json:"volumes,omitempty"`
 }
 
 // Snapshot lists all allowed containers.

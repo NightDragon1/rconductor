@@ -81,7 +81,7 @@ func (d *Docker) Name() string { return "docker" }
 // Capabilities implements Backend; version.detect and volumes.size follow
 // in R2.
 func (d *Docker) Capabilities() []string {
-	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics}
+	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics, agentproto.CapRestartInfo}
 }
 
 func (d *Docker) labelFilter() client.Filters {
@@ -117,6 +117,24 @@ func toContainer(s container.Summary) agentproto.Container {
 		}
 	}
 	c.Clean()
+	return c
+}
+
+// withStart adds start time and restart count from an inspect; without
+// them the panel shows neither (revision 2.4 candidate 2).
+func (d *Docker) withStart(ctx context.Context, c agentproto.Container) agentproto.Container {
+	ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	r, err := d.api.ContainerInspect(ictx, c.ID, client.ContainerInspectOptions{})
+	if err != nil {
+		return c
+	}
+	c.RestartCount = r.Container.RestartCount
+	if r.Container.State != nil {
+		if t, err := time.Parse(time.RFC3339Nano, r.Container.State.StartedAt); err == nil && t.Year() > 1 {
+			c.StartedAt = t.UTC()
+		}
+	}
 	return c
 }
 
@@ -171,7 +189,7 @@ func (d *Docker) snapshot(ctx context.Context, out Sender) error {
 	}
 	snap := agentproto.Snapshot{Containers: make([]agentproto.Container, 0, len(items))}
 	for _, s := range items {
-		snap.Containers = append(snap.Containers, toContainer(s))
+		snap.Containers = append(snap.Containers, d.withStart(ctx, toContainer(s)))
 	}
 	return out.Send(ctx, agentproto.TypeSnapshot, "", snap)
 }
@@ -212,7 +230,7 @@ func (d *Docker) event(ctx context.Context, out Sender, m events.Message) {
 	}
 	ev := agentproto.ContainerEvent{}
 	if len(items) == 1 {
-		ev.Container = toContainer(items[0])
+		ev.Container = d.withStart(ctx, toContainer(items[0]))
 	} else {
 		ev.Container = agentproto.Container{ID: m.Actor.ID, Name: name}
 		ev.Container.Clean()
