@@ -430,3 +430,21 @@ func TestSubscribedConfirmation(t *testing.T) {
 		t.Errorf("refused = %+v %v", m, err)
 	}
 }
+
+// TestOverviewRuntimeReduced covers UI-006 on the WebSocket: in
+// servers.overview a moderator gets runtime data without the agent part.
+func TestOverviewRuntimeReduced(t *testing.T) {
+	w := newWSFixture(t)
+	w.grantModerator(t)
+	c, _, err := w.dial(t, w.login(t, "Mod"), w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	send(t, c, "subscribe", "servers.overview")
+	w.subscribed(t, "servers.overview", 1)
+	w.hub.PublishRuntime(w.server, map[string]string{"kind": "runtime", "container": "secret"}, map[string]string{"kind": "runtime"})
+	m, err := next(t, c, 5*time.Second)
+	if err != nil || m.Type != "event" || strings.Contains(string(m.Data), "container") {
+		t.Errorf("moderator got %+v %v", m, err)
+	}
+}

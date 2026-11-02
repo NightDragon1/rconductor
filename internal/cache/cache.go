@@ -71,6 +71,23 @@ type Cache struct {
 	entries map[string]*entry
 	// refresh overrides PlayersRefresh, for tests.
 	refresh time.Duration
+	// onPlayers is told about every new player list.
+	onPlayers func(serverID string)
+}
+
+// OnPlayers sets the receiver of new player lists, for the event bus.
+func (c *Cache) OnPlayers(f func(serverID string)) { c.onPlayers = f }
+
+// Cached returns the player list of a server as it is, without asking the
+// game server; ok is false when there is none yet.
+func (c *Cache) Cached(serverID string) (Players, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e := c.entries[serverID]
+	if e == nil || e.players.UpdatedAt.IsZero() {
+		return Players{}, false
+	}
+	return c.view(e), true
 }
 
 // New returns an empty cache.
@@ -178,6 +195,9 @@ func (c *Cache) fetch(ctx context.Context, serverID string) error {
 	e.players = Players{Names: names, UpdatedAt: c.now()}
 	e.invalidated = false
 	c.mu.Unlock()
+	if c.onPlayers != nil {
+		c.onPlayers(serverID)
+	}
 	return nil
 }
 

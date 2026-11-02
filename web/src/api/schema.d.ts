@@ -853,6 +853,7 @@ export interface components {
             agent_id?: string;
             /** @description Admins only; the container on that host. The agent resolves the name and checks its label for every order. */
             container_name?: string;
+            runtime?: components["schemas"]["ServerRuntime"];
             /** @description Admins only; the override of the server or the profile's ports (SRV-005). */
             game_ports?: components["schemas"]["GamePort"][];
             game_ports_override?: boolean;
@@ -877,6 +878,40 @@ export interface components {
             agent_id?: string;
             /** @description Container name on the agent's host; set together with agent_id. */
             container_name?: string;
+        };
+        /** @description Runtime data, kept in memory with its age (NFR-005); the same data comes live in servers.overview with kind runtime. Player count for everyone in scope, the container only for RCON admin and server admin (UI-006). */
+        ServerRuntime: {
+            /** @enum {string} */
+            kind: "runtime";
+            /** Format: uuid */
+            server_id: string;
+            players?: number;
+            /** Format: date-time */
+            players_at?: string;
+            players_stale?: boolean;
+            container?: components["schemas"]["ContainerRuntime"];
+        };
+        ContainerRuntime: {
+            name: string;
+            /** @description Foreign data from the agent (SEC-006). */
+            image?: string;
+            /** @description Docker state, or unknown while the agent is disconnected. */
+            state: string;
+            /** Format: date-time */
+            started_at?: string;
+            restart_count: number;
+            /** @description At least three starts within ten minutes (UI-003). */
+            restart_loop: boolean;
+            /** Format: double */
+            cpu_percent?: number;
+            /** Format: int64 */
+            mem_bytes?: number;
+            /** Format: int64 */
+            mem_limit?: number;
+            /** Format: date-time */
+            metrics_at?: string;
+            stale: boolean;
+            agent_connected: boolean;
         };
         ServerActionInput: {
             /** @enum {string} */

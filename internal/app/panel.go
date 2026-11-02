@@ -194,7 +194,9 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	agents.OnMessage(agentData.Receive)
 	agents.OnDisconnect(agentData.Disconnected)
 	serverSvc.SetActions(agents, conns)
-	hub.SetAgentViews(agentview.New(st, agentData, agents, hub, logs.Module("agent")))
+	views := agentview.New(st, agentData, agents, hub, logs.Module("agent"))
+	views.SetPlayers(runtime)
+	hub.SetAgentViews(views)
 	agentSvc.SetHub(agents)
 	wg.Go(func() { agentSvc.ClosePairing(ctx, time.Minute) })
 	agentAddr := make(chan net.Addr, 1)
@@ -218,7 +220,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	}
 	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc,
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
-		Agents: agentSvc,
+		Agents: agentSvc, Runtime: views,
 	})
 	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,
 		func(addr net.Addr) {

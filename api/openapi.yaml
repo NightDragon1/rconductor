@@ -1573,6 +1573,8 @@ components:
           description: >-
             Admins only; the container on that host. The agent resolves the
             name and checks its label for every order.
+        runtime:
+          $ref: "#/components/schemas/ServerRuntime"
         game_ports:
           type: array
           description: Admins only; the override of the server or the profile's ports (SRV-005).
@@ -1628,6 +1630,68 @@ components:
           type: string
           maxLength: 255
           description: Container name on the agent's host; set together with agent_id.
+
+    ServerRuntime:
+      type: object
+      description: >-
+        Runtime data, kept in memory with its age (NFR-005); the same data
+        comes live in servers.overview with kind runtime. Player count for
+        everyone in scope, the container only for RCON admin and server
+        admin (UI-006).
+      required: [kind, server_id]
+      properties:
+        kind:
+          type: string
+          enum: [runtime]
+        server_id:
+          type: string
+          format: uuid
+        players:
+          type: integer
+        players_at:
+          type: string
+          format: date-time
+        players_stale:
+          type: boolean
+        container:
+          $ref: "#/components/schemas/ContainerRuntime"
+
+    ContainerRuntime:
+      type: object
+      required: [name, state, restart_count, restart_loop, stale, agent_connected]
+      properties:
+        name:
+          type: string
+        image:
+          type: string
+          description: Foreign data from the agent (SEC-006).
+        state:
+          type: string
+          description: Docker state, or unknown while the agent is disconnected.
+        started_at:
+          type: string
+          format: date-time
+        restart_count:
+          type: integer
+        restart_loop:
+          type: boolean
+          description: At least three starts within ten minutes (UI-003).
+        cpu_percent:
+          type: number
+          format: double
+        mem_bytes:
+          type: integer
+          format: int64
+        mem_limit:
+          type: integer
+          format: int64
+        metrics_at:
+          type: string
+          format: date-time
+        stale:
+          type: boolean
+        agent_connected:
+          type: boolean
 
     ServerActionInput:
       type: object
