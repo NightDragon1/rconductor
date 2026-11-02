@@ -46,8 +46,13 @@ type Server struct {
 
 // Start listens on a free local port.
 func Start(password string, style MarkerStyle, handler func(string) string) (*Server, error) {
+	return StartOn("127.0.0.1:0", password, style, handler)
+}
+
+// StartOn listens on addr, for a test server in a container.
+func StartOn(addr, password string, style MarkerStyle, handler func(string) string) (*Server, error) {
 	var lc net.ListenConfig
-	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	ln, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return nil, err
 	}
