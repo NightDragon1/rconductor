@@ -33,19 +33,7 @@ func (s *apiServer) ListProfiles(ctx context.Context, _ api.ListProfilesRequestO
 			g.GamePorts = append(g.GamePorts, api.GamePort{Port: gp.Port, Proto: api.GamePortProto(gp.Proto), Name: gp.Name})
 		}
 		for _, c := range r.Catalog {
-			cmd := api.CatalogCommand{Path: c.Path, Description: c.Description, Params: []api.ProfileParam{}}
-			for _, pa := range c.Params {
-				param := api.ProfileParam{Name: pa.Name, Type: api.ProfileParamType(pa.Type), Min: pa.Min, Max: pa.Max}
-				if pa.Optional {
-					param.Optional = &pa.Optional
-				}
-				if len(pa.Values) > 0 {
-					v := pa.Values
-					param.Values = &v
-				}
-				cmd.Params = append(cmd.Params, param)
-			}
-			g.Catalog = append(g.Catalog, cmd)
+			g.Catalog = append(g.Catalog, toAPICatalog(c))
 		}
 		if admin && sp.LastError != "" {
 			g.LastError = &sp.LastError
@@ -54,4 +42,20 @@ func (s *apiServer) ListProfiles(ctx context.Context, _ api.ListProfilesRequestO
 		out.Items = append(out.Items, g)
 	}
 	return api.ListProfiles200JSONResponse(out), nil
+}
+
+func toAPICatalog(c profiles.Command) api.CatalogCommand {
+	cmd := api.CatalogCommand{Path: c.Path, Description: c.Description, Params: []api.ProfileParam{}}
+	for _, pa := range c.Params {
+		param := api.ProfileParam{Name: pa.Name, Type: api.ProfileParamType(pa.Type), Min: pa.Min, Max: pa.Max}
+		if pa.Optional {
+			param.Optional = &pa.Optional
+		}
+		if len(pa.Values) > 0 {
+			v := pa.Values
+			param.Values = &v
+		}
+		cmd.Params = append(cmd.Params, param)
+	}
+	return cmd
 }

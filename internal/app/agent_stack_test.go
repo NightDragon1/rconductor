@@ -205,8 +205,13 @@ func TestAgentThroughTheStack(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	for _, ev := range []string{"logs.follow.start", "logs.follow.stop"} {
-		if len(s.eventsOf(ev)) == 0 {
-			t.Errorf("%s missing in the panel log", ev)
+		// The panel logs each when the agent's result arrives.
+		deadline := time.Now().Add(5 * time.Second)
+		for len(s.eventsOf(ev)) == 0 {
+			if time.Now().After(deadline) {
+				t.Fatalf("%s missing in the panel log", ev)
+			}
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 

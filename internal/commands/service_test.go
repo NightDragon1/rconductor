@@ -495,3 +495,42 @@ func TestQueueFullIsBusy(t *testing.T) {
 		t.Errorf("cmd.result = %s %s %v", result, payload, err)
 	}
 }
+
+// TestAllowedCommands covers revision 2.4 candidate 5 for CMD-003 and
+// CMD-015: a moderator gets the paths of his list with the catalog entry
+// (parameters), without wrappers; admins get free input and the catalog;
+// outside the scope the server does not exist.
+func TestAllowedCommands(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	a, err := w.svc.AllowedCommands(ctx, w.as("m"), w.server)
+	if err != nil || a.FreeInput {
+		t.Fatalf("moderator: %+v %v", a, err)
+	}
+	var paths []string
+	for _, c := range a.Commands {
+		paths = append(paths, c.Path)
+		if c.Path == "whitelist add" && (len(c.Params) != 1 || c.Params[0].Type != "player" || c.Description == "") {
+			t.Errorf("whitelist add without its catalog entry: %+v", c)
+		}
+	}
+	if strings.Join(paths, ",") != "kick,whitelist add" {
+		t.Errorf("moderator paths = %v", paths)
+	}
+	admin, err := w.svc.AllowedCommands(ctx, w.as("admin"), w.server)
+	if err != nil || !admin.FreeInput || len(admin.Commands) < 5 {
+		t.Errorf("admin: %+v %v", admin, err)
+	}
+	sup, err := w.svc.AllowedCommands(ctx, w.as("sup"), w.server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range sup.Commands {
+		if c.Path != "whitelist add" {
+			t.Errorf("supporter sees %s, only passable commands allowed", c.Path)
+		}
+	}
+	if _, err := w.svc.AllowedCommands(ctx, w.as("m"), "nope"); !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("unknown server: %v", err)
+	}
+}

@@ -78,3 +78,15 @@ func (s *apiServer) GetHistory(ctx context.Context, req api.GetHistoryRequestObj
 	}
 	return api.GetHistory200JSONResponse(page), nil
 }
+
+func (s *apiServer) ListAllowedCommands(ctx context.Context, req api.ListAllowedCommandsRequestObject) (api.ListAllowedCommandsResponseObject, error) {
+	a, err := s.commands.AllowedCommands(ctx, adminRequest(ctx), req.Id.String())
+	if err != nil {
+		return nil, adminError(err)
+	}
+	out := api.AllowedCommands{FreeInput: a.FreeInput, Commands: make([]api.CatalogCommand, 0, len(a.Commands))}
+	for _, c := range a.Commands {
+		out.Commands = append(out.Commands, toAPICatalog(c))
+	}
+	return api.ListAllowedCommands200JSONResponse(out), nil
+}
