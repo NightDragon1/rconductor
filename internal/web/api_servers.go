@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/profiles"
@@ -76,7 +77,7 @@ func (s *apiServer) ListServers(ctx context.Context, _ api.ListServersRequestObj
 	}
 	out := api.ServerList{Items: make([]api.Server, 0, len(list))}
 	for _, sv := range list {
-		out.Items = append(out.Items, toAPIServer(sv))
+		out.Items = append(out.Items, s.withRuntime(ctx, sv))
 	}
 	return api.ListServers200JSONResponse(out), nil
 }
@@ -89,7 +90,7 @@ func (s *apiServer) CreateServer(ctx context.Context, req api.CreateServerReques
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.CreateServer201JSONResponse(toAPIServer(sv)), nil
+	return api.CreateServer201JSONResponse(s.withRuntime(ctx, sv)), nil
 }
 
 func (s *apiServer) GetServer(ctx context.Context, req api.GetServerRequestObject) (api.GetServerResponseObject, error) {
@@ -97,7 +98,7 @@ func (s *apiServer) GetServer(ctx context.Context, req api.GetServerRequestObjec
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.GetServer200JSONResponse(toAPIServer(sv)), nil
+	return api.GetServer200JSONResponse(s.withRuntime(ctx, sv)), nil
 }
 
 func (s *apiServer) UpdateServer(ctx context.Context, req api.UpdateServerRequestObject) (api.UpdateServerResponseObject, error) {
@@ -108,7 +109,7 @@ func (s *apiServer) UpdateServer(ctx context.Context, req api.UpdateServerReques
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.UpdateServer200JSONResponse(toAPIServer(sv)), nil
+	return api.UpdateServer200JSONResponse(s.withRuntime(ctx, sv)), nil
 }
 
 func (s *apiServer) DeleteServer(ctx context.Context, req api.DeleteServerRequestObject) (api.DeleteServerResponseObject, error) {
@@ -217,4 +218,44 @@ func actionError(err error) error {
 		return &problem{status: http.StatusBadGateway, reason: api.ReasonCodeActionFailed, detail: failed.Error()}
 	}
 	return adminError(err)
+}
+
+// RuntimeSource provides the runtime data of a server (agentview).
+type RuntimeSource interface {
+	Runtime(ctx context.Context, serverID string, agentData bool) agentview.Runtime
+}
+
+// withRuntime adds the runtime data; the container part only for those
+// who see the server's details, the admins in scope (UI-006).
+func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Server {
+	out := toAPIServer(sv)
+	if s.runtime == nil {
+		return out
+	}
+	rt := s.runtime.Runtime(ctx, sv.ID, sv.Detailed)
+	id, _ := uuid.Parse(rt.ServerID)
+	ar := &api.ServerRuntime{Kind: api.Runtime, ServerId: id, Players: rt.Players, PlayersAt: rt.PlayersAt}
+	if rt.PlayersStale {
+		ar.PlayersStale = &rt.PlayersStale
+	}
+	if c := rt.Container; c != nil {
+		ac := &api.ContainerRuntime{
+			Name: c.Name, State: c.State, StartedAt: c.StartedAt, RestartCount: c.RestartCount, RestartLoop: c.RestartLoop,
+			CpuPercent: c.CPUPercent, MetricsAt: c.MetricsAt, Stale: c.Stale, AgentConnected: c.AgentConnected,
+		}
+		if c.Image != "" {
+			ac.Image = &c.Image
+		}
+		if c.MemBytes != nil {
+			v := int64(min(*c.MemBytes, 1<<62)) //nolint:gosec // bounded
+			ac.MemBytes = &v
+		}
+		if c.MemLimit != nil {
+			v := int64(min(*c.MemLimit, 1<<62)) //nolint:gosec // bounded
+			ac.MemLimit = &v
+		}
+		ar.Container = ac
+	}
+	out.Runtime = ar
+	return out
 }

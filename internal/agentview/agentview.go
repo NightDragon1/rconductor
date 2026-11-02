@@ -28,6 +28,35 @@ type Agents interface {
 // Bus publishes to the WebSocket topics.
 type Bus interface {
 	PublishAgentData(serverID, kind string, data any)
+	PublishRuntime(serverID string, full, reduced any)
+}
+
+// ContainerRuntime is the agent part of a server's runtime data; only
+// RCON admin and server admin see it (UI-006).
+type ContainerRuntime struct {
+	Name           string     `json:"name"`
+	Image          string     `json:"image,omitempty"`
+	State          string     `json:"state"`
+	StartedAt      *time.Time `json:"started_at,omitempty"`
+	RestartCount   int        `json:"restart_count"`
+	RestartLoop    bool       `json:"restart_loop"`
+	CPUPercent     *float64   `json:"cpu_percent,omitempty"`
+	MemBytes       *uint64    `json:"mem_bytes,omitempty"`
+	MemLimit       *uint64    `json:"mem_limit,omitempty"`
+	MetricsAt      *time.Time `json:"metrics_at,omitempty"`
+	Stale          bool       `json:"stale"`
+	AgentConnected bool       `json:"agent_connected"`
+}
+
+// Runtime is what cards and the server head show (revision 2.4 candidates
+// 3 and 4); kind is runtime in servers.overview.
+type Runtime struct {
+	Kind         string            `json:"kind"`
+	ServerID     string            `json:"server_id"`
+	Players      *int              `json:"players,omitempty"`
+	PlayersAt    *time.Time        `json:"players_at,omitempty"`
+	PlayersStale bool              `json:"players_stale,omitempty"`
+	Container    *ContainerRuntime `json:"container,omitempty"`
 }
 
 // Metrics is the data of server.<id>.metrics.
@@ -68,8 +97,53 @@ type View struct {
 	bus    Bus
 	log    *slog.Logger
 
+	players *cache.Cache
+
 	mu      sync.Mutex
 	follows map[string]*follow // by server ID
+}
+
+// SetPlayers adds the player counts to the runtime data.
+func (v *View) SetPlayers(p *cache.Cache) {
+	v.players = p
+	p.OnPlayers(func(id string) { v.publishRuntime(context.Background(), id) })
+}
+
+// Runtime returns the runtime data of a server; agentData adds the
+// container part.
+func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Runtime {
+	rt := Runtime{Kind: "runtime", ServerID: serverID}
+	if v.players != nil {
+		if p, ok := v.players.Cached(serverID); ok {
+			n, at := len(p.Names), p.UpdatedAt
+			rt.Players, rt.PlayersAt, rt.PlayersStale = &n, &at, p.Stale
+		}
+	}
+	if !agentData {
+		return rt
+	}
+	agentID, name, ok := v.container(ctx, serverID)
+	if !ok {
+		return rt
+	}
+	cr := &ContainerRuntime{Name: name, State: cache.StateUnknown, AgentConnected: v.data.Connected(agentID), Stale: true}
+	if c, ok := v.data.Container(agentID, name); ok {
+		cr.State, cr.Image, cr.RestartCount, cr.RestartLoop = c.State, c.Image, c.RestartCount, c.RestartLoop
+		if !c.StartedAt.IsZero() {
+			t := c.StartedAt
+			cr.StartedAt = &t
+		}
+	}
+	if m, ok := v.data.Metric(agentID, name); ok {
+		cpu, mem, limit, at := m.CPUPercent, m.MemBytes, m.MemLimit, m.At
+		cr.CPUPercent, cr.MemBytes, cr.MemLimit, cr.MetricsAt, cr.Stale = &cpu, &mem, &limit, &at, m.Stale
+	}
+	rt.Container = cr
+	return rt
+}
+
+func (v *View) publishRuntime(ctx context.Context, serverID string) {
+	v.bus.PublishRuntime(serverID, v.Runtime(ctx, serverID, true), v.Runtime(ctx, serverID, false))
 }
 
 // New wires the cache's notifications to the bus.
@@ -141,6 +215,7 @@ func (v *View) metrics(agentID string, containers []string) {
 			if m, ok := v.metricsOf(id, agentID, c); ok {
 				v.bus.PublishAgentData(id, "metrics", m)
 			}
+			v.publishRuntime(context.Background(), id)
 		}
 	}
 }

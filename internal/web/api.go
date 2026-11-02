@@ -34,6 +34,7 @@ var whileMustChange = map[string]bool{"ChangePassword": true, "Logout": true, "G
 // apiServer implements the generated strict server interface.
 type apiServer struct {
 	agents   *agents.Service
+	runtime  RuntimeSource
 	hub      *events.Hub
 	cache    *cache.Cache
 	commands *commands.Service

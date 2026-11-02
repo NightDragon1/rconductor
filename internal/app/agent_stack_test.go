@@ -159,6 +159,31 @@ func TestAgentThroughTheStack(t *testing.T) {
 		t.Errorf("metrics = %s", data)
 	}
 
+	// Runtime data in REST and in servers.overview (revision 2.4
+	// candidates 3 and 4).
+	var srv struct {
+		Runtime struct {
+			Kind      string
+			Container struct {
+				Name           string
+				State          string
+				CPUPercent     float64 `json:"cpu_percent"`
+				AgentConnected bool    `json:"agent_connected"`
+			}
+		}
+	}
+	admin.must(http.MethodGet, "/servers/"+s.server, nil, &srv, http.StatusOK)
+	if srv.Runtime.Kind != "runtime" || srv.Runtime.Container.Name != "mc" || srv.Runtime.Container.CPUPercent != 42 || !srv.Runtime.Container.AgentConnected {
+		t.Errorf("runtime = %+v", srv.Runtime)
+	}
+	subscribe(t, ws, "servers.overview")
+	data = next(t, ws, func(typ, topic string, d json.RawMessage) bool {
+		return typ == "event" && topic == "servers.overview" && strings.Contains(string(d), `"kind":"runtime"`)
+	})
+	if !strings.Contains(string(data), `"container":{"name":"mc"`) {
+		t.Errorf("overview runtime = %s", data)
+	}
+
 	// Logs flow only while someone follows them (UI-009).
 	if slices.Contains(backend.got(), agentproto.TypeLogsFollow) {
 		t.Error("logs followed before anyone viewed them")

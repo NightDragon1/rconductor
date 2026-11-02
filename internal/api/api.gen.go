@@ -349,6 +349,21 @@ func (e ServerActionResultVia) Valid() bool {
 	}
 }
 
+// Defines values for ServerRuntimeKind.
+const (
+	Runtime ServerRuntimeKind = "runtime"
+)
+
+// Valid indicates whether the value is a known member of the ServerRuntimeKind enum.
+func (e ServerRuntimeKind) Valid() bool {
+	switch e {
+	case Runtime:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAuditParamsKind.
 const (
 	ListAuditParamsKindAdmin   ListAuditParamsKind = "admin"
@@ -527,6 +542,28 @@ type CommandResult struct {
 	// Truncated The answer was longer than 64 KiB and is cut.
 	Truncated bool      `json:"truncated"`
 	Ts        time.Time `json:"ts"`
+}
+
+// ContainerRuntime defines model for ContainerRuntime.
+type ContainerRuntime struct {
+	AgentConnected bool     `json:"agent_connected"`
+	CpuPercent     *float64 `json:"cpu_percent,omitempty"`
+
+	// Image Foreign data from the agent (SEC-006).
+	Image        *string    `json:"image,omitempty"`
+	MemBytes     *int64     `json:"mem_bytes,omitempty"`
+	MemLimit     *int64     `json:"mem_limit,omitempty"`
+	MetricsAt    *time.Time `json:"metrics_at,omitempty"`
+	Name         string     `json:"name"`
+	RestartCount int        `json:"restart_count"`
+
+	// RestartLoop At least three starts within ten minutes (UI-003).
+	RestartLoop bool       `json:"restart_loop"`
+	Stale       bool       `json:"stale"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+
+	// State Docker state, or unknown while the agent is disconnected.
+	State string `json:"state"`
 }
 
 // GamePort defines model for GamePort.
@@ -751,6 +788,9 @@ type Server struct {
 	// Protocol Admins only.
 	Protocol *string `json:"protocol,omitempty"`
 
+	// Runtime Runtime data, kept in memory with its age (NFR-005); the same data comes live in servers.overview with kind runtime. Player count for everyone in scope, the container only for RCON admin and server admin (UI-006).
+	Runtime *ServerRuntime `json:"runtime,omitempty"`
+
 	// Status Reachability over RCON (SRV-004).
 	Status      ServerStatus `json:"status"`
 	StatusSince time.Time    `json:"status_since"`
@@ -825,6 +865,19 @@ type ServerInput struct {
 type ServerList struct {
 	Items []Server `json:"items"`
 }
+
+// ServerRuntime Runtime data, kept in memory with its age (NFR-005); the same data comes live in servers.overview with kind runtime. Player count for everyone in scope, the container only for RCON admin and server admin (UI-006).
+type ServerRuntime struct {
+	Container    *ContainerRuntime  `json:"container,omitempty"`
+	Kind         ServerRuntimeKind  `json:"kind"`
+	Players      *int               `json:"players,omitempty"`
+	PlayersAt    *time.Time         `json:"players_at,omitempty"`
+	PlayersStale *bool              `json:"players_stale,omitempty"`
+	ServerId     openapi_types.UUID `json:"server_id"`
+}
+
+// ServerRuntimeKind defines model for ServerRuntime.Kind.
+type ServerRuntimeKind string
 
 // Session defines model for Session.
 type Session struct {

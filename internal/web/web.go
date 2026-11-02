@@ -64,6 +64,8 @@ type Options struct {
 	Profiles *users.Profiles
 	// Agents administers the host agents.
 	Agents *agents.Service
+	// Runtime provides the runtime data of servers.
+	Runtime RuntimeSource
 }
 
 // NewHandler returns the root handler of the web port.
@@ -78,7 +80,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{agents: opts.Agents, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
+	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,

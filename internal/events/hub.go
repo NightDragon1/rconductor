@@ -356,6 +356,20 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 	}
 	s := &subscription{topic: topic, server: server, kind: kind}
 	switch {
+	case kind == "overview" && h.viewer != nil:
+		// The overview views every server in scope: their player lists
+		// stay fresh while it is open (Gesamtkonzept 4.6).
+		if rights, err := h.perm.For(ctx, c.p.UserID); err == nil {
+			var releases []func()
+			for _, id := range rights.ServerIDs() {
+				releases = append(releases, h.viewer.Watch(ctx, id))
+			}
+			s.release = func() {
+				for _, r := range releases {
+					r()
+				}
+			}
+		}
 	case kind == "logs":
 		// Registered before the subscription is visible, so a recheck
 		// that ends it always finds the release.
@@ -498,8 +512,10 @@ func (h *Hub) each(kind, server string, f func(c *client, s *subscription)) {
 	}
 }
 
-// StatusEvent is the data of a status change.
+// StatusEvent is the data of a status change; in servers.overview its
+// kind is status, next to runtime events.
 type StatusEvent struct {
+	Kind     string    `json:"kind"`
 	ServerID string    `json:"server_id"`
 	Status   string    `json:"status"`
 	Since    time.Time `json:"since"`
@@ -508,7 +524,7 @@ type StatusEvent struct {
 // PublishStatus sends a reachability change to server.<id>.status and to
 // servers.overview of everyone who has the server in scope.
 func (h *Hub) PublishStatus(serverID string, status connmgr.Status, since time.Time) {
-	ev := StatusEvent{ServerID: serverID, Status: string(status), Since: since}
+	ev := StatusEvent{Kind: "status", ServerID: serverID, Status: string(status), Since: since}
 	h.each("status", serverID, func(c *client, s *subscription) {
 		c.send(message{Type: "event", Topic: s.topic, Data: ev})
 	})
@@ -519,6 +535,26 @@ func (h *Hub) PublishStatus(serverID string, status connmgr.Status, since time.T
 		}
 		if _, ok := rights.Server(serverID); ok {
 			c.send(message{Type: "event", Topic: s.topic, Data: ev})
+		}
+	})
+}
+
+// PublishRuntime sends the runtime data of a server to servers.overview:
+// full to those with agent rights on it, reduced (no agent data) to the
+// others in scope (UI-006, revision 2.4 candidate 3).
+func (h *Hub) PublishRuntime(serverID string, full, reduced any) {
+	h.each("overview", "", func(c *client, s *subscription) {
+		rights, err := h.perm.For(context.Background(), c.p.UserID)
+		if err != nil {
+			return
+		}
+		sr, ok := rights.Server(serverID)
+		switch {
+		case !ok:
+		case sr.Agent:
+			c.send(message{Type: "event", Topic: s.topic, Data: full})
+		default:
+			c.send(message{Type: "event", Topic: s.topic, Data: reduced})
 		}
 	})
 }
