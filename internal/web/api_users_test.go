@@ -108,3 +108,29 @@ func TestProfilesAPI(t *testing.T) {
 		t.Errorf("profile details = %+v", list.Items[0])
 	}
 }
+
+// TestShortcutsInSession covers revision 2.4 candidate 7 for UI-008:
+// keyboard shortcuts are off by default; once the RCON admin switches them
+// on, every session shows it.
+func TestShortcutsInSession(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	admin := f.login(t, "Boss")
+	mod := f.login(t, "Mod")
+	session := func(c *http.Cookie) string {
+		return f.do(t, call{method: http.MethodGet, path: "/api/v1/auth/session", cookies: []*http.Cookie{c}}).Body.String()
+	}
+	if !strings.Contains(session(mod), `"ui":{"shortcuts_enabled":false}`) {
+		t.Errorf("default = %s", session(mod))
+	}
+	if rec := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{mod}, origin: "http://panel.lan",
+		body: `{"ui.shortcuts_enabled":true}`}); rec.Code != http.StatusForbidden {
+		t.Errorf("moderator switches shortcuts: %d", rec.Code)
+	}
+	if rec := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: "http://panel.lan",
+		body: `{"ui.shortcuts_enabled":true}`}); rec.Code != http.StatusOK {
+		t.Fatalf("admin switches shortcuts: %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(session(mod), `"ui":{"shortcuts_enabled":true}`) {
+		t.Errorf("after switching = %s", session(mod))
+	}
+}

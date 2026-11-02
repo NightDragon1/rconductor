@@ -23,6 +23,11 @@ const (
 	DefaultWSMaxSubs    = 16
 )
 
+// SettingShortcuts switches keyboard shortcuts on for everyone (UI-008);
+// off by default, readable by all through the session (revision 2.4
+// candidate 7).
+const SettingShortcuts = "ui.shortcuts_enabled"
+
 // SettingFingerprintPairing opens pairing by fingerprint (way B, AGT-005);
 // off by default, it closes itself after PairingWindow (revision 2.3
 // candidate 3).
@@ -89,6 +94,7 @@ var settingRules = map[string]rule{
 	SettingWSMaxSubs:              intRule(1, 64),
 	profiles.SettingPollInterval:  durationRule(profiles.MinPollInterval, time.Hour),
 	SettingFingerprintPairing:     boolRule,
+	SettingShortcuts:              boolRule,
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and
@@ -111,8 +117,12 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 			return err
 		}
 	}
-	_, err := st.EnsureDefault(ctx, SettingFingerprintPairing, false)
-	return err
+	for _, key := range []string{SettingFingerprintPairing, SettingShortcuts} {
+		if _, err := st.EnsureDefault(ctx, key, false); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Settings returns the global settings; only the RCON admin reads them.

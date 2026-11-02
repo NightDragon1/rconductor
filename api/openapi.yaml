@@ -2324,8 +2324,18 @@ components:
 
     Session:
       type: object
-      required: [user, expires_at, must_change_password]
+      required: [user, expires_at, must_change_password, ui]
       properties:
+        ui:
+          type: object
+          description: >-
+            Global interface settings everyone needs (revision 2.4
+            candidate 7); only the RCON admin changes them in /settings.
+          required: [shortcuts_enabled]
+          properties:
+            shortcuts_enabled:
+              type: boolean
+              description: Keyboard shortcuts, off by default (UI-008).
         must_change_password:
           type: boolean
           description: >-
