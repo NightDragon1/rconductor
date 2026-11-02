@@ -12,6 +12,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"sync"
 	"time"
 
@@ -409,10 +410,16 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				continue
 			}
 			answer, err := conn.Execute(j.ctx, j.command)
-			if err != nil && j.ctx.Err() != nil {
-				// A late answer is dropped by its packet ID; the
-				// connection stays.
-				j.reply <- result{err: j.ctx.Err()}
+			var ne net.Error
+			if err != nil && (j.ctx.Err() != nil || (errors.As(err, &ne) && ne.Timeout())) {
+				// The socket deadline is the command deadline and may
+				// fire a moment before the context does. A late answer
+				// is dropped by its packet ID; the connection stays.
+				cause := j.ctx.Err()
+				if cause == nil {
+					cause = context.DeadlineExceeded
+				}
+				j.reply <- result{err: cause}
 				continue
 			}
 			j.reply <- result{answer: answer, err: err}
