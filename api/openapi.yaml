@@ -246,6 +246,30 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+  /servers/{id}/players:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: getPlayers
+      summary: Players online, from the cache (SRV-006, Overview 4.6).
+      description: >-
+        Fetched over RCON with the profile's player command when missing
+        or older than 120 s; kept in memory only. A value that could not
+        be refreshed comes back marked stale with its time.
+      tags: [servers]
+      responses:
+        "200":
+          description: The player list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
   /servers/{id}/history:
     parameters:
       - $ref: "#/components/parameters/ServerID"
@@ -1147,6 +1171,24 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    PlayerList:
+      type: object
+      required: [available, players, stale]
+      properties:
+        available:
+          type: boolean
+          description: The game profile defines a player list.
+        players:
+          type: array
+          description: Player names; foreign data (SEC-006).
+          items:
+            type: string
+        updated_at:
+          type: string
+          format: date-time
+        stale:
+          type: boolean
 
     CommandInput:
       type: object
