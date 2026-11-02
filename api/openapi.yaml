@@ -99,6 +99,204 @@ paths:
                 $ref: "#/components/schemas/ProfileList"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+  /servers:
+    get:
+      operationId: listServers
+      summary: Servers in the caller's scope (ROLE-003).
+      description: >-
+        RCON admin and server admins see connection fields and the state
+        of the credentials; moderators and supporters see name, profile
+        and groups. The password is never returned.
+      tags: [servers]
+      responses:
+        "200":
+          description: The servers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      operationId: createServer
+      summary: Add a game server; RCON admin only (SRV-001).
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerInput"
+      responses:
+        "201":
+          description: The new server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /servers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: getServer
+      summary: A server in the caller's scope; others answer 404 (Design 3.1).
+      tags: [servers]
+      responses:
+        "200":
+          description: The server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateServer
+      summary: Change a server; a password replaces the stored one; RCON admin only.
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerInput"
+      responses:
+        "200":
+          description: The changed server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteServer
+      summary: Delete a server (soft delete); RCON admin only.
+      tags: [servers]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /server-groups:
+    get:
+      operationId: listServerGroups
+      summary: Server groups; RCON admin all, server admin those fully in his scope (SRV-003).
+      tags: [servers]
+      responses:
+        "200":
+          description: The server groups.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroupList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      operationId: createServerGroup
+      summary: Add a server group; RCON admin only.
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerGroupInput"
+      responses:
+        "201":
+          description: The new group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /server-groups/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ServerGroupID"
+    get:
+      operationId: getServerGroup
+      summary: A server group the caller may see.
+      tags: [servers]
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroup"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateServerGroup
+      summary: Rename a group or replace its servers; RCON admin only.
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerGroupInput"
+      responses:
+        "200":
+          description: The changed group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteServerGroup
+      summary: Delete a server group (soft delete); RCON admin only.
+      tags: [servers]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /users:
     get:
       operationId: listUsers
@@ -781,6 +979,20 @@ paths:
 
 components:
   parameters:
+    ServerID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ServerGroupID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     InviteID:
       name: id
       in: path
@@ -853,6 +1065,129 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    Server:
+      type: object
+      required: [id, name, groups]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        profile_id:
+          type: string
+          format: uuid
+        groups:
+          type: array
+          items:
+            type: string
+            format: uuid
+        protocol:
+          type: string
+          description: Admins only.
+        host:
+          type: string
+          description: Admins only.
+        port:
+          type: integer
+          description: Admins only.
+        credentials:
+          type: string
+          enum: [ok, missing, reenter]
+          description: >-
+            Admins only. reenter: the credentials were encrypted with
+            another master key and must be entered again (SRV-002).
+        agent_id:
+          type: string
+          description: Admins only; set with the agents in M3.
+        container_id:
+          type: string
+          description: Admins only; set with the agents in M3.
+        game_ports:
+          type: array
+          description: Admins only; the override of the server or the profile's ports (SRV-005).
+          items:
+            $ref: "#/components/schemas/GamePort"
+        game_ports_override:
+          type: boolean
+
+    ServerList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Server"
+
+    ServerInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        profile_id:
+          type: string
+          format: uuid
+        host:
+          type: string
+          minLength: 1
+          maxLength: 253
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 512
+          description: RCON password; stored encrypted, never returned.
+        game_ports:
+          type: array
+          description: Overrides the profile's game ports; an empty list returns to them.
+          items:
+            $ref: "#/components/schemas/GamePort"
+
+    ServerGroup:
+      type: object
+      required: [id, name, server_ids]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        server_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    ServerGroupList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServerGroup"
+
+    ServerGroupInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        server_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
 
     ProfileParam:
       type: object
