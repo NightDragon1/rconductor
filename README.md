@@ -51,6 +51,7 @@ never contains the master key.
 | `/data/rconductor.db.migrate.lock` | lock against parallel migration runs | first start |
 | `/data/profiles/*.yaml` | custom game profiles; one with the id of a shipped profile replaces it; changes are picked up without restart (file events, plus a check every 30 s, setting `profiles.poll_interval`) | by you |
 | `/secrets/master.key` | master key (32 random bytes, base64, mode 0600) for encrypting RCON credentials | first start, unless `RCD_MASTER_KEY_FILE` is set |
+| `/secrets/panel.key` | Ed25519 key pair of the agent port (PEM, mode 0600); agents pin its fingerprint, shown as `panel_fingerprint` in the `app.ready` line. Losing it means pairing all agents again | first start |
 | `/backups/rconductor-<UTC time>-auto.db` | automatic backup, every 24 h, the last 7 are kept | 24 h after the newest automatic backup, or 24 h after start if there is none |
 | `/backups/rconductor-<UTC time>-pre-migrate-v<N>.db` | backup before a schema migration from version N, the last 3 are kept | before each migration of an existing database |
 
@@ -73,7 +74,7 @@ file, for example a Docker secret.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `RCD_HTTP_ADDR` | `:8080` | address of the web UI and API |
-| `RCD_AGENT_ADDR` | `:8443` | address of the agent port (TLS), served from the agent milestone |
+| `RCD_AGENT_ADDR` | `:8443` | address of the agent port (TLS 1.3 with pinned keys); never put a reverse proxy in front of it |
 | `RCD_AGENT_PUBLIC_ADDR` | empty | address under which agents reach the panel, written into pairing tokens |
 | `RCD_PUBLIC_URL` | empty | public URL of the UI for invitation links and origin checks; with `https://` session cookies are always marked Secure |
 | `RCD_BASE_PATH` | `/` | base path behind a reverse proxy |
@@ -81,7 +82,7 @@ file, for example a Docker secret.
 | `RCD_DB_DRIVER` | `sqlite` | database driver; `postgres` follows in release 2 |
 | `RCD_DB_URL` / `_FILE` | empty | connection URL of an external Postgres (release 2) |
 | `RCD_DATA_DIR` | `/data` | database and other data |
-| `RCD_SECRETS_DIR` | `/secrets` | master key |
+| `RCD_SECRETS_DIR` | `/secrets` | master key and panel key |
 | `RCD_BACKUP_DIR` | `/backups` | backups |
 | `RCD_MASTER_KEY_FILE` | empty | read the master key from this file instead of `/secrets/master.key`; it is never replaced |
 | `RCD_EMERGENCY_ADMIN` | `true` | emergency admin enabled |
