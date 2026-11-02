@@ -4,15 +4,17 @@ package web
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +25,8 @@ import (
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/servers"
+	"github.com/NightDragon1/rconductor/internal/store/secret"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 	"github.com/NightDragon1/rconductor/internal/users"
 	builtinprofiles "github.com/NightDragon1/rconductor/profiles"
@@ -37,6 +41,25 @@ type apiFixture struct {
 	userID  string
 	adminID string
 	proxies Proxies
+	logs    *lockedBuffer
+}
+
+// lockedBuffer collects log output of concurrent requests.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
 }
 
 func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
@@ -56,7 +79,8 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	}
 	adminID := storetest.CreateUser(t, st, storetest.User{Pseudonym: "Boss", Role: "rcon_admin", PasswordHash: hash})
 	id := storetest.CreateUser(t, st, storetest.User{Pseudonym: "Mod", Role: "moderator", PasswordHash: hash, CreatedBy: adminID})
-	log := logging.New(io.Discard, "panel", config.Log{}).Module("web")
+	logs := &lockedBuffer{}
+	log := logging.New(logs, "panel", config.Log{Level: slog.LevelDebug, Format: "json"}).Module("web")
 	if err := perm.EnsureDefaults(ctx, st); err != nil {
 		t.Fatal(err)
 	}
@@ -69,11 +93,18 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	svc := auth.NewService(st, hasher, log, true)
 	checker := perm.NewChecker(st, log)
 	us := users.NewService(st, checker, log, svc.RevokeUser)
+	key := make([]byte, 32)
+	_, _ = rand.Read(key)
+	box, err := secret.New(key)
+	if err != nil {
+		t.Fatal(err)
+	}
 	h := NewHandler(Options{
 		Log: log, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies,
+		Servers:  servers.NewService(st, checker, box, log),
 		Profiles: users.NewProfiles(us, hasher, svc.RevokeOtherSessions),
 	})
-	return &apiFixture{h: h, userID: id, adminID: adminID, proxies: proxies}
+	return &apiFixture{h: h, userID: id, adminID: adminID, proxies: proxies, logs: logs}
 }
 
 type call struct {

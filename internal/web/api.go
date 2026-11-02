@@ -11,8 +11,10 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
+	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
@@ -28,6 +30,8 @@ var whileMustChange = map[string]bool{"ChangePassword": true, "Logout": true, "G
 
 // apiServer implements the generated strict server interface.
 type apiServer struct {
+	commands *commands.Service
+	servers  *servers.Service
 	store    *store.Store
 	auth     *auth.Service
 	perm     *perm.Checker
