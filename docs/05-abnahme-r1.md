@@ -1,6 +1,6 @@
 # Abnahmekriterien R1
 
-Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept, Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
+Dokumentversion 2.2, zur Freigabe vorgelegt; Änderungen gegenüber 2.1 siehe Gesamtkonzept, Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
 
 | Prüfart | Bedeutung |
 | --- | --- |
@@ -31,9 +31,9 @@ Dokumentversion 2.1, freigegeben; Änderungen gegenüber 2.0 siehe Gesamtkonzept
 | SEC-005 | Der Master-Key liegt nur in /secrets; weder Datenbank noch Backup enthalten ihn; RCD\_MASTER\_KEY\_FILE wird gelesen | Integration |
 | PRJ-001 | Repository ist öffentlich unter AGPL-3.0, LICENSE liegt bei, Spielprofile liegen unter profiles/ | Review |
 | PRJ-002 | Kein übernommener Fremdcode außer deklarierten Abhängigkeiten mit kompatibler Lizenz | Review |
-| SEC-006 | Ein Spielername mit \<script> und eine RCON-Antwort mit HTML erscheinen als Text, nichts wird ausgeführt; ein unbekannter Farbcode erzeugt keinen Stil | E2E, Unit |
+| SEC-006 | Ein Spielername mit \<script> und eine RCON-Antwort mit HTML erscheinen als Text, nichts wird ausgeführt; ein unbekannter Farbcode erzeugt keinen Stil; ein Spielername mit U+202E erscheint ohne Umkehrung | E2E, Unit |
 | SEC-007 | Eine Nachricht über der Höchstgröße trennt die Agent-Verbindung; schnelle Verbindungsversuche einer Adresse werden gedrosselt; wartende Kopplungen bleiben unter der Obergrenze | Integration |
-| SEC-008 | Eine Session über der Abo-Grenze erhält error statt eines weiteren Abos | Integration |
+| SEC-008 | Ein WebSocket über der Abo-Grenze erhält error limit statt eines weiteren Abos; ein Socket über der Grenze je Session schließt den ältesten Socket mit error replaced; beide Grenzen ändert nur der RCON-Admin | Integration |
 | SEC-009 | Jede Antwort trägt die Header laut SEC-009; die Oberfläche läuft ohne CSP-Verletzung in der Browser-Konsole | E2E |
 | SEC-010 | Die Doku enthält ein lauffähiges Beispiel mit Socket-Proxy; alle Agent-Funktionen aus AGT-003 funktionieren damit | Integration, Review |
 | NFR-016 | Jeder Ereigniscode aus Design 8.3 tritt im Testlauf mindestens einmal auf, als gültige JSON-Zeile mit allen Pflichtfeldern aus 8.2 | Integration |
