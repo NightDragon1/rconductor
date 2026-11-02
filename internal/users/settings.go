@@ -14,6 +14,15 @@ import (
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 )
 
+// Settings keys of the WebSocket limits and their defaults (SEC-008,
+// revision 2.2 candidate 10).
+const (
+	SettingWSMaxSockets = "ws.max_sockets_per_session"
+	SettingWSMaxSubs    = "ws.max_subscriptions_per_socket"
+	DefaultWSMaxSockets = 20
+	DefaultWSMaxSubs    = 16
+)
+
 // Settings key of the audit retention and its default (AUD-003).
 const (
 	SettingAuditRetentionDays = "audit.retention_days"
@@ -68,6 +77,8 @@ var settingRules = map[string]rule{
 	SettingInviteLifetime:         durationRule(time.Minute, 30*24*time.Hour),
 	perm.SettingSupportersEnabled: boolRule,
 	SettingAuditRetentionDays:     intRule(1, 3650),
+	SettingWSMaxSockets:           intRule(1, 100),
+	SettingWSMaxSubs:              intRule(1, 64),
 	profiles.SettingPollInterval:  durationRule(profiles.MinPollInterval, time.Hour),
 }
 
@@ -82,8 +93,16 @@ func init() {
 
 // EnsureAuditDefaults stores the default audit retention unless it exists.
 func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
-	_, err := st.EnsureDefault(ctx, SettingAuditRetentionDays, DefaultAuditRetentionDays)
-	return err
+	for key, v := range map[string]int{
+		SettingAuditRetentionDays: DefaultAuditRetentionDays,
+		SettingWSMaxSockets:       DefaultWSMaxSockets,
+		SettingWSMaxSubs:          DefaultWSMaxSubs,
+	} {
+		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Settings returns the global settings; only the RCON admin reads them.
