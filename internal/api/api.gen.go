@@ -174,6 +174,8 @@ func (e ProfileParamType) Valid() bool {
 
 // Defines values for ReasonCode.
 const (
+	ReasonCodeActionFailed           ReasonCode = "action_failed"
+	ReasonCodeAgentUnavailable       ReasonCode = "agent_unavailable"
 	ReasonCodeBusy                   ReasonCode = "busy"
 	ReasonCodeForbidden              ReasonCode = "forbidden"
 	ReasonCodeInvalid                ReasonCode = "invalid"
@@ -190,6 +192,10 @@ const (
 // Valid indicates whether the value is a known member of the ReasonCode enum.
 func (e ReasonCode) Valid() bool {
 	switch e {
+	case ReasonCodeActionFailed:
+		return true
+	case ReasonCodeAgentUnavailable:
+		return true
 	case ReasonCodeBusy:
 		return true
 	case ReasonCodeForbidden:
@@ -277,6 +283,66 @@ func (e ServerStatus) Valid() bool {
 	case Connected:
 		return true
 	case Offline:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServerActionInputAction.
+const (
+	ServerActionInputActionRestart ServerActionInputAction = "restart"
+	ServerActionInputActionStart   ServerActionInputAction = "start"
+	ServerActionInputActionStop    ServerActionInputAction = "stop"
+)
+
+// Valid indicates whether the value is a known member of the ServerActionInputAction enum.
+func (e ServerActionInputAction) Valid() bool {
+	switch e {
+	case ServerActionInputActionRestart:
+		return true
+	case ServerActionInputActionStart:
+		return true
+	case ServerActionInputActionStop:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServerActionResultAction.
+const (
+	ServerActionResultActionRestart ServerActionResultAction = "restart"
+	ServerActionResultActionStart   ServerActionResultAction = "start"
+	ServerActionResultActionStop    ServerActionResultAction = "stop"
+)
+
+// Valid indicates whether the value is a known member of the ServerActionResultAction enum.
+func (e ServerActionResultAction) Valid() bool {
+	switch e {
+	case ServerActionResultActionRestart:
+		return true
+	case ServerActionResultActionStart:
+		return true
+	case ServerActionResultActionStop:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServerActionResultVia.
+const (
+	ServerActionResultViaAgent ServerActionResultVia = "agent"
+	ServerActionResultViaRcon  ServerActionResultVia = "rcon"
+)
+
+// Valid indicates whether the value is a known member of the ServerActionResultVia enum.
+func (e ServerActionResultVia) Valid() bool {
+	switch e {
+	case ServerActionResultViaAgent:
+		return true
+	case ServerActionResultViaRcon:
 		return true
 	default:
 		return false
@@ -659,11 +725,11 @@ type Role string
 
 // Server defines model for Server.
 type Server struct {
-	// AgentId Admins only; set with the agents in M3.
+	// AgentId Admins only; the paired agent on the server's host.
 	AgentId *string `json:"agent_id,omitempty"`
 
-	// ContainerId Admins only; set with the agents in M3.
-	ContainerId *string `json:"container_id,omitempty"`
+	// ContainerName Admins only; the container on that host. The agent resolves the name and checks its label for every order.
+	ContainerName *string `json:"container_name,omitempty"`
 
 	// Credentials Admins only. reenter: the credentials were encrypted with another master key and must be entered again (SRV-002).
 	Credentials *ServerCredentials `json:"credentials,omitempty"`
@@ -696,6 +762,28 @@ type ServerCredentials string
 // ServerStatus Reachability over RCON (SRV-004).
 type ServerStatus string
 
+// ServerActionInput defines model for ServerActionInput.
+type ServerActionInput struct {
+	Action ServerActionInputAction `json:"action"`
+}
+
+// ServerActionInputAction defines model for ServerActionInput.Action.
+type ServerActionInputAction string
+
+// ServerActionResult defines model for ServerActionResult.
+type ServerActionResult struct {
+	Action ServerActionResultAction `json:"action"`
+
+	// Via rcon is the restart without agent (AGT-009).
+	Via ServerActionResultVia `json:"via"`
+}
+
+// ServerActionResultAction defines model for ServerActionResult.Action.
+type ServerActionResultAction string
+
+// ServerActionResultVia rcon is the restart without agent (AGT-009).
+type ServerActionResultVia string
+
 // ServerGroup defines model for ServerGroup.
 type ServerGroup struct {
 	Id        openapi_types.UUID   `json:"id"`
@@ -716,6 +804,12 @@ type ServerGroupList struct {
 
 // ServerInput defines model for ServerInput.
 type ServerInput struct {
+	// AgentId An active agent; empty clears agent and container (SRV-001).
+	AgentId *string `json:"agent_id,omitempty"`
+
+	// ContainerName Container name on the agent's host; set together with agent_id.
+	ContainerName *string `json:"container_name,omitempty"`
+
 	// GamePorts Overrides the profile's game ports; an empty list returns to them.
 	GamePorts *[]GamePort `json:"game_ports,omitempty"`
 	Host      *string     `json:"host,omitempty"`
@@ -936,6 +1030,9 @@ type CreateServerJSONRequestBody = ServerInput
 // UpdateServerJSONRequestBody defines body for UpdateServer for application/json ContentType.
 type UpdateServerJSONRequestBody = ServerInput
 
+// ServerActionJSONRequestBody defines body for ServerAction for application/json ContentType.
+type ServerActionJSONRequestBody = ServerActionInput
+
 // SendCommandJSONRequestBody defines body for SendCommand for application/json ContentType.
 type SendCommandJSONRequestBody = CommandInput
 
@@ -1058,6 +1155,9 @@ type ServerInterface interface {
 	// UpdateServer Change a server; a password replaces the stored one; RCON admin only.
 	// (PATCH /servers/{id})
 	UpdateServer(w http.ResponseWriter, r *http.Request, id ServerID)
+	// ServerAction Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
+	// (POST /servers/{id}/actions)
+	ServerAction(w http.ResponseWriter, r *http.Request, id ServerID)
 	// SendCommand Send a command over the server's one RCON connection (Design 3.3).
 	// (POST /servers/{id}/commands)
 	SendCommand(w http.ResponseWriter, r *http.Request, id ServerID)
@@ -1816,6 +1916,32 @@ func (siw *ServerInterfaceWrapper) UpdateServer(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ServerAction operation middleware
+func (siw *ServerInterfaceWrapper) ServerAction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ServerID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ServerAction(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SendCommand operation middleware
 func (siw *ServerInterfaceWrapper) SendCommand(w http.ResponseWriter, r *http.Request) {
 
@@ -2431,6 +2557,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers/{id}/commands", wrapper.SendCommand)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/players", wrapper.GetPlayers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/history", wrapper.GetHistory)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers/{id}/actions", wrapper.ServerAction)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups", wrapper.ListServerGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/server-groups", wrapper.CreateServerGroup)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/server-groups/{id}", wrapper.DeleteServerGroup)
@@ -4707,6 +4834,154 @@ func (response UpdateServer422ApplicationProblemPlusJSONResponse) VisitUpdateSer
 	return err
 }
 
+type ServerActionRequestObject struct {
+	Id   ServerID `json:"id"`
+	Body *ServerActionJSONRequestBody
+}
+
+type ServerActionResponseObject interface {
+	VisitServerActionResponse(w http.ResponseWriter) error
+}
+
+type ServerAction200JSONResponse ServerActionResult
+
+func (response ServerAction200JSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ServerAction400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ServerAction400ApplicationProblemPlusJSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ServerAction401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ServerAction401ApplicationProblemPlusJSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ServerAction403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ServerAction403ApplicationProblemPlusJSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ServerAction404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ServerAction404ApplicationProblemPlusJSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ServerAction429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response ServerAction429ApplicationProblemPlusJSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ServerAction502ApplicationProblemPlusJSONResponse Problem
+
+func (response ServerAction502ApplicationProblemPlusJSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ServerAction503ApplicationProblemPlusJSONResponse Problem
+
+func (response ServerAction503ApplicationProblemPlusJSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ServerAction504ApplicationProblemPlusJSONResponse Problem
+
+func (response ServerAction504ApplicationProblemPlusJSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SendCommandRequestObject struct {
 	Id   ServerID `json:"id"`
 	Body *SendCommandJSONRequestBody
@@ -6193,6 +6468,9 @@ type StrictServerInterface interface {
 	// UpdateServer Change a server; a password replaces the stored one; RCON admin only.
 	// (PATCH /servers/{id})
 	UpdateServer(ctx context.Context, request UpdateServerRequestObject) (UpdateServerResponseObject, error)
+	// ServerAction Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
+	// (POST /servers/{id}/actions)
+	ServerAction(ctx context.Context, request ServerActionRequestObject) (ServerActionResponseObject, error)
 	// SendCommand Send a command over the server's one RCON connection (Design 3.3).
 	// (POST /servers/{id}/commands)
 	SendCommand(ctx context.Context, request SendCommandRequestObject) (SendCommandResponseObject, error)
@@ -7209,6 +7487,39 @@ func (sh *strictHandler) UpdateServer(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateServerResponseObject); ok {
 		if err := validResponse.VisitUpdateServerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ServerAction operation middleware
+func (sh *strictHandler) ServerAction(w http.ResponseWriter, r *http.Request, id ServerID) {
+	var request ServerActionRequestObject
+
+	request.Id = id
+
+	var body ServerActionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ServerAction(ctx, request.(ServerActionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ServerAction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ServerActionResponseObject); ok {
+		if err := validResponse.VisitServerActionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

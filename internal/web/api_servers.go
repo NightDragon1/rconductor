@@ -4,6 +4,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -39,13 +40,13 @@ func toAPIServer(s servers.Server) api.Server {
 		ports = append(ports, api.GamePort{Port: p.Port, Proto: api.GamePortProto(p.Proto), Name: p.Name})
 	}
 	out.Protocol, out.Host, out.Port, out.Credentials = &s.Protocol, &s.Host, &s.Port, &cred
-	out.AgentId, out.ContainerId = strPtr(s.AgentID), strPtr(s.ContainerID)
+	out.AgentId, out.ContainerName = strPtr(s.AgentID), strPtr(s.ContainerName)
 	out.GamePorts, out.GamePortsOverride = &ports, &s.GamePortsOverride
 	return out
 }
 
 func serverInput(b *api.ServerInput) servers.Input {
-	in := servers.Input{Name: b.Name, Host: b.Host, Port: b.Port}
+	in := servers.Input{Name: b.Name, Host: b.Host, Port: b.Port, AgentID: b.AgentId, ContainerName: b.ContainerName}
 	if b.ProfileId != nil {
 		p := b.ProfileId.String()
 		in.ProfileID = &p
@@ -184,4 +185,36 @@ func (s *apiServer) DeleteServerGroup(ctx context.Context, req api.DeleteServerG
 		return nil, adminError(err)
 	}
 	return api.DeleteServerGroup204Response{}, nil
+}
+
+func (s *apiServer) ServerAction(ctx context.Context, req api.ServerActionRequestObject) (api.ServerActionResponseObject, error) {
+	if req.Body == nil {
+		return nil, bodyRequired()
+	}
+	r, err := s.servers.Action(ctx, adminRequest(ctx), req.Id.String(), string(req.Body.Action))
+	if err != nil {
+		return nil, actionError(err)
+	}
+	return api.ServerAction200JSONResponse(api.ServerActionResult{
+		Action: api.ServerActionResultAction(r.Action), Via: api.ServerActionResultVia(r.Via),
+	}), nil
+}
+
+// actionError maps the errors of an action to Design 3.5 (revision 2.3
+// candidate 6).
+func actionError(err error) error {
+	var failed *servers.ActionFailedError
+	switch {
+	case errors.Is(err, servers.ErrAgentUnavailable):
+		return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeAgentUnavailable, detail: err.Error()}
+	case errors.Is(err, servers.ErrRCONUnavailable):
+		return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeServerUnavailable}
+	case errors.Is(err, servers.ErrActionTimeout):
+		return &problem{status: http.StatusGatewayTimeout, reason: api.ReasonCodeTimeout, detail: err.Error()}
+	case errors.Is(err, servers.ErrActionRateLimited):
+		return &problem{status: http.StatusTooManyRequests, reason: api.ReasonCodeRateLimited, retryAfter: 6}
+	case errors.As(err, &failed):
+		return &problem{status: http.StatusBadGateway, reason: api.ReasonCodeActionFailed, detail: failed.Error()}
+	}
+	return adminError(err)
 }

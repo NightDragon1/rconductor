@@ -186,6 +186,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/servers/{id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
+         * @description RCON admin everywhere, server admin in his scope; moderators and supporters never (403). With an agent the order goes to it and the agent checks the label again; without an agent only restart works, by the profile's stop command over RCON and the container's restart policy unless-stopped. Without a connected agent (or for start and stop without agent) the answer is 503 agent_unavailable. Every action is audited.
+         */
+        post: operations["serverAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/server-groups": {
         parameters: {
             query?: never;
@@ -827,10 +849,10 @@ export interface components {
              * @enum {string}
              */
             credentials?: "ok" | "missing" | "reenter";
-            /** @description Admins only; set with the agents in M3. */
+            /** @description Admins only; the paired agent on the server's host. */
             agent_id?: string;
-            /** @description Admins only; set with the agents in M3. */
-            container_id?: string;
+            /** @description Admins only; the container on that host. The agent resolves the name and checks its label for every order. */
+            container_name?: string;
             /** @description Admins only; the override of the server or the profile's ports (SRV-005). */
             game_ports?: components["schemas"]["GamePort"][];
             game_ports_override?: boolean;
@@ -851,6 +873,23 @@ export interface components {
             password?: string;
             /** @description Overrides the profile's game ports; an empty list returns to them. */
             game_ports?: components["schemas"]["GamePort"][];
+            /** @description An active agent; empty clears agent and container (SRV-001). */
+            agent_id?: string;
+            /** @description Container name on the agent's host; set together with agent_id. */
+            container_name?: string;
+        };
+        ServerActionInput: {
+            /** @enum {string} */
+            action: "start" | "stop" | "restart";
+        };
+        ServerActionResult: {
+            /** @enum {string} */
+            action: "start" | "stop" | "restart";
+            /**
+             * @description rcon is the restart without agent (AGT-009).
+             * @enum {string}
+             */
+            via: "agent" | "rcon";
         };
         ServerGroup: {
             /** Format: uuid */
@@ -1124,7 +1163,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "action_failed";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
@@ -1537,6 +1576,64 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Invalid"];
+        };
+    };
+    serverAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServerActionInput"];
+            };
+        };
+        responses: {
+            /** @description Done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerActionResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            /** @description The agent or Docker refused the action (action_failed). */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No agent connected (agent_unavailable) or no RCON connection (server_unavailable). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The agent or the game server did not answer in time. */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listServerGroups: {

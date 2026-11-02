@@ -310,6 +310,62 @@ paths:
           $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/Invalid"
+  /servers/{id}/actions:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    post:
+      operationId: serverAction
+      summary: Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
+      description: >-
+        RCON admin everywhere, server admin in his scope; moderators and
+        supporters never (403). With an agent the order goes to it and
+        the agent checks the label again; without an agent only restart
+        works, by the profile's stop command over RCON and the container's
+        restart policy unless-stopped. Without a connected agent (or for
+        start and stop without agent) the answer is 503 agent_unavailable.
+        Every action is audited.
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerActionInput"
+      responses:
+        "200":
+          description: Done.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          description: The agent or Docker refused the action (action_failed).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: No agent connected (agent_unavailable) or no RCON connection (server_unavailable).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "504":
+          description: The agent or the game server did not answer in time.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
   /server-groups:
     get:
       operationId: listServerGroups
@@ -1504,10 +1560,12 @@ components:
             another master key and must be entered again (SRV-002).
         agent_id:
           type: string
-          description: Admins only; set with the agents in M3.
-        container_id:
+          description: Admins only; the paired agent on the server's host.
+        container_name:
           type: string
-          description: Admins only; set with the agents in M3.
+          description: >-
+            Admins only; the container on that host. The agent resolves the
+            name and checks its label for every order.
         game_ports:
           type: array
           description: Admins only; the override of the server or the profile's ports (SRV-005).
@@ -1555,6 +1613,34 @@ components:
           description: Overrides the profile's game ports; an empty list returns to them.
           items:
             $ref: "#/components/schemas/GamePort"
+        agent_id:
+          type: string
+          maxLength: 36
+          description: An active agent; empty clears agent and container (SRV-001).
+        container_name:
+          type: string
+          maxLength: 255
+          description: Container name on the agent's host; set together with agent_id.
+
+    ServerActionInput:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [start, stop, restart]
+
+    ServerActionResult:
+      type: object
+      required: [action, via]
+      properties:
+        action:
+          type: string
+          enum: [start, stop, restart]
+        via:
+          type: string
+          enum: [agent, rcon]
+          description: rcon is the restart without agent (AGT-009).
 
     ServerGroup:
       type: object
@@ -2165,6 +2251,8 @@ components:
         - busy
         - password_change_required
         - timeout
+        - agent_unavailable
+        - action_failed
 
     Problem:
       type: object

@@ -66,7 +66,7 @@ Stand: Beginn M3 (02.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 ## 6. Grund-Code agent\_unavailable
 
 - **Fundstelle:** 03-design.md, Kapitel 3.5 (kein Code für fehlenden Agent); 2.2 (/servers/{id}/actions).
-- **Umsetzung (M3, nach Vorgabe):** POST /servers/{id}/actions für einen Server mit Agent, dessen Agent nicht verbunden ist, antwortet 503 mit Grund-Code agent\_unavailable. Ein Server ohne Agent nutzt für restart den stop-Befehl aus dem Profil (AGT-009); start und stop ohne Agent sind nicht möglich (ebenfalls agent\_unavailable).
+- **Umsetzung (M3, nach Vorgabe):** POST /servers/{id}/actions für einen Server mit Agent, dessen Agent nicht verbunden ist, antwortet 503 mit Grund-Code agent\_unavailable. Ein Server ohne Agent nutzt für restart den stop-Befehl aus dem Profil (AGT-009); start und stop ohne Agent sind nicht möglich (ebenfalls agent\_unavailable). Lehnt der Agent oder Docker die Aktion ab (Container ohne Label, Docker-Fehler), antwortet die API 502 mit dem neuen Grund-Code action\_failed; das Ratenlimit des Agents ergibt 429 rate\_limited, eine Zeitüberschreitung 504 timeout. Antwort bei Erfolg: action und via (agent oder rcon). Jede Aktion steht im Audit (server.action, Art agent).
 - **Vorschlag:** Zeile in Design 3.5.
 - **Begründung:** server\_unavailable meint die RCON-Verbindung; die Oberfläche muss beide Fälle unterscheiden.
 

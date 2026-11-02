@@ -1,19 +1,19 @@
 -- Servers and server groups (SRV-001, SRV-003, SRV-005).
 
 -- name: ListServers :many
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_id, game_ports
+SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports
 FROM servers WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE;
 
 -- name: GetServer :one
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_id, game_ports
+SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports
 FROM servers WHERE id = ? AND deleted_at IS NULL;
 
 -- name: InsertServer :exec
-INSERT INTO servers (id, name, profile_id, protocol, host, port, secret, game_ports, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO servers (id, name, profile_id, protocol, host, port, secret, game_ports, agent_id, container_name, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateServer :exec
-UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, updated_at = ?
+UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, updated_at = ?
 WHERE id = ?;
 
 -- name: SetServerSecret :exec
