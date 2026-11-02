@@ -58,7 +58,10 @@ func (f *fakeDocker) ContainerList(_ context.Context, o client.ContainerListOpti
 }
 
 func (f *fakeDocker) ContainerInspect(context.Context, string, client.ContainerInspectOptions) (client.ContainerInspectResult, error) {
-	return client.ContainerInspectResult{Container: container.InspectResponse{Config: &container.Config{Tty: f.tty}}}, nil
+	return client.ContainerInspectResult{Container: container.InspectResponse{
+		Config: &container.Config{Tty: f.tty}, RestartCount: 2,
+		State: &container.State{StartedAt: "2026-11-03T10:00:00.5Z"},
+	}}, nil
 }
 
 func (f *fakeDocker) record(a string) {
@@ -191,7 +194,7 @@ func TestSnapshotOnlyLabeled(t *testing.T) {
 	}
 	c := snap.Containers[0]
 	if c.Name != "mc" || c.State != "running" || len(c.Ports) != 1 || c.Ports[0].Private != 25575 ||
-		len(c.Volumes) != 1 || c.Volumes[0] != "mc-data" {
+		len(c.Volumes) != 1 || c.Volumes[0] != "mc-data" || c.RestartCount != 2 || c.StartedAt.IsZero() {
 		t.Errorf("container = %+v", c)
 	}
 }

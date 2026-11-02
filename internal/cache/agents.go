@@ -16,6 +16,10 @@ import (
 const (
 	MetricsStale = 30 * time.Second
 	LogRing      = 50
+	// A container that started LoopStarts times within LoopWindow is in a
+	// restart loop (UI-003, revision 2.4 candidate 2).
+	LoopStarts = 3
+	LoopWindow = 10 * time.Minute
 )
 
 // StateUnknown is the container state while its agent is disconnected.
@@ -24,7 +28,8 @@ const StateUnknown = "unknown"
 // ContainerView is a container as the panel shows it, with its age.
 type ContainerView struct {
 	agentproto.Container
-	UpdatedAt time.Time
+	UpdatedAt   time.Time
+	RestartLoop bool
 }
 
 // MetricView is the last sample of a container; Stale is set after 30 s,
@@ -41,6 +46,28 @@ type containerEntry struct {
 	metric   *agentproto.Metric
 	metricAt time.Time
 	logs     []string
+	starts   []time.Time // distinct start times within LoopWindow
+}
+
+// started notes the start time of the container, if new.
+func (e *containerEntry) started(t time.Time) {
+	if t.IsZero() || (len(e.starts) > 0 && e.starts[len(e.starts)-1].Equal(t)) {
+		return
+	}
+	e.starts = append(e.starts, t)
+	if len(e.starts) > 16 {
+		e.starts = slices.Clone(e.starts[len(e.starts)-16:])
+	}
+}
+
+func (e *containerEntry) inLoop(now time.Time) bool {
+	n := 0
+	for _, t := range e.starts {
+		if now.Sub(t) <= LoopWindow {
+			n++
+		}
+	}
+	return n >= LoopStarts
 }
 
 type agentEntry struct {
@@ -125,6 +152,7 @@ func (d *AgentData) Snapshot(agentID string, s agentproto.Snapshot) {
 			e.logs, e.metric = nil, nil // another container under this name
 		}
 		e.c, e.updated = c, now
+		e.started(c.StartedAt)
 		names = append(names, c.Name)
 	}
 	for n := range a.containers {
@@ -163,6 +191,7 @@ func (d *AgentData) Event(agentID string, ev agentproto.ContainerEvent) {
 			e.logs = nil
 		}
 		e.c, e.updated = c, d.now()
+		e.started(c.StartedAt)
 	}
 	d.mu.Unlock()
 	d.changed(agentID, c.Name)
@@ -267,7 +296,7 @@ func (d *AgentData) Container(agentID, name string) (ContainerView, bool) {
 	if e == nil {
 		return ContainerView{}, false
 	}
-	v := ContainerView{Container: e.c, UpdatedAt: e.updated}
+	v := ContainerView{Container: e.c, UpdatedAt: e.updated, RestartLoop: e.inLoop(d.now())}
 	v.Ports, v.Volumes = slices.Clone(e.c.Ports), slices.Clone(e.c.Volumes)
 	if !a.connected {
 		v.State = StateUnknown
