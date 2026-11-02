@@ -189,6 +189,12 @@ func (h *Hub) Serve(ctx context.Context, conn *websocket.Conn, p auth.Principal,
 	h.bySession[p.SessionHash][c] = true
 	h.mu.Unlock()
 	defer h.remove(c)
+	// A session that ended between the upgrade and the registration above
+	// missed CloseSessions; check once more now that it would be reached.
+	if h.sessions != nil && !h.sessions.SessionValid(ctx, p.SessionHash) {
+		_ = conn.Close(websocket.StatusPolicyViolation, "session ended")
+		return
+	}
 	for _, old := range replaced {
 		h.log.Info("websocket replaced by a newer one", append(h.attrs(old), slog.String(logging.KeyReason, ReasonReplaced))...)
 		h.closeWith(old, ReasonReplaced)
