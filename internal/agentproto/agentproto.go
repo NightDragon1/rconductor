@@ -53,7 +53,10 @@ const (
 	CodeInvalid     = "invalid"
 	CodeTimeout     = "timeout"
 	CodeUnsupported = "unsupported"
+	// CodeRateLimited and CodeError come with revision 2.3 candidate 2:
+	// orders over the rate per container, and Docker refusing an action.
 	CodeRateLimited = "rate_limited"
+	CodeError       = "error"
 )
 
 // Reject reasons (Design 1.3); pending answers a fingerprint pairing that
