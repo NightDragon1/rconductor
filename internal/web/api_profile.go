@@ -77,7 +77,7 @@ func (s *apiServer) GetUserAvatar(ctx context.Context, req api.GetUserAvatarRequ
 	// The picture is user content: never sniffed, never active (SEC-006).
 	h := httpOf(ctx).w.Header()
 	h.Set("X-Content-Type-Options", "nosniff")
-	h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	h.Set("Content-Security-Policy", "default-src 'none'; sandbox; frame-ancestors 'none'")
 	h.Set("Cache-Control", "private, no-cache")
 	h.Set("Content-Disposition", "inline")
 	if mediaType == "image/jpeg" {
