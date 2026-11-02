@@ -45,13 +45,16 @@ func startMinecraft(t *testing.T) string {
 	if jar == "" {
 		t.Fatal("RCD_MINECRAFT_JAR is not set; scripts/minecraft-server.sh DIR fetches the JAR")
 	}
+	if os.Getenv("MINECRAFT_ACCEPT_EULA") != "true" {
+		t.Fatal("the Minecraft EULA (https://aka.ms/MinecraftEULA) is not accepted; set MINECRAFT_ACCEPT_EULA=true")
+	}
 	ctx := context.Background()
 	ctr, err := testcontainers.Run(ctx, javaImage,
 		testcontainers.WithExposedPorts("25575/tcp"),
 		testcontainers.WithFiles(
 			testcontainers.ContainerFile{HostFilePath: jar, ContainerFilePath: "/srv/server.jar", FileMode: 0o644},
 			testcontainers.ContainerFile{Reader: strings.NewReader(serverProperties), ContainerFilePath: "/srv/server.properties", FileMode: 0o644},
-			// Running the server requires accepting the Minecraft EULA.
+			// Accepted through MINECRAFT_ACCEPT_EULA above.
 			testcontainers.ContainerFile{Reader: strings.NewReader("eula=true\n"), ContainerFilePath: "/srv/eula.txt", FileMode: 0o644},
 		),
 		testcontainers.WithConfigModifier(func(c *container.Config) { c.WorkingDir = "/srv" }),

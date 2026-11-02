@@ -5,7 +5,16 @@
 # (build tag minecraft) into the given directory, unless it is there
 # already, and checks its SHA-1 from Mojang's version manifest. A failed
 # download is tried once more. Prints the path of the JAR.
+#
+# Running the server means accepting the Minecraft EULA
+# (https://aka.ms/MinecraftEULA); set MINECRAFT_ACCEPT_EULA=true to do so.
+# The test writes eula=true only then.
 set -eu
+if [ "${MINECRAFT_ACCEPT_EULA:-}" != true ]; then
+  echo "The Minecraft test server needs the Minecraft EULA (https://aka.ms/MinecraftEULA)." >&2
+  echo "Read it and set MINECRAFT_ACCEPT_EULA=true to accept it." >&2
+  exit 1
+fi
 VERSION=26.3
 SHA1=33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c
 URL=https://piston-data.mojang.com/v1/objects/$SHA1/server.jar

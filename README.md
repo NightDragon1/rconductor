@@ -105,6 +105,7 @@ Requirements: Go (see `go.mod`), Node.js 22 or newer, Docker with buildx.
 | `make test` | Go unit tests |
 | `make images` | local images `rconductor-panel:dev` and `rconductor-agent:dev` |
 | `make test-integration` | build the images and run the integration tests against them |
+| `MINECRAFT_ACCEPT_EULA=true make test-minecraft` | walking skeleton against a real Minecraft server (see below) |
 | `make lint`, `make vuln` | golangci-lint and govulncheck |
 | `make generate` | regenerate sqlc and oapi-codegen code |
 | `cd web && npm run lint && npm run format:check && npm test` | UI checks |
@@ -112,6 +113,14 @@ Requirements: Go (see `go.mod`), Node.js 22 or newer, Docker with buildx.
 `api/openapi.yaml` is the single source of the API: server stubs are
 generated with oapi-codegen, UI types with `npm run gen:api`. Without a UI
 build the panel answers 503 on UI pages.
+
+`make test-minecraft` downloads the pinned Minecraft server JAR into
+`.cache/minecraft` (checked against its SHA-1) and runs it in a Java
+container. Running a Minecraft server means accepting the
+[Minecraft EULA](https://aka.ms/MinecraftEULA). The script and the test
+refuse to run until you accept it by setting `MINECRAFT_ACCEPT_EULA=true`;
+only then is `eula=true` written for the server. CI sets the variable for
+its Minecraft job.
 
 ## License
 
