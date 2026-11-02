@@ -17,13 +17,17 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
+	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/ops/backup"
 	"github.com/NightDragon1/rconductor/internal/ops/cleanup"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon"
+	"github.com/NightDragon1/rconductor/internal/rcon/source"
 	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
@@ -136,6 +140,18 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err := serverSvc.CheckCredentials(ctx); err != nil {
 		return err
 	}
+	// RCON connections before serving (Architecture 5.4); they keep
+	// reconnecting in the background.
+	conns := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}}, serverSvc, logs.Module("rcon"), connmgr.Options{})
+	serverSvc.SetConnections(conns)
+	if err := conns.Start(ctx); err != nil {
+		return err
+	}
+	defer conns.Wait()
+	if err := commands.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
+	cmdSvc := commands.NewService(st, checker, conns, logs.Module("cmd"))
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
@@ -149,7 +165,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
 			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
 	}
-	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Auth: authSvc, Perm: checker, Users: userSvc,
+	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Auth: authSvc, Perm: checker, Users: userSvc,
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
 	})
 	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,

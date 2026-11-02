@@ -139,3 +139,27 @@ func TestTimeout(t *testing.T) {
 		t.Error("timeout not applied")
 	}
 }
+
+func TestAlive(t *testing.T) {
+	s := start(t, rcontest.SourceEngine, nil)
+	c := dial(t, s).(*Conn)
+	if err := c.Alive(); err != nil {
+		t.Fatalf("alive: %v", err)
+	}
+	// A late second marker answer stays buffered and does no harm.
+	if _, err := c.Execute(context.Background(), "a"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if err := c.Alive(); err != nil {
+		t.Errorf("alive with buffered data: %v", err)
+	}
+	if got, err := c.Execute(context.Background(), "b"); err != nil || got != "b" {
+		t.Errorf("after probe: %q %v", got, err)
+	}
+	s.DropConnections()
+	time.Sleep(50 * time.Millisecond)
+	if err := c.Alive(); err == nil {
+		t.Error("closed connection reported alive")
+	}
+}

@@ -37,6 +37,13 @@ type Conn interface {
 	Close() error
 }
 
+// Prober is implemented by connections that can tell, without sending a
+// command, whether the server still holds them; the connection manager
+// uses it to notice a stopped game server while idle (SRV-004).
+type Prober interface {
+	Alive() error
+}
+
 // Registry maps protocol names of the game profiles to adapters.
 type Registry map[string]Adapter
 

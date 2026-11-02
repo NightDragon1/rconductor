@@ -120,6 +120,50 @@ export interface paths {
         patch: operations["updateServer"];
         trace?: never;
     };
+    "/servers/{id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a command over the server's one RCON connection (Design 3.3).
+         * @description RCON admin and server admin may send any command (CMD-002); moderators and supporters only commands of the list that applies to them on this server, never wrappers (CMD-004, CMD-005). The answer comes synchronously and as event to the console; the request ID is also the ID of the audit entry (CMD-007).
+         */
+        post: operations["sendCommand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/servers/{id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Command history of a server, newest first (Design 2.2).
+         * @description RCON admin and server admin see all commands; moderators and supporters only their own in R1.
+         */
+        get: operations["getHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/server-groups": {
         parameters: {
             query?: never;
@@ -550,7 +594,49 @@ export interface components {
         UserList: {
             items: components["schemas"]["User"][];
         };
+        CommandInput: {
+            command: string;
+        };
+        CommandResult: {
+            /** Format: uuid */
+            request_id: string;
+            /** Format: date-time */
+            ts: string;
+            /** @description The command as sent, after cleaning. */
+            command: string;
+            /** @description Foreign data from the game server (SEC-006). */
+            response: string;
+            /** @description The answer was longer than 64 KiB and is cut. */
+            truncated: boolean;
+        };
+        HistoryEntry: {
+            /** Format: uuid */
+            request_id: string;
+            /** Format: date-time */
+            ts: string;
+            /** Format: uuid */
+            user_id?: string;
+            pseudonym?: string;
+            role?: string;
+            command: string;
+            response?: string;
+            truncated?: boolean;
+            /** @enum {string} */
+            result: "ok" | "denied" | "error" | "timeout";
+            reason?: string;
+        };
+        HistoryPage: {
+            items: components["schemas"]["HistoryEntry"][];
+            next_cursor?: string;
+        };
         Server: {
+            /**
+             * @description Reachability over RCON (SRV-004).
+             * @enum {string}
+             */
+            status: "connected" | "auth_failed" | "offline";
+            /** Format: date-time */
+            status_since: string;
             /** Format: uuid */
             id: string;
             name: string;
@@ -865,7 +951,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
@@ -1180,6 +1266,76 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    sendCommand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandInput"];
+            };
+        };
+        responses: {
+            /** @description The game server's answer. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Busy"];
+            /** @description The game server did not answer in time. */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getHistory: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryPage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Invalid"];
         };
