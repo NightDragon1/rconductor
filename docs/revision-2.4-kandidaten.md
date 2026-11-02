@@ -1,10 +1,22 @@
 # Kandidaten für Revision 2.4
 
-Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach der Freigabe von Dokumentversion 2.3 aufgefallen sind. Keiner der Punkte ändert das freigegebene Konzept 2.3; über die Übernahme entscheidet Rob.
+Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach der Freigabe von Dokumentversion 2.3 aufgefallen sind. Keiner der Punkte ändert das freigegebene Konzept 2.3; über die Übernahme entscheidet Rob. Nr. 2 bis 13 sind von Rob für M4 entschieden (Freigabe des M4-Plans, 03.11.2026).
 
 | Nr. | Thema | Betroffen |
 | --- | --- | --- |
 | 1 | /backups erst nach M5 | Design 2.2, 6.2, Plan R1 |
+| 2 | Startzeit und Restart-Zahl im Agent-Protokoll, Restart-Schleifen | UI-003, UI-004, Design 1.5 |
+| 3 | servers.overview mit Laufzeitdaten aller Server im Scope | Design 2.3, UI-002 bis UI-006 |
+| 4 | Laufzeitdaten im Server-Objekt der REST-API | Design 2.2, UI-004 |
+| 5 | Erlaubte Befehle je Server: GET /servers/{id}/commands | Design 2.2, CMD-003, CMD-015 |
+| 6 | Favoriten je Benutzer im Backend | CMD-001, Design 2.2, 4.2 |
+| 7 | Einstellung ui.shortcuts\_enabled, für alle lesbar über /auth/session | UI-008, Design 5.6, 2.2 |
+| 8 | Rückgängig im Browser mit 5 s Verzögerung | UI-008, Design 6.1 |
+| 9 | Farbcodes in R1 entfernen | SEC-006, CMD-017, Design 7.2 |
+| 10 | Mitteilungen in UI-012 erst mit R2 | UI-012, MSG-\* |
+| 11 | Spielversion auf Karten erst mit R2 | UI-004, UI-006, AGT-006 |
+| 12 | CMD-001 verweist nur auf CMD-012 bis CMD-015 in R1 | CMD-001, CMD-016, CMD-017 |
+| 13 | shadcn/ui als gekennzeichneter Fremdcode | PRJ-002, Technologie 3 |
 
 ## 1. /backups erst nach M5
 
@@ -13,3 +25,71 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Entscheidung (Rob, 03.11.2026):** /backups folgt nach M5, nicht in R1 1.0.0.
 - **Vorschlag:** In Design 2.2 und 6.2 die Release-Angabe für /backups und die Backup-Seite auf nach M5 setzen; im Plan R1 vermerken.
 - **Begründung:** Backups entstehen automatisch und lassen sich über das Volume /backups prüfen; die Ansicht ist Komfort, kein Muss für 1.0.0.
+
+## 2. Startzeit und Restart-Zahl im Agent-Protokoll
+
+- **Fundstelle:** 03-design.md, Kapitel 1.5 (snapshot: Status, Ports, Volumes); 01-gesamtkonzept.md, UI-003 (Restart-Schleifen), UI-004 (letzter Restart).
+- **Entscheidung (M4, F1):** Container im snapshot und in container.event tragen started\_at und restart\_count. Die Erweiterung ist additiv (Minor-Version, neue Fähigkeit); ein Agent ohne die Felder bleibt gültig, die Karten blenden die Werte dann aus. Als Restart-Schleife gelten mindestens 3 Starts binnen 10 min.
+- **Vorschlag:** Design 1.5 um die Felder ergänzen, Design 6 um die Regel für Restart-Schleifen.
+
+## 3. servers.overview mit Laufzeitdaten
+
+- **Fundstelle:** 03-design.md, Kapitel 2.3 (servers.overview); Grenze von 16 Abos je Socket (Design 5.6).
+- **Entscheidung (M4, F2):** servers.overview liefert für alle Server im Scope Status, Containerzustand, CPU und RAM mit Kennzeichen veraltet sowie die Spielerzahl; Agent-Daten nur für RCON-Admin und Server-Admin (UI-006). Solange die Übersicht abonniert ist, gelten ihre Server als angesehen (Spielerliste alle 60 s, Gesamtkonzept 4.6).
+- **Vorschlag:** Design 2.3 entsprechend ergänzen.
+
+## 4. Laufzeitdaten im Server-Objekt
+
+- **Entscheidung (M4, F3):** GET /servers und /servers/{id} liefern runtime (Containerzustand, Startzeit, Restarts, letzte Messwerte mit Zeit und veraltet, Spielerzahl) als Startwert für Karten und Kopf; Agent-Teile nur für Admins.
+- **Vorschlag:** Design 2.2, Zeile /servers.
+
+## 5. Erlaubte Befehle je Server
+
+- **Entscheidung (M4, F4):** GET /servers/{id}/commands liefert die Pfade, die der Aufrufer auf dem Server senden darf, mit den Katalogparametern des Profils; für Admins den Katalog des Profils (Autovervollständigung, CMD-015).
+- **Vorschlag:** Design 2.2, Zeile /servers/{id}/commands um GET ergänzen.
+
+## 6. Favoriten je Benutzer im Backend
+
+- **Entscheidung (M4, F5):** Favoriten (Server) je Benutzer im Backend, PUT /me/favorites, damit sie auf allen Geräten gelten.
+- **Vorschlag:** Design 2.2 und 4.2 (Tabelle oder Feld für Favoriten).
+
+## 7. Einstellung ui.shortcuts\_enabled
+
+- **Fundstelle:** 03-design.md, Kapitel 6.1 (Tastaturkürzel nur global durch den RCON-Admin aktivierbar) und 5.6 (kein Schlüssel); /settings lesen nur RCON-Admins.
+- **Entscheidung (M4, F6):** Einstellung ui.shortcuts\_enabled, Standard aus; für alle Benutzer lesbar über GET /auth/session (Feld ui).
+- **Vorschlag:** Zeile in Design 5.6, Hinweis in 2.2 bei /auth/session.
+
+## 8. Rückgängig im Browser
+
+- **Fundstelle:** 03-design.md, Kapitel 6.1 (Bestätigung nur bei destruktiven Aktionen, sonst Rückgängig); UI-008.
+- **Entscheidung (M4, F8):** Nicht destruktive Änderungen sendet die Oberfläche erst nach 5 s; bis dahin lassen sie sich rückgängig machen. Beim Verlassen der Seite (pagehide) werden offene Änderungen sofort gesendet. Löschen und Widerruf bestätigt ein Dialog.
+- **Vorschlag:** Design 6.1, Zeile Bestätigung.
+
+## 9. Farbcodes in R1 entfernen
+
+- **Fundstelle:** 01-gesamtkonzept.md, SEC-006 (Farbcodes nur in eine feste Liste erlaubter Stile) gegenüber CMD-017 (Farbcodes, R2) und Design 7.2 (formatting, R2).
+- **Entscheidung (M4, W1):** In R1 entfernt die Oberfläche Farbcodes (z. B. Minecraft-§-Codes) vor der Anzeige; es entsteht nie ein Stil. Die Übersetzung in erlaubte Stile kommt mit CMD-017 in R2.
+- **Vorschlag:** SEC-006 und Abnahme SEC-006 auf R1 „Farbcodes werden entfernt“ fassen, die Stilliste an CMD-017 binden.
+
+## 10. Mitteilungen in UI-012 erst mit R2
+
+- **Fundstelle:** UI-012 (R1: Karten, Befehlsseite, Konsole und Mitteilungen mobil); Design 6.2 (Mitteilungen R2).
+- **Entscheidung (M4, W2):** Mitteilungen entfallen in R1; UI-012 gilt in R1 für Karten, Befehlsseite und Konsole.
+
+## 11. Spielversion auf Karten erst mit R2
+
+- **Fundstelle:** UI-004 und UI-006 (Spielversion); AGT-006 (R2); Gesamtkonzept 4.6 (Spielversion ab R2, Revision 2.3).
+- **Entscheidung (M4, W3):** Die Version entfällt in R1 nach der Regel „Felder ohne Quelle ausgeblendet“.
+
+## 12. CMD-001 in R1 mit CMD-012 bis CMD-015
+
+- **Fundstelle:** CMD-001 („gemäß CMD-012 bis CMD-017“); CMD-016 und CMD-017 sind R2.
+- **Entscheidung (M4, W4):** In R1 gelten für die Konsole CMD-012 bis CMD-015.
+
+## 13. shadcn/ui als gekennzeichneter Fremdcode
+
+- **Fundstelle:** PRJ-002 (kein übernommener Fremdcode außer deklarierten Abhängigkeiten); 04-technologie.md, Kapitel 3 (shadcn/ui, Quellcode im Repository).
+- **Entscheidung (M4):** shadcn/ui-Komponenten werden ins Repository kopiert. Jede kopierte Datei trägt im Kopf den MIT-Hinweis und SPDX-License-Identifier: MIT mit Herkunft, THIRD\_PARTY\_NOTICES nennt sie, und der SPDX-Check erlaubt MIT nur für diese Dateien.
+- **Vorschlag:** PRJ-002 um „kopierte Komponenten mit kompatibler Lizenz, gekennzeichnet“ ergänzen; Technologie 3 verweist auf THIRD\_PARTY\_NOTICES.
+- **Begründung:** shadcn/ui ist eine Vorlage zum Kopieren, keine Abhängigkeit; ohne Kennzeichnung wäre es Fremdcode im Sinne von PRJ-002.
+
