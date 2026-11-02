@@ -64,7 +64,9 @@ type Server struct {
 	Port        int
 	Credentials string
 	AgentID     string
-	ContainerID string
+	// ContainerName is the container on the agent's host; the agent
+	// resolves it and checks the label each time (revision 2.3 cand. 1).
+	ContainerName string
 	// GamePorts are the effective game ports: the override of the server,
 	// or else those of the profile (SRV-005).
 	GamePorts         []profiles.GamePort
@@ -82,6 +84,10 @@ type Input struct {
 	// GamePorts overrides the profile's game ports; an empty slice
 	// returns to the profile's.
 	GamePorts *[]profiles.GamePort
+	// AgentID and ContainerName tie the server to a container of a paired
+	// agent; "" clears them (SRV-001 rev. 2).
+	AgentID       *string
+	ContainerName *string
 }
 
 // Service administers servers and server groups.
@@ -91,6 +97,9 @@ type Service struct {
 	box   *secret.Box
 	log   *slog.Logger
 	conns Connections
+	// agents and rcon carry out actions (AGT-003, AGT-009).
+	agents Agents
+	rcon   Executor
 }
 
 // NewService returns the server administration; box encrypts credentials
@@ -199,7 +208,7 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 	}
 	srv.Protocol, srv.Host, srv.Port = r.Protocol, r.Host, int(r.Port)
 	srv.Credentials = s.credentialState(r.Secret)
-	srv.AgentID, srv.ContainerID = r.AgentID.String, r.ContainerID.String
+	srv.AgentID, srv.ContainerName = r.AgentID.String, r.ContainerName.String
 	srv.GamePorts = []profiles.GamePort{}
 	if r.GamePorts.Valid {
 		srv.GamePortsOverride = true
@@ -339,6 +348,7 @@ type fields struct {
 	name, profileID, protocol, host string
 	port                            int
 	gamePorts                       sql.NullString
+	agentID, container              sql.NullString
 }
 
 func (s *Service) check(ctx context.Context, f fields, in Input) (fields, error) {
@@ -385,10 +395,49 @@ func (s *Service) check(ctx context.Context, f fields, in Input) (fields, error)
 			f.gamePorts = sql.NullString{String: string(b), Valid: true}
 		}
 	}
+	if in.AgentID != nil {
+		id := strings.TrimSpace(*in.AgentID)
+		f.agentID = sql.NullString{String: id, Valid: id != ""}
+		if id == "" {
+			f.container = sql.NullString{}
+		} else {
+			a, err := s.st.Queries.GetAgent(ctx, id)
+			if errors.Is(err, sql.ErrNoRows) || (err == nil && a.Status != "active") {
+				return f, &users.InvalidError{Detail: "unknown or inactive agent"}
+			}
+			if err != nil {
+				return f, err
+			}
+		}
+	}
+	if in.ContainerName != nil {
+		n := strings.TrimSpace(*in.ContainerName)
+		if n != "" && !validContainerName(n) {
+			return f, &users.InvalidError{Detail: "a container name has letters, digits, _ . - (at most 255)"}
+		}
+		f.container = sql.NullString{String: n, Valid: n != ""}
+	}
+	if f.container.Valid != f.agentID.Valid {
+		return f, &users.InvalidError{Detail: "agent_id and container_name go together"}
+	}
 	if !slices.Contains(profiles.Protocols, f.protocol) {
 		return f, &users.InvalidError{Detail: "the profile's protocol is not supported"}
 	}
 	return f, nil
+}
+
+// validContainerName follows Docker's container names.
+func validContainerName(n string) bool {
+	if len(n) > 255 {
+		return false
+	}
+	for i, r := range n {
+		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || (i > 0 && (r == '_' || r == '.' || r == '-'))
+		if !ok {
+			return false
+		}
+	}
+	return n != ""
 }
 
 func checkPassword(pw logging.Secret) error {
@@ -405,6 +454,7 @@ func changedFields(in Input) []string {
 	for name, set := range map[string]bool{
 		"name": in.Name != nil, "profile_id": in.ProfileID != nil, "host": in.Host != nil,
 		"port": in.Port != nil, "password": in.Password != nil, "game_ports": in.GamePorts != nil,
+		"agent_id": in.AgentID != nil, "container_name": in.ContainerName != nil,
 	} {
 		if set {
 			out = append(out, name)
@@ -446,7 +496,8 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	now := store.Now()
 	if err := sqlitedb.New(tx).InsertServer(ctx, sqlitedb.InsertServerParams{
 		ID: id, Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: true}, Protocol: f.protocol,
-		Host: f.host, Port: int64(f.port), Secret: sealed, GamePorts: f.gamePorts, CreatedAt: now, UpdatedAt: now,
+		Host: f.host, Port: int64(f.port), Secret: sealed, GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
+		CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
@@ -478,6 +529,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	}
 	f, err := s.check(ctx, fields{
 		name: r.Name, profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port), gamePorts: r.GamePorts,
+		agentID: r.AgentID, container: r.ContainerName,
 	}, in)
 	if err != nil {
 		return Server{}, err
@@ -500,7 +552,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	now := store.Now()
 	if err := q.UpdateServer(ctx, sqlitedb.UpdateServerParams{
 		Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: f.profileID != ""}, Protocol: f.protocol,
-		Host: f.host, Port: int64(f.port), GamePorts: f.gamePorts, UpdatedAt: now, ID: id,
+		Host: f.host, Port: int64(f.port), GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container, UpdatedAt: now, ID: id,
 	}); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}

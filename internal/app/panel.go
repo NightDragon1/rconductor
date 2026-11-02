@@ -192,6 +192,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	agentData := cache.NewAgentData(logs.Module("cache"))
 	agents.OnMessage(agentData.Receive)
 	agents.OnDisconnect(agentData.Disconnected)
+	serverSvc.SetActions(agents, conns)
 	agentSvc.SetHub(agents)
 	wg.Go(func() { agentSvc.ClosePairing(ctx, time.Minute) })
 	agentAddr := make(chan net.Addr, 1)

@@ -45,21 +45,21 @@ func (q *Queries) GetGameProfile(ctx context.Context, id string) (GetGameProfile
 }
 
 const getServer = `-- name: GetServer :one
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_id, game_ports
+SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports
 FROM servers WHERE id = ? AND deleted_at IS NULL
 `
 
 type GetServerRow struct {
-	ID          string
-	Name        string
-	ProfileID   sql.NullString
-	Protocol    string
-	Host        string
-	Port        int64
-	Secret      []byte
-	AgentID     sql.NullString
-	ContainerID sql.NullString
-	GamePorts   sql.NullString
+	ID            string
+	Name          string
+	ProfileID     sql.NullString
+	Protocol      string
+	Host          string
+	Port          int64
+	Secret        []byte
+	AgentID       sql.NullString
+	ContainerName sql.NullString
+	GamePorts     sql.NullString
 }
 
 func (q *Queries) GetServer(ctx context.Context, id string) (GetServerRow, error) {
@@ -74,7 +74,7 @@ func (q *Queries) GetServer(ctx context.Context, id string) (GetServerRow, error
 		&i.Port,
 		&i.Secret,
 		&i.AgentID,
-		&i.ContainerID,
+		&i.ContainerName,
 		&i.GamePorts,
 	)
 	return i, err
@@ -97,21 +97,23 @@ func (q *Queries) GetServerGroup(ctx context.Context, id string) (GetServerGroup
 }
 
 const insertServer = `-- name: InsertServer :exec
-INSERT INTO servers (id, name, profile_id, protocol, host, port, secret, game_ports, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO servers (id, name, profile_id, protocol, host, port, secret, game_ports, agent_id, container_name, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertServerParams struct {
-	ID        string
-	Name      string
-	ProfileID sql.NullString
-	Protocol  string
-	Host      string
-	Port      int64
-	Secret    []byte
-	GamePorts sql.NullString
-	CreatedAt string
-	UpdatedAt string
+	ID            string
+	Name          string
+	ProfileID     sql.NullString
+	Protocol      string
+	Host          string
+	Port          int64
+	Secret        []byte
+	GamePorts     sql.NullString
+	AgentID       sql.NullString
+	ContainerName sql.NullString
+	CreatedAt     string
+	UpdatedAt     string
 }
 
 func (q *Queries) InsertServer(ctx context.Context, arg InsertServerParams) error {
@@ -124,6 +126,8 @@ func (q *Queries) InsertServer(ctx context.Context, arg InsertServerParams) erro
 		arg.Port,
 		arg.Secret,
 		arg.GamePorts,
+		arg.AgentID,
+		arg.ContainerName,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -229,21 +233,21 @@ func (q *Queries) ListServerGroups(ctx context.Context) ([]ListServerGroupsRow, 
 
 const listServers = `-- name: ListServers :many
 
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_id, game_ports
+SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports
 FROM servers WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE
 `
 
 type ListServersRow struct {
-	ID          string
-	Name        string
-	ProfileID   sql.NullString
-	Protocol    string
-	Host        string
-	Port        int64
-	Secret      []byte
-	AgentID     sql.NullString
-	ContainerID sql.NullString
-	GamePorts   sql.NullString
+	ID            string
+	Name          string
+	ProfileID     sql.NullString
+	Protocol      string
+	Host          string
+	Port          int64
+	Secret        []byte
+	AgentID       sql.NullString
+	ContainerName sql.NullString
+	GamePorts     sql.NullString
 }
 
 // Servers and server groups (SRV-001, SRV-003, SRV-005).
@@ -265,7 +269,7 @@ func (q *Queries) ListServers(ctx context.Context) ([]ListServersRow, error) {
 			&i.Port,
 			&i.Secret,
 			&i.AgentID,
-			&i.ContainerID,
+			&i.ContainerName,
 			&i.GamePorts,
 		); err != nil {
 			return nil, err
@@ -342,19 +346,21 @@ func (q *Queries) SoftDeleteServerGroup(ctx context.Context, arg SoftDeleteServe
 }
 
 const updateServer = `-- name: UpdateServer :exec
-UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, updated_at = ?
+UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, updated_at = ?
 WHERE id = ?
 `
 
 type UpdateServerParams struct {
-	Name      string
-	ProfileID sql.NullString
-	Protocol  string
-	Host      string
-	Port      int64
-	GamePorts sql.NullString
-	UpdatedAt string
-	ID        string
+	Name          string
+	ProfileID     sql.NullString
+	Protocol      string
+	Host          string
+	Port          int64
+	GamePorts     sql.NullString
+	AgentID       sql.NullString
+	ContainerName sql.NullString
+	UpdatedAt     string
+	ID            string
 }
 
 func (q *Queries) UpdateServer(ctx context.Context, arg UpdateServerParams) error {
@@ -365,6 +371,8 @@ func (q *Queries) UpdateServer(ctx context.Context, arg UpdateServerParams) erro
 		arg.Host,
 		arg.Port,
 		arg.GamePorts,
+		arg.AgentID,
+		arg.ContainerName,
 		arg.UpdatedAt,
 		arg.ID,
 	)

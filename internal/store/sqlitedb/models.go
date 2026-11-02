@@ -122,19 +122,19 @@ type Invite struct {
 }
 
 type Server struct {
-	ID          string
-	Name        string
-	CreatedAt   string
-	UpdatedAt   string
-	DeletedAt   sql.NullString
-	ProfileID   sql.NullString
-	Protocol    string
-	Host        string
-	Port        int64
-	Secret      []byte
-	AgentID     sql.NullString
-	ContainerID sql.NullString
-	GamePorts   sql.NullString
+	ID            string
+	Name          string
+	CreatedAt     string
+	UpdatedAt     string
+	DeletedAt     sql.NullString
+	ProfileID     sql.NullString
+	Protocol      string
+	Host          string
+	Port          int64
+	Secret        []byte
+	AgentID       sql.NullString
+	ContainerName sql.NullString
+	GamePorts     sql.NullString
 }
 
 type ServerGroup struct {
