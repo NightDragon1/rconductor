@@ -14,6 +14,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
 // Session cookie names (decision W1): the __Host- prefix binds the cookie
@@ -57,13 +58,20 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func sessionOf(p auth.Principal) api.Session {
+func (s *apiServer) sessionOf(ctx context.Context, p auth.Principal) api.Session {
 	id, _ := uuid.Parse(p.UserID)
-	return api.Session{
+	out := api.Session{
 		User:               api.SessionUser{Id: id, Pseudonym: p.Pseudonym, Role: api.Role(p.Role)},
 		ExpiresAt:          p.ExpiresAt,
 		MustChangePassword: p.MustChangePassword,
 	}
+	if s.store != nil {
+		var on bool
+		if s.store.GlobalSetting(ctx, users.SettingShortcuts, &on) == nil {
+			out.Ui.ShortcutsEnabled = on
+		}
+	}
+	return out
 }
 
 func (s *apiServer) Login(ctx context.Context, req api.LoginRequestObject) (api.LoginResponseObject, error) {
@@ -93,7 +101,7 @@ func (s *apiServer) Login(ctx context.Context, req api.LoginRequestObject) (api.
 		return nil, err
 	}
 	setSessionCookie(h.w, h.r, token, s.auth.MaxLifetime(ctx))
-	return api.Login200JSONResponse(sessionOf(p)), nil
+	return api.Login200JSONResponse(s.sessionOf(ctx, p)), nil
 }
 
 func (s *apiServer) Logout(ctx context.Context, _ api.LogoutRequestObject) (api.LogoutResponseObject, error) {
@@ -108,5 +116,5 @@ func (s *apiServer) Logout(ctx context.Context, _ api.LogoutRequestObject) (api.
 
 func (s *apiServer) GetSession(ctx context.Context, _ api.GetSessionRequestObject) (api.GetSessionResponseObject, error) {
 	p, _ := principal(ctx)
-	return api.GetSession200JSONResponse(sessionOf(p)), nil
+	return api.GetSession200JSONResponse(s.sessionOf(ctx, p)), nil
 }

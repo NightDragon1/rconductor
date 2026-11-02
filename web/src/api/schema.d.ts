@@ -1193,6 +1193,11 @@ export interface components {
             role: components["schemas"]["Role"];
         };
         Session: {
+            /** @description Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings. */
+            ui: {
+                /** @description Keyboard shortcuts, off by default (UI-008). */
+                shortcuts_enabled: boolean;
+            };
             /** @description Until the password is changed only /me/password, /auth/logout and /auth/session are allowed (AUTH-010). */
             must_change_password: boolean;
             user: components["schemas"]["SessionUser"];

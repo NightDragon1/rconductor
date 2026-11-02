@@ -891,8 +891,14 @@ type Session struct {
 	ExpiresAt time.Time `json:"expires_at"`
 
 	// MustChangePassword Until the password is changed only /me/password, /auth/logout and /auth/session are allowed (AUTH-010).
-	MustChangePassword bool        `json:"must_change_password"`
-	User               SessionUser `json:"user"`
+	MustChangePassword bool `json:"must_change_password"`
+
+	// Ui Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings.
+	Ui struct {
+		// ShortcutsEnabled Keyboard shortcuts, off by default (UI-008).
+		ShortcutsEnabled bool `json:"shortcuts_enabled"`
+	} `json:"ui"`
+	User SessionUser `json:"user"`
 }
 
 // SessionUser defines model for SessionUser.
