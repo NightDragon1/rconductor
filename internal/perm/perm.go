@@ -99,9 +99,19 @@ type Checker struct {
 	st  *store.Store
 	log *slog.Logger
 
-	mu    sync.Mutex
-	gen   uint64
-	cache map[string]*Rights
+	mu      sync.Mutex
+	gen     uint64
+	cache   map[string]*Rights
+	watches []func()
+}
+
+// OnInvalidate registers f to run after every Invalidate, for example to
+// check open WebSocket subscriptions again (Design 2.3). f runs in its own
+// goroutine.
+func (c *Checker) OnInvalidate(f func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.watches = append(c.watches, f)
 }
 
 // NewChecker returns a checker on st.
@@ -115,9 +125,13 @@ func NewChecker(st *store.Store, log *slog.Logger) *Checker {
 // 3.2).
 func (c *Checker) Invalidate() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.gen++
 	clear(c.cache)
+	watches := append([]func(){}, c.watches...)
+	c.mu.Unlock()
+	for _, f := range watches {
+		go f()
+	}
 }
 
 // For returns the rights of a user. Unknown, disabled and deleted users

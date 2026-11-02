@@ -225,6 +225,26 @@ export interface paths {
         patch: operations["updateServerGroup"];
         trace?: never;
     };
+    "/ws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * WebSocket for live data (Design 2.3).
+         * @description Upgrade with the session cookie; the Origin is checked. Messages from the browser: {"type":"subscribe"|"unsubscribe","topic":...}. Messages from the panel: {"type":"event","topic":...,"data":...} and {"type":"error","topic":...,"reason":...}. Topics: servers.overview, server.{id}.status, server.{id}.console (server.{id}.metrics and .logs follow with the agent). Rights are checked on subscribe and after every change; withdrawn subscriptions end with reason revoked. Ended sessions close the socket. At most 4 sockets and 32 subscriptions per session (SEC-008). Ping every 30 s.
+         */
+        get: operations["openWebSocket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -1521,6 +1541,26 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Invalid"];
+        };
+    };
+    openWebSocket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switching to the WebSocket protocol. */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listUsers: {

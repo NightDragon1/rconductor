@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
@@ -85,6 +86,29 @@ type Service struct {
 	throttle  *throttle
 	now       func() time.Time
 	sleep     func(ctx context.Context, d time.Duration) error
+
+	mu    sync.Mutex
+	ended []func(sessionHashes []string)
+}
+
+// OnSessionsEnded registers f to learn about every ended session, so that
+// open WebSockets of it close at once (AUTH-006).
+func (s *Service) OnSessionsEnded(f func(sessionHashes []string)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ended = append(s.ended, f)
+}
+
+func (s *Service) sessionsEnded(hashes ...string) {
+	if len(hashes) == 0 {
+		return
+	}
+	s.mu.Lock()
+	fs := append([]func([]string){}, s.ended...)
+	s.mu.Unlock()
+	for _, f := range fs {
+		f(hashes)
+	}
 }
 
 // NewService returns the authentication service. emergencyEnabled is
@@ -351,6 +375,7 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Principal, er
 		if _, err := s.st.Queries.DeleteSession(ctx, hash); err != nil {
 			return Principal{}, fmt.Errorf("remove session: %w", err)
 		}
+		s.sessionsEnded(hash)
 		return Principal{}, ErrUnauthenticated
 	}
 	if now.Sub(lastSeen) >= touchInterval {
@@ -389,6 +414,7 @@ func (s *Service) Logout(ctx context.Context, p Principal, requestID string) err
 	s.log.Info("logout", logging.Event(logging.AuthLogout), slog.String(logging.KeyRequestID, requestID),
 		slog.String(logging.KeySession, p.SessionRef()), slog.String(logging.KeyUser, p.Pseudonym),
 		slog.String(logging.KeyRole, p.Role))
+	s.sessionsEnded(p.SessionHash)
 	return nil
 }
 
@@ -412,6 +438,7 @@ func (s *Service) RevokeUser(ctx context.Context, userID, reason, requestID stri
 			slog.String(logging.KeyRequestID, requestID), slog.String(logging.KeySession, h[:8]),
 			slog.String("user_id", userID), slog.String("cause", reason))
 	}
+	s.sessionsEnded(hashes...)
 	return nil
 }
 
@@ -427,5 +454,19 @@ func (s *Service) RevokeOtherSessions(ctx context.Context, userID, keepHash, rea
 			slog.String(logging.KeyRequestID, requestID), slog.String(logging.KeySession, h[:8]),
 			slog.String("user_id", userID), slog.String("cause", reason))
 	}
+	s.sessionsEnded(hashes...)
 	return nil
+}
+
+// SessionValid reports whether a session still exists and may be used: not
+// past its maximum lifetime and its user neither disabled nor deleted. Open
+// WebSockets check it regularly (AUTH-006).
+func (s *Service) SessionValid(ctx context.Context, hash string) bool {
+	row, err := s.st.Queries.GetSessionUser(ctx, hash)
+	if err != nil {
+		return false
+	}
+	absolute, err := time.Parse(store.TimeLayout, row.ExpiresAt)
+	return err == nil && s.now().UTC().Before(absolute) && !row.DisabledAt.Valid && !row.DeletedAt.Valid &&
+		(row.IsEmergency == 0 || s.emergency) && row.MustChangePassword == 0
 }
