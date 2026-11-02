@@ -308,3 +308,56 @@ func TestProtocolBreak(t *testing.T) {
 	}
 	f.waitLog(t, `"reason":"protocol"`)
 }
+
+// TestMessagesAndDisconnect: messages of an admitted agent reach the
+// receiver; the end of its session is reported once (NFR-005).
+func TestMessagesAndDisconnect(t *testing.T) {
+	f := newFixture(t, ThrottleOptions{})
+	agent := agentKey(t)
+	f.known.keys[agent.Fingerprint()] = "agent-1"
+	var mu sync.Mutex
+	var got []string
+	gone := make(chan string, 2)
+	f.hub.OnMessage(func(id string, e agentproto.Envelope) {
+		mu.Lock()
+		got = append(got, id+":"+e.Type)
+		mu.Unlock()
+	})
+	f.hub.OnDisconnect(func(id string) { gone <- id })
+	c, err := f.dial(t, agent, f.panel.Fingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	hello(t, c, agentproto.Hello{AgentID: "agent-1"})
+	data, _ := agentproto.Encode(agentproto.TypeSnapshot, "", agentproto.Snapshot{})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Fatal(err)
+	}
+	f.waitLog(t, `"event":"agent.connected"`)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		n := len(got)
+		mu.Unlock()
+		if n == 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	mu.Lock()
+	if len(got) != 1 || got[0] != "agent-1:snapshot" {
+		t.Errorf("messages = %v", got)
+	}
+	mu.Unlock()
+	_ = c.Close(websocket.StatusNormalClosure, "bye")
+	select {
+	case id := <-gone:
+		if id != "agent-1" {
+			t.Errorf("disconnect of %s", id)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no disconnect reported")
+	}
+}

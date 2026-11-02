@@ -100,7 +100,12 @@ type Hub struct {
 	sessions map[string]*Session
 	// onMessage gets every message of an admitted agent except results.
 	onMessage func(agentID string, e agentproto.Envelope)
+	// onDisconnect is told when an agent's last session ends.
+	onDisconnect func(agentID string)
 }
+
+// OnDisconnect sets the receiver of ended sessions; call it before Serve.
+func (h *Hub) OnDisconnect(f func(agentID string)) { h.onDisconnect = f }
 
 // OnMessage sets the receiver of snapshots, events, metrics and log lines;
 // call it before Serve.
@@ -374,10 +379,14 @@ func (h *Hub) register(s *Session) {
 
 func (h *Hub) unregister(s *Session) {
 	h.mu.Lock()
-	if h.sessions[s.AgentID] == s {
+	last := h.sessions[s.AgentID] == s
+	if last {
 		delete(h.sessions, s.AgentID)
 	}
 	h.mu.Unlock()
+	if last && h.onDisconnect != nil {
+		h.onDisconnect(s.AgentID)
+	}
 }
 
 // Revoke tells a connected agent that its pairing is revoked and ends
