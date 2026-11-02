@@ -407,6 +407,13 @@ func (s *Service) Admit(ctx context.Context, h agentproto.Hello, key ed25519.Pub
 	// Way B: the agent knows only the panel address.
 	r, err := s.st.Queries.GetAgentByFingerprint(ctx, fp)
 	switch {
+	case err == nil && r.Status == StatusRevoked && s.PairingOpen(ctx):
+		// A revoked agent asks for a new pairing by fingerprint.
+		now := sql.NullString{String: store.Now(), Valid: true}
+		if _, err := s.st.Queries.RequestRepairAgent(ctx, sqlitedb.RequestRepairAgentParams{CreatedAt: now.String, LastSeenAt: now, ID: r.ID}); err != nil {
+			return agenthub.Admission{}, err
+		}
+		return agenthub.Admission{Reject: agentproto.RejectPending}, nil
 	case err == nil:
 		return s.admitKnown(ctx, r, h, remote)
 	case !errors.Is(err, sql.ErrNoRows):
@@ -443,12 +450,13 @@ func (s *Service) pairByToken(ctx context.Context, h agentproto.Hello, key ed255
 	if err != nil {
 		return agenthub.Admission{}, err
 	}
-	if _, err := s.st.Queries.GetAgentByFingerprint(ctx, fp); err == nil {
-		// The key is paired already; a token cannot pair it twice.
+	// A key that is paired cannot pair twice; a revoked one pairs again
+	// with its old record (Design 1.7: a new pairing needs way A or B).
+	existing, err := s.st.Queries.GetAgentByFingerprint(ctx, fp)
+	switch {
+	case err == nil && existing.Status != StatusRevoked:
 		return agenthub.Admission{Reject: agentproto.RejectInvalid}, nil
-	}
-	id, err := store.NewID()
-	if err != nil {
+	case err != nil && !errors.Is(err, sql.ErrNoRows):
 		return agenthub.Admission{}, err
 	}
 	now := store.Now()
@@ -459,12 +467,25 @@ func (s *Service) pairByToken(ctx context.Context, h agentproto.Hello, key ed255
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
-	if err := q.InsertAgent(ctx, sqlitedb.InsertAgentParams{
-		ID: id, Name: h.Name, PublicKey: key, Fingerprint: fp, Status: StatusActive, Version: h.Version,
-		Capabilities: string(caps), Remote: remote, PairedBy: sql.NullString{String: tok.CreatedBy, Valid: true},
-		CreatedAt: now, LastSeenAt: sql.NullString{String: now, Valid: true},
-	}); err != nil {
-		return agenthub.Admission{}, err
+	pairedBy := sql.NullString{String: tok.CreatedBy, Valid: true}
+	seen := sql.NullString{String: now, Valid: true}
+	id := existing.ID
+	if id != "" {
+		if _, err := q.RepairAgent(ctx, sqlitedb.RepairAgentParams{
+			PairedBy: pairedBy, Name: h.Name, Version: h.Version, Capabilities: string(caps), Remote: remote, LastSeenAt: seen, ID: id,
+		}); err != nil {
+			return agenthub.Admission{}, err
+		}
+	} else {
+		if id, err = store.NewID(); err != nil {
+			return agenthub.Admission{}, err
+		}
+		if err := q.InsertAgent(ctx, sqlitedb.InsertAgentParams{
+			ID: id, Name: h.Name, PublicKey: key, Fingerprint: fp, Status: StatusActive, Version: h.Version,
+			Capabilities: string(caps), Remote: remote, PairedBy: pairedBy, CreatedAt: now, LastSeenAt: seen,
+		}); err != nil {
+			return agenthub.Admission{}, err
+		}
 	}
 	n, err := q.UseAgentToken(ctx, sqlitedb.UseAgentTokenParams{
 		UsedAt: sql.NullString{String: now, Valid: true}, AgentID: sql.NullString{String: id, Valid: true},

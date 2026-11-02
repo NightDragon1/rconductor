@@ -59,7 +59,20 @@ type Panel struct {
 // Agent is the start-up configuration of the agent. Until M3 only the
 // logging settings are read.
 type Agent struct {
-	Log Log
+	// PairingToken pairs the agent once (way A); ignored after the
+	// pairing it made. Secret, never log.
+	PairingToken string
+	// PanelAddr is the panel's agent port for way B, or overrides the
+	// address in the token.
+	PanelAddr string
+	// Name is shown in the panel; empty means the host name.
+	Name string
+	// LabelKey and LabelValue mark the containers the agent may manage
+	// (RCD_LABEL, AGT-002).
+	LabelKey, LabelValue string
+	DockerHost           string
+	SecretsDir           string
+	Log                  Log
 }
 
 // LoadPanelFromOS loads the panel configuration from the process environment.
@@ -101,7 +114,25 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 // LoadAgent reads and validates the agent configuration.
 func LoadAgent(env Lookup, readFile ReadFile) (Agent, error) {
 	r := reader{env: env, readFile: readFile}
-	c := Agent{Log: r.log()}
+	c := Agent{
+		PairingToken: r.secret("RCD_PAIRING_TOKEN"),
+		PanelAddr:    r.str("RCD_PANEL_ADDR", ""),
+		Name:         r.str("RCD_AGENT_NAME", ""),
+		DockerHost:   r.str("RCD_DOCKER_HOST", "unix:///var/run/docker.sock"),
+		SecretsDir:   r.str("RCD_SECRETS_DIR", "/secrets"),
+		Log:          r.log(),
+	}
+	label := r.str("RCD_LABEL", "rcon.manage=true")
+	key, value, ok := strings.Cut(label, "=")
+	if !ok || strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
+		r.fail("RCD_LABEL", "must be key=value")
+	}
+	c.LabelKey, c.LabelValue = strings.TrimSpace(key), strings.TrimSpace(value)
+	if c.PanelAddr != "" {
+		if _, _, err := net.SplitHostPort(c.PanelAddr); err != nil {
+			r.fail("RCD_PANEL_ADDR", "must be host:port")
+		}
+	}
 	return c, r.err()
 }
 

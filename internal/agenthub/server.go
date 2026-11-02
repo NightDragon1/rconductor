@@ -43,6 +43,17 @@ const (
 	ReasonProtocol = "protocol"
 )
 
+// Errors of Request.
+var (
+	// ErrNotConnected means the agent has no session.
+	ErrNotConnected = errors.New("agent not connected")
+	// ErrBusy means too many orders wait for the agent.
+	ErrBusy = errors.New("too many orders wait for the agent")
+)
+
+// maxPending bounds the orders waiting for results per agent.
+const maxPending = 64
+
 // Admission is the answer of the registry to a hello.
 type Admission struct {
 	AgentID string
@@ -87,6 +98,24 @@ type Hub struct {
 
 	mu       sync.Mutex
 	sessions map[string]*Session
+	// onMessage gets every message of an admitted agent except results.
+	onMessage func(agentID string, e agentproto.Envelope)
+}
+
+// OnMessage sets the receiver of snapshots, events, metrics and log lines;
+// call it before Serve.
+func (h *Hub) OnMessage(f func(agentID string, e agentproto.Envelope)) { h.onMessage = f }
+
+// Request sends an order to an agent and waits for its result until ctx
+// ends (Design 1.5).
+func (h *Hub) Request(ctx context.Context, agentID, typ string, payload any) (agentproto.Result, error) {
+	h.mu.Lock()
+	s := h.sessions[agentID]
+	h.mu.Unlock()
+	if s == nil {
+		return agentproto.Result{}, ErrNotConnected
+	}
+	return s.request(ctx, typ, payload)
 }
 
 // New returns a hub with the panel identity.

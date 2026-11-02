@@ -227,6 +227,56 @@ func (q *Queries) ListAgents(ctx context.Context) ([]Agent, error) {
 	return items, nil
 }
 
+const repairAgent = `-- name: RepairAgent :execrows
+UPDATE agents SET status = 'active', paired_by = ?, revoked_at = NULL, name = ?, version = ?, capabilities = ?, remote = ?, last_seen_at = ?
+WHERE id = ? AND status = 'revoked'
+`
+
+type RepairAgentParams struct {
+	PairedBy     sql.NullString
+	Name         string
+	Version      string
+	Capabilities string
+	Remote       string
+	LastSeenAt   sql.NullString
+	ID           string
+}
+
+func (q *Queries) RepairAgent(ctx context.Context, arg RepairAgentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, repairAgent,
+		arg.PairedBy,
+		arg.Name,
+		arg.Version,
+		arg.Capabilities,
+		arg.Remote,
+		arg.LastSeenAt,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const requestRepairAgent = `-- name: RequestRepairAgent :execrows
+UPDATE agents SET status = 'pending', paired_by = NULL, revoked_at = NULL, created_at = ?, last_seen_at = ?
+WHERE id = ? AND status = 'revoked'
+`
+
+type RequestRepairAgentParams struct {
+	CreatedAt  string
+	LastSeenAt sql.NullString
+	ID         string
+}
+
+func (q *Queries) RequestRepairAgent(ctx context.Context, arg RequestRepairAgentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, requestRepairAgent, arg.CreatedAt, arg.LastSeenAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const revokeAgent = `-- name: RevokeAgent :execrows
 UPDATE agents SET status = 'revoked', revoked_at = ? WHERE id = ? AND status = 'active'
 `
