@@ -5,7 +5,9 @@
 package webui
 
 import (
+	"bytes"
 	"embed"
+	"html"
 	"io"
 	"io/fs"
 	"net/http"
@@ -24,21 +26,34 @@ var dist embed.FS
 
 const indexFile = "index.html"
 
-// Handler serves the embedded build.
-func Handler() http.Handler {
+// Policy is the Content-Security-Policy of the interface (SEC-009): only
+// own scripts, styles, fonts and images, no inline script, the WebSocket
+// to the panel itself, never framed.
+const Policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; " +
+	"connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+
+// Handler serves the embedded build below basePath (RCD_BASE_PATH).
+func Handler(basePath string) http.Handler {
 	sub, err := fs.Sub(dist, "dist")
 	if err != nil {
 		panic(err) // the directory is embedded at compile time
 	}
-	return New(sub)
+	return NewAt(sub, basePath)
 }
 
 // New serves the UI from fsys. Paths with a file extension are assets and
 // answer 404 when missing; all other paths get index.html so client-side
 // routes work after a reload. Without index.html the UI is not built and
 // every page answers 503.
-func New(fsys fs.FS) http.Handler {
+func New(fsys fs.FS) http.Handler { return NewAt(fsys, "/") }
+
+// NewAt is New with the base path the browser sees: index.html gets
+// <base href="{basePath}/">, so that relative assets and client routes
+// resolve from deep links too (issue #88), without an inline script.
+func NewAt(fsys fs.FS, basePath string) http.Handler {
+	index, ok := withBase(fsys, basePath)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", Policy)
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
 			web.WriteProblem(w, http.StatusMethodNotAllowed, "", "")
@@ -47,7 +62,7 @@ func New(fsys fs.FS) http.Handler {
 
 		name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
 		if name == "" || name == indexFile || path.Ext(name) == "" {
-			serveIndex(w, r, fsys)
+			serveIndex(w, r, index, ok)
 			return
 		}
 		if hidden(name) || !serveFile(w, r, fsys, name, "public, max-age=31536000, immutable") {
@@ -56,11 +71,33 @@ func New(fsys fs.FS) http.Handler {
 	})
 }
 
-func serveIndex(w http.ResponseWriter, r *http.Request, fsys fs.FS) {
-	// The index references hashed assets and must always be revalidated.
-	if !serveFile(w, r, fsys, indexFile, "no-cache") {
-		web.WriteProblem(w, http.StatusServiceUnavailable, "", "web UI is not built")
+// withBase reads index.html once and puts the base element first into its
+// head.
+func withBase(fsys fs.FS, basePath string) ([]byte, bool) {
+	b, err := fs.ReadFile(fsys, indexFile)
+	if err != nil {
+		return nil, false
 	}
+	href := strings.TrimSuffix(basePath, "/") + "/"
+	tag := `<base href="` + html.EscapeString(href) + `">`
+	s := string(b)
+	if i := strings.Index(s, "<head>"); i >= 0 {
+		s = s[:i+len("<head>")] + tag + s[i+len("<head>"):]
+	} else {
+		s = tag + s
+	}
+	return []byte(s), true
+}
+
+func serveIndex(w http.ResponseWriter, r *http.Request, index []byte, ok bool) {
+	if !ok {
+		web.WriteProblem(w, http.StatusServiceUnavailable, "", "web UI is not built")
+		return
+	}
+	// The index references hashed assets and must always be revalidated.
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeContent(w, r, indexFile, time.Time{}, bytes.NewReader(index))
 }
 
 // serveFile writes the regular file name and reports whether it exists.

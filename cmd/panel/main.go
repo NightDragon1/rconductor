@@ -24,7 +24,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := app.RunPanel(ctx, cfg, os.Stdout, app.PanelOptions{UI: webui.Handler()}); err != nil {
+	if err := app.RunPanel(ctx, cfg, os.Stdout, app.PanelOptions{UI: webui.Handler(cfg.BasePath)}); err != nil {
 		stop()
 		os.Exit(1) //nolint:gocritic // stop already called
 	}

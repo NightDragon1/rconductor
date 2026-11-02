@@ -5,12 +5,13 @@ package webui
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
 
 var built = fstest.MapFS{
-	"index.html":       {Data: []byte("<!doctype html><title>ui</title>")},
+	"index.html":       {Data: []byte("<!doctype html><html><head><title>ui</title></head></html>")},
 	"assets/app-1.js":  {Data: []byte("console.log(1)")},
 	"assets/app-1.css": {Data: []byte("body{}")},
 	".gitkeep":         {Data: nil},
@@ -27,7 +28,7 @@ func TestIndexAndClientRoutes(t *testing.T) {
 	h := New(built)
 	for _, target := range []string{"/", "/index.html", "/servers/42", "/admin/users/", "/a/../b"} {
 		rec := get(t, h, http.MethodGet, target)
-		if rec.Code != http.StatusOK || rec.Body.String() != string(built["index.html"].Data) {
+		if rec.Code != http.StatusOK || rec.Body.String() != `<!doctype html><html><head><base href="/"><title>ui</title></head></html>` {
 			t.Errorf("%s: %d %q, want index.html", target, rec.Code, rec.Body.String())
 		}
 		if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
@@ -95,11 +96,32 @@ func TestOnlyGetAndHead(t *testing.T) {
 
 func TestEmbeddedHandler(t *testing.T) {
 	// Works with and without a UI build in internal/webui/dist.
-	rec := get(t, Handler(), http.MethodGet, "/")
+	rec := get(t, Handler("/"), http.MethodGet, "/")
 	if rec.Code != http.StatusOK && rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("embedded: %d", rec.Code)
 	}
-	if rec := get(t, Handler(), http.MethodGet, "/.gitkeep"); rec.Code != http.StatusNotFound {
+	if rec := get(t, Handler("/"), http.MethodGet, "/.gitkeep"); rec.Code != http.StatusNotFound {
 		t.Errorf("placeholder served: %d", rec.Code)
+	}
+}
+
+// TestBaseHref covers issue #88 (NFR-003): index.html names the base path,
+// so deep links load their assets; the policy of SEC-009 allows no inline
+// script and no framing.
+func TestBaseHref(t *testing.T) {
+	h := NewAt(built, "/rcon")
+	rec := get(t, h, http.MethodGet, "/servers/1")
+	if !strings.Contains(rec.Body.String(), `<head><base href="/rcon/">`) {
+		t.Errorf("index = %s", rec.Body.String())
+	}
+	h = NewAt(built, `/a"><script>`)
+	if strings.Contains(get(t, h, http.MethodGet, "/").Body.String(), "<script>") {
+		t.Error("base path not escaped")
+	}
+	for _, target := range []string{"/", "/assets/app-1.js", "/assets/missing.js"} {
+		csp := get(t, NewAt(built, "/"), http.MethodGet, target).Header().Get("Content-Security-Policy")
+		if csp != Policy || strings.Contains(csp, "unsafe-inline") || !strings.Contains(csp, "frame-ancestors 'none'") {
+			t.Errorf("%s: policy %q", target, csp)
+		}
 	}
 }
