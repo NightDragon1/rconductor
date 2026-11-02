@@ -286,6 +286,17 @@ func TestMarking(t *testing.T) {
 	if kind != "command" || actor != w.ids["m"] || role != "moderator" || session != req.SessionID || server != w.server || result != "ok" {
 		t.Errorf("audit = %s %s %s %s %s %s", kind, actor, role, session, server, result)
 	}
+	// The result is a second, appended entry that refers to the request ID.
+	var resActor, resSession, resResult, resPayload string
+	if err := w.st.DB.QueryRowContext(context.Background(),
+		`SELECT actor_id, session_id, result, payload FROM audit_log WHERE action = 'cmd.result' AND target_type = 'command' AND target_id = ?`, req.RequestID,
+	).Scan(&resActor, &resSession, &resResult, &resPayload); err != nil {
+		t.Fatalf("cmd.result entry: %v", err)
+	}
+	if resActor != w.ids["m"] || resSession != req.SessionID || resResult != "ok" ||
+		!strings.Contains(resPayload, `"request_id":"`+req.RequestID+`"`) || !strings.Contains(resPayload, `"duration_ms":`) {
+		t.Errorf("cmd.result = %s %s %s %s", resActor, resSession, resResult, resPayload)
+	}
 	for _, ev := range []string{"cmd.accepted", "cmd.sent", "cmd.response"} {
 		found := false
 		for line := range strings.Lines(w.logs.String()) {
@@ -384,5 +395,25 @@ func TestHistory(t *testing.T) {
 	rest, _, _ := w.svc.History(context.Background(), w.as("admin"), w.server, 2, next)
 	if len(page) != 2 || len(rest) != 1 || next == "" {
 		t.Errorf("paging: %d + %d", len(page), len(rest))
+	}
+}
+
+// TestAuditAppendOnly: sending a command only adds entries; the entry
+// written before sending is never changed.
+func TestAuditAppendOnly(t *testing.T) {
+	w := newWorld(t)
+	req := w.as("admin")
+	if _, err := w.svc.Send(context.Background(), req, w.server, "list"); err != nil {
+		t.Fatal(err)
+	}
+	var sentResult, sentPayload string
+	_ = w.st.DB.QueryRowContext(context.Background(), `SELECT result, payload FROM audit_log WHERE id = ?`, req.RequestID).Scan(&sentResult, &sentPayload)
+	if sentResult != "ok" || sentPayload != `{"command":"list"}` {
+		t.Errorf("cmd.sent entry was changed: %s %s", sentResult, sentPayload)
+	}
+	var n int
+	_ = w.st.DB.QueryRowContext(context.Background(), `SELECT count(*) FROM audit_log WHERE kind = 'command' AND (id = ? OR target_id = ?)`, req.RequestID, req.RequestID).Scan(&n)
+	if n != 2 {
+		t.Errorf("entries for one command = %d, want cmd.sent and cmd.result", n)
 	}
 }

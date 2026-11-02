@@ -11,10 +11,14 @@ import (
 )
 
 const listCommandHistory = `-- name: ListCommandHistory :many
-SELECT a.id, a.ts, a.actor_id, a.actor_role, a.payload, a.result, a.reason_code,
-       coalesce(u.pseudonym, '') AS pseudonym
-FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
-WHERE a.kind = 'command' AND a.server_id = ?1
+
+SELECT a.id, a.ts, a.actor_id, a.actor_role, a.action, a.payload, a.result, a.reason_code,
+       coalesce(u.pseudonym, '') AS pseudonym,
+       r.result AS final_result, r.reason_code AS final_reason, r.payload AS result_payload
+FROM audit_log a
+LEFT JOIN users u ON u.id = a.actor_id
+LEFT JOIN audit_log r ON r.kind = 'command' AND r.action = 'cmd.result' AND r.target_type = 'command' AND r.target_id = a.id
+WHERE a.kind = 'command' AND a.action IN ('cmd.sent', 'cmd.denied') AND a.server_id = ?1
   AND (?2 = '' OR a.actor_id = ?2)
   AND (?3 = '' OR a.ts < ?3 OR (a.ts = ?3 AND a.id < ?4))
 ORDER BY a.ts DESC, a.id DESC
@@ -30,16 +34,23 @@ type ListCommandHistoryParams struct {
 }
 
 type ListCommandHistoryRow struct {
-	ID         string
-	Ts         string
-	ActorID    sql.NullString
-	ActorRole  sql.NullString
-	Payload    string
-	Result     string
-	ReasonCode sql.NullString
-	Pseudonym  string
+	ID            string
+	Ts            string
+	ActorID       sql.NullString
+	ActorRole     sql.NullString
+	Action        string
+	Payload       string
+	Result        string
+	ReasonCode    sql.NullString
+	Pseudonym     string
+	FinalResult   sql.NullString
+	FinalReason   sql.NullString
+	ResultPayload sql.NullString
 }
 
+// Command history: a view on the append-only audit log (D-029). Each
+// command has a cmd.sent entry (ID = request ID) and later a cmd.result
+// entry that refers to it; a refusal is one cmd.denied entry.
 func (q *Queries) ListCommandHistory(ctx context.Context, arg ListCommandHistoryParams) ([]ListCommandHistoryRow, error) {
 	rows, err := q.db.QueryContext(ctx, listCommandHistory,
 		arg.ServerID,
@@ -60,10 +71,14 @@ func (q *Queries) ListCommandHistory(ctx context.Context, arg ListCommandHistory
 			&i.Ts,
 			&i.ActorID,
 			&i.ActorRole,
+			&i.Action,
 			&i.Payload,
 			&i.Result,
 			&i.ReasonCode,
 			&i.Pseudonym,
+			&i.FinalResult,
+			&i.FinalReason,
+			&i.ResultPayload,
 		); err != nil {
 			return nil, err
 		}
@@ -76,27 +91,4 @@ func (q *Queries) ListCommandHistory(ctx context.Context, arg ListCommandHistory
 		return nil, err
 	}
 	return items, nil
-}
-
-const setAuditResult = `-- name: SetAuditResult :exec
-
-UPDATE audit_log SET result = ?, reason_code = ?, payload = ? WHERE id = ?
-`
-
-type SetAuditResultParams struct {
-	Result     string
-	ReasonCode sql.NullString
-	Payload    string
-	ID         string
-}
-
-// Command history: a view on the audit log (D-029, Design 4.1).
-func (q *Queries) SetAuditResult(ctx context.Context, arg SetAuditResultParams) error {
-	_, err := q.db.ExecContext(ctx, setAuditResult,
-		arg.Result,
-		arg.ReasonCode,
-		arg.Payload,
-		arg.ID,
-	)
-	return err
 }

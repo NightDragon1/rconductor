@@ -29,6 +29,10 @@ const Timeout = 10 * time.Second
 // also the console history (D-029, SEC-006).
 const MaxStoredResponse = 64 << 10
 
+// ReasonTimeout is the reason code of a command without answer in time
+// (Design 3.5, 504).
+const ReasonTimeout = "timeout"
+
 // Results of a command in audit and history.
 const (
 	ResultOK      = string(audit.ResultOK)
@@ -127,9 +131,14 @@ func NewService(st *store.Store, c *perm.Checker, exec Executor, log *slog.Logge
 }
 
 type payload struct {
-	Command   string `json:"command"`
-	Response  string `json:"response,omitempty"`
-	Truncated bool   `json:"truncated,omitempty"`
+	Command string `json:"command"`
+}
+
+type resultPayload struct {
+	RequestID  string `json:"request_id"`
+	Response   string `json:"response,omitempty"`
+	Truncated  bool   `json:"truncated,omitempty"`
+	DurationMS int64  `json:"duration_ms"`
 }
 
 func (s *Service) limit(ctx context.Context, role string) Limit {
@@ -182,8 +191,20 @@ func (s *Service) attrs(req users.Request, serverID string) []any {
 	}
 }
 
-func (s *Service) entry(ctx context.Context, req users.Request, serverID string, e audit.Entry) error {
-	e.ID, e.Kind, e.Action = req.RequestID, audit.KindCommand, "command"
+// Audit actions of a command. The audit log is append-only: cmd.sent
+// (ID = request ID, Design 4.1) before sending and cmd.result after it,
+// which refers to the request ID; a refusal is one cmd.denied entry.
+const (
+	ActionSent   = "cmd.sent"
+	ActionResult = "cmd.result"
+	ActionDenied = "cmd.denied"
+)
+
+func (s *Service) entry(ctx context.Context, req users.Request, serverID, action string, e audit.Entry) error {
+	e.Kind, e.Action = audit.KindCommand, action
+	if action != ActionResult {
+		e.ID = req.RequestID
+	}
 	e.ActorID, e.ActorRole, e.SessionID, e.ServerID = req.Actor.ID, string(req.Actor.Role), req.SessionID, serverID
 	_, err := audit.Write(ctx, s.st.DB, e)
 	return err
@@ -192,7 +213,7 @@ func (s *Service) entry(ctx context.Context, req users.Request, serverID string,
 // deny logs cmd.denied, audits the refusal and tells the console.
 func (s *Service) deny(ctx context.Context, req users.Request, serverID, command, reason string, retry time.Duration) error {
 	s.log.Info("command refused", append(s.attrs(req, serverID), logging.Event(logging.CmdDenied), slog.String(logging.KeyReason, reason))...)
-	if err := s.entry(ctx, req, serverID, audit.Entry{
+	if err := s.entry(ctx, req, serverID, ActionDenied, audit.Entry{
 		Payload: payload{Command: command}, Result: audit.ResultDenied, Reason: reason,
 	}); err != nil {
 		return err
@@ -254,7 +275,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	// 9 and 10: marked with request ID, session, user and role; audit
 	// before sending (CMD-007).
 	s.log.Info("command accepted", append(s.attrs(req, serverID), logging.Event(logging.CmdAccepted))...)
-	if err := s.entry(ctx, req, serverID, audit.Entry{Payload: payload{Command: cmd}, Result: audit.ResultError, Reason: "not_answered"}); err != nil {
+	if err := s.entry(ctx, req, serverID, ActionSent, audit.Entry{Payload: payload{Command: cmd}, Result: audit.ResultOK}); err != nil {
 		return Result{}, err
 	}
 	// 11: one connection, one queue per server.
@@ -272,7 +293,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 		s.log.Info("command answered", append(s.attrs(req, serverID), logging.Event(logging.CmdResponse),
 			slog.Int("bytes", len(answer)), logging.Duration(s.now().Sub(start)))...)
 	case errors.Is(err, context.DeadlineExceeded):
-		outcome, reason = ResultTimeout, "timeout"
+		outcome, reason = ResultTimeout, ReasonTimeout
 		s.log.Warn("command timed out", append(s.attrs(req, serverID), logging.Event(logging.CmdTimeout))...)
 		err = ErrTimeout
 	case errors.Is(err, connmgr.ErrUnavailable), errors.Is(err, connmgr.ErrUnknownServer):
@@ -283,12 +304,16 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 		s.log.Warn("command failed", append(s.attrs(req, serverID), slog.Any("err", err))...)
 		err = ErrUnavailable
 	}
-	// 12: result in the audit and to the console.
-	body, _ := json.Marshal(payload{Command: cmd, Response: res.Response, Truncated: res.Truncated})
-	if uerr := s.st.Queries.SetAuditResult(context.WithoutCancel(ctx), sqlitedb.SetAuditResultParams{
-		Result: outcome, ReasonCode: sql.NullString{String: reason, Valid: reason != ""}, Payload: string(body), ID: req.RequestID,
-	}); uerr != nil {
-		s.log.Error("audit result not stored", slog.String(logging.KeyRequestID, req.RequestID), slog.Any("err", uerr))
+	// 12: result in the audit (a second entry, append-only) and to the
+	// console.
+	if aerr := s.entry(context.WithoutCancel(ctx), req, serverID, ActionResult, audit.Entry{
+		TargetType: "command", TargetID: req.RequestID, Result: audit.Result(outcome), Reason: reason,
+		Payload: resultPayload{
+			RequestID: req.RequestID, Response: res.Response, Truncated: res.Truncated,
+			DurationMS: s.now().Sub(start).Milliseconds(),
+		},
+	}); aerr != nil {
+		s.log.Error("audit result not stored", slog.String(logging.KeyRequestID, req.RequestID), slog.Any("err", aerr))
 	}
 	s.publish(serverID, Entry{
 		RequestID: req.RequestID, TS: res.TS, UserID: req.Actor.ID, Pseudonym: req.Pseudonym, Role: string(req.Actor.Role),
@@ -351,7 +376,17 @@ func (s *Service) History(ctx context.Context, req users.Request, serverID strin
 		_ = json.Unmarshal([]byte(r.Payload), &p)
 		e := Entry{
 			RequestID: r.ID, UserID: r.ActorID.String, Pseudonym: r.Pseudonym, Role: r.ActorRole.String,
-			Command: p.Command, Response: p.Response, Truncated: p.Truncated, Result: r.Result, Reason: r.ReasonCode.String,
+			Command: p.Command, Result: r.Result, Reason: r.ReasonCode.String,
+		}
+		if r.Action == ActionSent {
+			if r.FinalResult.Valid {
+				var rp resultPayload
+				_ = json.Unmarshal([]byte(r.ResultPayload.String), &rp)
+				e.Result, e.Reason, e.Response, e.Truncated = r.FinalResult.String, r.FinalReason.String, rp.Response, rp.Truncated
+			} else {
+				// Sent, but no answer recorded (yet).
+				e.Result, e.Reason = ResultError, "not_answered"
+			}
 		}
 		e.TS, _ = time.Parse(store.TimeLayout, r.Ts)
 		out = append(out, e)
