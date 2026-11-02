@@ -551,6 +551,13 @@ export interface components {
             items: components["schemas"]["User"][];
         };
         Server: {
+            /**
+             * @description Reachability over RCON (SRV-004).
+             * @enum {string}
+             */
+            status: "connected" | "auth_failed" | "offline";
+            /** Format: date-time */
+            status_since: string;
             /** Format: uuid */
             id: string;
             name: string;

@@ -7,15 +7,22 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"net"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon"
+	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
+	"github.com/NightDragon1/rconductor/internal/rcon/source"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
@@ -231,5 +238,63 @@ func TestOtherMasterKey(t *testing.T) {
 	pw := logging.Secret("new password")
 	if got, _ = other.Update(ctx, f.as("admin"), s.ID, Input{Password: &pw}); got.Credentials != CredentialsOK {
 		t.Errorf("after entering again: %s", got.Credentials)
+	}
+}
+
+// TestConnectsWithStoredCredentials: a created server is connected with
+// its decrypted password, and its status shows in the server answer
+// (SRV-004); a new password reconnects at once.
+func TestConnectsWithStoredCredentials(t *testing.T) {
+	f := newFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	srv, err := rcontest.Start(rconPassword, rcontest.Minecraft, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	m := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}}, f.svc, f.svc.log, connmgr.Options{ProbeInterval: 50 * time.Millisecond, MaxBackoff: 100 * time.Millisecond})
+	f.svc.SetConnections(m)
+	if err := m.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer m.Wait()
+	defer cancel()
+
+	host, port, _ := net.SplitHostPort(srv.Addr)
+	p, _ := strconv.Atoi(port)
+	name, wrong, profile := "local", logging.Secret("wrong"), f.ids["profile"]
+	s, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileID: &profile, Host: &host, Port: &p, Password: &wrong})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor := func(want connmgr.Status) {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			got, _ := f.svc.Get(ctx, f.as("admin"), s.ID)
+			if got.Status == want {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("status %s, want %s", got.Status, want)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	waitFor(connmgr.AuthFailed)
+	right := logging.Secret(rconPassword)
+	if _, err := f.svc.Update(ctx, f.as("admin"), s.ID, Input{Password: &right}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(connmgr.Connected)
+	if got, err := m.Execute(ctx, s.ID, "list"); err != nil || got != "list" {
+		t.Errorf("execute = %q %v", got, err)
+	}
+	if err := f.svc.Delete(ctx, f.as("admin"), s.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Execute(ctx, s.ID, "list"); !errors.Is(err, connmgr.ErrUnknownServer) {
+		t.Errorf("deleted server still connected: %v", err)
 	}
 }

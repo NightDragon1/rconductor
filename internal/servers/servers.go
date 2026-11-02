@@ -17,10 +17,12 @@ import (
 	"net"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
+	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
@@ -49,8 +51,11 @@ const (
 // Server is a game server. Connection fields are filled only for callers
 // who may see them (RCON admin and server admin).
 type Server struct {
-	ID          string
-	Name        string
+	ID   string
+	Name string
+	// Status is the reachability (SRV-004); everyone in scope sees it.
+	Status      connmgr.Status
+	StatusSince time.Time
 	ProfileID   string
 	GroupIDs    []string
 	Detailed    bool
@@ -81,10 +86,11 @@ type Input struct {
 
 // Service administers servers and server groups.
 type Service struct {
-	st   *store.Store
-	perm *perm.Checker
-	box  *secret.Box
-	log  *slog.Logger
+	st    *store.Store
+	perm  *perm.Checker
+	box   *secret.Box
+	log   *slog.Logger
+	conns Connections
 }
 
 // NewService returns the server administration; box encrypts credentials
@@ -181,7 +187,10 @@ func (s *Service) memberships(ctx context.Context) (map[string][]string, error) 
 }
 
 func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, groups []string, detailed bool) (Server, error) {
-	srv := Server{ID: r.ID, Name: r.Name, ProfileID: r.ProfileID.String, GroupIDs: groups, Detailed: detailed}
+	srv := Server{ID: r.ID, Name: r.Name, ProfileID: r.ProfileID.String, GroupIDs: groups, Detailed: detailed, Status: connmgr.Offline}
+	if s.conns != nil {
+		srv.Status, srv.StatusSince = s.conns.Status(r.ID)
+	}
 	if srv.GroupIDs == nil {
 		srv.GroupIDs = []string{}
 	}
@@ -451,6 +460,7 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 		return Server{}, err
 	}
 	s.perm.Invalidate()
+	s.changed(ctx, id)
 	return s.Get(ctx, req, id)
 }
 
@@ -508,6 +518,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	if err := tx.Commit(); err != nil {
 		return Server{}, err
 	}
+	s.changed(ctx, id)
 	return s.Get(ctx, req, id)
 }
 
@@ -539,5 +550,6 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 		return err
 	}
 	s.perm.Invalidate()
+	s.changed(ctx, id)
 	return nil
 }

@@ -10,6 +10,7 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 | 4 | Änderung von Servergruppen beendet keine Sessions | AUTH-006, Design 2.1 (D-044) |
 | 5 | Agent und Container am Server erst ab M3 setzbar | SRV-001, Plan R1 |
 | 6 | Eigener Source-RCON-Adapter statt gorcon/rcon | Technologie 2, PROT-001 |
+| 7 | RCON-Verbindung: Prüfung im Leerlauf und Backoff höchstens 5 s | SRV-004, PROT-002, Design 1.1 |
 
 ## 1. Beispielprofil in Design 7.4 auf Englisch
 
@@ -52,3 +53,10 @@ Stand: M2 (02.11.2026). Abweichungen und Lücken, die nach der Freigabe von Doku
 - **Umsetzung (M2, nach Vorgabe):** eigener Adapter hinter der vorgesehenen Schnittstelle: nach jedem Befehl ein leeres Paket als Endmarker, Sammeln bis zu dessen Antwort, Pakete mit fremder ID werden verworfen; Grenzen 64 KiB je Paket und 1 MiB je Antwort (SEC-006). gorcon/rcon wird nicht eingebunden.
 - **Vorschlag:** Technologie 2, Zeile Source RCON: „eigener Adapter (Endmarker-Verfahren)“ statt gorcon/rcon.
 - **Begründung:** Erfüllt PROT-001 ohne Fremdcode; der Austausch war über die Adapter-Schnittstelle ohnehin vorgesehen.
+
+## 7. RCON-Verbindung: Prüfung im Leerlauf und Backoff höchstens 5 s
+
+- **Fundstelle:** 05-abnahme-r1.md, SRV-004 (Wechsel binnen 10 s sichtbar) und PROT-002 (Panel verbindet sich nach Spielneustart selbst); 03-design.md, Kapitel 1.1 (Backoff 1 s, Faktor 1,6, ±20 %, höchstens 120 s – für den Agent) und 4.6 (RCON-Erreichbarkeit „bei Verbindungsereignis“). Umsetzung: internal/connmgr, internal/rcon/source.
+- **Umsetzung (M2):** Eine ruhende Verbindung wird alle 2 s geprüft, ohne einen Befehl an das Spiel zu senden (kurzer Lesevorgang: Zeitüberschreitung heißt verbunden, Verbindungsende heißt offline). Nach einem Abbruch wird sofort neu verbunden, danach mit Backoff wie Design 1.1, aber höchstens 5 s.
+- **Vorschlag:** In Design 4.6 bzw. einem neuen Abschnitt zum Verbindungsmanager festhalten; Design 1.1 ausdrücklich nur auf den Agent beziehen.
+- **Begründung:** Ohne Prüfung im Leerlauf fiele ein gestoppter Spielserver erst beim nächsten Befehl auf; mit 120 s Backoff wäre der Wechsel nach einem Neustart nicht binnen 10 s sichtbar.

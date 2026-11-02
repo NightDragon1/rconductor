@@ -1068,8 +1068,15 @@ components:
 
     Server:
       type: object
-      required: [id, name, groups]
+      required: [id, name, groups, status, status_since]
       properties:
+        status:
+          type: string
+          enum: [connected, auth_failed, offline]
+          description: Reachability over RCON (SRV-004).
+        status_since:
+          type: string
+          format: date-time
         id:
           type: string
           format: uuid
