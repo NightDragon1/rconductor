@@ -142,6 +142,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/servers/{id}/players": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Players online, from the cache (SRV-006, Overview 4.6).
+         * @description Fetched over RCON with the profile's player command when missing or older than 120 s; kept in memory only. A value that could not be refreshed comes back marked stale with its time.
+         */
+        get: operations["getPlayers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/servers/{id}/history": {
         parameters: {
             query?: never;
@@ -593,6 +615,15 @@ export interface components {
         };
         UserList: {
             items: components["schemas"]["User"][];
+        };
+        PlayerList: {
+            /** @description The game profile defines a player list. */
+            available: boolean;
+            /** @description Player names; foreign data (SEC-006). */
+            players: string[];
+            /** Format: date-time */
+            updated_at?: string;
+            stale: boolean;
         };
         CommandInput: {
             command: string;
@@ -1310,6 +1341,31 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    getPlayers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The player list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Busy"];
         };
     };
     getHistory: {

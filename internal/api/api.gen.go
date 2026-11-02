@@ -526,6 +526,17 @@ type PasswordReset struct {
 	Password string `json:"password"`
 }
 
+// PlayerList defines model for PlayerList.
+type PlayerList struct {
+	// Available The game profile defines a player list.
+	Available bool `json:"available"`
+
+	// Players Player names; foreign data (SEC-006).
+	Players   []string   `json:"players"`
+	Stale     bool       `json:"stale"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
 // Problem Problem Details for HTTP APIs (RFC 9457).
 type Problem struct {
 	// Detail Human-readable explanation of this occurrence.
@@ -970,6 +981,9 @@ type ServerInterface interface {
 	// GetHistory Command history of a server, newest first (Design 2.2).
 	// (GET /servers/{id}/history)
 	GetHistory(w http.ResponseWriter, r *http.Request, id ServerID, params GetHistoryParams)
+	// GetPlayers Players online, from the cache (SRV-006, Overview 4.6).
+	// (GET /servers/{id}/players)
+	GetPlayers(w http.ResponseWriter, r *http.Request, id ServerID)
 	// GetSettings Global settings (Design 5.1); RCON admin only.
 	// (GET /settings)
 	GetSettings(w http.ResponseWriter, r *http.Request)
@@ -1691,6 +1705,32 @@ func (siw *ServerInterfaceWrapper) GetHistory(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetPlayers operation middleware
+func (siw *ServerInterfaceWrapper) GetPlayers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ServerID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlayers(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -2183,6 +2223,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}", wrapper.GetServer)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/servers/{id}", wrapper.UpdateServer)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers/{id}/commands", wrapper.SendCommand)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/players", wrapper.GetPlayers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/history", wrapper.GetHistory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups", wrapper.ListServerGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/server-groups", wrapper.CreateServerGroup)
@@ -4370,6 +4411,79 @@ func (response GetHistory422ApplicationProblemPlusJSONResponse) VisitGetHistoryR
 	return err
 }
 
+type GetPlayersRequestObject struct {
+	Id ServerID `json:"id"`
+}
+
+type GetPlayersResponseObject interface {
+	VisitGetPlayersResponse(w http.ResponseWriter) error
+}
+
+type GetPlayers200JSONResponse PlayerList
+
+func (response GetPlayers200JSONResponse) VisitGetPlayersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlayers401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetPlayers401ApplicationProblemPlusJSONResponse) VisitGetPlayersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlayers404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetPlayers404ApplicationProblemPlusJSONResponse) VisitGetPlayersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlayers503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response GetPlayers503ApplicationProblemPlusJSONResponse) VisitGetPlayersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSettingsRequestObject struct {
 }
 
@@ -5501,6 +5615,9 @@ type StrictServerInterface interface {
 	// GetHistory Command history of a server, newest first (Design 2.2).
 	// (GET /servers/{id}/history)
 	GetHistory(ctx context.Context, request GetHistoryRequestObject) (GetHistoryResponseObject, error)
+	// GetPlayers Players online, from the cache (SRV-006, Overview 4.6).
+	// (GET /servers/{id}/players)
+	GetPlayers(ctx context.Context, request GetPlayersRequestObject) (GetPlayersResponseObject, error)
 	// GetSettings Global settings (Design 5.1); RCON admin only.
 	// (GET /settings)
 	GetSettings(ctx context.Context, request GetSettingsRequestObject) (GetSettingsResponseObject, error)
@@ -6439,6 +6556,32 @@ func (sh *strictHandler) GetHistory(w http.ResponseWriter, r *http.Request, id S
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHistoryResponseObject); ok {
 		if err := validResponse.VisitGetHistoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPlayers operation middleware
+func (sh *strictHandler) GetPlayers(w http.ResponseWriter, r *http.Request, id ServerID) {
+	var request GetPlayersRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPlayers(ctx, request.(GetPlayersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPlayers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPlayersResponseObject); ok {
+		if err := validResponse.VisitGetPlayersResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
