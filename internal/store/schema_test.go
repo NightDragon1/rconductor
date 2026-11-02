@@ -4,8 +4,10 @@ package store
 
 import (
 	"context"
+	"io/fs"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 
 	"github.com/NightDragon1/rconductor/migrations"
 )
@@ -125,8 +127,19 @@ func TestServersAgentFK(t *testing.T) {
 	s := openStore(t, filepath.Join(t.TempDir(), "data"))
 	ctx := context.Background()
 	var logs syncBuffer
-	// Up to 00006 only: the SQL files without the Go migration.
-	if _, err := s.Migrate(ctx, testLogger(&logs), MigrateOptions{FS: migrations.SQLite()}); err != nil {
+	// Up to 00006 only: the SQL files before the Go migration.
+	upTo6 := fstest.MapFS{}
+	entries, err := fs.ReadDir(migrations.SQLite(), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() <= "00006_~" {
+			b, _ := fs.ReadFile(migrations.SQLite(), e.Name())
+			upTo6[e.Name()] = &fstest.MapFile{Data: b}
+		}
+	}
+	if _, err := s.Migrate(ctx, testLogger(&logs), MigrateOptions{FS: upTo6}); err != nil {
 		t.Fatal(err)
 	}
 	exec := func(q string, args ...any) {

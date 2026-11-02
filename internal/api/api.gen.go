@@ -572,6 +572,11 @@ type ContainerRuntime struct {
 	State string `json:"state"`
 }
 
+// Favorites defines model for Favorites.
+type Favorites struct {
+	ServerIds []openapi_types.UUID `json:"server_ids"`
+}
+
 // GamePort defines model for GamePort.
 type GamePort struct {
 	Name  string        `json:"name"`
@@ -1080,6 +1085,9 @@ type RedeemInviteJSONRequestBody = InviteRedeem
 // UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
 type UpdateMeJSONRequestBody = ProfileUpdate
 
+// SetFavoritesJSONRequestBody defines body for SetFavorites for application/json ContentType.
+type SetFavoritesJSONRequestBody = Favorites
+
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = PasswordChange
 
@@ -1184,6 +1192,12 @@ type ServerInterface interface {
 	// SetMyAvatar Upload the own profile picture (AUTH-009).
 	// (PUT /me/avatar)
 	SetMyAvatar(w http.ResponseWriter, r *http.Request)
+	// GetFavorites The caller's favorite servers for the console (CMD-001).
+	// (GET /me/favorites)
+	GetFavorites(w http.ResponseWriter, r *http.Request)
+	// SetFavorites Replace the caller's favorite servers.
+	// (PUT /me/favorites)
+	SetFavorites(w http.ResponseWriter, r *http.Request)
 	// ChangePassword Change the own password (AUTH-007).
 	// (POST /me/password)
 	ChangePassword(w http.ResponseWriter, r *http.Request)
@@ -1735,6 +1749,34 @@ func (siw *ServerInterfaceWrapper) SetMyAvatar(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetMyAvatar(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFavorites operation middleware
+func (siw *ServerInterfaceWrapper) GetFavorites(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFavorites(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetFavorites operation middleware
+func (siw *ServerInterfaceWrapper) SetFavorites(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetFavorites(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2686,6 +2728,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/invites/redeem", wrapper.RedeemInvite)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/me", wrapper.UpdateMe)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/favorites", wrapper.GetFavorites)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/me/favorites", wrapper.SetFavorites)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/password", wrapper.ChangePassword)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/avatar", wrapper.DeleteMyAvatar)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/me/avatar", wrapper.SetMyAvatar)
@@ -4094,6 +4138,113 @@ type SetMyAvatar422ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response SetMyAvatar422ApplicationProblemPlusJSONResponse) VisitSetMyAvatarResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFavoritesRequestObject struct {
+}
+
+type GetFavoritesResponseObject interface {
+	VisitGetFavoritesResponse(w http.ResponseWriter) error
+}
+
+type GetFavorites200JSONResponse Favorites
+
+func (response GetFavorites200JSONResponse) VisitGetFavoritesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFavorites401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetFavorites401ApplicationProblemPlusJSONResponse) VisitGetFavoritesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFavoritesRequestObject struct {
+	Body *SetFavoritesJSONRequestBody
+}
+
+type SetFavoritesResponseObject interface {
+	VisitSetFavoritesResponse(w http.ResponseWriter) error
+}
+
+type SetFavorites200JSONResponse Favorites
+
+func (response SetFavorites200JSONResponse) VisitSetFavoritesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFavorites400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SetFavorites400ApplicationProblemPlusJSONResponse) VisitSetFavoritesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFavorites401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SetFavorites401ApplicationProblemPlusJSONResponse) VisitSetFavoritesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetFavorites422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response SetFavorites422ApplicationProblemPlusJSONResponse) VisitSetFavoritesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -6581,6 +6732,12 @@ type StrictServerInterface interface {
 	// SetMyAvatar Upload the own profile picture (AUTH-009).
 	// (PUT /me/avatar)
 	SetMyAvatar(ctx context.Context, request SetMyAvatarRequestObject) (SetMyAvatarResponseObject, error)
+	// GetFavorites The caller's favorite servers for the console (CMD-001).
+	// (GET /me/favorites)
+	GetFavorites(ctx context.Context, request GetFavoritesRequestObject) (GetFavoritesResponseObject, error)
+	// SetFavorites Replace the caller's favorite servers.
+	// (PUT /me/favorites)
+	SetFavorites(ctx context.Context, request SetFavoritesRequestObject) (SetFavoritesResponseObject, error)
 	// ChangePassword Change the own password (AUTH-007).
 	// (POST /me/password)
 	ChangePassword(ctx context.Context, request ChangePasswordRequestObject) (ChangePasswordResponseObject, error)
@@ -7304,6 +7461,61 @@ func (sh *strictHandler) SetMyAvatar(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetMyAvatarResponseObject); ok {
 		if err := validResponse.VisitSetMyAvatarResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetFavorites operation middleware
+func (sh *strictHandler) GetFavorites(w http.ResponseWriter, r *http.Request) {
+	var request GetFavoritesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetFavorites(ctx, request.(GetFavoritesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetFavorites")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetFavoritesResponseObject); ok {
+		if err := validResponse.VisitGetFavoritesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetFavorites operation middleware
+func (sh *strictHandler) SetFavorites(w http.ResponseWriter, r *http.Request) {
+	var request SetFavoritesRequestObject
+
+	var body SetFavoritesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetFavorites(ctx, request.(SetFavoritesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetFavorites")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetFavoritesResponseObject); ok {
+		if err := validResponse.VisitSetFavoritesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

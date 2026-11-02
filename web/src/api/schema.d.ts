@@ -594,6 +594,30 @@ export interface paths {
         patch: operations["updateMe"];
         trace?: never;
     };
+    "/me/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's favorite servers for the console (CMD-001).
+         * @description Servers that left the caller's scope are left out.
+         */
+        get: operations["getFavorites"];
+        /**
+         * Replace the caller's favorite servers.
+         * @description Only servers in the caller's scope, at most 50, in the given order.
+         */
+        put: operations["setFavorites"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/password": {
         parameters: {
             query?: never;
@@ -960,6 +984,9 @@ export interface components {
             path: string;
             description: string;
             params: components["schemas"]["ProfileParam"][];
+        };
+        Favorites: {
+            server_ids: string[];
         };
         GamePort: {
             port: number;
@@ -2523,6 +2550,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getFavorites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The favorites in order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Favorites"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    setFavorites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Favorites"];
+            };
+        };
+        responses: {
+            /** @description The favorites now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Favorites"];
                 };
             };
             400: components["responses"]["BadRequest"];

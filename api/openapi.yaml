@@ -1093,6 +1093,45 @@ paths:
           $ref: "#/components/responses/Unauthenticated"
         "422":
           $ref: "#/components/responses/Invalid"
+  /me/favorites:
+    get:
+      operationId: getFavorites
+      summary: The caller's favorite servers for the console (CMD-001).
+      description: Servers that left the caller's scope are left out.
+      tags: [profile]
+      responses:
+        "200":
+          description: The favorites in order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Favorites"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    put:
+      operationId: setFavorites
+      summary: Replace the caller's favorite servers.
+      description: Only servers in the caller's scope, at most 50, in the given order.
+      tags: [profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Favorites"
+      responses:
+        "200":
+          description: The favorites now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Favorites"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/Invalid"
   /me/password:
     post:
       operationId: changePassword
@@ -1815,6 +1854,17 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProfileParam"
+
+    Favorites:
+      type: object
+      required: [server_ids]
+      properties:
+        server_ids:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
 
     GamePort:
       type: object

@@ -199,6 +199,12 @@ type User struct {
 	MustChangePassword int64
 }
 
+type UserFavorite struct {
+	UserID   string
+	ServerID string
+	Position int64
+}
+
 type UserGroup struct {
 	ID            string
 	Name          string
