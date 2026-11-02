@@ -382,6 +382,9 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 		return
 	}
 	h.log.Info("subscribed", append(h.attrs(c), logging.Event(logging.WSSubscribe), slog.String("topic", topic))...)
+	// The confirmation comes before any event of the topic (Design 2.3,
+	// issue #99).
+	c.send(message{Type: "subscribed", Topic: topic})
 	if agentKind(kind) {
 		if v, ok := h.agentViews.Current(ctx, server, kind); ok {
 			c.send(message{Type: "event", Topic: topic, Data: v})

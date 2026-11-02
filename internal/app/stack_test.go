@@ -198,16 +198,13 @@ func (s *stack) console(user string) *websocket.Conn {
 		s.t.Fatal(err)
 	}
 	s.t.Cleanup(func() { _ = c.CloseNow() })
-	for _, topic := range []string{"server." + s.server + ".console", "unknown"} {
-		b, _ := json.Marshal(map[string]string{"type": "subscribe", "topic": topic})
-		if err := c.Write(ctx, websocket.MessageText, b); err != nil {
-			s.t.Fatal(err)
-		}
+	topic := "server." + s.server + ".console"
+	b, _ := json.Marshal(map[string]string{"type": "subscribe", "topic": topic})
+	if err := c.Write(ctx, websocket.MessageText, b); err != nil {
+		s.t.Fatal(err)
 	}
-	// Messages of one socket are handled in order: the refusal of the
-	// unknown topic shows that the console subscription is in place.
 	var m struct{ Type, Topic string }
-	if err := readJSON(c, &m); err != nil || m.Type != "error" || m.Topic != "unknown" {
+	if err := readJSON(c, &m); err != nil || m.Type != "subscribed" || m.Topic != topic {
 		s.t.Fatalf("subscription: %+v %v", m, err)
 	}
 	return c

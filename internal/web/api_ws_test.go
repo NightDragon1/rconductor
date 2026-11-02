@@ -111,10 +111,20 @@ func send(t *testing.T, c *websocket.Conn, typ, topic string) {
 	}
 }
 
+// next returns the next message that is not a subscription confirmation.
 func next(t *testing.T, c *websocket.Conn, wait time.Duration) (wsMsg, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
+	for {
+		m, err := read(ctx, c)
+		if err != nil || m.Type != "subscribed" {
+			return m, err
+		}
+	}
+}
+
+func read(ctx context.Context, c *websocket.Conn) (wsMsg, error) {
 	_, data, err := c.Read(ctx)
 	if err != nil {
 		return wsMsg{}, err
@@ -123,7 +133,7 @@ func next(t *testing.T, c *websocket.Conn, wait time.Duration) (wsMsg, error) {
 	return m, json.Unmarshal(data, &m)
 }
 
-// subscribed waits until the hub has the subscription (it sends no ack).
+// subscribed waits until the hub has the subscription.
 func (w *wsFixture) subscribed(t *testing.T, topic string, n int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -390,5 +400,33 @@ func TestAgentTopicsAdminsOnly(t *testing.T) {
 		if m, err := next(t, c, 5*time.Second); err != nil || m.Type != "error" || m.Topic != topic || m.Reason != "forbidden" {
 			t.Errorf("%s: %+v %v", kind, m, err)
 		}
+	}
+}
+
+// TestSubscribedConfirmation covers issue #99: a subscription is confirmed
+// once with its topic before its first event; a refused one gets only
+// error.
+func TestSubscribedConfirmation(t *testing.T) {
+	w := newWSFixture(t)
+	c, _, err := w.dial(t, w.login(t, "Boss"), w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	topic := "server." + w.server + ".status"
+	send(t, c, "subscribe", topic)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	m, err := read(ctx, c)
+	if err != nil || m.Type != "subscribed" || m.Topic != topic {
+		t.Fatalf("first message = %+v %v", m, err)
+	}
+	w.hub.PublishStatus(w.server, connmgr.Offline, time.Now())
+	if m, err := read(ctx, c); err != nil || m.Type != "event" {
+		t.Errorf("then = %+v %v", m, err)
+	}
+	send(t, c, "subscribe", topic) // again: no second confirmation
+	send(t, c, "subscribe", "server.nope.status")
+	if m, err := read(ctx, c); err != nil || m.Type != "error" || m.Topic != "server.nope.status" {
+		t.Errorf("refused = %+v %v", m, err)
 	}
 }
