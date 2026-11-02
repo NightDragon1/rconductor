@@ -373,3 +373,22 @@ func TestOldestSocketReplaced(t *testing.T) {
 		}
 	}
 }
+
+// TestAgentTopicsAdminsOnly covers AGT-008 and T-014 on the WebSocket:
+// metrics and logs are agent functions; a moderator with the server in
+// scope is refused with forbidden.
+func TestAgentTopicsAdminsOnly(t *testing.T) {
+	w := newWSFixture(t)
+	w.grantModerator(t)
+	c, _, err := w.dial(t, w.login(t, "Mod"), w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"metrics", "logs"} {
+		topic := "server." + w.server + "." + kind
+		send(t, c, "subscribe", topic)
+		if m, err := next(t, c, 5*time.Second); err != nil || m.Type != "error" || m.Topic != topic || m.Reason != "forbidden" {
+			t.Errorf("%s: %+v %v", kind, m, err)
+		}
+	}
+}

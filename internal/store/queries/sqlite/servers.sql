@@ -8,6 +8,9 @@ FROM servers WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE;
 SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports
 FROM servers WHERE id = ? AND deleted_at IS NULL;
 
+-- name: ListServersByContainer :many
+SELECT id FROM servers WHERE agent_id = ? AND container_name = ? AND deleted_at IS NULL;
+
 -- name: InsertServer :exec
 INSERT INTO servers (id, name, profile_id, protocol, host, port, secret, game_ports, agent_id, container_name, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

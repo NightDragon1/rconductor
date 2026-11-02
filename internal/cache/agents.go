@@ -55,10 +55,21 @@ type AgentData struct {
 
 	mu     sync.Mutex
 	agents map[string]*agentEntry
-	// onChange is told about every change of a container's state, for
-	// the event bus.
-	onChange func(agentID, container string)
+	// Receivers for the event bus; set before data arrives.
+	onChange  func(agentID, container string)
+	onMetrics func(agentID string, containers []string)
+	onLines   func(agentID string, ll agentproto.LogLines)
+	onConnect func(agentID string)
 }
+
+// OnMetrics sets the receiver of new samples.
+func (d *AgentData) OnMetrics(f func(agentID string, containers []string)) { d.onMetrics = f }
+
+// OnLines sets the receiver of new log lines.
+func (d *AgentData) OnLines(f func(agentID string, ll agentproto.LogLines)) { d.onLines = f }
+
+// OnConnect sets the receiver of the first snapshot after a connection.
+func (d *AgentData) OnConnect(f func(agentID string)) { d.onConnect = f }
 
 // NewAgentData returns an empty store.
 func NewAgentData(log *slog.Logger) *AgentData {
@@ -91,6 +102,7 @@ func (d *AgentData) changed(agentID string, names ...string) {
 func (d *AgentData) Snapshot(agentID string, s agentproto.Snapshot) {
 	d.mu.Lock()
 	a := d.agent(agentID)
+	fresh := !a.connected
 	a.connected = true
 	now := d.now()
 	seen := map[string]bool{}
@@ -123,6 +135,9 @@ func (d *AgentData) Snapshot(agentID string, s agentproto.Snapshot) {
 	}
 	d.mu.Unlock()
 	d.changed(agentID, names...)
+	if fresh && d.onConnect != nil {
+		d.onConnect(agentID)
+	}
 }
 
 // Event applies a status change (Gesamtkonzept 4.6: at once).
@@ -156,9 +171,9 @@ func (d *AgentData) Event(agentID string, ev agentproto.ContainerEvent) {
 // Metrics stores a sample for every container in it.
 func (d *AgentData) Metrics(agentID string, m agentproto.Metrics) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	a := d.agent(agentID)
 	now := d.now()
+	var names []string
 	for i, s := range m.Containers {
 		if i == agentproto.MaxContainers {
 			break
@@ -169,21 +184,30 @@ func (d *AgentData) Metrics(agentID string, m agentproto.Metrics) {
 		}
 		s := s
 		e.metric, e.metricAt = &s, now
+		names = append(names, s.Name)
+	}
+	d.mu.Unlock()
+	if d.onMetrics != nil && len(names) > 0 {
+		d.onMetrics(agentID, names)
 	}
 }
 
 // Lines appends log lines to the ring of the container.
 func (d *AgentData) Lines(agentID string, ll agentproto.LogLines) {
-	lines, _ := agentproto.LimitLines(ll.Lines)
+	lines, cut := agentproto.LimitLines(ll.Lines)
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	e := d.agent(agentID).containers[ll.Container]
 	if e == nil {
+		d.mu.Unlock()
 		return
 	}
 	e.logs = append(e.logs, lines...)
 	if len(e.logs) > LogRing {
 		e.logs = slices.Clone(e.logs[len(e.logs)-LogRing:])
+	}
+	d.mu.Unlock()
+	if d.onLines != nil && len(lines) > 0 {
+		d.onLines(agentID, agentproto.LogLines{Container: ll.Container, Lines: lines, Truncated: cut || ll.Truncated})
 	}
 }
 

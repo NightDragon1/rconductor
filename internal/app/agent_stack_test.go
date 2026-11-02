@@ -1,0 +1,228 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/coder/websocket"
+
+	"github.com/NightDragon1/rconductor/internal/agent"
+	"github.com/NightDragon1/rconductor/internal/agentproto"
+	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
+)
+
+// hostBackend stands in for Docker: one container mc, metrics every 50 ms,
+// logs while followed, and every order recorded.
+type hostBackend struct {
+	mu     sync.Mutex
+	orders []string
+}
+
+func (b *hostBackend) Name() string { return "docker" }
+func (b *hostBackend) Capabilities() []string {
+	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics}
+}
+
+func (b *hostBackend) Run(ctx context.Context, out agent.Sender) error {
+	snap := agentproto.Snapshot{Containers: []agentproto.Container{{ID: "c1", Name: "mc", State: "running", Image: "mc"}}}
+	if err := out.Send(ctx, agentproto.TypeSnapshot, "", snap); err != nil {
+		return err
+	}
+	t := time.NewTicker(50 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+			_ = out.Send(ctx, agentproto.TypeMetrics, "", agentproto.Metrics{Containers: []agentproto.Metric{{Name: "mc", CPUPercent: 42, MemBytes: 1 << 20}}})
+		}
+	}
+}
+
+func (b *hostBackend) Handle(ctx context.Context, e agentproto.Envelope, out agent.Sender) {
+	b.mu.Lock()
+	b.orders = append(b.orders, e.Type)
+	b.mu.Unlock()
+	if e.Type == agentproto.TypeLogsFollow {
+		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"[Server] <b>Done</b>"}})
+	}
+	_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeOK})
+}
+
+func (b *hostBackend) got() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.orders)
+}
+
+// next reads WebSocket messages until one matches.
+func next(t *testing.T, c *websocket.Conn, match func(typ, topic string, data json.RawMessage) bool) json.RawMessage {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		var m struct {
+			Type, Topic, Reason string
+			Data                json.RawMessage
+		}
+		if err := readJSON(c, &m); err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if match(m.Type, m.Topic, m.Data) {
+			return m.Data
+		}
+	}
+	t.Fatal("no matching message")
+	return nil
+}
+
+func subscribe(t *testing.T, c *websocket.Conn, topic string) {
+	t.Helper()
+	b, _ := json.Marshal(map[string]string{"type": "subscribe", "topic": topic})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.Write(ctx, websocket.MessageText, b); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestAgentThroughTheStack covers the panel side of AGT-003, AGT-008,
+// NFR-005 and UI-009 with a real agent and a stand-in backend: pairing by
+// token, the server tied to the container, live metrics and logs over the
+// WebSocket (logs only while followed), a restart over the agent, and stale
+// metrics at once when the agent goes.
+func TestAgentThroughTheStack(t *testing.T) {
+	game, err := rcontest.Start("rconpw", rcontest.Minecraft, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(game.Close)
+	s := newStack(t, game.Addr, "rconpw")
+	admin := s.users["admin"]
+
+	var tok struct{ Token string }
+	admin.must(http.MethodPost, "/agents/tokens", nil, &tok, http.StatusCreated)
+	backend := &hostBackend{}
+	cfg := config.Agent{PairingToken: tok.Token, PanelAddr: s.agentAddr, SecretsDir: t.TempDir(), Name: "host-1",
+		LabelKey: "rcon.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
+	var agentLogs syncBuffer
+	a, err := agent.New(cfg, logging.New(&agentLogs, "agent", cfg.Log).Root(), backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actx, stopAgent := context.WithCancel(context.Background())
+	agentDone := make(chan error, 1)
+	go func() { agentDone <- a.Run(actx) }()
+	t.Cleanup(func() {
+		stopAgent()
+		if err := <-agentDone; err != nil {
+			t.Errorf("agent: %v", err)
+		}
+	})
+
+	var agentID string
+	deadline := time.Now().Add(10 * time.Second)
+	for agentID == "" {
+		var list struct {
+			Items []struct {
+				ID        string `json:"id"`
+				Connected bool   `json:"connected"`
+			}
+		}
+		admin.must(http.MethodGet, "/agents", nil, &list, http.StatusOK)
+		if len(list.Items) == 1 && list.Items[0].Connected {
+			agentID = list.Items[0].ID
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("agent not connected:\n%s", agentLogs.String())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	admin.must(http.MethodPatch, "/servers/"+s.server, map[string]string{"agent_id": agentID, "container_name": "mc"}, nil, http.StatusOK)
+
+	ws := s.console("admin")
+	subscribe(t, ws, "server."+s.server+".metrics")
+	data := next(t, ws, func(typ, topic string, _ json.RawMessage) bool {
+		return typ == "event" && topic == "server."+s.server+".metrics"
+	})
+	if !strings.Contains(string(data), `"cpu_percent":42`) || !strings.Contains(string(data), `"state":"running"`) {
+		t.Errorf("metrics = %s", data)
+	}
+
+	// Logs flow only while someone follows them (UI-009).
+	if slices.Contains(backend.got(), agentproto.TypeLogsFollow) {
+		t.Error("logs followed before anyone viewed them")
+	}
+	subscribe(t, ws, "server."+s.server+".logs")
+	data = next(t, ws, func(typ, topic string, d json.RawMessage) bool {
+		return typ == "event" && topic == "server."+s.server+".logs" && strings.Contains(string(d), "Done")
+	})
+	if !strings.Contains(string(data), `\u003cb\u003eDone\u003c/b\u003e`) {
+		t.Errorf("log lines not escaped JSON: %s", data)
+	}
+	b, _ := json.Marshal(map[string]string{"type": "unsubscribe", "topic": "server." + s.server + ".logs"})
+	_ = ws.Write(context.Background(), websocket.MessageText, b)
+	deadline = time.Now().Add(5 * time.Second)
+	for !slices.Contains(backend.got(), agentproto.TypeLogsStop) {
+		if time.Now().After(deadline) {
+			t.Fatalf("no logs.stop after the last viewer left: %v", backend.got())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	for _, ev := range []string{"logs.follow.start", "logs.follow.stop"} {
+		if len(s.eventsOf(ev)) == 0 {
+			t.Errorf("%s missing in the panel log", ev)
+		}
+	}
+
+	// A restart goes to the agent and is audited.
+	var res struct{ Action, Via string }
+	admin.must(http.MethodPost, "/servers/"+s.server+"/actions", map[string]string{"action": "restart"}, &res, http.StatusOK)
+	if res.Via != "agent" || !slices.Contains(backend.got(), agentproto.TypeContainerAction) {
+		t.Errorf("action = %+v, orders %v", res, backend.got())
+	}
+	var auditList struct {
+		Items []struct {
+			Action string `json:"action"`
+			Result string `json:"result"`
+		}
+	}
+	admin.must(http.MethodGet, "/audit?kind=agent", nil, &auditList, http.StatusOK)
+	found := false
+	for _, e := range auditList.Items {
+		found = found || (e.Action == "server.action" && e.Result == "ok")
+	}
+	if !found {
+		t.Errorf("action not in the audit: %+v", auditList.Items)
+	}
+
+	// The agent goes: metrics are stale at once, the state unknown.
+	stopAgent()
+	if err := <-agentDone; err != nil {
+		t.Fatalf("agent: %v", err)
+	}
+	agentDone <- nil
+	data = next(t, ws, func(typ, topic string, d json.RawMessage) bool {
+		return typ == "event" && topic == "server."+s.server+".metrics" && strings.Contains(string(d), `"stale":true`)
+	})
+	if !strings.Contains(string(data), `"state":"unknown"`) {
+		t.Errorf("metrics after the agent left = %s", data)
+	}
+	if len(s.eventsOf("agent.disconnected")) == 0 || len(s.eventsOf("cache.stale")) == 0 {
+		t.Error("agent.disconnected or cache.stale missing")
+	}
+	var problem struct{ Reason string }
+	if code := admin.call(http.MethodPost, "/servers/"+s.server+"/actions", map[string]string{"action": "start"}, &problem); code != http.StatusServiceUnavailable {
+		t.Errorf("action without agent = %d", code)
+	}
+}

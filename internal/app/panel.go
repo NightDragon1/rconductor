@@ -18,6 +18,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/agenthub"
 	agentadmin "github.com/NightDragon1/rconductor/internal/agents"
+	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
@@ -193,6 +194,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	agents.OnMessage(agentData.Receive)
 	agents.OnDisconnect(agentData.Disconnected)
 	serverSvc.SetActions(agents, conns)
+	hub.SetAgentViews(agentview.New(st, agentData, agents, hub, logs.Module("agent")))
 	agentSvc.SetHub(agents)
 	wg.Go(func() { agentSvc.ClosePairing(ctx, time.Minute) })
 	agentAddr := make(chan net.Addr, 1)

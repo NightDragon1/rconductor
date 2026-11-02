@@ -87,11 +87,13 @@ func login(t *testing.T, base, pseudonym, password string) *client {
 // stack is a running panel with one game server and three users who may
 // send any command to it: the RCON admin and two server admins.
 type stack struct {
-	t      *testing.T
-	base   string
-	logs   *syncBuffer
-	server string
-	users  map[string]*client
+	t    *testing.T
+	base string
+	// agentAddr is the panel's agent port.
+	agentAddr string
+	logs      *syncBuffer
+	server    string
+	users     map[string]*client
 }
 
 // newStack starts the panel and connects it to the RCON server at addr.
@@ -102,6 +104,9 @@ func newStack(t *testing.T, addr, rconPassword string) *stack {
 	a, stop := startPanel(t, cfg, &out, &console)
 	t.Cleanup(func() { _ = stop() })
 	s := &stack{t: t, base: "http://" + a, logs: &out, users: map[string]*client{}}
+	if v, ok := agentAddrs.Load(cfg.SecretsDir); ok {
+		s.agentAddr = v.(string)
+	}
 
 	m := regexp.MustCompile(`password: (\S+)`).FindStringSubmatch(console.String())
 	if m == nil {
