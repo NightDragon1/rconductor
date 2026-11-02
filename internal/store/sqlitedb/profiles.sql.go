@@ -142,6 +142,39 @@ func (q *Queries) ListCatalog(ctx context.Context) ([]ListCatalogRow, error) {
 	return items, nil
 }
 
+const listCatalogOfProfile = `-- name: ListCatalogOfProfile :many
+SELECT path, description, params FROM catalog_commands WHERE profile_id = ? ORDER BY position
+`
+
+type ListCatalogOfProfileRow struct {
+	Path        string
+	Description string
+	Params      string
+}
+
+func (q *Queries) ListCatalogOfProfile(ctx context.Context, profileID string) ([]ListCatalogOfProfileRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCatalogOfProfile, profileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCatalogOfProfileRow{}
+	for rows.Next() {
+		var i ListCatalogOfProfileRow
+		if err := rows.Scan(&i.Path, &i.Description, &i.Params); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGameProfiles = `-- name: ListGameProfiles :many
 SELECT id, slug, name, protocol, default_port, rules, source_file, overridden, imported_at, last_error, last_error_at
 FROM game_profiles ORDER BY name COLLATE NOCASE

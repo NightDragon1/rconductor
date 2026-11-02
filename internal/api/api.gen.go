@@ -432,6 +432,12 @@ type AgentToken struct {
 	Token string `json:"token"`
 }
 
+// AllowedCommands defines model for AllowedCommands.
+type AllowedCommands struct {
+	Commands  []CatalogCommand `json:"commands"`
+	FreeInput bool             `json:"free_input"`
+}
+
 // Assignments defines model for Assignments.
 type Assignments struct {
 	AdminScopes []Target             `json:"admin_scopes"`
@@ -1211,6 +1217,9 @@ type ServerInterface interface {
 	// ServerAction Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
 	// (POST /servers/{id}/actions)
 	ServerAction(w http.ResponseWriter, r *http.Request, id ServerID)
+	// ListAllowedCommands Commands the caller may send on the server (CMD-003, CMD-015).
+	// (GET /servers/{id}/commands)
+	ListAllowedCommands(w http.ResponseWriter, r *http.Request, id ServerID)
 	// SendCommand Send a command over the server's one RCON connection (Design 3.3).
 	// (POST /servers/{id}/commands)
 	SendCommand(w http.ResponseWriter, r *http.Request, id ServerID)
@@ -1995,6 +2004,32 @@ func (siw *ServerInterfaceWrapper) ServerAction(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListAllowedCommands operation middleware
+func (siw *ServerInterfaceWrapper) ListAllowedCommands(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ServerID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAllowedCommands(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SendCommand operation middleware
 func (siw *ServerInterfaceWrapper) SendCommand(w http.ResponseWriter, r *http.Request) {
 
@@ -2607,6 +2642,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/servers/{id}", wrapper.DeleteServer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}", wrapper.GetServer)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/servers/{id}", wrapper.UpdateServer)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/commands", wrapper.ListAllowedCommands)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers/{id}/commands", wrapper.SendCommand)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/players", wrapper.GetPlayers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/history", wrapper.GetHistory)
@@ -5035,6 +5071,60 @@ func (response ServerAction504ApplicationProblemPlusJSONResponse) VisitServerAct
 	return err
 }
 
+type ListAllowedCommandsRequestObject struct {
+	Id ServerID `json:"id"`
+}
+
+type ListAllowedCommandsResponseObject interface {
+	VisitListAllowedCommandsResponse(w http.ResponseWriter) error
+}
+
+type ListAllowedCommands200JSONResponse AllowedCommands
+
+func (response ListAllowedCommands200JSONResponse) VisitListAllowedCommandsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAllowedCommands401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListAllowedCommands401ApplicationProblemPlusJSONResponse) VisitListAllowedCommandsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAllowedCommands404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListAllowedCommands404ApplicationProblemPlusJSONResponse) VisitListAllowedCommandsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SendCommandRequestObject struct {
 	Id   ServerID `json:"id"`
 	Body *SendCommandJSONRequestBody
@@ -6524,6 +6614,9 @@ type StrictServerInterface interface {
 	// ServerAction Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
 	// (POST /servers/{id}/actions)
 	ServerAction(ctx context.Context, request ServerActionRequestObject) (ServerActionResponseObject, error)
+	// ListAllowedCommands Commands the caller may send on the server (CMD-003, CMD-015).
+	// (GET /servers/{id}/commands)
+	ListAllowedCommands(ctx context.Context, request ListAllowedCommandsRequestObject) (ListAllowedCommandsResponseObject, error)
 	// SendCommand Send a command over the server's one RCON connection (Design 3.3).
 	// (POST /servers/{id}/commands)
 	SendCommand(ctx context.Context, request SendCommandRequestObject) (SendCommandResponseObject, error)
@@ -7573,6 +7666,32 @@ func (sh *strictHandler) ServerAction(w http.ResponseWriter, r *http.Request, id
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ServerActionResponseObject); ok {
 		if err := validResponse.VisitServerActionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAllowedCommands operation middleware
+func (sh *strictHandler) ListAllowedCommands(w http.ResponseWriter, r *http.Request, id ServerID) {
+	var request ListAllowedCommandsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAllowedCommands(ctx, request.(ListAllowedCommandsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAllowedCommands")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAllowedCommandsResponseObject); ok {
+		if err := validResponse.VisitListAllowedCommandsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

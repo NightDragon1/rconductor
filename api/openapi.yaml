@@ -203,6 +203,28 @@ paths:
   /servers/{id}/commands:
     parameters:
       - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: listAllowedCommands
+      summary: Commands the caller may send on the server (CMD-003, CMD-015).
+      description: >-
+        Moderators and supporters get the paths of the list that applies to
+        them, with the catalog entry of the profile where one exists
+        (description and parameters); a path without catalog entry has no
+        parameters and takes the rest of the line. RCON admin and server
+        admin get free_input and the whole catalog, for completion.
+        Orientation only: the pipeline checks every command again.
+      tags: [commands]
+      responses:
+        "200":
+          description: The allowed commands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AllowedCommands"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
     post:
       operationId: sendCommand
       summary: Send a command over the server's one RCON connection (Design 3.3).
@@ -1769,6 +1791,17 @@ components:
           type: integer
         max:
           type: integer
+
+    AllowedCommands:
+      type: object
+      required: [free_input, commands]
+      properties:
+        free_input:
+          type: boolean
+        commands:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogCommand"
 
     CatalogCommand:
       type: object

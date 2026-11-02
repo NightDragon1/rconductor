@@ -129,7 +129,11 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Commands the caller may send on the server (CMD-003, CMD-015).
+         * @description Moderators and supporters get the paths of the list that applies to them, with the catalog entry of the profile where one exists (description and parameters); a path without catalog entry has no parameters and takes the rest of the line. RCON admin and server admin get free_input and the whole catalog, for completion. Orientation only: the pipeline checks every command again.
+         */
+        get: operations["listAllowedCommands"];
         put?: never;
         /**
          * Send a command over the server's one RCON connection (Design 3.3).
@@ -948,6 +952,10 @@ export interface components {
             min?: number;
             max?: number;
         };
+        AllowedCommands: {
+            free_input: boolean;
+            commands: components["schemas"]["CatalogCommand"][];
+        };
         CatalogCommand: {
             path: string;
             description: string;
@@ -1516,6 +1524,30 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Invalid"];
+        };
+    };
+    listAllowedCommands: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The allowed commands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllowedCommands"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
         };
     };
     sendCommand: {

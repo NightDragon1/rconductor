@@ -29,4 +29,7 @@ FROM game_profiles ORDER BY name COLLATE NOCASE;
 -- name: ListCatalog :many
 SELECT profile_id, path, description, params FROM catalog_commands ORDER BY profile_id, position;
 
+-- name: ListCatalogOfProfile :many
+SELECT path, description, params FROM catalog_commands WHERE profile_id = ? ORDER BY position;
+
 -- SPDX-License-Identifier: AGPL-3.0-or-later
