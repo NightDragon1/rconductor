@@ -48,11 +48,13 @@ type AuditQuery struct {
 	Cursor   string // opaque, from the previous page
 }
 
-func encodeCursor(ts, id string) string {
+// EncodeCursor makes an opaque cursor for paging newest first by (ts, id).
+func EncodeCursor(ts, id string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(ts + "|" + id))
 }
 
-func decodeCursor(c string) (ts, id string, err error) {
+// DecodeCursor reads a cursor of EncodeCursor; empty means the first page.
+func DecodeCursor(c string) (ts, id string, err error) {
 	if c == "" {
 		return "", "", nil
 	}
@@ -77,7 +79,7 @@ func (s *Service) Audit(ctx context.Context, req Request, q AuditQuery) ([]Audit
 		limit = DefaultAuditLimit
 	}
 	limit = min(limit, MaxAuditLimit)
-	cts, cid, err := decodeCursor(q.Cursor)
+	cts, cid, err := DecodeCursor(q.Cursor)
 	if err != nil {
 		return nil, "", err
 	}
@@ -111,7 +113,7 @@ func (s *Service) Audit(ctx context.Context, req Request, q AuditQuery) ([]Audit
 	if len(rows) > limit {
 		rows = rows[:limit]
 		last := rows[len(rows)-1]
-		next = encodeCursor(last.Ts, last.ID)
+		next = EncodeCursor(last.Ts, last.ID)
 	}
 	out := make([]AuditEntry, 0, len(rows))
 	for _, r := range rows {
