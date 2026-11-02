@@ -49,7 +49,7 @@ Stand: Beginn M3 (02.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 ## 4. Format des Kopplungs-Tokens, \_FILE-Variante, Agent-ID
 
 - **Fundstelle:** 03-design.md, Kapitel 1.2 (Token enthält Panel-Adresse und Fingerprint, „Token-Nachweis“), 1.3 (hello mit Agent-ID), 5.3 (RCD\_PAIRING\_TOKEN / \_FILE); D-033.
-- **Umsetzung (M3, nach Vorgabe):** Token = rcd1. + base64url(Panel-Adresse, Panel-Fingerprint, 32 Byte Zufall). Der Agent prüft beim TLS-Handshake den Fingerprint und sendet das Geheimnis erst danach; das Panel speichert nur den SHA-256-Hash. RCD\_PAIRING\_TOKEN\_FILE liest das Token aus einer Datei. Die Agent-ID vergibt das Panel bei der Kopplung; der Agent speichert sie in /secrets und sendet sie im hello.
+- **Umsetzung (M3, nach Vorgabe):** Token = rcd1. + base64url(Panel-Adresse, Panel-Fingerprint, 32 Byte Zufall). Der Agent prüft beim TLS-Handshake den Fingerprint und sendet das Geheimnis erst danach; das Panel speichert nur den SHA-256-Hash. RCD\_PAIRING\_TOKEN\_FILE liest das Token aus einer Datei. Die Agent-ID vergibt das Panel bei der Kopplung; der Agent speichert sie in /secrets und sendet sie im hello. Das Geheimnis des Tokens geht im hello mit (Feld token). Eine Kopplung über Weg B, die auf die Freigabe wartet, beantwortet das Panel mit reject und dem zusätzlichen Grund pending; der Agent versucht es mit Backoff erneut.
 - **Vorschlag:** Format und Ablauf in Design 1.2 und 1.3 festhalten.
 - **Begründung:** „Token-Nachweis“ und Herkunft der Agent-ID sind im Design offen.
 

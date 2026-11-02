@@ -14,11 +14,15 @@ var Version = "0.0.0-dev"
 
 // Major returns the major version number; panel and agent must match on it (D-023).
 // It returns -1 if Version is not a semantic version.
-func Major() int {
-	v := strings.TrimPrefix(Version, "v")
+func Major() int { return MajorOf(Version) }
+
+// MajorOf returns the major version number of v, or -1 if v is not a
+// semantic version.
+func MajorOf(v string) int {
+	v = strings.TrimPrefix(v, "v")
 	head, _, _ := strings.Cut(v, ".")
 	n, err := strconv.Atoi(head)
-	if err != nil {
+	if err != nil || n < 0 {
 		return -1
 	}
 	return n
