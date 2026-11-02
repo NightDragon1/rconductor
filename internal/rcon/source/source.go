@@ -2,9 +2,9 @@
 
 // Package source implements the Source RCON protocol over TCP (PROT-001),
 // used by Minecraft, ARK, Factorio and others. Long responses arrive in
-// several packets without end mark; after every command an empty packet
-// is sent as marker, and the response is collected until the server
-// answers that marker.
+// several packets without end mark; after the first packet of a response
+// an empty packet is sent as marker, and the response is collected until
+// the server answers that marker.
 package source
 
 import (
@@ -127,10 +127,8 @@ func (c *Conn) Execute(ctx context.Context, command string) (string, error) {
 	if err := c.write(cmdID, typeExecCommand, command); err != nil {
 		return "", err
 	}
-	if err := c.write(markerID, typeResponseValue, ""); err != nil {
-		return "", err
-	}
 	var out bytes.Buffer
+	marked := false
 	for {
 		pid, _, body, err := c.read()
 		if err != nil {
@@ -142,6 +140,16 @@ func (c *Conn) Execute(ctx context.Context, command string) (string, error) {
 				return "", rcon.ErrTooLarge
 			}
 			out.Write(body)
+			// The marker goes out only once the command is answered:
+			// Minecraft takes one packet per read and drops a connection
+			// whose command and marker arrive together. It answers in
+			// order, so the marker's answer still comes last.
+			if !marked {
+				if err := c.write(markerID, typeResponseValue, ""); err != nil {
+					return "", err
+				}
+				marked = true
+			}
 		case markerID:
 			return out.String(), nil
 		default:
