@@ -18,12 +18,15 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/ops/backup"
 	"github.com/NightDragon1/rconductor/internal/ops/cleanup"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon"
+	"github.com/NightDragon1/rconductor/internal/rcon/source"
 	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
@@ -136,6 +139,14 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err := serverSvc.CheckCredentials(ctx); err != nil {
 		return err
 	}
+	// RCON connections before serving (Architecture 5.4); they keep
+	// reconnecting in the background.
+	conns := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}}, serverSvc, logs.Module("rcon"), connmgr.Options{})
+	serverSvc.SetConnections(conns)
+	if err := conns.Start(ctx); err != nil {
+		return err
+	}
+	defer conns.Wait()
 
 	var wg sync.WaitGroup
 	defer wg.Wait()

@@ -26,7 +26,10 @@ func uuids(ids []string) []uuid.UUID {
 
 func toAPIServer(s servers.Server) api.Server {
 	id, _ := uuid.Parse(s.ID)
-	out := api.Server{Id: id, Name: s.Name, ProfileId: uuidPtr(s.ProfileID), Groups: uuids(s.GroupIDs)}
+	out := api.Server{
+		Id: id, Name: s.Name, ProfileId: uuidPtr(s.ProfileID), Groups: uuids(s.GroupIDs),
+		Status: api.ServerStatus(s.Status), StatusSince: s.StatusSince,
+	}
 	if !s.Detailed {
 		return out
 	}

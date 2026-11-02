@@ -8,6 +8,7 @@
 package source
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/binary"
@@ -53,6 +54,7 @@ var _ rcon.Adapter = Adapter{}
 type Conn struct {
 	mu     sync.Mutex
 	conn   net.Conn
+	r      *bufio.Reader
 	nextID int32
 }
 
@@ -63,7 +65,7 @@ func (Adapter) Dial(ctx context.Context, addr string, password logging.Secret) (
 	if err != nil {
 		return nil, err
 	}
-	c := &Conn{conn: nc, nextID: 1}
+	c := &Conn{conn: nc, r: bufio.NewReader(nc), nextID: 1}
 	if err := c.auth(ctx, password); err != nil {
 		_ = nc.Close()
 		return nil, err
@@ -149,6 +151,31 @@ func (c *Conn) Execute(ctx context.Context, command string) (string, error) {
 	}
 }
 
+// Alive reports whether the server still holds the connection, without
+// sending anything: a short read that times out means alive, end of
+// stream means the server closed it. Between commands every packet that
+// arrives is stale, such as a late marker answer, and is dropped.
+func (c *Conn) Alive() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for range 16 {
+		_ = c.conn.SetReadDeadline(time.Now().Add(time.Millisecond))
+		_, err := c.r.Peek(1)
+		var ne net.Error
+		if errors.As(err, &ne) && ne.Timeout() {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		_ = c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		if _, _, _, err := c.read(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Close closes the connection.
 func (c *Conn) Close() error { return c.conn.Close() }
 
@@ -166,7 +193,7 @@ func (c *Conn) write(id, typ int32, body string) error {
 
 func (c *Conn) read() (id, typ int32, body []byte, err error) {
 	var head [12]byte
-	if _, err = io.ReadFull(c.conn, head[:4]); err != nil {
+	if _, err = io.ReadFull(c.r, head[:4]); err != nil {
 		return 0, 0, nil, err
 	}
 	size := int32(binary.LittleEndian.Uint32(head[:4])) //nolint:gosec // wire format
@@ -174,7 +201,7 @@ func (c *Conn) read() (id, typ int32, body []byte, err error) {
 		return 0, 0, nil, errors.Join(rcon.ErrTooLarge, fmt.Errorf("packet size %d", size))
 	}
 	rest := make([]byte, size)
-	if _, err = io.ReadFull(c.conn, rest); err != nil {
+	if _, err = io.ReadFull(c.r, rest); err != nil {
 		return 0, 0, nil, err
 	}
 	id = int32(binary.LittleEndian.Uint32(rest[0:4]))  //nolint:gosec // wire format

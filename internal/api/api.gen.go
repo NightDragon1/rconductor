@@ -214,6 +214,27 @@ func (e ServerCredentials) Valid() bool {
 	}
 }
 
+// Defines values for ServerStatus.
+const (
+	AuthFailed ServerStatus = "auth_failed"
+	Connected  ServerStatus = "connected"
+	Offline    ServerStatus = "offline"
+)
+
+// Valid indicates whether the value is a known member of the ServerStatus enum.
+func (e ServerStatus) Valid() bool {
+	switch e {
+	case AuthFailed:
+		return true
+	case Connected:
+		return true
+	case Offline:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAuditParamsKind.
 const (
 	ListAuditParamsKindAdmin   ListAuditParamsKind = "admin"
@@ -518,10 +539,17 @@ type Server struct {
 
 	// Protocol Admins only.
 	Protocol *string `json:"protocol,omitempty"`
+
+	// Status Reachability over RCON (SRV-004).
+	Status      ServerStatus `json:"status"`
+	StatusSince time.Time    `json:"status_since"`
 }
 
 // ServerCredentials Admins only. reenter: the credentials were encrypted with another master key and must be entered again (SRV-002).
 type ServerCredentials string
+
+// ServerStatus Reachability over RCON (SRV-004).
+type ServerStatus string
 
 // ServerGroup defines model for ServerGroup.
 type ServerGroup struct {
