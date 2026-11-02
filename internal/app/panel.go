@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agenthub"
+	agentadmin "github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
@@ -186,7 +187,10 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err != nil {
 		return err
 	}
-	agents := agenthub.New(panelKey, logs.Module("agent"), agenthub.Options{})
+	agentSvc := agentadmin.NewService(st, logs.Module("agent"), cfg.AgentPublicAddr)
+	agents := agenthub.New(panelKey, logs.Module("agent"), agenthub.Options{Registry: agentSvc})
+	agentSvc.SetHub(agents)
+	wg.Go(func() { agentSvc.ClosePairing(ctx, time.Minute) })
 	agentAddr := make(chan net.Addr, 1)
 	agentErr := make(chan error, 1)
 	wg.Go(func() { agentErr <- agents.Serve(ctx, cfg.AgentAddr, func(a net.Addr) { agentAddr <- a }) })
@@ -208,6 +212,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	}
 	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc,
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
+		Agents: agentSvc,
 	})
 	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,
 		func(addr net.Addr) {

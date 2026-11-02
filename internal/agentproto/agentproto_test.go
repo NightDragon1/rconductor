@@ -4,6 +4,7 @@ package agentproto
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -113,5 +114,27 @@ func TestCleanHello(t *testing.T) {
 	h.Capabilities = make([]string, 40)
 	if err := h.Clean(); !errors.Is(err, ErrProtocol) {
 		t.Errorf("too many capabilities: %v", err)
+	}
+}
+
+func TestPairingToken(t *testing.T) {
+	pt, err := NewPairingToken("panel:8443", "SHA256:abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ParsePairingToken(" " + pt.Encode() + "\n")
+	if err != nil || got != pt {
+		t.Fatalf("round trip = %+v %v", got, err)
+	}
+	if strings.Contains(pt.String(), pt.Secret) || strings.Contains(fmt.Sprint(pt), pt.Secret) {
+		t.Error("printing the token reveals the secret")
+	}
+	for _, bad := range []string{"", "rcd2.x", "rcd1.!!", "rcd1." + strings.Repeat("A", 2000)} {
+		if _, err := ParsePairingToken(bad); !errors.Is(err, ErrInvalidToken) {
+			t.Errorf("%q: %v", bad, err)
+		}
+	}
+	if len(SecretHash(pt.Secret)) != 32 {
+		t.Error("hash is not SHA-256")
 	}
 }

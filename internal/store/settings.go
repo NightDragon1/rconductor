@@ -52,6 +52,23 @@ func (s *Store) EnsureDefault(ctx context.Context, key string, value any) (bool,
 	return n > 0, nil
 }
 
+// GlobalSettingSince decodes the global setting key into dst and returns
+// when it was last changed.
+func (s *Store) GlobalSettingSince(ctx context.Context, key string, dst any) (time.Time, error) {
+	r, err := s.Queries.GetSettingWithTime(ctx, key)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("read setting %s: %w", key, err)
+	}
+	if err := json.Unmarshal([]byte(r.Value), dst); err != nil {
+		return time.Time{}, fmt.Errorf("decode setting %s: %w", key, err)
+	}
+	since, err := time.Parse(TimeLayout, r.UpdatedAt)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("setting %s: %w", key, err)
+	}
+	return since, nil
+}
+
 // GlobalSetting decodes the global setting key into dst.
 func (s *Store) GlobalSetting(ctx context.Context, key string, dst any) error {
 	v, err := s.Queries.GetSetting(ctx, sqlitedb.GetSettingParams{Key: key, ScopeType: ScopeGlobal, ScopeID: ""})

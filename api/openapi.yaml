@@ -407,6 +407,106 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /agents:
+    get:
+      operationId: listAgents
+      summary: Paired, pending and revoked agents (Design 1.2); RCON admin only.
+      description: >-
+        Pending pairings by fingerprint (way B) older than 24 h are dropped.
+        connected tells whether the agent has a session now.
+      tags: [agents]
+      responses:
+        "200":
+          description: All agents.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /agents/tokens:
+    post:
+      operationId: createAgentToken
+      summary: Create a pairing token (way A, AGT-005); RCON admin only.
+      description: >-
+        The token is valid once for 24 h and returned only now, with a
+        ready Compose service for the agent. It carries the panel address
+        (RCD_AGENT_PUBLIC_ADDR) and the fingerprint of the panel key; with
+        no public address the agent needs RCD_PANEL_ADDR.
+      tags: [agents]
+      responses:
+        "201":
+          description: The token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentToken"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /agents/{id}:
+    parameters:
+      - $ref: "#/components/parameters/AgentID"
+    get:
+      operationId: getAgent
+      summary: One agent; RCON admin only.
+      tags: [agents]
+      responses:
+        "200":
+          description: The agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteAgent
+      summary: Revoke an agent or turn down a pending pairing (Design 1.7); RCON admin only.
+      description: >-
+        A revoked agent gets the message revoked, is disconnected and cannot
+        connect again; a new pairing needs way A or B. A pending pairing is
+        removed.
+      tags: [agents]
+      responses:
+        "204":
+          description: Revoked or turned down.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /agents/{id}/approve:
+    parameters:
+      - $ref: "#/components/parameters/AgentID"
+    post:
+      operationId: approveAgent
+      summary: Approve a pending pairing by fingerprint (way B); RCON admin only.
+      description: >-
+        Compare the fingerprint with the host operator first. The agent is
+        admitted on its next connection attempt.
+      tags: [agents]
+      responses:
+        "200":
+          description: The paired agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /ws:
     get:
       operationId: openWebSocket
@@ -1114,6 +1214,13 @@ paths:
 
 components:
   parameters:
+    AgentID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     ServerID:
       name: id
       in: path
@@ -1158,6 +1265,74 @@ components:
         format: uuid
 
   schemas:
+    Agent:
+      type: object
+      required: [id, name, fingerprint, status, version, capabilities, connected, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Foreign data from the agent (SEC-006).
+        fingerprint:
+          type: string
+          description: SHA256:<base64> of the agent key.
+        status:
+          type: string
+          enum: [pending, active, revoked]
+        version:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        remote:
+          type: string
+          description: Source address of the last connection.
+        paired_by:
+          type: string
+          format: uuid
+        connected:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+
+    AgentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Agent"
+
+    AgentToken:
+      type: object
+      required: [token, expires_at, panel_fingerprint, compose]
+      properties:
+        token:
+          type: string
+          description: Shown only once; stored only as hash.
+        expires_at:
+          type: string
+          format: date-time
+        panel_addr:
+          type: string
+          description: RCD_AGENT_PUBLIC_ADDR; empty when not configured.
+        panel_fingerprint:
+          type: string
+        compose:
+          type: string
+          description: Compose service for the agent with the token filled in.
+
     User:
       type: object
       required: [id, pseudonym, role, contacts, has_avatar, disabled, is_emergency, supporters_allowed, created_at]

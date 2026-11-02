@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/cache"
@@ -61,6 +62,8 @@ type Options struct {
 	Invites *users.Invites
 	// Profiles maintains the caller's own profile and password.
 	Profiles *users.Profiles
+	// Agents administers the host agents.
+	Agents *agents.Service
 }
 
 // NewHandler returns the root handler of the web port.
@@ -75,7 +78,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
+	srv := &apiServer{agents: opts.Agents, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,
