@@ -34,7 +34,10 @@ Stand: Beginn M3 (02.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
   | log.lines | höchstens 500 Zeilen und höchstens 512 KiB Nutzdaten je Nachricht, sonst gekürzt mit truncated=true; je Zeile höchstens 8 KiB |
   | Verbindungsaufbau je Quelladresse | 10 je Minute, kurzzeitig 5 am Stück |
   | Wartende Kopplungen (Weg B) | höchstens 10, verworfen nach 24 h |
-  | Aufträge je Container im Agent | 10 je Minute, kurzzeitig 3 am Stück |
+  | Aufträge je Container im Agent | 10 je Minute, kurzzeitig 3 am Stück; darüber Ergebniscode rate\_limited |
+  | Laufende Logs (logs.follow) je Agent | höchstens 16 Container gleichzeitig |
+
+  Zusätzlich zu den Fehlercodes aus Design 1.5: rate\_limited (Rate je Container überschritten) und error (Docker hat die Aktion abgelehnt).
 
 - **Vorschlag:** Werte in Design 1.5 und 1.6 bzw. einem Abschnitt zu SEC-007 festhalten.
 - **Begründung:** SEC-007 nennt keine Werte; die Abnahme braucht prüfbare Grenzen.

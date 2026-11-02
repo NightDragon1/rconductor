@@ -169,25 +169,20 @@ func TestPanelFailsOnBadKeyFile(t *testing.T) {
 	}
 }
 
-func TestAgentStub(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+// TestAgentWithoutPanel: without token and panel address the agent stops
+// with a clear error after creating its key pair (Design 5.3).
+func TestAgentWithoutPanel(t *testing.T) {
 	var out syncBuffer
-	done := make(chan error, 1)
-	go func() { done <- RunAgent(ctx, config.Agent{Log: config.Log{Format: "json"}}, &out) }()
-
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(out.String(), "app.ready") {
-		if time.Now().After(deadline) {
-			t.Fatal("agent not ready")
+	cfg := config.Agent{SecretsDir: t.TempDir(), DockerHost: "unix:///nonexistent.sock", LabelKey: "rcon.manage", LabelValue: "true",
+		Log: config.Log{Format: "json"}}
+	err := RunAgent(context.Background(), cfg, &out)
+	if err == nil || !strings.Contains(err.Error(), "RCD_PAIRING_TOKEN") {
+		t.Fatalf("run = %v", err)
+	}
+	for _, want := range []string{`"comp":"agent"`, `"event":"key.created"`, `"event":"app.ready"`, "agent stopped with error"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("%s missing:\n%s", want, out.String())
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	cancel()
-	if err := <-done; err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), `"comp":"agent"`) {
-		t.Errorf("agent comp missing:\n%s", out.String())
 	}
 }
 
