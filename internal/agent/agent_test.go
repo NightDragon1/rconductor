@@ -354,3 +354,22 @@ func TestAgentWithoutPanel(t *testing.T) {
 		}
 	}
 }
+
+// TestVersionHint covers the agent side of AGT-013: a reject with reason
+// version puts the panel's hint and the agent's version into the agent log.
+func TestVersionHint(t *testing.T) {
+	logs := &lockedBuf{}
+	a, err := New(agentCfg(t, t.TempDir()), logging.New(logs, "agent", config.Log{Format: "json"}).Root(), &fakeBackend{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reason := a.rejected(agentproto.Reject{Reason: agentproto.RejectVersion, Message: "agent 2.0.0 and panel 1.4.0 differ in the major version"}, nil)
+	if reason != agentproto.RejectVersion {
+		t.Errorf("reason = %s", reason)
+	}
+	for _, want := range []string{`"event":"agent.rejected"`, `"reason":"version"`, "differ in the major version", `"version":"`} {
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("%s missing:\n%s", want, logs.String())
+		}
+	}
+}
