@@ -124,13 +124,26 @@ func TestStaleKeptAndMarked(t *testing.T) {
 	}
 }
 
-// TestRefreshOnlyWhileWatched covers Overview 4.6: the list is refreshed
-// regularly only while someone views the server.
+// TestRefreshOnlyWhileWatched covers Overview 4.6: the list is fetched at
+// once for the first viewer and refreshed regularly only while someone
+// views the server.
 func TestRefreshOnlyWhileWatched(t *testing.T) {
 	c, ex, _ := newCache(t)
-	c.refresh = 30 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	c.refresh = time.Hour
+	first := c.Watch(ctx, "s1")
+	deadline := time.Now().Add(2 * time.Second)
+	for ex.calls.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if ex.calls.Load() != 1 {
+		t.Fatalf("fetches for the first viewer = %d, want 1 at once", ex.calls.Load())
+	}
+	first()
+	time.Sleep(20 * time.Millisecond)
+
+	c.refresh = 30 * time.Millisecond
 	stop := c.Watch(ctx, "s1")
 	stop2 := c.Watch(ctx, "s1")
 	time.Sleep(200 * time.Millisecond)
