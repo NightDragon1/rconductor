@@ -43,11 +43,24 @@
     "serverAdmin": "Servers and groups",
     "agents": "Agents",
     "settings": "Settings",
-    "profile": "Your profile"
+    "profile": "Your profile",
+    "server": "Server"
   },
   "home": {
     "title": "Overview",
-    "welcome": "Signed in as {{name}} ({{role}})."
+    "summaryServers_one": "{{count}} server",
+    "summaryServers_other": "{{count}} servers",
+    "summaryGroups_one": "{{count}} server group",
+    "summaryGroups_other": "{{count}} server groups",
+    "summaryAgents_one": "{{count}} agent",
+    "summaryAgents_other": "{{count}} agents",
+    "search": "Search servers …",
+    "searchLabel": "Search servers by name",
+    "ungrouped": "Other servers",
+    "empty": "No servers yet.",
+    "noMatch": "No server matches the search.",
+    "groupSummary_one": "{{count}} server · {{ok}} up",
+    "groupSummary_other": "{{count}} servers · {{ok}} up"
   },
   "role": {
     "rcon_admin": "RCON admin",
@@ -58,5 +71,61 @@
   "notFound": {
     "title": "Page not found",
     "back": "Back to the overview"
+  },
+  "health": {
+    "label": "Health",
+    "servers": "Servers",
+    "serversSub": "up",
+    "stopped": "{{count}} stopped",
+    "agents": "Agents",
+    "agentsSub": "connected",
+    "rconErrors": "RCON errors",
+    "restartLoops": "Restart loops",
+    "users": "Users",
+    "usersSub": "active · {{count}} locked",
+    "none": "none",
+    "notices": "Notices",
+    "noNotices": "Everything is fine.",
+    "restartLoop": "restarts again and again (3 or more starts in 10 minutes)",
+    "rconOffline": "RCON not reachable",
+    "rconAuth": "RCON password rejected",
+    "containerRunning": "container running",
+    "agentGone": "agent disconnected",
+    "userLocked": "locked",
+    "since": "since {{time}}",
+    "at": "{{time}}",
+    "openServer": "Open server",
+    "openAgents": "Open agents",
+    "openUser": "Open user"
+  },
+  "card": {
+    "profile": "Profile: {{name}}",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "percent": "{{value}} %",
+    "memory": "{{used}} / {{limit}} GB",
+    "players": "Players",
+    "playersValue": "{{count}}",
+    "started": "Started {{ago}}",
+    "stale": "Values stale · {{age}}",
+    "playersStale": "Players stale",
+    "open": "Open {{name}}"
+  },
+  "status": {
+    "running": "running",
+    "restartLoop": "restart loop",
+    "rconError": "RCON error",
+    "stopped": "stopped",
+    "unknown": "unknown",
+    "online": "online",
+    "offline": "offline",
+    "authFailed": "RCON password rejected"
+  },
+  "time": {
+    "seconds": "{{count}} s",
+    "minutes": "{{count}} min",
+    "hours": "{{count}} h",
+    "days": "{{count}} d",
+    "ago": "{{span}} ago"
   }
 }
