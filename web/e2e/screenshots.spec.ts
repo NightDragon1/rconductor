@@ -29,6 +29,7 @@ const pages: [string, string, string][] = [
   ['admin', 'admin/agents', 'agents-admin'],
   ['sadmin', './', 'overview-server-admin'],
   ['mod', './', 'overview-moderator'],
+  ['mod2', './', 'overview-moderator-without-release'],
   ['sup', './', 'overview-supporter'],
 ];
 

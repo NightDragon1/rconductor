@@ -1,43 +1,81 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import type { Page } from '@playwright/test';
 import { expect, login, secret, test } from './fixtures';
 
-// UI-011 with Design 6.2: each role sees only its entries; the others are
-// hidden, and their pages do not exist for it.
-const everyEntry = [
-  'Overview',
-  'Servers',
-  'Audit',
-  'Users',
-  'Groups',
-  'Command lists',
-  'Servers and groups',
-  'Agents',
-  'Settings',
-];
-const expected: Record<string, string[]> = {
-  admin: everyEntry,
-  sadmin: [
-    'Overview',
-    'Servers',
-    'Audit',
-    'Users',
-    'Groups',
-    'Command lists',
-    'Servers and groups',
-  ],
-  mod: ['Overview', 'Servers', 'Users'],
-  sup: ['Overview', 'Servers'],
+// UI-011: the visible entries per role are exactly those of the table in
+// Design 6.2 (R1 rows; topology and messages are R2). Entries without the
+// right are hidden, not greyed.
+const design62: Record<string, { main: string[]; admin: string[] }> = {
+  // RCON admin: everything.
+  admin: {
+    main: ['Overview', 'Servers', 'Audit'],
+    admin: ['Users', 'Groups', 'Command lists', 'Servers and groups', 'Agents', 'Settings'],
+  },
+  // Server admin: users (his moderators and supporters), moderator
+  // groups, own lists, servers read-only in scope; no agents, no settings.
+  sadmin: {
+    main: ['Overview', 'Servers', 'Audit'],
+    admin: ['Users', 'Groups', 'Command lists', 'Servers and groups'],
+  },
+  // Moderator with supporters on (global and for him): his supporters.
+  mod: { main: ['Overview', 'Servers'], admin: ['Users'] },
+  // Moderator without his own release: no administration.
+  mod2: { main: ['Overview', 'Servers'], admin: [] },
+  // Supporter: no administration.
+  sup: { main: ['Overview', 'Servers'], admin: [] },
 };
 
-for (const [user, entries] of Object.entries(expected)) {
-  test(`navigation of ${user}`, async ({ page, state, csp }) => {
+async function visibleEntries(page: Page) {
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+  await expect(nav.getByRole('link').first()).toBeVisible();
+  const lists = nav.getByRole('list');
+  const main = await lists.nth(0).getByRole('link').allTextContents();
+  const admin =
+    (await lists.count()) > 1 ? await lists.nth(1).getByRole('link').allTextContents() : [];
+  return { main, admin };
+}
+
+for (const [user, want] of Object.entries(design62)) {
+  test(`navigation of ${user} matches Design 6.2`, async ({ page, state, csp }) => {
     void csp;
     await login(page, user, secret(state, user));
-    const nav = page.getByRole('navigation', { name: 'Main navigation' });
-    await expect(nav.getByRole('link').first()).toBeVisible();
-    await expect(nav.getByRole('link')).toHaveText(entries);
+    expect(await visibleEntries(page)).toEqual(want);
+    // The profile is in the user block for every role.
+    await expect(page.getByTitle('Your profile')).toBeVisible();
   });
 }
+
+// With the global supporter switch off, no moderator manages supporters,
+// also one with his own release.
+test('moderator without the global supporter switch', async ({ page, playwright, state, csp }) => {
+  void csp;
+  const origin = new URL(state.base_url).origin;
+  const admin = await playwright.request.newContext({
+    baseURL: state.base_url,
+    extraHTTPHeaders: { Origin: origin },
+  });
+  const set = async (on: boolean) => {
+    const r = await admin.patch('api/v1/settings', { data: { 'supporters.enabled': on } });
+    expect(r.status()).toBe(200);
+  };
+  expect(
+    (
+      await admin.post('api/v1/auth/login', {
+        data: { pseudonym: 'admin', password: secret(state, 'admin') },
+      })
+    ).status(),
+  ).toBe(200);
+  await set(false);
+  try {
+    await login(page, 'mod', secret(state, 'mod'));
+    expect(await visibleEntries(page)).toEqual({ main: ['Overview', 'Servers'], admin: [] });
+    await page.goto('admin/users');
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+  } finally {
+    await set(true);
+    await admin.dispose();
+  }
+});
 
 test('pages outside the role do not exist', async ({ page, state, csp }) => {
   void csp;

@@ -902,6 +902,9 @@ type Session struct {
 	Ui struct {
 		// ShortcutsEnabled Keyboard shortcuts, off by default (UI-008).
 		ShortcutsEnabled bool `json:"shortcuts_enabled"`
+
+		// SupportersEnabled The global supporter switch (ROLE-006); with the user's own release it decides whether a moderator manages supporters (Design 6.2).
+		SupportersEnabled bool `json:"supporters_enabled"`
 	} `json:"ui"`
 	User SessionUser `json:"user"`
 }

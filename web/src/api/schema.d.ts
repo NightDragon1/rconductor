@@ -1224,6 +1224,8 @@ export interface components {
             ui: {
                 /** @description Keyboard shortcuts, off by default (UI-008). */
                 shortcuts_enabled: boolean;
+                /** @description The global supporter switch (ROLE-006); with the user's own release it decides whether a moderator manages supporters (Design 6.2). */
+                supporters_enabled: boolean;
             };
             /** @description Until the password is changed only /me/password, /auth/logout and /auth/session are allowed (AUTH-010). */
             must_change_password: boolean;

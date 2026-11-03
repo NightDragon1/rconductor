@@ -14,13 +14,21 @@ import type { components } from '@/api/schema';
 
 export type Role = components['schemas']['Role'];
 
+// NavContext holds what decides beyond the role: a moderator manages
+// supporters only with the global switch and his own release (Design 6.2,
+// ROLE-006).
+export interface NavContext {
+  supportersEnabled: boolean;
+  supportersAllowed: boolean;
+}
+
 export interface NavEntry {
   to: string;
   key: string; // i18n key below nav.
   icon: LucideIcon;
   // allowed decides per role (Design 6.2); entries without right are
   // hidden, not greyed. The backend checks every request anyway.
-  allowed: (role: Role, me: { supportersAllowed: boolean }) => boolean;
+  allowed: (role: Role, me: NavContext) => boolean;
 }
 
 const admins = (r: Role) => r === 'rcon_admin' || r === 'server_admin';
@@ -37,7 +45,8 @@ export const adminNav: NavEntry[] = [
     to: '/admin/users',
     key: 'users',
     icon: UsersRound,
-    allowed: (r, me) => admins(r) || (r === 'moderator' && me.supportersAllowed),
+    allowed: (r, me) =>
+      admins(r) || (r === 'moderator' && me.supportersEnabled && me.supportersAllowed),
   },
   { to: '/admin/groups', key: 'groups', icon: ShieldCheck, allowed: admins },
   { to: '/admin/command-lists', key: 'commandLists', icon: ListChecks, allowed: admins },

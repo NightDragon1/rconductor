@@ -73,7 +73,12 @@ function guarded(path: string, key: string) {
         s.user.role === 'moderator'
           ? await context.queryClient.fetchQuery({ queryKey: meKey, queryFn: fetchMe })
           : undefined;
-      if (!entry.allowed(s.user.role, { supportersAllowed: me?.supporters_allowed ?? false }))
+      if (
+        !entry.allowed(s.user.role, {
+          supportersEnabled: s.ui.supporters_enabled,
+          supportersAllowed: me?.supporters_allowed ?? false,
+        })
+      )
         throw notFound();
     },
     component: placeholder(key),

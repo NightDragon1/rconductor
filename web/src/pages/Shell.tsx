@@ -111,7 +111,10 @@ function Navigation({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
   const { data: session } = useSession();
   const { data: me } = useMe();
   if (!session) return null;
-  const ctx = { supportersAllowed: me?.supporters_allowed ?? false };
+  const ctx = {
+    supportersEnabled: session.ui.supporters_enabled,
+    supportersAllowed: me?.supporters_allowed ?? false,
+  };
   const visible = (list: NavEntry[]) => list.filter((e) => e.allowed(session.user.role, ctx));
   const admin = visible(adminNav);
   const item = (e: NavEntry) => (

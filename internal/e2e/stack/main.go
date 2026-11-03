@@ -334,6 +334,16 @@ func seedModeration(admin *client, panel, o string, st *State) error {
 	}, nil); err != nil {
 		return err
 	}
-	st.Users["mod"], st.Users["sup"] = userPassword, userPassword
+	// A second moderator without his own supporter release (Design 6.2).
+	mod2ID, err := invite(admin, panel, o, "moderator", "mod2")
+	if err != nil {
+		return err
+	}
+	if err := admin.call(http.MethodPut, "/users/"+mod2ID+"/assignments", map[string]any{
+		"groups": []string{group.ID}, "grants": []map[string]string{{"group_id": group.ID, "server_id": st.ServerID}},
+	}, nil); err != nil {
+		return err
+	}
+	st.Users["mod"], st.Users["mod2"], st.Users["sup"] = userPassword, userPassword, userPassword
 	return nil
 }
