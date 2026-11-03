@@ -407,5 +407,60 @@
     "summary_other": "{{count}} users · {{locked}} locked",
     "invitesOpen_one": "{{count}} invitation open",
     "invitesOpen_other": "{{count}} invitations open"
+  },
+  "lists": {
+    "summary_one": "{{count}} command list",
+    "summary_other": "{{count}} command lists",
+    "search": "Name or command …",
+    "searchLabel": "Search command lists",
+    "newName": "Name of a new list",
+    "create": "Create list",
+    "name": "Name",
+    "entries": "Commands",
+    "passable": "Passable",
+    "passableCount": "{{count}}",
+    "passableFor": "{{path}} passable to supporters",
+    "path": "Command path",
+    "none": "No command lists.",
+    "explain": "A command path allows whole tokens and everything after them (CMD-004). Passable commands can be given to supporters.",
+    "oneLocked": "At least one command must stay locked for supporters. Not saved.",
+    "addLabel": "Add a command path",
+    "addPlaceholder": "whitelist add",
+    "add": "Add",
+    "delete": "Delete list …",
+    "deleteTitle": "Delete the list {{name}}?",
+    "deleteText": "Moderator groups with this list lose their commands at once. This cannot be undone.",
+    "undo": {
+      "changed": "List {{name}} changed"
+    }
+  },
+  "groups": {
+    "summary_one": "{{count}} group",
+    "summary_other": "{{count}} groups",
+    "search": "Group name …",
+    "searchLabel": "Search groups",
+    "newName": "Name of a new group",
+    "create": "Create group",
+    "kindLabel": "Kind",
+    "kind": {
+      "moderator": "Moderator group",
+      "general": "User group"
+    },
+    "name": "Name",
+    "list": "Command list",
+    "noList": "No list",
+    "members": "Members",
+    "memberCount_one": "{{count}} member",
+    "memberCount_other": "{{count}} members",
+    "addMember": "+ Member",
+    "grants": "Servers and server groups",
+    "addGrant": "+ Server or group",
+    "none": "No groups.",
+    "delete": "Delete group …",
+    "deleteTitle": "Delete the group {{name}}?",
+    "deleteText": "Its members lose the servers and commands of this group at once. This cannot be undone.",
+    "undo": {
+      "changed": "Group {{name}} changed"
+    }
   }
 }

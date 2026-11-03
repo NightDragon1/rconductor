@@ -15,6 +15,8 @@ export const UNDO_MS = 5000;
 
 interface Pending {
   id: number;
+  key?: string;
+  onUndo?: () => void;
   label: string;
   // send carries the change out; keepalive lets it outlive the page.
   send: (keepalive: boolean) => Promise<void>;
@@ -22,8 +24,16 @@ interface Pending {
   until: number;
 }
 
+// Options of a change: a later change with the same key replaces a
+// waiting one (an edited object is saved as a whole); onUndo resets a
+// draft when the change is undone.
+interface Options {
+  key?: string;
+  onUndo?: () => void;
+}
+
 interface Undo {
-  schedule: (label: string, send: (keepalive: boolean) => Promise<void>) => void;
+  schedule: (label: string, send: (keepalive: boolean) => Promise<void>, opts?: Options) => void;
   undoLast: () => void;
 }
 
@@ -47,20 +57,33 @@ export function UndoProvider({ children }: { children: ReactNode }) {
 
   const drop = useCallback((id: number) => setPending((p) => p.filter((x) => x.id !== id)), []);
   const schedule = useCallback(
-    (label: string, send: (keepalive: boolean) => Promise<void>) => {
+    (label: string, send: (keepalive: boolean) => Promise<void>, opts: Options = {}) => {
       const id = ++seq.current;
       const timer = setTimeout(() => {
         drop(id);
         void send(false);
       }, UNDO_MS);
-      setPending((p) => [...p, { id, label, send, timer, until: Date.now() + UNDO_MS }]);
+      setPending((p) => {
+        const old = opts.key ? p.find((x) => x.key === opts.key) : undefined;
+        if (old) clearTimeout(old.timer);
+        const keep = old ? p.filter((x) => x !== old) : p;
+        // A replaced change keeps the reset of the first one.
+        const onUndo = old?.onUndo ?? opts.onUndo;
+        return [
+          ...keep,
+          { id, key: opts.key, onUndo, label, send, timer, until: Date.now() + UNDO_MS },
+        ];
+      });
     },
     [drop],
   );
   const undo = useCallback(
     (id: number) => {
       const p = ref.current.find((x) => x.id === id);
-      if (p) clearTimeout(p.timer);
+      if (p) {
+        clearTimeout(p.timer);
+        p.onUndo?.();
+      }
       drop(id);
     },
     [drop],

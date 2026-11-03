@@ -22,6 +22,8 @@ import { LogsTab } from '@/pages/server/LogsTab';
 import { OverviewTab } from '@/pages/server/OverviewTab';
 import { ServerLayout } from '@/pages/server/ServerLayout';
 import { ServersPage } from '@/pages/Servers';
+import { CommandListsPage } from '@/pages/admin/CommandLists';
+import { GroupsPage } from '@/pages/admin/Groups';
 import { UsersPage } from '@/pages/admin/Users';
 import { InvitePage } from '@/pages/Invite';
 import { LoginPage } from '@/pages/Login';
@@ -104,8 +106,8 @@ function guarded(path: string, key: string, component?: () => React.JSX.Element 
 const pages = [
   guarded('/audit', 'audit'),
   guarded('/admin/users', 'users', UsersPage),
-  guarded('/admin/groups', 'groups'),
-  guarded('/admin/command-lists', 'commandLists'),
+  guarded('/admin/groups', 'groups', GroupsPage),
+  guarded('/admin/command-lists', 'commandLists', CommandListsPage),
   guarded('/admin/servers', 'serverAdmin'),
   guarded('/admin/agents', 'agents'),
   guarded('/admin/settings', 'settings'),

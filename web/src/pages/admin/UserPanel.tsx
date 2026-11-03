@@ -21,7 +21,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
 import { dateTime } from '@/lib/format';
 import { useUndo } from '@/lib/undo';
-import { reasonText } from './BulkResults';
+import { reasonText } from '@/lib/admin';
 
 function Chips({
   label,
