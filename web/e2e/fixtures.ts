@@ -9,6 +9,8 @@ export interface StackState {
   reset_password: string;
   server_id: string;
   server_name: string;
+  servers: Record<string, string>;
+  locked_user_id: string;
 }
 
 interface Fixtures {

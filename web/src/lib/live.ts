@@ -31,7 +31,10 @@ export class LiveSocket {
     private readonly onReconnect: () => void = () => {},
   ) {}
 
+  // subscribe also opens a closed socket again: a provider that unmounts
+  // and mounts again (React StrictMode) keeps working.
   subscribe(topic: string, listener: Listener): () => void {
+    this.closed = false;
     let set = this.topics.get(topic);
     if (!set) {
       set = new Set();

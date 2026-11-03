@@ -16,6 +16,13 @@
   --warn: #fb923c;
   --danger: #f87171;
   --focus: #c4b5fd;
+  /* Frames of the server groups on the overview (Design 6.5). */
+  --group-1: #a78bfa;
+  --group-2: #2dd4bf;
+  --group-3: #fbbf24;
+  --group-4: #38bdf8;
+  --group-5: #f472b6;
+  --group-6: #a3e635;
   color-scheme: dark;
 }
 
@@ -32,6 +39,12 @@
   --warn: #b45309;
   --danger: #b91c1c;
   --focus: #6d28d9;
+  --group-1: #6d28d9;
+  --group-2: #0f766e;
+  --group-3: #b45309;
+  --group-4: #0369a1;
+  --group-5: #be185d;
+  --group-6: #4d7c0f;
   color-scheme: light;
 }
 
@@ -48,6 +61,12 @@
   --color-warn: var(--warn);
   --color-danger: var(--danger);
   --color-focus: var(--focus);
+  --color-group-1: var(--group-1);
+  --color-group-2: var(--group-2);
+  --color-group-3: var(--group-3);
+  --color-group-4: var(--group-4);
+  --color-group-5: var(--group-5);
+  --color-group-6: var(--group-6);
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, monospace;
 }

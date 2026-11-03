@@ -92,6 +92,13 @@ const pages = [
   guarded('/admin/agents', 'agents'),
   guarded('/admin/settings', 'settings'),
 ];
+// The server page follows in step 4; every role may open it, the backend
+// answers only for servers in scope.
+const serverRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'servers/$serverId',
+  component: placeholder('server'),
+});
 const profileRoute = createRoute({
   getParentRoute: () => appRoute,
   path: 'profile',
@@ -101,7 +108,7 @@ const profileRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   loginRoute,
   changePasswordRoute,
-  appRoute.addChildren([homeRoute, profileRoute, ...pages]),
+  appRoute.addChildren([homeRoute, serverRoute, profileRoute, ...pages]),
 ]);
 
 // The base path comes from <base href> (RCD_BASE_PATH, issue #88).
