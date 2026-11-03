@@ -27,7 +27,9 @@ async function shoot(page: Page, name: string) {
 const pages: [string, string, string][] = [
   ['admin', './', 'overview-admin'],
   ['admin', 'admin/agents', 'agents-admin'],
+  ['sadmin', './', 'overview-server-admin'],
   ['mod', './', 'overview-moderator'],
+  ['sup', './', 'overview-supporter'],
 ];
 
 for (const [user, path, name] of pages) {
