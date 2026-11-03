@@ -12,6 +12,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -32,7 +33,10 @@ import (
 	"syscall"
 	"time"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/NightDragon1/rconductor/internal/app"
+	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
@@ -59,7 +63,9 @@ type State struct {
 	// a disabled supporter (UI-003).
 	Servers      map[string]string `json:"servers"`
 	LockedUserID string            `json:"locked_user_id"`
-	profile      string
+	// ExpiredInvite is the token of an invitation past its time (UI-008).
+	ExpiredInvite string `json:"expired_invite"`
+	profile       string
 }
 
 type buffer struct {
@@ -84,14 +90,15 @@ func main() {
 	dist := flag.String("dist", "internal/webui/dist", "built web interface")
 	base := flag.String("base", "/", "base path (RCD_BASE_PATH)")
 	statePath := flag.String("state", "", "file for the state JSON")
+	logPath := flag.String("log", "", "file that gets the panel's log lines too")
 	host := flag.String("host", "", "host name the browser uses instead of the address, e.g. rcon.lan for a page outside a secure context")
 	flag.Parse()
-	if err := run(*addr, *host, *dist, *base, *statePath); err != nil {
+	if err := run(*addr, *host, *dist, *base, *statePath, *logPath); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(addr, host, dist, base, statePath string) error {
+func run(addr, host, dist, base, statePath, logPath string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	root, err := os.MkdirTemp("", "rcd-e2e-")
@@ -129,11 +136,20 @@ func run(addr, host, dist, base, statePath string) error {
 	defer game.Close()
 
 	var logs, console buffer
+	var panelLog io.Writer = &logs
+	if logPath != "" {
+		f, err := os.Create(logPath) //nolint:gosec // a path the test runner names
+		if err != nil {
+			return err
+		}
+		defer func() { _ = f.Close() }()
+		panelLog = io.MultiWriter(&logs, f)
+	}
 	ready, agentReady := make(chan net.Addr, 1), make(chan net.Addr, 1)
 	done := make(chan error, 1)
 	fast := password.Params{Time: 1, MemoryKiB: 64, Threads: 1, SaltLen: 16, KeyLen: 32}
 	go func() {
-		done <- app.RunPanel(ctx, cfg, &logs, app.PanelOptions{
+		done <- app.RunPanel(ctx, cfg, panelLog, app.PanelOptions{
 			UI: webui.NewAt(os.DirFS(dist), base), Ready: func(a net.Addr) { ready <- a },
 			AgentReady: func(a net.Addr) { agentReady <- a }, Console: &console, HashParams: &fast,
 		})
@@ -169,6 +185,9 @@ func run(addr, host, dist, base, statePath string) error {
 	}
 	if err := seedHosts(ctx, admin, panelURL, origin(public), (<-agentReady).String(), root, game.Addr, st.profile, &st); err != nil {
 		return fmt.Errorf("seed hosts: %w\n%s", err, logs.String())
+	}
+	if st.ExpiredInvite, err = expiredInvite(ctx, admin, filepath.Join(root, "data", "rconductor.db")); err != nil {
+		return fmt.Errorf("expired invite: %w", err)
 	}
 	st.BaseURL = public + "/"
 	if statePath != "" {
@@ -370,4 +389,22 @@ func seedModeration(admin *client, panel, o string, st *State) error {
 	}
 	st.Users["mod"], st.Users["mod2"], st.Users["sup"] = userPassword, userPassword, userPassword
 	return nil
+}
+
+// expiredInvite creates an invitation over the API and moves its expiry
+// into the past, as the shortest lifetime (one minute) is too long for a
+// test.
+func expiredInvite(ctx context.Context, admin *client, dbPath string) (string, error) {
+	var inv struct{ Token string }
+	if err := admin.call(http.MethodPost, "/invites", map[string]string{"role": "supporter"}, &inv); err != nil {
+		return "", err
+	}
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = db.Close() }()
+	past := time.Now().Add(-time.Hour).UTC().Format("2006-01-02T15:04:05.000Z")
+	_, err = db.ExecContext(ctx, `UPDATE invites SET expires_at = ? WHERE token_hash = ?`, past, auth.HashToken(inv.Token))
+	return inv.Token, err
 }

@@ -31,5 +31,6 @@ Thumbs.db
 
 # Playwright
 /web/e2e/.state-*.json
+/web/e2e/.panel-*.log
 /web/test-results/
 /web/playwright-report/
