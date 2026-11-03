@@ -242,5 +242,35 @@
     "tab": "Tab",
     "hint": "Tab takes the first suggestion · arrow keys walk your own commands",
     "favorites": "Favorites"
+  },
+  "commands": {
+    "optional": "{{name}} (optional)",
+    "args": "Arguments",
+    "run": "Run",
+    "none": "There are no commands for you on this server.",
+    "players": "Players online",
+    "pick": "Put the name into the player field",
+    "pickHint": "Click a player field, then a name",
+    "myHistory": "My history",
+    "showAll": "Show all",
+    "reason": {
+      "not_in_list": "Not in your command list",
+      "wrapper_blocked": "This command is blocked for your role",
+      "rate_limited": "Too many commands. Please wait a moment.",
+      "rate_limited_wait": "Too many commands. Try again in {{s}} s.",
+      "invalid": "The command does not fit its fields",
+      "server_unavailable": "The server is not reachable",
+      "timeout": "The server did not answer in time",
+      "busy": "The server is busy",
+      "other": "The command failed"
+    },
+    "preview": "› {{command}}"
+  },
+  "form": {
+    "required": "Required",
+    "oneWord": "One word, no spaces",
+    "choice": "Pick one of the values",
+    "whole": "A whole number",
+    "range": "Out of range"
   }
 }

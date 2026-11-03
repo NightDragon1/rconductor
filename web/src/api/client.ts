@@ -17,6 +17,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly problem?: Problem,
+    // Seconds from Retry-After (429, 503), if the panel sent it.
+    readonly retryAfter?: number,
   ) {
     super(problem?.title ?? `HTTP ${status}`);
   }
@@ -25,7 +27,12 @@ export class ApiError extends Error {
 // must unwraps an openapi-fetch result or throws ApiError.
 export function must<T>(r: { data?: T; error?: unknown; response: Response }): T {
   if (r.error !== undefined || !r.response.ok) {
-    throw new ApiError(r.response.status, r.error as Problem | undefined);
+    const retry = Number(r.response.headers.get('Retry-After'));
+    throw new ApiError(
+      r.response.status,
+      r.error as Problem | undefined,
+      Number.isFinite(retry) && retry > 0 ? retry : undefined,
+    );
   }
   return r.data as T;
 }
