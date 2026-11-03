@@ -162,3 +162,9 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Fundstelle:** Mockup „Verwaltung · Benutzer“ (Knopf „Sitzungen beenden“ im Seitenpanel); Design 2.2 ohne Endpunkt dafür; AUTH-006.
 - **Entscheidung (M4, Schritt 8, K1 B):** DELETE /users/{id}/sessions beendet alle Sessions eines verwalteten Benutzers und schließt seine WebSockets sofort. Berechtigt ist, wer den Benutzer verwaltet (3.6); Audit-Eintrag user.sessions.end, Ereigniscode auth.session.revoked wie bei Sperre und Rechteänderung.
 - **Vorschlag:** Design 2.2 um /users/{id}/sessions (DELETE, wie /users) ergänzen.
+
+## 23. Einladungstoken nur im Fragment
+
+- **Fundstelle:** Design 2.2 (/invites, /invites/redeem), D-046, SEC-012 (keine Geheimnisse in Logs); UI-008 (Einladungslink).
+- **Entscheidung (M4, Schritt 8):** Der Einladungslink trägt das Token nur im URL-Fragment (/invite#<token>), nie in Pfad oder Query; Browser schicken Fragmente nicht an Server, so erscheint das Token in keinem Proxy- oder Panel-Log. Die Seite liest das Token einmal, entfernt es aus der Adresszeile und sendet es nur im Body von POST /invites/redeem. Ein E2E-Test prüft, dass das Token in keinem Request-Pfad und keinem Panel-Log steht.
+- **Vorschlag:** Design 2.2 bei /invites/redeem und D-046 um diese Festlegung ergänzen.
