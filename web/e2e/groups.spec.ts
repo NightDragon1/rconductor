@@ -101,3 +101,43 @@ test('a server admin sees only his own groups and lists', async ({ page, state, 
   await expect(page.getByRole('row').filter({ hasText: 'moderation' })).toHaveCount(0);
   await expect(page.getByText('No command lists.')).toBeVisible();
 });
+
+test('a stale draft is not sent; reload shows the other change (revision 2.4 candidate 24)', async ({
+  page,
+  browser,
+  state,
+  csp,
+}) => {
+  void csp;
+  await as(page, state, 'admin', 'admin/command-lists', 'Command lists');
+  await page.getByPlaceholder('Name of a new list').fill('lock-test');
+  await page.getByRole('button', { name: 'Create list' }).click();
+  const mine = page.getByRole('complementary', { name: 'Details of lock-test' });
+  await expect(mine).toBeVisible();
+
+  // A second session of the admin opens the same list.
+  const other = await browser.newContext();
+  const page2 = await other.newPage();
+  await as(page2, state, 'admin', 'admin/command-lists', 'Command lists');
+  await page2.getByRole('button', { name: 'lock-test' }).click();
+  const theirs = page2.getByRole('complementary', { name: 'Details of lock-test' });
+
+  await theirs.getByLabel('Add a command path').fill('say');
+  await theirs.getByRole('button', { name: 'Add' }).click();
+  await expect(theirs.getByRole('status')).toHaveText('Saved.', saved);
+
+  await mine.getByLabel('Add a command path').fill('list');
+  await mine.getByRole('button', { name: 'Add' }).click();
+  await expect(mine.getByRole('alert')).toHaveText('Changed by someone else – reload', saved);
+  const entries = await page.evaluate(async () => {
+    const r = await fetch('api/v1/command-lists').then((x) => x.json());
+    return (r.items as { name: string; entries: { path: string }[] }[])
+      .find((l) => l.name === 'lock-test')
+      ?.entries.map((e) => e.path);
+  });
+  expect(entries).toEqual(['say']);
+  await mine.getByRole('button', { name: 'Reload' }).click();
+  await expect(mine.getByRole('cell').filter({ hasText: /^say$/ })).toBeVisible();
+  await expect(mine.getByRole('cell').filter({ hasText: /^list$/ })).toHaveCount(0);
+  await other.close();
+});

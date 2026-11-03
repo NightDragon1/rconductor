@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, must } from '@/api/client';
 import { useProfiles } from '@/api/servers';
@@ -19,10 +19,15 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
   const qc = useQueryClient();
   const { schedule } = useUndo();
   const profiles = useProfiles();
+  const lists = useCommandLists(true);
   const [draft, setDraft] = useState<CommandList>(list);
   const [path, setPath] = useState('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  // The version of the last saved state goes along as If-Match (revision
+  // 2.4 candidate 24).
+  const base = useRef(list);
   const pathId = useId();
   const catalogId = useId();
   const catalog = [
@@ -32,6 +37,7 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
   // Edits change the draft at once and save it as a whole after the undo
   // time; undo goes back to the saved list.
   const change = (next: CommandList, label: string) => {
+    if (conflict) return;
     setDraft(next);
     if (!lockedOk(next.entries)) {
       setMessage({ ok: false, text: t('lists.oneLocked') });
@@ -41,15 +47,20 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
     schedule(
       label,
       async (keepalive) => {
-        const r = await outcome(list.id, async () =>
-          must(
+        const r = await outcome(list.id, async () => {
+          base.current = must(
             await api.PATCH('/command-lists/{id}', {
-              params: { path: { id: list.id } },
+              params: { path: { id: list.id }, header: { 'If-Match': base.current.version } },
               body: { name: next.name, entries: next.entries },
               keepalive,
             }),
-          ),
-        );
+          );
+        });
+        if (r.reason === 'conflict') {
+          setConflict(true);
+          setMessage({ ok: false, text: t('admin.conflict') });
+          return;
+        }
         setMessage(
           r.ok
             ? { ok: true, text: t('admin.saved') }
@@ -57,7 +68,7 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
         );
         void qc.invalidateQueries({ queryKey: commandListsKey });
       },
-      { key: `list:${list.id}`, onUndo: () => setDraft(list) },
+      { key: `list:${list.id}`, onUndo: () => setDraft(base.current) },
     );
   };
   const add = (e: FormEvent) => {
@@ -165,6 +176,23 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
         >
           {message.text}
         </p>
+      )}
+      {conflict && (
+        <Button
+          variant="outline"
+          className="self-start"
+          onClick={async () => {
+            const fresh = (await lists.refetch()).data?.find((x) => x.id === list.id);
+            if (fresh) {
+              base.current = fresh;
+              setDraft(fresh);
+            }
+            setConflict(false);
+            setMessage(null);
+          }}
+        >
+          {t('admin.reload')}
+        </Button>
       )}
       <Button
         variant="outline"
