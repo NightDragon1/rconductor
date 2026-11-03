@@ -168,3 +168,14 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Fundstelle:** Design 2.2 (/invites, /invites/redeem), D-046, SEC-012 (keine Geheimnisse in Logs); UI-008 (Einladungslink).
 - **Entscheidung (M4, Schritt 8):** Der Einladungslink trägt das Token nur im URL-Fragment (/invite#<token>), nie in Pfad oder Query; Browser schicken Fragmente nicht an Server, so erscheint das Token in keinem Proxy- oder Panel-Log. Die Seite liest das Token einmal, entfernt es aus der Adresszeile und sendet es nur im Body von POST /invites/redeem. Ein E2E-Test prüft, dass das Token in keinem Request-Pfad und keinem Panel-Log steht.
 - **Vorschlag:** Design 2.2 bei /invites/redeem und D-046 um diese Festlegung ergänzen.
+
+## 24. Optimistische Sperre für Objekte, die als Ganzes gespeichert werden
+
+- **Fundstelle:** Design 2.1 (Fehler, Problem Details), 3.5 (Grund-Codes), 6.1 (Rückgängig statt Bestätigung); UI-007, UI-008. Mehrere Verwaltende können dasselbe Objekt gleichzeitig bearbeiten; ohne Sperre überschreibt der Spätere den Früheren unbemerkt.
+- **Entscheidung (M4, Schritt 8):**
+  - Benutzergruppen, Befehlslisten, Server und Servergruppen tragen ein Feld version, /settings einen ETag-Header (Hash des gespeicherten Stands; bei Servern nur die Konfiguration, nicht Status und Laufzeitdaten).
+  - Schreiben nennt die gelesene Version in If-Match; ist sie veraltet, antwortet das Panel mit 409 und dem neuen Grund-Code conflict, nichts wird geschrieben. Prüfung und Schreiben laufen je Objekt unter einer Sperre im Panel.
+  - Ohne If-Match ist ein Schreiben nicht geschützt (für Werkzeuge außerhalb der Oberfläche); die Oberfläche sendet es immer.
+  - Die Rolle wird vor der Version geprüft (Kandidat 14): wer ein Objekt nicht ändern darf, erhält 403, nicht 409.
+  - Die Oberfläche zeigt bei 409 „Changed by someone else – reload“; der Entwurf wird nicht gesendet, „Reload“ lädt den aktuellen Stand.
+- **Vorschlag:** Design 2.1 um eine Zeile „Gleichzeitige Änderungen“ ergänzen, Design 3.5 um 409 conflict.
