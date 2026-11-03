@@ -319,7 +319,10 @@ func invite(inviter *client, panel, o, role, name string) (string, error) {
 func seedModeration(admin *client, panel, o string, st *State) error {
 	var list struct{ ID string }
 	if err := admin.call(http.MethodPost, "/command-lists", map[string]any{"name": "moderation", "entries": []map[string]any{
-		{"path": "kick", "passable": false}, {"path": "whitelist add", "passable": true}, {"path": "say", "passable": true},
+		{"path": "list", "passable": true}, {"path": "kick", "passable": false}, {"path": "whitelist add", "passable": true},
+		{"path": "say", "passable": true}, {"path": "time set", "passable": true},
+		// weather has no catalog entry: its card has a free field (Design 7.3).
+		{"path": "weather", "passable": false},
 	}}, &list); err != nil {
 		return err
 	}
