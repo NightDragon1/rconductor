@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 
+	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
@@ -469,5 +471,61 @@ func TestFavorites(t *testing.T) {
 	}
 	if rec := w.do(t, call{method: http.MethodGet, path: "/api/v1/me/favorites", cookies: []*http.Cookie{mod}}); !strings.Contains(rec.Body.String(), w.server) {
 		t.Errorf("moderator get = %s", rec.Body.String())
+	}
+}
+
+// racingViews delivers log lines while the hub reads the current state,
+// as an agent may: one delivery the state already holds, one after it.
+type racingViews struct {
+	hub interface {
+		PublishAgentData(serverID, kind string, data any)
+	}
+	server string
+}
+
+func (r racingViews) Current(_ context.Context, serverID, kind string) (any, bool) {
+	if kind != "logs" {
+		return nil, false
+	}
+	r.hub.PublishAgentData(serverID, "logs", agentview.Logs{ServerID: serverID, Lines: []string{"one"}, Seq: 1})
+	r.hub.PublishAgentData(serverID, "logs", agentview.Logs{ServerID: serverID, Lines: []string{"two"}, Seq: 2})
+	return agentview.Logs{ServerID: serverID, Lines: []string{"one"}, Seq: 1}, true
+}
+
+func (racingViews) FollowLogs(context.Context, string) func() { return func() {} }
+
+// TestLogsWithoutDuplicates covers Design 2.3 and issue #99 for the agent
+// topics: subscribed comes first, then the current state, then only the
+// deliveries it does not hold.
+func TestLogsWithoutDuplicates(t *testing.T) {
+	w := newWSFixture(t)
+	w.hub.SetAgentViews(racingViews{hub: w.hub, server: w.server})
+	c, _, err := w.dial(t, w.login(t, "Boss"), w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	topic := "server." + w.server + ".logs"
+	send(t, c, "subscribe", topic)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var got []string
+	for len(got) < 3 {
+		m, err := read(ctx, c)
+		if err != nil {
+			t.Fatalf("after %v: %v", got, err)
+		}
+		if m.Type == "subscribed" {
+			got = append(got, "subscribed")
+			continue
+		}
+		var d struct{ Lines []string }
+		_ = json.Unmarshal(m.Data, &d)
+		got = append(got, strings.Join(d.Lines, ","))
+	}
+	if want := []string{"subscribed", "one", "two"}; !slices.Equal(got, want) {
+		t.Errorf("messages = %v, want %v", got, want)
+	}
+	if m, err := next(t, c, 300*time.Millisecond); err == nil {
+		t.Errorf("extra message %+v", m)
 	}
 }

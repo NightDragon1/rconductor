@@ -80,21 +80,21 @@ func TestLogRing(t *testing.T) {
 	for i := range 60 {
 		d.Lines("a1", agentproto.LogLines{Container: "mc", Lines: []string{fmt.Sprintf("line %d", i)}})
 	}
-	logs := d.Logs("a1", "mc")
+	logs, _ := d.Logs("a1", "mc")
 	if len(logs) != LogRing || logs[0] != "line 10" || logs[49] != "line 59" {
 		t.Errorf("ring = %d lines, %q .. %q", len(logs), logs[0], logs[len(logs)-1])
 	}
 	d.Event("a1", agentproto.ContainerEvent{Container: agentproto.Container{ID: "1", Name: "mc", State: "exited"}})
-	if len(d.Logs("a1", "mc")) != LogRing {
+	if len(lines(d, "a1", "mc")) != LogRing {
 		t.Error("ring cleared on stop")
 	}
 	d.Event("a1", agentproto.ContainerEvent{Container: running("1", "mc")})
-	if len(d.Logs("a1", "mc")) != 0 {
+	if len(lines(d, "a1", "mc")) != 0 {
 		t.Error("ring kept after restart")
 	}
 	d.Lines("a1", agentproto.LogLines{Container: "mc", Lines: []string{"x"}})
 	d.Event("a1", agentproto.ContainerEvent{Container: running("2", "mc")})
-	if len(d.Logs("a1", "mc")) != 0 {
+	if len(lines(d, "a1", "mc")) != 0 {
 		t.Error("ring kept for a replaced container")
 	}
 	d.Event("a1", agentproto.ContainerEvent{Container: agentproto.Container{ID: "2", Name: "mc"}, Gone: true})
@@ -140,4 +140,9 @@ func TestAgentDataUTC(t *testing.T) {
 	if m, _ := d.Metric("a1", "mc"); m.At.Location() != time.UTC {
 		t.Errorf("metric time in %v, want UTC", m.At.Location())
 	}
+}
+
+func lines(d *AgentData, agentID, name string) []string {
+	l, _ := d.Logs(agentID, name)
+	return l
 }

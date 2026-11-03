@@ -76,13 +76,18 @@ type Metrics struct {
 }
 
 // Logs is the data of server.<id>.logs; the lines are foreign data
-// (SEC-006).
+// (SEC-006). Seq numbers the delivery; the hub drops live deliveries that
+// a new subscriber's current state already holds (Design 2.3).
 type Logs struct {
 	ServerID  string   `json:"server_id"`
 	Container string   `json:"container"`
 	Lines     []string `json:"lines"`
 	Truncated bool     `json:"truncated,omitempty"`
+	Seq       uint64   `json:"-"`
 }
+
+// Sequence implements events.Sequenced.
+func (l Logs) Sequence() uint64 { return l.Seq }
 
 type follow struct {
 	agentID, container string
@@ -201,7 +206,8 @@ func (v *View) Current(ctx context.Context, serverID, kind string) (any, bool) {
 	case "metrics":
 		return v.metricsOf(serverID, agentID, container)
 	case "logs":
-		return Logs{ServerID: serverID, Container: container, Lines: v.data.Logs(agentID, container)}, true
+		lines, seq := v.data.Logs(agentID, container)
+		return Logs{ServerID: serverID, Container: container, Lines: lines, Seq: seq}, true
 	}
 	return nil, false
 }
@@ -220,9 +226,9 @@ func (v *View) metrics(agentID string, containers []string) {
 	}
 }
 
-func (v *View) lines(agentID string, ll agentproto.LogLines) {
+func (v *View) lines(agentID string, ll agentproto.LogLines, seq uint64) {
 	for _, id := range v.servers(agentID, ll.Container) {
-		v.bus.PublishAgentData(id, "logs", Logs{ServerID: id, Container: ll.Container, Lines: ll.Lines, Truncated: ll.Truncated})
+		v.bus.PublishAgentData(id, "logs", Logs{ServerID: id, Container: ll.Container, Lines: ll.Lines, Truncated: ll.Truncated, Seq: seq})
 	}
 }
 

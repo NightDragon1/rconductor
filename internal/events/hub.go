@@ -108,6 +108,41 @@ type subscription struct {
 	server  string // empty for servers.overview
 	kind    string // overview, status or console
 	release func()
+	// Until ready, events wait in pending: none may come before subscribed
+	// and the current state (Design 2.3, issue #99). after is the last
+	// delivery the current state holds. All three under Hub.mu.
+	ready   bool
+	pending []message
+	after   uint64
+}
+
+// Sequenced data numbers its delivery (log lines); a subscription drops
+// deliveries that its current state already holds.
+type Sequenced interface{ Sequence() uint64 }
+
+// maxPending bounds the events held for a subscription that is being set
+// up.
+const maxPending = 64
+
+// deliver sends an event of a subscription, or holds it while the
+// subscription is not ready.
+func (h *Hub) deliver(c *client, s *subscription, m message) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !s.ready {
+		if len(s.pending) < maxPending {
+			s.pending = append(s.pending, m)
+		}
+		return
+	}
+	if !s.holds(m) {
+		c.send(m)
+	}
+}
+
+func (s *subscription) holds(m message) bool {
+	q, ok := m.Data.(Sequenced)
+	return ok && q.Sequence() <= s.after
 }
 
 type client struct {
@@ -399,11 +434,25 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 	// The confirmation comes before any event of the topic (Design 2.3,
 	// issue #99).
 	c.send(message{Type: "subscribed", Topic: topic})
+	var current any
+	has := false
 	if agentKind(kind) {
-		if v, ok := h.agentViews.Current(ctx, server, kind); ok {
-			c.send(message{Type: "event", Topic: topic, Data: v})
+		current, has = h.agentViews.Current(ctx, server, kind)
+	}
+	h.mu.Lock()
+	if has {
+		c.send(message{Type: "event", Topic: topic, Data: current})
+		if q, ok := current.(Sequenced); ok {
+			s.after = q.Sequence()
 		}
 	}
+	for _, m := range s.pending {
+		if !s.holds(m) {
+			c.send(m)
+		}
+	}
+	s.pending, s.ready = nil, true
+	h.mu.Unlock()
 }
 
 func agentKind(kind string) bool { return kind == "metrics" || kind == "logs" }
@@ -412,7 +461,7 @@ func agentKind(kind string) bool { return kind == "metrics" || kind == "logs" }
 // subscribers of server.<id>.metrics or .logs.
 func (h *Hub) PublishAgentData(serverID, kind string, data any) {
 	h.each(kind, serverID, func(c *client, s *subscription) {
-		c.send(message{Type: "event", Topic: s.topic, Data: data})
+		h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: data})
 	})
 }
 
@@ -526,7 +575,7 @@ type StatusEvent struct {
 func (h *Hub) PublishStatus(serverID string, status connmgr.Status, since time.Time) {
 	ev := StatusEvent{Kind: "status", ServerID: serverID, Status: string(status), Since: since}
 	h.each("status", serverID, func(c *client, s *subscription) {
-		c.send(message{Type: "event", Topic: s.topic, Data: ev})
+		h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: ev})
 	})
 	h.each("overview", "", func(c *client, s *subscription) {
 		rights, err := h.perm.For(context.Background(), c.p.UserID)
@@ -534,7 +583,7 @@ func (h *Hub) PublishStatus(serverID string, status connmgr.Status, since time.T
 			return
 		}
 		if _, ok := rights.Server(serverID); ok {
-			c.send(message{Type: "event", Topic: s.topic, Data: ev})
+			h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: ev})
 		}
 	})
 }
@@ -552,9 +601,9 @@ func (h *Hub) PublishRuntime(serverID string, full, reduced any) {
 		switch {
 		case !ok:
 		case sr.Agent:
-			c.send(message{Type: "event", Topic: s.topic, Data: full})
+			h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: full})
 		default:
-			c.send(message{Type: "event", Topic: s.topic, Data: reduced})
+			h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: reduced})
 		}
 	})
 }
@@ -586,6 +635,6 @@ func (h *Hub) PublishConsole(serverID string, e commands.Entry) {
 		if role != perm.RCONAdmin && role != perm.ServerAdmin && e.UserID != c.p.UserID {
 			return
 		}
-		c.send(message{Type: "event", Topic: s.topic, Data: ev})
+		h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: ev})
 	})
 }
