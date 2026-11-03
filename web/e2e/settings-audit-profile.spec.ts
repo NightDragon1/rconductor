@@ -20,11 +20,11 @@ test('settings: a change waits for undo and saves with the ETag (Design 5.6)', a
   await as(page, state, 'admin', 'admin/settings', 'Settings');
   const field = page.getByLabel('invite.lifetime');
   const before = await field.inputValue();
-  await field.fill('48h');
+  await field.fill('48 h');
   await page.getByRole('button', { name: 'Save 1 change' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible(saved);
   await page.reload();
-  await expect(page.getByLabel('invite.lifetime')).toHaveValue(/^48h/);
+  await expect(page.getByLabel('invite.lifetime')).toHaveValue('48 h');
   await page.getByLabel('invite.lifetime').fill(before);
   await page.getByRole('button', { name: 'Save 1 change' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible(saved);

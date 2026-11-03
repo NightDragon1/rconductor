@@ -9,10 +9,30 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
+import { formatDuration, isGoDuration, parseDuration } from '@/lib/duration';
 import { useUndo } from '@/lib/undo';
 
 type Values = Record<string, unknown>;
 export const settingsKey = ['settings'] as const;
+
+// Keys with their own label and help in the language file.
+const keyTexts = [
+  'agents_fingerprint_pairing',
+  'audit_retention_days',
+  'backup_interval',
+  'backup_keep_auto',
+  'backup_keep_pre_migration',
+  'invite_lifetime',
+  'login_lockout_duration',
+  'login_max_failures',
+  'profiles_poll_interval',
+  'session_idle_timeout',
+  'session_max_lifetime',
+  'supporters_enabled',
+  'ui_shortcuts_enabled',
+  'ws_max_sockets_per_session',
+  'ws_max_subscriptions_per_socket',
+];
 
 // Sections of the settings (Design 5.6); keys not listed show under
 // "other", so a new key is never hidden.
@@ -29,6 +49,26 @@ const sections: [string, RegExp][] = [
   ['interface', /^ui\./],
   ['backups', /^backup\./],
 ];
+// describe gives the label and help of a key from the language file
+// (NFR-007); rate limits share one text per kind with the role in it. A
+// key without texts shows by its name.
+function describe(t: (k: string, o?: Record<string, unknown>) => string, key: string) {
+  const rate = /^ratelimit\.(\w+)\.(per_minute|burst)$/.exec(key);
+  if (rate) {
+    const role = t(`role.${rate[1]}`);
+    return {
+      label: t(`settings.key.ratelimit_${rate[2]}.label`, { role }),
+      help: t(`settings.key.ratelimit_${rate[2]}.help`, { role }),
+    };
+  }
+  const slug = key.replace(/\./g, '_');
+  const known = keyTexts.includes(slug);
+  return {
+    label: known ? t(`settings.key.${slug}.label`) : key,
+    help: known ? t(`settings.key.${slug}.help`) : '',
+  };
+}
+
 const sectionOf = (key: string) => sections.find(([, re]) => re.test(key))?.[0] ?? 'other';
 
 // SettingsPage changes the global settings (Design 5.6): only the RCON
@@ -50,11 +90,21 @@ export function SettingsPage() {
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [conflict, setConflict] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
+  // What people typed into duration fields, shown as typed.
+  const [texts, setTexts] = useState<Record<string, string>>({});
+  const reset = () => {
+    setDraft(null);
+    setTexts({});
+  };
   const base = settings.data;
   const values = draft ?? base?.values ?? {};
-  const changed = Object.keys(values).filter(
-    (k) => base && JSON.stringify(values[k]) !== JSON.stringify(base.values[k]),
-  );
+  // Durations compare by their length, not by their spelling.
+  const same = (a: unknown, b: unknown) =>
+    isGoDuration(a) && isGoDuration(b)
+      ? formatDuration(a) === formatDuration(b)
+      : JSON.stringify(a) === JSON.stringify(b);
+  const changed = Object.keys(values).filter((k) => base && !same(values[k], base.values[k]));
+  const invalid = Object.entries(texts).some(([, x]) => parseDuration(x) === null);
 
   const send = () => {
     if (!base) return;
@@ -82,12 +132,12 @@ export function SettingsPage() {
             ? { ok: true, text: t('admin.saved') }
             : { ok: false, text: reasonText(t, r.reason) },
         );
-        if (r.ok) setDraft(null);
+        if (r.ok) reset();
         void qc.invalidateQueries({ queryKey: settingsKey });
         // ui.* and supporters.* reach the session (shortcuts, navigation).
         void qc.invalidateQueries({ queryKey: sessionKey });
       },
-      { key: 'settings', onUndo: () => setDraft(null) },
+      { key: 'settings', onUndo: () => reset() },
     );
   };
   const submit = (e: FormEvent) => {
@@ -121,37 +171,65 @@ export function SettingsPage() {
             {keys
               .filter((k) => sectionOf(k) === g)
               .map((k) => {
-                const v = values[k];
+                const v =
+                  base?.values[k] !== undefined && isGoDuration(base.values[k])
+                    ? 'duration'
+                    : typeof values[k];
                 const id = `setting-${k}`;
-                return typeof v === 'boolean' ? (
-                  <label
-                    key={k}
-                    className="flex items-center justify-between gap-3 text-sm sm:col-span-2"
-                  >
-                    <span className="font-mono">{k}</span>
-                    <input
-                      id={id}
-                      type="checkbox"
-                      className="size-5"
-                      disabled={conflict}
-                      checked={v}
-                      onChange={(e) => set(k, e.target.checked)}
-                    />
-                  </label>
-                ) : (
-                  <div key={k} className="flex flex-col gap-1">
-                    <label htmlFor={id} className="font-mono text-sm text-muted">
-                      {k}
+                const { label, help } = describe(t, k);
+                const head = (
+                  <span className="flex min-w-0 flex-col">
+                    <span className="font-medium">{label}</span>
+                    {help && <span className="text-xs text-muted">{help}</span>}
+                    <span className="font-mono text-xs text-muted">{k}</span>
+                  </span>
+                );
+                if (v === 'boolean') {
+                  return (
+                    <label
+                      key={k}
+                      className="flex items-center justify-between gap-3 text-sm sm:col-span-2"
+                    >
+                      {head}
+                      <input
+                        id={id}
+                        type="checkbox"
+                        className="size-5 shrink-0"
+                        disabled={conflict}
+                        checked={values[k] === true}
+                        onChange={(e) => set(k, e.target.checked)}
+                      />
                     </label>
+                  );
+                }
+                const text =
+                  v === 'duration'
+                    ? (texts[k] ?? formatDuration(String(values[k])))
+                    : String(values[k] ?? '');
+                const bad =
+                  v === 'duration' && texts[k] !== undefined && parseDuration(texts[k]) === null;
+                return (
+                  <div key={k} className="flex flex-col gap-1 text-sm">
+                    <label htmlFor={id}>{head}</label>
                     <Input
                       id={id}
-                      type={typeof v === 'number' ? 'number' : 'text'}
+                      type={v === 'number' ? 'number' : 'text'}
+                      inputMode={v === 'duration' ? 'text' : undefined}
                       disabled={conflict}
-                      value={String(v ?? '')}
-                      onChange={(e) =>
-                        set(k, typeof v === 'number' ? Number(e.target.value) : e.target.value)
-                      }
+                      aria-invalid={bad}
+                      value={text}
+                      onChange={(e) => {
+                        if (v === 'duration') {
+                          const raw = e.target.value;
+                          setTexts((x) => ({ ...x, [k]: raw }));
+                          const go = parseDuration(raw);
+                          if (go) set(k, go);
+                        } else set(k, v === 'number' ? Number(e.target.value) : e.target.value);
+                      }}
                     />
+                    {bad && (
+                      <span className="text-xs text-danger">{t('settings.badDuration')}</span>
+                    )}
                   </div>
                 );
               })}
@@ -168,7 +246,7 @@ export function SettingsPage() {
       )}
       <div className="flex gap-2">
         {!conflict && (
-          <Button type="submit" disabled={changed.length === 0}>
+          <Button type="submit" disabled={changed.length === 0 || invalid}>
             {t('settings.save', { count: changed.length })}
           </Button>
         )}
@@ -178,7 +256,7 @@ export function SettingsPage() {
             variant="outline"
             onClick={async () => {
               await qc.invalidateQueries({ queryKey: settingsKey });
-              setDraft(null);
+              reset();
               setConflict(false);
               setMessage(null);
             }}
@@ -187,7 +265,7 @@ export function SettingsPage() {
           </Button>
         )}
         {changed.length > 0 && !conflict && (
-          <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
+          <Button type="button" variant="ghost" onClick={() => reset()}>
             {t('settings.discard')}
           </Button>
         )}
