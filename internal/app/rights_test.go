@@ -68,6 +68,15 @@ func (f *rightsFixture) unique(prefix string) string {
 // raw sends a request as role and returns status and reason code.
 func (f *rightsFixture) raw(role, method, path string, body any) (int, string) {
 	f.t.Helper()
+	status, b := f.rawBody(role, method, path, body)
+	var p struct{ Reason string }
+	_ = json.Unmarshal(b, &p)
+	return status, p.Reason
+}
+
+// rawBody sends a request as role and returns status and body.
+func (f *rightsFixture) rawBody(role, method, path string, body any) (int, []byte) {
+	f.t.Helper()
 	var rd io.Reader
 	ctype := "application/json"
 	switch b := body.(type) {
@@ -92,9 +101,26 @@ func (f *rightsFixture) raw(role, method, path string, body any) (int, string) {
 		f.t.Fatal(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	var p struct{ Reason string }
-	_ = json.NewDecoder(resp.Body).Decode(&p)
-	return resp.StatusCode, p.Reason
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return resp.StatusCode, b
+}
+
+// caller returns who sends op for role: a session that ends or changes
+// runs on its own login.
+func (f *rightsFixture) caller(op matrixOp, role string) string {
+	f.t.Helper()
+	if !op.last || role == rX {
+		return role
+	}
+	pw := matrixPassword
+	if role == rP {
+		pw = f.pwchangeTemp
+	}
+	f.c["fresh"] = login(f.t, f.base, role, pw)
+	return "fresh"
 }
 
 // as returns the client of a role; it fails when the call fails.
@@ -537,26 +563,74 @@ func TestRightsMatrix(t *testing.T) {
 		}
 		for i, role := range matrixRoles {
 			r := op.req(f, role)
-			// A session that ends or changes runs on its own login.
-			who := role
-			if op.last && role != rX {
-				pw := matrixPassword
-				if role == rP {
-					pw = f.pwchangeTemp
-				}
-				name := role
-				if role == rA {
-					name = "admin"
-				}
-				f.c["fresh"] = login(t, f.base, name, pw)
-				who = "fresh"
-			}
-			status, reason := f.raw(who, op.method, r.path, r.body)
+			status, reason := f.raw(f.caller(op, role), op.method, r.path, r.body)
 			if got, want := classify(status, reason), op.expect[i]; got != want {
 				t.Errorf("%s %s as %s: %d %s (%c), want %c", op.method, op.path, role, status, reason, got, want)
 			}
 		}
 	}
+}
+
+// TestForbiddenHidesExistence checks the order of the rights check
+// (revision 2.4 candidate 14): a role that may not use a kind of resource
+// gets 403 before any lookup of the object, so the answer for an existing
+// and a missing ID is the same in status and body.
+func TestForbiddenHidesExistence(t *testing.T) {
+	f := newRightsFixture(t)
+	param := regexp.MustCompile(`^\{[^}]+\}$`)
+	checked := 0
+	for _, op := range matrix() {
+		if op.req == nil || !strings.Contains(op.path, "{") {
+			continue
+		}
+		for i, role := range matrixRoles {
+			if op.expect[i] != 'F' {
+				continue
+			}
+			r := op.req(f, role)
+			// The same path with every ID swapped for one that does not exist.
+			tmpl, segs := strings.Split(op.path, "/"), strings.Split(r.path, "/")
+			if len(tmpl) != len(segs) {
+				t.Fatalf("%s: path %s does not match the template", op.path, r.path)
+			}
+			missing := slices.Clone(segs)
+			for j, seg := range tmpl {
+				if param.MatchString(seg) {
+					missing[j] = uuid.NewString()
+				}
+			}
+			var bodies [2]string
+			var statuses [2]int
+			for k, path := range []string{r.path, strings.Join(missing, "/")} {
+				status, b := f.rawBody(f.caller(op, role), op.method, path, r.body)
+				statuses[k], bodies[k] = status, withoutRequestID(t, b)
+			}
+			if statuses[0] != http.StatusForbidden || statuses != [2]int{statuses[0], statuses[0]} || bodies[0] != bodies[1] {
+				t.Errorf("%s %s as %s: existing %d %s, missing %d %s",
+					op.method, op.path, role, statuses[0], bodies[0], statuses[1], bodies[1])
+			}
+			checked++
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no forbidden operation with an ID checked")
+	}
+}
+
+// withoutRequestID returns a Problem Details body without its request ID,
+// which differs on every response.
+func withoutRequestID(t *testing.T, b []byte) string {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return string(b)
+	}
+	delete(m, "request_id")
+	out, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
 }
 
 // TestWebSocketMatrix checks the upgrade and every topic for every role
