@@ -212,6 +212,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/servers/{id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The last log lines of the server's container over the agent (UI-009, logs.tail).
+         * @description Earlier lines than the live view holds (Gesamtkonzept 5, revision 2.4 candidate 20). RCON admin everywhere, server admin in his scope, only with a connected agent; moderators and supporters never (403). The lines are foreign data, cleaned and bounded (SEC-006). The agent's rate limit per container applies (429).
+         */
+        get: operations["getServerLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/server-groups": {
         parameters: {
             query?: never;
@@ -976,6 +998,15 @@ export interface components {
             min?: number;
             max?: number;
         };
+        LogTail: {
+            /** Format: uuid */
+            server_id: string;
+            container: string;
+            /** @description Foreign data from the container (SEC-006). */
+            lines: string[];
+            /** @description Lines or the whole were cut to the limits. */
+            truncated: boolean;
+        };
         AllowedCommands: {
             free_input: boolean;
             commands: components["schemas"]["CatalogCommand"][];
@@ -1731,6 +1762,62 @@ export interface operations {
                 };
             };
             /** @description The agent or the game server did not answer in time. */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getServerLogs: {
+        parameters: {
+            query?: {
+                lines?: number;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The lines, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogTail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            /** @description The agent or Docker could not read the logs (action_failed). */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No agent assigned or connected (agent_unavailable). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The agent did not answer in time. */
             504: {
                 headers: {
                     [name: string]: unknown;

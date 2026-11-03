@@ -21,9 +21,10 @@ import (
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
-// Agents is what the actions need from the agent hub.
+// Agents is what the actions and the log tail need from the agent hub.
 type Agents interface {
 	Request(ctx context.Context, agentID, typ string, payload any) (agentproto.Result, error)
+	RequestData(ctx context.Context, agentID, typ string, payload any, collect func(agentproto.Envelope)) (agentproto.Result, error)
 }
 
 // Executor runs an RCON command, for the restart without agent.

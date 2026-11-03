@@ -31,11 +31,14 @@ type Session struct {
 	mu      sync.Mutex
 	reason  string // why the session ends, set by close
 	pending map[string]chan agentproto.Result
+	// collect takes the messages that answer an order with data before
+	// its result (logs.tail), by order ID.
+	collect map[string]func(agentproto.Envelope)
 	done    chan struct{} // closed when run ends
 }
 
 func newSession(h *Hub, conn *websocket.Conn, agentID string, hello agentproto.Hello, remote string) *Session {
-	return &Session{AgentID: agentID, Hello: hello, Remote: remote, h: h, conn: conn, cancel: func() {}, pending: map[string]chan agentproto.Result{}, done: make(chan struct{})}
+	return &Session{AgentID: agentID, Hello: hello, Remote: remote, h: h, conn: conn, cancel: func() {}, pending: map[string]chan agentproto.Result{}, collect: map[string]func(agentproto.Envelope){}, done: make(chan struct{})}
 }
 
 // run reads messages until the connection ends and returns the reason.
@@ -127,8 +130,9 @@ func (s *Session) close(code websocket.StatusCode, reason string) {
 	cancel()
 }
 
-// request sends an order and waits for its result until ctx ends.
-func (s *Session) request(ctx context.Context, typ string, payload any) (agentproto.Result, error) {
+// request sends an order and waits for its result until ctx ends; collect,
+// if set, gets the messages that answer the order before its result.
+func (s *Session) request(ctx context.Context, typ string, payload any, collect func(agentproto.Envelope)) (agentproto.Result, error) {
 	e, err := agentproto.New(typ, "", payload)
 	if err != nil {
 		return agentproto.Result{}, err
@@ -147,10 +151,14 @@ func (s *Session) request(ctx context.Context, typ string, payload any) (agentpr
 		return agentproto.Result{}, ErrBusy
 	}
 	s.pending[e.ID] = ch
+	if collect != nil {
+		s.collect[e.ID] = collect
+	}
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
 		delete(s.pending, e.ID)
+		delete(s.collect, e.ID)
 		s.mu.Unlock()
 	}()
 	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -191,6 +199,16 @@ func (s *Session) result(e agentproto.Envelope) {
 
 // dispatch handles a message of an admitted agent.
 func (h *Hub) dispatch(s *Session, e agentproto.Envelope) {
+	if e.Type != agentproto.TypeResult && e.Ref != "" {
+		s.mu.Lock()
+		c := s.collect[e.Ref]
+		s.mu.Unlock()
+		if c != nil {
+			// An answer with data goes to its order, not to the live data.
+			c(e)
+			return
+		}
+	}
 	switch e.Type {
 	case agentproto.TypeResult:
 		s.result(e)

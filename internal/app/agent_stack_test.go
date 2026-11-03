@@ -57,6 +57,14 @@ func (b *hostBackend) Handle(ctx context.Context, e agentproto.Envelope, out age
 	if e.Type == agentproto.TypeLogsFollow {
 		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"[Server] <b>Done</b>"}})
 	}
+	if e.Type == agentproto.TypeLogsTail {
+		// lines=7 stands for a container over the agent's rate.
+		if t, _ := agentproto.Payload[agentproto.LogsTail](e); t.Lines == 7 {
+			_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeRateLimited})
+			return
+		}
+		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"old 1", "old 2", "old \x1b[31m3\u202e"}})
+	}
 	_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeOK})
 }
 
@@ -213,6 +221,35 @@ func TestAgentThroughTheStack(t *testing.T) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
+	}
+
+	// Earlier lines come over logs.tail as foreign data, never into the
+	// live ring; the agent's rate limit comes through as 429 (revision 2.4
+	// candidate 20).
+	var tail struct {
+		Container string
+		Lines     []string
+		Truncated bool
+	}
+	admin.must(http.MethodGet, "/servers/"+s.server+"/logs?lines=2", nil, &tail, http.StatusOK)
+	// Control characters go; format characters stay in free text and the
+	// interface isolates them (SEC-006).
+	if tail.Container != "mc" || !slices.Equal(tail.Lines, []string{"old 2", "old [31m3\u202e"}) || !tail.Truncated {
+		t.Errorf("tail = %+v", tail)
+	}
+	if code := admin.call(http.MethodGet, "/servers/"+s.server+"/logs?lines=7", nil, nil); code != http.StatusTooManyRequests {
+		t.Errorf("tail over the agent's rate = %d", code)
+	}
+	if len(s.eventsOf("logs.tail")) == 0 {
+		t.Error("logs.tail missing in the panel log")
+	}
+	ws2 := s.console("admin")
+	subscribe(t, ws2, "server."+s.server+".logs")
+	data = next(t, ws2, func(typ, topic string, _ json.RawMessage) bool {
+		return typ == "event" && topic == "server."+s.server+".logs"
+	})
+	if strings.Contains(string(data), "old") {
+		t.Errorf("tail lines in the live ring: %s", data)
 	}
 
 	// A restart goes to the agent and is audited.

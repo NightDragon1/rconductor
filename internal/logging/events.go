@@ -82,6 +82,9 @@ const (
 	DockerAction     Code = "docker.action"
 	LogsFollowStart  Code = "logs.follow.start"
 	LogsFollowStop   Code = "logs.follow.stop"
+	// LogsTail: earlier log lines read over the agent (revision 2.4
+	// candidate 20).
+	LogsTail Code = "logs.tail"
 )
 
 // Live data.
@@ -103,6 +106,6 @@ var AllCodes = []Code{
 	ProfileImported, ProfileRejected, ProfileOverridden,
 	AgentConnected, AgentRejected, AgentPaired, AgentRevoked, AgentLimit, AgentDisconnected,
 	AgentHandshake, AgentForbidden, AgentUnsupported, DockerAction,
-	LogsFollowStart, LogsFollowStop,
+	LogsFollowStart, LogsFollowStop, LogsTail,
 	WSSubscribe, WSSubscribeDenied, CacheStale,
 }
