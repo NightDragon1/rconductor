@@ -2,6 +2,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { LiveProvider } from '@/lib/live-context';
+import { UndoProvider } from '@/lib/undo';
 import { ChevronsLeft, ChevronsRight, LogOut, Menu, SunMoon, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -83,7 +84,9 @@ export function Shell() {
         </header>
         <main className="min-w-0 flex-1 p-4 md:p-8">
           <LiveProvider>
-            <Outlet />
+            <UndoProvider>
+              <Outlet />
+            </UndoProvider>
           </LiveProvider>
         </main>
       </div>
