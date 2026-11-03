@@ -11,6 +11,7 @@ export interface StackState {
   server_name: string;
   servers: Record<string, string>;
   locked_user_id: string;
+  expired_invite: string;
 }
 
 interface Fixtures {

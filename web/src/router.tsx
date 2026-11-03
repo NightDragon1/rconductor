@@ -22,6 +22,7 @@ import { LogsTab } from '@/pages/server/LogsTab';
 import { OverviewTab } from '@/pages/server/OverviewTab';
 import { ServerLayout } from '@/pages/server/ServerLayout';
 import { ServersPage } from '@/pages/Servers';
+import { InvitePage } from '@/pages/Invite';
 import { LoginPage } from '@/pages/Login';
 import { NotFoundPage } from '@/pages/NotFound';
 import { Shell } from '@/pages/Shell';
@@ -33,6 +34,14 @@ export interface RouterContext {
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: Outlet,
   notFoundComponent: NotFoundPage,
+});
+
+// The invitation is open without a session; the token comes in the
+// fragment (revision 2.4 candidate 23).
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'invite',
+  component: InvitePage,
 });
 
 const loginRoute = createRoute({
@@ -165,6 +174,7 @@ const profileRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  inviteRoute,
   changePasswordRoute,
   appRoute.addChildren([
     homeRoute,
