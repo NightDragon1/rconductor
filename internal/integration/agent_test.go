@@ -266,7 +266,10 @@ func exerciseAgent(t *testing.T, p *panelSide, agentID, labeled, plain string, l
 	if r := p.request(agentID, agentproto.TypeLogsTail, agentproto.LogsTail{Container: labeled, Lines: 5}); r.Code != agentproto.CodeOK {
 		t.Errorf("logs.tail: %+v", r)
 	}
-	waitUntil(t, 10*time.Second, "log lines", func() bool { return slices.Contains(p.data.Logs(agentID, labeled), "tick") })
+	waitUntil(t, 10*time.Second, "log lines", func() bool {
+		l, _ := p.data.Logs(agentID, labeled)
+		return slices.Contains(l, "tick")
+	})
 
 	before := startedAt(t, labeledCtr)
 	if r := p.request(agentID, agentproto.TypeContainerAction, agentproto.ContainerAction{Container: labeled, Action: "restart"}); r.Code != agentproto.CodeOK {
