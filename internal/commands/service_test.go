@@ -537,9 +537,10 @@ func TestAllowedCommands(t *testing.T) {
 
 // TestCatalogParamsInPipeline covers revision 2.4 candidate 19: for
 // moderator and supporter a command with catalog entry must fit its
-// parameters; it is refused as invalid before the rate limit and never
-// reaches the game server. Admins and commands without catalog entry are
-// not affected.
+// parameters (players after the profile's pattern, no selectors, no
+// arguments after the last one unless it is text); it is refused as
+// invalid before the rate limit and never reaches the game server.
+// Admins and commands without catalog entry are not affected.
 func TestCatalogParamsInPipeline(t *testing.T) {
 	w := newWorld(t)
 	for _, who := range []string{"m", "sup"} {
@@ -552,7 +553,12 @@ func TestCatalogParamsInPipeline(t *testing.T) {
 	if _, err := w.send("m", "kick"); reason(err) != ReasonInvalid {
 		t.Errorf("kick without player: %v", err)
 	}
-	for _, ok := range []string{"time set day", "TIME SET Night", "kick steve", "kick steve for spam", "whitelist add x y"} {
+	for _, bad := range []string{"kick @a", "kick @e[type=player]", `kick "x"`, "time set day extra", "whitelist add x y"} {
+		if _, err := w.send("m", bad); reason(err) != ReasonInvalid {
+			t.Errorf("moderator %q: %v, want invalid", bad, err)
+		}
+	}
+	for _, ok := range []string{"time set day", "TIME SET Night", "kick steve", "kick steve for spam", "whitelist add steve"} {
 		if _, err := w.send("m", ok); err != nil {
 			t.Errorf("moderator %q: %v", ok, err)
 		}
@@ -567,7 +573,7 @@ func TestCatalogParamsInPipeline(t *testing.T) {
 	var n int
 	_ = w.st.DB.QueryRowContext(context.Background(),
 		`SELECT count(*) FROM audit_log WHERE action = 'cmd.denied' AND reason_code = 'invalid'`).Scan(&n)
-	if n != 3 {
-		t.Errorf("cmd.denied invalid = %d, want 3", n)
+	if n != 8 {
+		t.Errorf("cmd.denied invalid = %d, want 8", n)
 	}
 }

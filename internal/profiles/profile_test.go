@@ -115,6 +115,7 @@ func TestRejected(t *testing.T) {
 		"duplicate path":        {"  - path: say", "  - path: list", "listed twice"},
 		"unknown param type":    {"{ name: text, type: text }", "{ name: text, type: color }", "type must be"},
 		"wrapper with space":    {"wrappers: [execute]", "wrappers: [\"execute run\"]", "single command name"},
+		"bad player pattern":    {"wrappers: [execute]", "wrappers: [execute]\n  player_pattern: \"(?=x)\"", "syntax.player_pattern"},
 	}
 	for name, tc := range cases {
 		if !strings.Contains(base, tc.from) {

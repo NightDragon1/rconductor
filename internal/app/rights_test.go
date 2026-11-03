@@ -752,6 +752,11 @@ func TestCatalogParams(t *testing.T) {
 		{rMR, "time set day", http.StatusOK, ""},
 		{rMR, "kick", http.StatusUnprocessableEntity, "parameter player: missing"},
 		{rMR, "kick steve spamming in chat", http.StatusOK, ""},
+		{rMR, "kick @a", http.StatusUnprocessableEntity, "parameter player: not a player name"},
+		{rMR, "kick @e[type=player]", http.StatusUnprocessableEntity, "parameter player: not a player name"},
+		{rMR, `kick "x"`, http.StatusUnprocessableEntity, "parameter player: not a player name"},
+		{rMR, "time set day extra", http.StatusUnprocessableEntity, "unexpected argument"},
+		{rA, "time set day extra", http.StatusOK, ""},
 	}
 	for _, c := range cases {
 		status, body := f.rawBody(c.role, http.MethodPost, path, map[string]string{"command": c.command})
@@ -774,7 +779,7 @@ func TestCatalogParams(t *testing.T) {
 			denied++
 		}
 	}
-	if denied != 3 {
-		t.Errorf("cmd.denied with invalid = %d, want 3: %+v", denied, audit.Items)
+	if denied != 7 {
+		t.Errorf("cmd.denied with invalid = %d, want 7: %+v", denied, audit.Items)
 	}
 }

@@ -233,10 +233,12 @@ paths:
         moderators and supporters only commands of the list that applies
         to them on this server, never wrappers (CMD-004, CMD-005). For
         them a command with catalog entry must also fit its parameters
-        (player one token, choice one of its values, number a whole
-        number in range, text the rest, required ones present), else 422
-        invalid with the parameter in the detail (revision 2.4 candidate
-        19); commands without catalog entry pass as they are. The
+        (player a name after the profile's player_pattern, never a
+        selector such as @a; choice one of its values; number a whole
+        number in range; text the rest; required ones present; further
+        arguments only after a text parameter), else 422 invalid with
+        the parameter in the detail (revision 2.4 candidate 19);
+        commands without catalog entry pass as they are. The
         answer comes synchronously and as event to the console; the
         request ID is also the ID of the first audit entry (CMD-007).
         The command has 10 s from its acceptance, the wait in the
@@ -1846,6 +1848,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CatalogCommand"
+        player_pattern:
+          type: string
+          description: >-
+            RE2 pattern a player parameter must match as a whole
+            (syntax.player_pattern of the game profile). Without it a
+            player must not start with @ nor hold quotes or control
+            characters (revision 2.4 candidate 19).
 
     CatalogCommand:
       type: object

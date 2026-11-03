@@ -436,6 +436,9 @@ type AgentToken struct {
 type AllowedCommands struct {
 	Commands  []CatalogCommand `json:"commands"`
 	FreeInput bool             `json:"free_input"`
+
+	// PlayerPattern RE2 pattern a player parameter must match as a whole (syntax.player_pattern of the game profile). Without it a player must not start with @ nor hold quotes or control characters (revision 2.4 candidate 19).
+	PlayerPattern *string `json:"player_pattern,omitempty"`
 }
 
 // Assignments defines model for Assignments.
