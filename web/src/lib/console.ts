@@ -16,6 +16,8 @@ export interface CmdBlock {
   truncated?: boolean;
   result: Result;
   reason?: string;
+  detail?: string; // what was wrong, e.g. the parameter (422)
+  retryAfter?: number; // seconds, for rate_limited
 }
 
 // LogBlock holds the log lines of one delivery (CMD-014, UI-009).

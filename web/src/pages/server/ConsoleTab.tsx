@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMutation } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, ApiError, must } from '@/api/client';
 import { useServer } from '@/api/live-servers';
 import { useAllowedCommands, useFavorites, useServers } from '@/api/servers';
 import { useSession } from '@/api/session';
@@ -12,50 +10,18 @@ import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  addCommands,
-  addLogLines,
   MAX_COMMANDS,
   ownCommands,
   suggest,
-  updateBuffer,
-  useBuffer,
   visible,
   type Block,
   type CmdBlock,
-  type Result,
   type Tracks,
 } from '@/lib/console';
 import { clock } from '@/lib/format';
-import { useTopic } from '@/lib/live-context';
 import { stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
-
-interface Wire {
-  request_id: string;
-  ts: string;
-  user_id?: string;
-  pseudonym?: string;
-  role?: string;
-  command: string;
-  response?: string;
-  truncated?: boolean;
-  result: Result;
-  reason?: string;
-}
-
-const fromWire = (e: Wire): CmdBlock => ({
-  kind: 'cmd',
-  id: e.request_id,
-  ts: e.ts,
-  userId: e.user_id,
-  pseudonym: e.pseudonym,
-  role: e.role,
-  command: e.command,
-  response: e.response,
-  truncated: e.truncated,
-  result: e.result,
-  reason: e.reason,
-});
+import { useConsoleFeed } from './useConsoleFeed';
 
 // tone colors a block and its marker on the timeline (CMD-013): own
 // commands, those of others, logs; errors red.
@@ -91,7 +57,8 @@ function CommandView({
   const { t, i18n } = useTranslation();
   const pre = useRef<HTMLPreElement>(null);
   // Answers are foreign data: text only, color codes dropped (SEC-006).
-  const answer = b.response ? stripCodes(b.response) : '';
+  // The detail of a refusal comes from the panel, not the game server.
+  const answer = b.response ? stripCodes(b.response) : (b.detail ?? '');
   const copy = answer ? `${b.command}\n${answer}` : b.command;
   return (
     <article
@@ -202,7 +169,6 @@ export function ConsoleTab() {
   const server = useServer();
   const id = server?.id ?? '';
   const hasAgent = !!server?.agent_id;
-  const buf = useBuffer(id);
   const allowed = useAllowedCommands(id, !!id);
   const [tracks, setTracks] = useState<Tracks>({ own: true, others: true, logs: true });
   const [filter, setFilter] = useState('');
@@ -212,88 +178,8 @@ export function ConsoleTab() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [older, setOlder] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
-
-  // The last 50 commands come from the history, then live (G1).
-  const loadPage = async (cursor?: string) => {
-    const page = must(
-      await api.GET('/servers/{id}/history', {
-        params: { path: { id }, query: { limit: 50, cursor } },
-      }),
-    );
-    updateBuffer(id, (b) => ({
-      ...addCommands(
-        b,
-        page.items.map((e) => fromWire(e as Wire)),
-      ),
-      loaded: true,
-      cursor: page.next_cursor || undefined,
-    }));
-  };
-  useEffect(() => {
-    if (id && !buf.loaded) void loadPage().catch(() => undefined);
-    // Only when the server changes; loadPage reads the current id.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, buf.loaded]);
-
-  useTopic(id ? `server.${id}.console` : undefined, (m) => {
-    if (m.type === 'event' && m.data && typeof m.data === 'object') {
-      updateBuffer(id, (b) => addCommands(b, [fromWire(m.data as Wire)]));
-    }
-  });
-  // Logs flow only while the track is shown (G2, UI-009).
-  useTopic(id && hasAgent && tracks.logs ? `server.${id}.logs` : undefined, (m) => {
-    const d = m.data as { lines?: unknown } | undefined;
-    if (m.type === 'event' && Array.isArray(d?.lines)) {
-      const lines = d.lines.filter((l): l is string => typeof l === 'string');
-      updateBuffer(id, (b) => addLogLines(b, lines, new Date().toISOString()));
-    }
-  });
-
-  const send = useMutation({
-    mutationFn: async (command: string) =>
-      must(
-        await api.POST('/servers/{id}/commands', {
-          params: { path: { id } },
-          body: { command },
-        }),
-      ),
-    onSuccess: (r) =>
-      updateBuffer(id, (b) =>
-        addCommands(b, [
-          {
-            kind: 'cmd',
-            id: r.request_id,
-            ts: r.ts,
-            userId: me,
-            pseudonym: session?.user.pseudonym,
-            role: session?.user.role,
-            command: r.command,
-            response: r.response,
-            truncated: r.truncated,
-            result: 'ok',
-          },
-        ]),
-      ),
-    onError: (e, command) => {
-      const p = e instanceof ApiError ? e.problem : undefined;
-      const status = e instanceof ApiError ? e.status : 0;
-      updateBuffer(id, (b) =>
-        addCommands(b, [
-          {
-            kind: 'cmd',
-            id: p?.request_id ?? `local-${Date.now()}`,
-            ts: new Date().toISOString(),
-            userId: me,
-            pseudonym: session?.user.pseudonym,
-            role: session?.user.role,
-            command,
-            result: status === 504 ? 'timeout' : status === 403 ? 'denied' : 'error',
-            reason: p?.reason ?? undefined,
-          },
-        ]),
-      );
-    },
-  });
+  // Logs flow only while their track is shown (G2, UI-009).
+  const { buf, send, loadOlder } = useConsoleFeed(id, hasAgent && tracks.logs);
 
   const items = visible(buf, { ...tracks, logs: tracks.logs && hasAgent }, filter, me);
   // TanStack Virtual keeps its own state, so the React Compiler skips this
@@ -429,7 +315,7 @@ export function ConsoleTab() {
                 onClick={() => {
                   setOlder(true);
                   atEnd.current = false;
-                  void loadPage(buf.cursor)
+                  void loadOlder()
                     .catch(() => undefined)
                     .finally(() => setOlder(false));
                 }}
