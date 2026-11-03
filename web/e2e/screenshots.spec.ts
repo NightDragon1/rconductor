@@ -106,3 +106,29 @@ for (const [width, name] of [
     await shoot(page, name, false);
   });
 }
+
+// The user administration (step 8a): list, selection with mass actions and
+// the side panel; the moderator's view; the phone.
+for (const [user, width, name] of [
+  ['admin', 1440, 'users-admin'],
+  ['mod', 1440, 'users-moderator'],
+  ['admin', 390, 'phone-users-admin'],
+] as const) {
+  test(`screenshot ${name}`, async ({ page, state }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page, user, secret(state, user));
+    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    await page.goto('admin/users');
+    await expect(page.getByRole('heading', { name: 'Users', level: 1 })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    if (user === 'admin') {
+      await page.getByRole('checkbox', { name: 'Select mod', exact: true }).check();
+      await page.getByRole('checkbox', { name: 'Select mod2', exact: true }).check();
+      await page.getByRole('button', { name: 'mod', exact: true }).click();
+    } else {
+      await page.getByRole('button', { name: 'sup', exact: true }).click();
+    }
+    await page.waitForTimeout(300);
+    await shoot(page, name);
+  });
+}

@@ -22,6 +22,7 @@ import { LogsTab } from '@/pages/server/LogsTab';
 import { OverviewTab } from '@/pages/server/OverviewTab';
 import { ServerLayout } from '@/pages/server/ServerLayout';
 import { ServersPage } from '@/pages/Servers';
+import { UsersPage } from '@/pages/admin/Users';
 import { InvitePage } from '@/pages/Invite';
 import { LoginPage } from '@/pages/Login';
 import { NotFoundPage } from '@/pages/NotFound';
@@ -80,7 +81,7 @@ const homeRoute = createRoute({ getParentRoute: () => appRoute, path: '/', compo
 // A page outside the role's navigation does not exist for it (Design 6.2).
 // The guard needs only the session: no other request goes out for a page
 // the role may not see. The backend checks every request anyway.
-function guarded(path: string, key: string) {
+function guarded(path: string, key: string, component?: () => React.JSX.Element | null) {
   return createRoute({
     getParentRoute: () => appRoute,
     path,
@@ -96,13 +97,13 @@ function guarded(path: string, key: string) {
       )
         throw notFound();
     },
-    component: placeholder(key),
+    component: component ?? placeholder(key),
   });
 }
 
 const pages = [
   guarded('/audit', 'audit'),
-  guarded('/admin/users', 'users'),
+  guarded('/admin/users', 'users', UsersPage),
   guarded('/admin/groups', 'groups'),
   guarded('/admin/command-lists', 'commandLists'),
   guarded('/admin/servers', 'serverAdmin'),
