@@ -108,3 +108,9 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Fundstelle:** Design 2.2 (/auth/session), 6.2 (Navigation je Rolle); UI-011, ROLE-006.
 - **Entscheidung (M4, Schritt 2):** Session.ui enthält zusätzlich supporters\_enabled (globaler Schalter) und supporters\_allowed (Freigabe des Moderators), damit Navigation und Router-Guards allein aus der Session entscheiden. Über Rechte entscheidet weiter nur das Backend.
 - **Vorschlag:** Design 2.2 bei /auth/session um die Felder ergänzen.
+
+## 16. Neustart ohne Agent in der Oberfläche
+
+- **Fundstelle:** Design 6.3 (Aktionen im Kopf nur, wenn der Server einem Agent zugeordnet ist) gegenüber AGT-009 (R1, Kann: ohne Agent Neustart per stop-Befehl und Restart-Policy unless-stopped) und Design 2.2 (/servers/{id}/actions).
+- **Entscheidung (M4, Schritt 4, W6 B):** Ohne Agent zeigt der Kopf für RCON-Admin und Server-Admin im Scope nur „Neustart über RCON (stop-Befehl)“. Der Bestätigungsdialog sagt: Der Server wird über den stop-Befehl beendet. Er startet nur neu, wenn ein Neustart-Mechanismus greift (z. B. Docker restart: always oder unless-stopped; on-failure greift bei sauberem Beenden nicht). Start und Stopp gibt es nur mit Agent.
+- **Vorschlag:** Design 6.3, Absatz zu den Aktionen, um diesen Fall ergänzen.
