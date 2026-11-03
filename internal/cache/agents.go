@@ -100,7 +100,7 @@ func (d *AgentData) OnConnect(f func(agentID string)) { d.onConnect = f }
 
 // NewAgentData returns an empty store.
 func NewAgentData(log *slog.Logger) *AgentData {
-	return &AgentData{log: log, now: time.Now, agents: map[string]*agentEntry{}}
+	return &AgentData{log: log, now: func() time.Time { return time.Now().UTC() }, agents: map[string]*agentEntry{}}
 }
 
 // OnChange sets the receiver of container changes.
