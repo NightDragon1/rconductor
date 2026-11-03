@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, must } from '@/api/client';
 import { useServer } from '@/api/live-servers';
+import type { Server } from '@/api/servers';
 import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,9 +19,14 @@ const STEP = 200;
 // tab is open, earlier lines on demand over logs.tail (revision 2.4
 // candidate 20). The lines share the buffer with the console's log track.
 export function LogsTab() {
-  const { t } = useTranslation();
   const server = useServer();
-  const id = server?.id ?? '';
+  return server ? <LogsView server={server} /> : null;
+}
+
+// LogsView is the tab for a given server.
+export function LogsView({ server }: { server: Server }) {
+  const { t } = useTranslation();
+  const id = server.id;
   useLogsFeed(id, !!id);
   const buf = useBuffer(id);
   const [filter, setFilter] = useState('');
@@ -66,7 +72,6 @@ export function LogsTab() {
     }
   };
 
-  if (!server) return null;
   const agentGone = server.runtime?.container?.agent_connected === false;
   return (
     <section
