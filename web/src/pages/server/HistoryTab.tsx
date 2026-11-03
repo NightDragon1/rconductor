@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHistory, type HistoryEntry } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { Button } from '@/components/ui/button';
+import { CopyButton } from '@/components/CopyButton';
 import { dateTime } from '@/lib/format';
 import { isAdmin, stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
@@ -18,7 +19,7 @@ const resultTone: Record<HistoryEntry['result'], string> = {
 
 function Entry({ e }: { e: HistoryEntry }) {
   const { t, i18n } = useTranslation();
-  const [copied, setCopied] = useState(false);
+  const pre = useRef<HTMLPreElement>(null);
   // Answers are foreign data: text only, color codes dropped (SEC-006).
   const answer = e.response ? stripCodes(e.response) : '';
   return (
@@ -40,19 +41,14 @@ function Entry({ e }: { e: HistoryEntry }) {
       {answer && (
         <details className="text-sm">
           <summary className="cursor-pointer text-muted">{t('history.response')}</summary>
-          <pre className="mt-1 overflow-x-auto rounded bg-surface-raised p-2 font-mono text-xs whitespace-pre-wrap">
+          <pre
+            ref={pre}
+            className="mt-1 overflow-x-auto rounded bg-surface-raised p-2 font-mono text-xs whitespace-pre-wrap"
+          >
             {answer}
           </pre>
           <div className="mt-1 flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                void navigator.clipboard?.writeText(answer).then(() => setCopied(true));
-              }}
-            >
-              {copied ? t('history.copied') : t('history.copy')}
-            </Button>
+            <CopyButton text={answer} target={pre} label={t('history.copy')} />
             {e.truncated && <span className="text-xs text-warn">{t('history.truncated')}</span>}
           </div>
         </details>

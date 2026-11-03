@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { queryOptions, useInfiniteQuery, useQuery, type QueryClient } from '@tanstack/react-query';
+import {
+  queryOptions,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { api, must } from './client';
 import type { components } from './schema';
 
@@ -60,6 +67,27 @@ export function useHistory(id: string) {
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor || undefined,
+  });
+}
+
+export const favoritesKey = ['favorites'] as const;
+
+// useFavorites holds the caller's favorite servers (CMD-001), kept in the
+// backend so that they follow him to every device.
+export function useFavorites(enabled = true) {
+  return useQuery({
+    queryKey: favoritesKey,
+    queryFn: async () => must(await api.GET('/me/favorites')).server_ids,
+    enabled,
+  });
+}
+
+export function useSetFavorites() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) =>
+      must(await api.PUT('/me/favorites', { body: { server_ids: ids } })).server_ids,
+    onSuccess: (ids) => qc.setQueryData(favoritesKey, ids),
   });
 }
 

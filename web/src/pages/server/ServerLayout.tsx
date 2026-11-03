@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Link, Outlet } from '@tanstack/react-router';
+import { Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   useAgents,
   useAllowedCommands,
+  useFavorites,
+  useSetFavorites,
   useProfiles,
   useServerGroups,
   type Server,
@@ -43,6 +46,32 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
+// FavoriteStar puts the server on the admin's favorites for the console
+// (CMD-001).
+function FavoriteStar({ id }: { id: string }) {
+  const { t } = useTranslation();
+  const favorites = useFavorites();
+  const set = useSetFavorites();
+  const on = favorites.data?.includes(id) ?? false;
+  const label = t(on ? 'server.unfavorite' : 'server.favorite');
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      aria-label={label}
+      title={label}
+      disabled={!favorites.data || set.isPending}
+      className="flex size-9 items-center justify-center rounded-md text-muted hover:text-text"
+      onClick={() => {
+        const ids = favorites.data ?? [];
+        set.mutate(on ? ids.filter((x) => x !== id) : [...ids, id]);
+      }}
+    >
+      <Star aria-hidden className={cn('size-5', on && 'fill-warn text-warn')} />
+    </button>
+  );
+}
+
 function Head({ server, role }: { server: Server; role?: string }) {
   const { t, i18n } = useTranslation();
   const now = useNow();
@@ -71,6 +100,7 @@ function Head({ server, role }: { server: Server; role?: string }) {
           <h1 className="truncate font-mono text-2xl font-semibold">
             <bdi>{server.name}</bdi>
           </h1>
+          {admin && <FavoriteStar id={server.id} />}
           <span className={cn('flex items-center gap-1.5 text-sm', text[tone])}>
             <span className={cn('size-2 rounded-full', dot[tone])} aria-hidden />
             {status === 'running' && c?.started_at
