@@ -120,3 +120,12 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Fundstelle:** D-011 (kein HTTPS für die Weboberfläche, TLS am Reverse Proxy) gegenüber CMD-012 (Blöcke kopierbar) und dem Verlauf (Design 6.3). Browser bieten navigator.clipboard nur in einem sicheren Kontext (https oder localhost), nicht über http://lan-ip.
 - **Entscheidung (M4, Schritt 5):** Ohne Clipboard-API markiert der Kopieren-Knopf den Text und zeigt den Hinweis „Press Ctrl+C“. E2E-Test über http mit einem Namen statt localhost.
 - **Vorschlag:** Design 6.1 um eine Zeile „Kopieren“ ergänzen; Hinweis in der Betriebsdoku, dass HTTPS über den Reverse Proxy das direkte Kopieren ermöglicht.
+
+## 18. Betriebshinweis: parallele RCON-Clients bei Minecraft
+
+- **Fundstelle:** README (Betriebsdoku zu NFR-004; eine Anforderung DOC-001 gibt es im Gesamtkonzept nicht); PROT-002 (eine Verbindung je Spieleserver). Beleg: Issue #104.
+- **Befund:** Minecraft sammelt die RCON-Ausgabe aller Verbindungen an einer gemeinsamen Stelle. Senden zwei Verbindungen gleichzeitig, bekommt eine die Ausgabe beider oder eine leere Antwort. Das Panel verursacht die Vermischung nicht (eine Verbindung, Befehle nacheinander), ist aber von ihr betroffen, sobald ein zweiter RCON-Client parallel sendet, z. B. alte itzg/rcon-Container, Backup-Container wie itzg/mc-backup (save-off, save-all), Bots oder rcon-cli-Skripte.
+- **Vorschlag:** Abschnitt im README:
+  - Alte RCON-Container nach dem Umzug auf RCONductor abschalten.
+  - Backup-Läufe als bekannte Ursache für vereinzelt falsche oder leere Antworten nennen.
+  - Verweis auf #104.
