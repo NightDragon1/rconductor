@@ -144,3 +144,15 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Abgrenzung zu CMD-004:** CMD-004 regelt den Pfad (ganze Tokens am Anfang), nicht die Form der Argumente. Das Abnahmekriterium „Mit Eintrag whitelist add sind whitelist add x und whitelist add x y erlaubt“ gilt für den Pfadabgleich; mit Katalogeintrag lehnt die Parameterprüfung whitelist add x y für Moderator und Supporter ab.
 - **Abgrenzung zu CMD-009 (R2):** Dort geht es um Einschränkungen je Listeneintrag, die ein Server-Admin festlegt, z. B. nur bestimmte Spielernamen oder Werte für einen Eintrag einer Befehlsliste. Die R1-Prüfung kennt nur die festen Parameter aus dem Spielprofil und gilt für alle Listen gleich.
 - **Vorschlag:** Design 3.3 um den Schritt „7b: Katalogparameter (Moderator, Supporter)“ ergänzen; Design 7.2 um das Feld syntax.player_pattern; Design 7.3 Spalte „Prüfung im Backend“ an diese Regeln angleichen und für Einschränkungen je Listeneintrag auf CMD-009 verweisen; Abnahme CMD-004 auf „Pfadabgleich“ präzisieren.
+
+## 20. Rückwirkende Logs über logs.tail
+
+- **Fundstelle:** Gesamtkonzept 5 (Logs: „Live- und rückwirkende Container-Logs“); Design 1.5 (logs.tail im Agent-Protokoll); Design 2.2 ohne REST-Endpunkt dafür; Design 8.3 (Ereigniscodes).
+- **Entscheidung (M4, Schritt 7, W8 A):**
+  - GET /servers/{id}/logs?lines=N (Standard 200, höchstens 500) liest die letzten Zeilen über logs.tail.
+  - Nur für RCON-Admin und Server-Admin im Scope mit verbundenem Agent. Ohne Agent antwortet das Panel mit 503 agent\_unavailable, Moderator und Supporter erhalten 403 (Rolle vor Objekt, Kandidat 14).
+  - Die Zeilen sind Fremddaten und werden bereinigt und begrenzt (SEC-006). Sie gehen nur an den Aufrufer, nie in den Live-Ringpuffer.
+  - Das Ratenlimit des Agents je Container greift und kommt als 429 rate\_limited an.
+  - Neuer Ereigniscode logs.tail (Agent-Funktion im Panel).
+  - Der Logs-Reiter hat einen Knopf „Load earlier lines“.
+- **Vorschlag:** Design 2.2 um /servers/{id}/logs (GET, RCON-Admin; Server-Admin im Scope) ergänzen, Design 8.3 in der Zeile „Agent selbst“ um logs.tail.
