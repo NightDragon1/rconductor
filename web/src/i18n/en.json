@@ -273,5 +273,19 @@
     "whole": "A whole number",
     "range": "Out of range",
     "player": "Not a player name"
+  },
+  "logs": {
+    "follow": "Follow",
+    "wrap": "Wrap lines",
+    "clear": "Clear view",
+    "copy": "Copy the shown lines",
+    "filterLabel": "Filter the logs",
+    "earlier": "Load earlier lines",
+    "lines": "Log lines",
+    "empty": "No log lines yet.",
+    "noMatch": "No line matches the filter.",
+    "agentGone": "The agent is disconnected; no new lines arrive.",
+    "rateLimited": "Too many requests for this container. Try again in {{s}} s.",
+    "failed": "The earlier lines could not be read."
   }
 }

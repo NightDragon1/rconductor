@@ -82,6 +82,30 @@ export function addLogLines(buf: ConsoleBuffer, lines: string[], ts: string): Co
   return { ...buf, logs };
 }
 
+// prependTail puts earlier lines from logs.tail before the buffer. The
+// tail ends with lines the buffer may already hold, so only the part
+// before the longest overlap goes in; the limit of MAX_LOG_LINES then
+// keeps the newest lines (G3).
+export function prependTail(buf: ConsoleBuffer, tail: string[]): ConsoleBuffer {
+  const have = buf.logs.flatMap((l) => l.lines);
+  let overlap = 0;
+  for (let k = Math.min(tail.length, have.length); k > 0; k--) {
+    if (tail.slice(tail.length - k).every((line, i) => line === have[i])) {
+      overlap = k;
+      break;
+    }
+  }
+  const room = Math.max(0, MAX_LOG_LINES - have.length);
+  const earlier = tail.slice(0, tail.length - overlap).slice(-room);
+  if (earlier.length === 0) return buf;
+  const first = buf.logs[0];
+  const ts = new Date((first ? Date.parse(first.ts) : Date.now()) - 1).toISOString();
+  return {
+    ...buf,
+    logs: [{ kind: 'log', id: `log-${++logSeq}`, ts, lines: earlier }, ...buf.logs],
+  };
+}
+
 export interface Tracks {
   own: boolean;
   others: boolean;
