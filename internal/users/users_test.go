@@ -219,3 +219,19 @@ func storeUser(t *testing.T, f *fixture, name, role, by string) string {
 	t.Helper()
 	return storetest.CreateUser(t, f.st, storetest.User{Pseudonym: name, Role: role, CreatedBy: f.ids[by]})
 }
+
+// version reads the stored version of an object for a versioned write
+// (revision 2.4 candidate 24); table "settings" means the settings.
+func (f *fixture) version(table, id string) *int64 {
+	f.t.Helper()
+	var v int64
+	q := "SELECT version FROM " + table + " WHERE id = ?"
+	args := []any{id}
+	if table == "settings" {
+		q, args = "SELECT version FROM settings_version WHERE id = 1", nil
+	}
+	if err := f.st.DB.QueryRowContext(context.Background(), q, args...).Scan(&v); err != nil {
+		f.t.Fatal(err)
+	}
+	return &v
+}

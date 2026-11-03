@@ -75,6 +75,7 @@ type CommandList struct {
 	CreatedAt string
 	UpdatedAt string
 	DeletedAt sql.NullString
+	Version   int64
 }
 
 type CommandListEntry struct {
@@ -135,6 +136,7 @@ type Server struct {
 	AgentID       sql.NullString
 	ContainerName sql.NullString
 	GamePorts     sql.NullString
+	Version       int64
 }
 
 type ServerGroup struct {
@@ -143,6 +145,7 @@ type ServerGroup struct {
 	CreatedAt string
 	UpdatedAt string
 	DeletedAt sql.NullString
+	Version   int64
 }
 
 type ServerGroupMember struct {
@@ -167,6 +170,11 @@ type Setting struct {
 	ScopeType string
 	ScopeID   string
 	UpdatedAt string
+}
+
+type SettingsVersion struct {
+	ID      int64
+	Version int64
 }
 
 type SupporterGrant struct {
@@ -214,6 +222,7 @@ type UserGroup struct {
 	CreatedAt     string
 	UpdatedAt     string
 	DeletedAt     sql.NullString
+	Version       int64
 }
 
 type UserGroupMember struct {

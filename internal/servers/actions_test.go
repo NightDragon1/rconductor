@@ -77,7 +77,7 @@ func TestServerAgentFields(t *testing.T) {
 	s := f.create("mc")
 	f.agent("a1")
 	agent, name := "a1", "mc-server"
-	got, err := f.svc.Update(ctx, f.as("admin"), s.ID, Input{AgentID: &agent, ContainerName: &name})
+	got, err := f.svc.Update(ctx, f.as("admin"), s.ID, Input{AgentID: &agent, ContainerName: &name, Version: f.version(s.ID)})
 	if err != nil || got.AgentID != "a1" || got.ContainerName != "mc-server" {
 		t.Fatalf("update = %+v %v", got, err)
 	}
@@ -88,6 +88,7 @@ func TestServerAgentFields(t *testing.T) {
 		{AgentID: ptr("nope"), ContainerName: &name}, // unknown agent
 		{ContainerName: ptr("mc;rm -rf")},            // invalid name
 	} {
+		in.Version = f.version(s.ID)
 		_, err := f.svc.Update(ctx, f.as("admin"), s.ID, in)
 		if in.ContainerName == nil {
 			if err != nil {
@@ -100,7 +101,7 @@ func TestServerAgentFields(t *testing.T) {
 			t.Errorf("%+v: %v", in, err)
 		}
 	}
-	got, err = f.svc.Update(ctx, f.as("admin"), s.ID, Input{AgentID: &empty})
+	got, err = f.svc.Update(ctx, f.as("admin"), s.ID, Input{AgentID: &empty, Version: f.version(s.ID)})
 	if err != nil || got.AgentID != "" || got.ContainerName != "" {
 		t.Errorf("clear = %+v %v", got, err)
 	}

@@ -175,6 +175,8 @@ paths:
       responses:
         "409":
           $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
         "200":
           description: The changed server.
           content:
@@ -528,6 +530,8 @@ paths:
       responses:
         "409":
           $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
         "200":
           description: The changed group.
           content:
@@ -939,6 +943,8 @@ paths:
       responses:
         "409":
           $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
         "200":
           description: The changed group.
           content:
@@ -1040,6 +1046,8 @@ paths:
       responses:
         "409":
           $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
         "200":
           description: The changed list.
           content:
@@ -1455,6 +1463,8 @@ paths:
       responses:
         "409":
           $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
         "200":
           description: All global settings after the change.
           headers:
@@ -1483,8 +1493,12 @@ components:
       required: false
       description: >-
         The version read before (version field, or ETag of /settings).
-        If it is not the current one, the change is refused with 409
-        conflict and nothing is written (revision 2.4 candidate 24).
+        Required for these writes: without it the answer is 428
+        precondition_required, after the role check. If it is not the
+        current one, the change is refused with 409 conflict and nothing
+        is written; the database checks and raises the version in one
+        statement (revision 2.4 candidate 24). Optional in this file only
+        so that the role check comes first.
       schema:
         type: string
         maxLength: 128
@@ -1744,9 +1758,9 @@ components:
         version:
           type: string
           description: >-
-            Version of the stored object for optimistic locking; send it
-            as If-Match when changing the object (revision 2.4 candidate
-            24).
+            Version of the stored object for optimistic locking, raised
+            by every change; send it as If-Match when changing the object
+            (revision 2.4 candidate 24).
         status:
           type: string
           enum: [connected, auth_failed, offline]
@@ -1937,9 +1951,9 @@ components:
         version:
           type: string
           description: >-
-            Version of the stored object for optimistic locking; send it
-            as If-Match when changing the object (revision 2.4 candidate
-            24).
+            Version of the stored object for optimistic locking, raised
+            by every change; send it as If-Match when changing the object
+            (revision 2.4 candidate 24).
         id:
           type: string
           format: uuid
@@ -2331,9 +2345,9 @@ components:
         version:
           type: string
           description: >-
-            Version of the stored object for optimistic locking; send it
-            as If-Match when changing the object (revision 2.4 candidate
-            24).
+            Version of the stored object for optimistic locking, raised
+            by every change; send it as If-Match when changing the object
+            (revision 2.4 candidate 24).
         id:
           type: string
           format: uuid
@@ -2392,9 +2406,9 @@ components:
         version:
           type: string
           description: >-
-            Version of the stored object for optimistic locking; send it
-            as If-Match when changing the object (revision 2.4 candidate
-            24).
+            Version of the stored object for optimistic locking, raised
+            by every change; send it as If-Match when changing the object
+            (revision 2.4 candidate 24).
         id:
           type: string
           format: uuid
@@ -2648,6 +2662,7 @@ components:
         - agent_unavailable
         - action_failed
         - conflict
+        - precondition_required
 
     Problem:
       type: object
@@ -2729,6 +2744,14 @@ components:
             $ref: "#/components/schemas/Problem"
     NotFound:
       description: Resource does not exist or is outside the caller's scope.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    PreconditionRequired:
+      description: >-
+        A versioned write without If-Match (precondition_required,
+        revision 2.4 candidate 24).
       content:
         application/problem+json:
           schema:

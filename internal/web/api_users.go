@@ -29,6 +29,10 @@ func adminError(err error) error {
 	switch {
 	case errors.Is(err, users.ErrNotFound):
 		return &problem{status: http.StatusNotFound, reason: api.ReasonCodeNotFound}
+	case errors.Is(err, users.ErrConflict):
+		return &problem{status: http.StatusConflict, reason: api.ReasonCodeConflict, detail: "changed by someone else since it was read"}
+	case errors.Is(err, users.ErrPreconditionRequired):
+		return &problem{status: http.StatusPreconditionRequired, reason: api.ReasonCodePreconditionRequired, detail: "If-Match with the version read before is required"}
 	case errors.Is(err, users.ErrForbidden):
 		return &problem{status: http.StatusForbidden, reason: api.ReasonCodeForbidden, detail: err.Error()}
 	case errors.As(err, &inv):

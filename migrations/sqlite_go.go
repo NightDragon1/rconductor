@@ -18,8 +18,80 @@ func SQLiteGo() []*goose.Migration {
 		goose.NewGoMigration(7,
 			&goose.GoFunc{RunDB: serversAgentFK, Mode: goose.TransactionDisabled},
 			&goose.GoFunc{RunDB: serversAgentFKDown, Mode: goose.TransactionDisabled}),
+		goose.NewGoMigration(10,
+			&goose.GoFunc{RunTx: execTx(versionTriggersUp)},
+			&goose.GoFunc{RunTx: execTx(versionTriggersDown)}),
 	}
 }
+
+func execTx(stmts string) func(context.Context, *sql.Tx) error {
+	return func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, stmts)
+		return err
+	}
+}
+
+// 00010: every change of an object saved as a whole raises its version
+// (revision 2.4 candidate 24): a change of the row itself when the write
+// did not raise it already, and changes of its members, grants or entries.
+// In Go because sqlc reads the SQL files as schema.
+const versionTriggersUp = `
+CREATE TRIGGER user_groups_version AFTER UPDATE ON user_groups WHEN NEW.version = OLD.version
+BEGIN UPDATE user_groups SET version = version + 1 WHERE id = NEW.id; END;
+CREATE TRIGGER command_lists_version AFTER UPDATE ON command_lists WHEN NEW.version = OLD.version
+BEGIN UPDATE command_lists SET version = version + 1 WHERE id = NEW.id; END;
+CREATE TRIGGER servers_version AFTER UPDATE ON servers WHEN NEW.version = OLD.version
+BEGIN UPDATE servers SET version = version + 1 WHERE id = NEW.id; END;
+CREATE TRIGGER server_groups_version AFTER UPDATE ON server_groups WHEN NEW.version = OLD.version
+BEGIN UPDATE server_groups SET version = version + 1 WHERE id = NEW.id; END;
+
+CREATE TRIGGER user_group_members_added AFTER INSERT ON user_group_members
+BEGIN UPDATE user_groups SET version = version + 1 WHERE id = NEW.user_group_id; END;
+CREATE TRIGGER user_group_members_removed AFTER DELETE ON user_group_members
+BEGIN UPDATE user_groups SET version = version + 1 WHERE id = OLD.user_group_id; END;
+CREATE TRIGGER group_grants_added AFTER INSERT ON grants WHEN NEW.user_id IS NULL
+BEGIN UPDATE user_groups SET version = version + 1 WHERE id = NEW.user_group_id; END;
+CREATE TRIGGER group_grants_removed AFTER DELETE ON grants WHEN OLD.user_id IS NULL
+BEGIN UPDATE user_groups SET version = version + 1 WHERE id = OLD.user_group_id; END;
+
+CREATE TRIGGER command_list_entries_added AFTER INSERT ON command_list_entries
+BEGIN UPDATE command_lists SET version = version + 1 WHERE id = NEW.command_list_id; END;
+CREATE TRIGGER command_list_entries_changed AFTER UPDATE ON command_list_entries
+BEGIN UPDATE command_lists SET version = version + 1 WHERE id = NEW.command_list_id; END;
+CREATE TRIGGER command_list_entries_removed AFTER DELETE ON command_list_entries
+BEGIN UPDATE command_lists SET version = version + 1 WHERE id = OLD.command_list_id; END;
+
+CREATE TRIGGER server_group_members_added AFTER INSERT ON server_group_members
+BEGIN UPDATE server_groups SET version = version + 1 WHERE id = NEW.server_group_id; END;
+CREATE TRIGGER server_group_members_removed AFTER DELETE ON server_group_members
+BEGIN UPDATE server_groups SET version = version + 1 WHERE id = OLD.server_group_id; END;
+
+CREATE TRIGGER settings_added AFTER INSERT ON settings WHEN NEW.scope_type = 'global'
+BEGIN UPDATE settings_version SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER settings_changed AFTER UPDATE ON settings WHEN NEW.scope_type = 'global'
+BEGIN UPDATE settings_version SET version = version + 1 WHERE id = 1; END;
+CREATE TRIGGER settings_removed AFTER DELETE ON settings WHEN OLD.scope_type = 'global'
+BEGIN UPDATE settings_version SET version = version + 1 WHERE id = 1; END;
+`
+
+const versionTriggersDown = `
+DROP TRIGGER user_groups_version;
+DROP TRIGGER command_lists_version;
+DROP TRIGGER servers_version;
+DROP TRIGGER server_groups_version;
+DROP TRIGGER user_group_members_added;
+DROP TRIGGER user_group_members_removed;
+DROP TRIGGER group_grants_added;
+DROP TRIGGER group_grants_removed;
+DROP TRIGGER command_list_entries_added;
+DROP TRIGGER command_list_entries_changed;
+DROP TRIGGER command_list_entries_removed;
+DROP TRIGGER server_group_members_added;
+DROP TRIGGER server_group_members_removed;
+DROP TRIGGER settings_added;
+DROP TRIGGER settings_changed;
+DROP TRIGGER settings_removed;
+`
 
 // 00007: servers.agent_id gets its foreign key on agents with ON DELETE
 // SET NULL (revision 2.3); SQLite adds one only by building the table

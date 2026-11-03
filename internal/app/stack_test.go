@@ -50,6 +50,11 @@ func (c *client) call(method, path string, body, out any) int {
 	if c.cookie != nil {
 		req.AddCookie(c.cookie)
 	}
+	if method == http.MethodPatch && versionedPath.MatchString(path) {
+		if v := c.version(path); v != "" {
+			req.Header.Set("If-Match", v)
+		}
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		c.t.Fatal(err)
@@ -325,4 +330,35 @@ func TestThroughTheStack(t *testing.T) {
 	if r, code := s.send("sa1", "list"); code != http.StatusOK || r.Response == "" {
 		t.Errorf("after the restart = %d %+v", code, r)
 	}
+}
+
+// versionedPath names the objects saved as a whole with optimistic
+// locking (revision 2.4 candidate 24).
+var versionedPath = regexp.MustCompile(`^/(user-groups|command-lists|servers|server-groups)/[^/?]+$|^/settings$`)
+
+// version reads the current version of a versioned object with the
+// client's session, for If-Match; empty if the session cannot read it.
+func (c *client) version(path string) string {
+	c.t.Helper()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, c.base+"/api/v1"+path, nil)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	if c.cookie != nil {
+		req.AddCookie(c.cookie)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+	if path == "/settings" {
+		return resp.Header.Get("ETag")
+	}
+	var o struct{ Version string }
+	_ = json.NewDecoder(resp.Body).Decode(&o)
+	return o.Version
 }

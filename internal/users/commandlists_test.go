@@ -27,7 +27,7 @@ func TestAllPassableListRefused(t *testing.T) {
 		t.Errorf("entries = %+v", l.Entries)
 	}
 	all := []Entry{{Path: "say", Passable: true}, {Path: "whitelist add", Passable: true}}
-	if _, err := f.svc.UpdateCommandList(ctx, sa, l.ID, nil, &all); !errors.As(err, &inv) {
+	if _, err := f.svc.UpdateCommandList(ctx, sa, l.ID, nil, &all, f.version("command_lists", l.ID)); !errors.As(err, &inv) {
 		t.Errorf("all passable on update: %v", err)
 	}
 	if got, _ := f.svc.CommandList(ctx, sa, l.ID); !slices.Equal(got.Entries, l.Entries) {
@@ -62,7 +62,7 @@ func TestCommandListRules(t *testing.T) {
 	// Changing the list changes the moderators' commands without logout.
 	f.revoked = nil
 	entries := []Entry{{Path: "list"}}
-	if _, err := f.svc.UpdateCommandList(ctx, sa, "l1", nil, &entries); err != nil {
+	if _, err := f.svc.UpdateCommandList(ctx, sa, "l1", nil, &entries, f.version("command_lists", "l1")); err != nil {
 		t.Fatal(err)
 	}
 	r, _ := f.checker.For(ctx, f.ids["m"])

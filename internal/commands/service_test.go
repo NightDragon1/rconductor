@@ -360,7 +360,7 @@ func TestListChangeWithoutNewSession(t *testing.T) {
 	w := newWorld(t)
 	sa := w.as("sa")
 	entries := []users.Entry{{Path: "say"}, {Path: "list", Passable: true}}
-	if _, err := w.users.UpdateCommandList(context.Background(), sa, "l", nil, &entries); err != nil {
+	if _, err := w.users.UpdateCommandList(context.Background(), sa, "l", nil, &entries, w.listVersion("l")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := w.send("m", "whitelist add steve"); reason(err) != ReasonNotInList {
@@ -576,4 +576,13 @@ func TestCatalogParamsInPipeline(t *testing.T) {
 	if n != 8 {
 		t.Errorf("cmd.denied invalid = %d, want 8", n)
 	}
+}
+
+func (w *world) listVersion(id string) *int64 {
+	w.t.Helper()
+	var v int64
+	if err := w.st.DB.QueryRowContext(context.Background(), `SELECT version FROM command_lists WHERE id = ?`, id).Scan(&v); err != nil {
+		w.t.Fatal(err)
+	}
+	return &v
 }

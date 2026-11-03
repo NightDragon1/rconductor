@@ -183,6 +183,7 @@ const (
 	ReasonCodeNotFound               ReasonCode = "not_found"
 	ReasonCodeNotInList              ReasonCode = "not_in_list"
 	ReasonCodePasswordChangeRequired ReasonCode = "password_change_required"
+	ReasonCodePreconditionRequired   ReasonCode = "precondition_required"
 	ReasonCodeRateLimited            ReasonCode = "rate_limited"
 	ReasonCodeServerUnavailable      ReasonCode = "server_unavailable"
 	ReasonCodeTimeout                ReasonCode = "timeout"
@@ -210,6 +211,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeNotInList:
 		return true
 	case ReasonCodePasswordChangeRequired:
+		return true
+	case ReasonCodePreconditionRequired:
 		return true
 	case ReasonCodeRateLimited:
 		return true
@@ -525,7 +528,7 @@ type CommandList struct {
 	Name    string             `json:"name"`
 	OwnerId openapi_types.UUID `json:"owner_id"`
 
-	// Version Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24).
+	// Version Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24).
 	Version string `json:"version"`
 }
 
@@ -837,7 +840,7 @@ type Server struct {
 	Status      ServerStatus `json:"status"`
 	StatusSince time.Time    `json:"status_since"`
 
-	// Version Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24).
+	// Version Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24).
 	Version string `json:"version"`
 }
 
@@ -875,7 +878,7 @@ type ServerGroup struct {
 	Name      string               `json:"name"`
 	ServerIds []openapi_types.UUID `json:"server_ids"`
 
-	// Version Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24).
+	// Version Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24).
 	Version string `json:"version"`
 }
 
@@ -1005,7 +1008,7 @@ type UserGroup struct {
 	Name    string               `json:"name"`
 	OwnerId openapi_types.UUID   `json:"owner_id"`
 
-	// Version Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24).
+	// Version Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24).
 	Version string `json:"version"`
 }
 
@@ -1088,6 +1091,9 @@ type Invalid = Problem
 // NotFound Problem Details for HTTP APIs (RFC 9457).
 type NotFound = Problem
 
+// PreconditionRequired Problem Details for HTTP APIs (RFC 9457).
+type PreconditionRequired = Problem
+
 // RateLimited Problem Details for HTTP APIs (RFC 9457).
 type RateLimited = Problem
 
@@ -1107,19 +1113,19 @@ type ListAuditParamsKind string
 
 // UpdateCommandListParams defines parameters for UpdateCommandList.
 type UpdateCommandListParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
 // UpdateServerGroupParams defines parameters for UpdateServerGroup.
 type UpdateServerGroupParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
 // UpdateServerParams defines parameters for UpdateServer.
 type UpdateServerParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
@@ -1136,13 +1142,13 @@ type GetServerLogsParams struct {
 
 // UpdateSettingsParams defines parameters for UpdateSettings.
 type UpdateSettingsParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
 // UpdateUserGroupParams defines parameters for UpdateUserGroup.
 type UpdateUserGroupParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
@@ -3077,6 +3083,8 @@ type InvalidApplicationProblemPlusJSONResponse Problem
 
 type NotFoundApplicationProblemPlusJSONResponse Problem
 
+type PreconditionRequiredApplicationProblemPlusJSONResponse Problem
+
 type RateLimitedResponseHeaders struct {
 	RetryAfter *int
 }
@@ -4055,6 +4063,22 @@ func (response UpdateCommandList422ApplicationProblemPlusJSONResponse) VisitUpda
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCommandList428ApplicationProblemPlusJSONResponse struct {
+	PreconditionRequiredApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCommandList428ApplicationProblemPlusJSONResponse) VisitUpdateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -5158,6 +5182,22 @@ func (response UpdateServerGroup422ApplicationProblemPlusJSONResponse) VisitUpda
 	return err
 }
 
+type UpdateServerGroup428ApplicationProblemPlusJSONResponse struct {
+	PreconditionRequiredApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateServerGroup428ApplicationProblemPlusJSONResponse) VisitUpdateServerGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListServersRequestObject struct {
 }
 
@@ -5515,6 +5555,22 @@ func (response UpdateServer422ApplicationProblemPlusJSONResponse) VisitUpdateSer
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateServer428ApplicationProblemPlusJSONResponse struct {
+	PreconditionRequiredApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateServer428ApplicationProblemPlusJSONResponse) VisitUpdateServerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -6344,6 +6400,22 @@ func (response UpdateSettings422ApplicationProblemPlusJSONResponse) VisitUpdateS
 	return err
 }
 
+type UpdateSettings428ApplicationProblemPlusJSONResponse struct {
+	PreconditionRequiredApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSettings428ApplicationProblemPlusJSONResponse) VisitUpdateSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUserGroupsRequestObject struct {
 }
 
@@ -6685,6 +6757,22 @@ func (response UpdateUserGroup422ApplicationProblemPlusJSONResponse) VisitUpdate
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserGroup428ApplicationProblemPlusJSONResponse struct {
+	PreconditionRequiredApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateUserGroup428ApplicationProblemPlusJSONResponse) VisitUpdateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
 	_, err := buf.WriteTo(w)
 	return err
 }

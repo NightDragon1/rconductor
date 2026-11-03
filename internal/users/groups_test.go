@@ -25,7 +25,7 @@ func TestGroupAssignmentAppliesToMembers(t *testing.T) {
 	}
 	members := []string{f.ids["m"], f.ids["m3"]}
 	grants := []Target{{ServerID: "s1"}}
-	if _, err := f.svc.UpdateGroup(ctx, sa, g.ID, GroupUpdate{Members: &members, Grants: &grants}); err != nil {
+	if _, err := f.svc.UpdateGroup(ctx, sa, g.ID, GroupUpdate{Members: &members, Grants: &grants, Version: f.version("user_groups", g.ID)}); err != nil {
 		t.Fatal(err)
 	}
 	for _, m := range []string{"m", "m3"} {
@@ -36,7 +36,7 @@ func TestGroupAssignmentAppliesToMembers(t *testing.T) {
 	}
 	f.revoked = nil
 	only := []string{f.ids["m"]}
-	if _, err := f.svc.UpdateGroup(ctx, sa, g.ID, GroupUpdate{Members: &only}); err != nil {
+	if _, err := f.svc.UpdateGroup(ctx, sa, g.ID, GroupUpdate{Members: &only, Version: f.version("user_groups", g.ID)}); err != nil {
 		t.Fatal(err)
 	}
 	r, _ := f.checker.For(ctx, f.ids["m3"])
@@ -101,5 +101,45 @@ func TestGroupRules(t *testing.T) {
 	}
 	if !slices.Contains(f.revoked, f.ids["m"]) {
 		t.Error("member's sessions not ended")
+	}
+}
+
+// TestVersionFollowsEveryChange: the version of a group rises with every
+// change, also a member added through the user's assignments; a stale
+// version is refused and writes nothing (revision 2.4 candidate 24).
+func TestVersionFollowsEveryChange(t *testing.T) {
+	f := withMore(t)
+	ctx := context.Background()
+	sa := f.as("sa")
+	g, err := f.svc.CreateGroup(ctx, sa, "versioned", KindModerator, "l1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := *f.version("user_groups", g.ID)
+	groups := []string{g.ID}
+	if _, err := f.svc.UpdateAssignments(ctx, sa, f.ids["m"], AssignmentsUpdate{Groups: &groups}); err != nil {
+		t.Fatal(err)
+	}
+	if v := *f.version("user_groups", g.ID); v <= start {
+		t.Fatalf("version %d after a member came through assignments, was %d", v, start)
+	}
+	name := "renamed"
+	stale := start
+	if _, err := f.svc.UpdateGroup(ctx, sa, g.ID, GroupUpdate{Name: &name, Version: &stale}); !errors.Is(err, ErrConflict) {
+		t.Errorf("stale version: %v, want ErrConflict", err)
+	}
+	if got, _ := f.svc.Group(ctx, sa, g.ID); got.Name != "versioned" {
+		t.Errorf("a stale write renamed the group to %q", got.Name)
+	}
+	if _, err := f.svc.UpdateGroup(ctx, sa, g.ID, GroupUpdate{Name: &name}); !errors.Is(err, ErrPreconditionRequired) {
+		t.Errorf("no version: %v, want ErrPreconditionRequired", err)
+	}
+	// Settings: a change by another way raises the version too.
+	before := *f.version("settings", "")
+	if _, err := f.st.DB.ExecContext(ctx, `INSERT INTO settings (id, key, value, updated_at) VALUES ('v1', 'invite.lifetime', '"80h"', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	if v := *f.version("settings", ""); v <= before {
+		t.Errorf("settings version %d after a change, was %d", v, before)
 	}
 }

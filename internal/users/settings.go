@@ -142,10 +142,15 @@ func (s *Service) Settings(ctx context.Context, req Request) (map[string]json.Ra
 	return out, nil
 }
 
+// SettingsVersion is the version of the global settings, for If-Match.
+func (s *Service) SettingsVersion(ctx context.Context) (int64, error) {
+	return s.st.Queries.GetSettingsVersion(ctx)
+}
+
 // UpdateSettings changes global settings; only the RCON admin, only known
 // keys with valid values, all or nothing (AUD-003, AUD-004). Switching
 // supporters off ends the sessions of all supporters (decision W2).
-func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string]json.RawMessage, version *int64) (map[string]json.RawMessage, error) {
 	if req.Actor.Role != perm.RCONAdmin {
 		keysTried := make([]string, 0, len(in))
 		for k := range in {
@@ -177,6 +182,18 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
+	// Optimistic locking in one statement (revision 2.4 candidate 24);
+	// the version is required, checked after the role.
+	if version == nil {
+		return nil, ErrPreconditionRequired
+	}
+	n, err := q.BumpSettingsVersion(ctx, *version)
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, ErrConflict
+	}
 	changes := map[string]any{}
 	for k, v := range values {
 		if string(cur[k]) == v {

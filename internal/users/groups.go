@@ -43,6 +43,9 @@ type GroupUpdate struct {
 	CommandListID *string
 	Members       *[]string
 	Grants        *[]Target
+	// Version is the version read before (required); the write is refused
+	// with ErrConflict if it is stale.
+	Version *int64
 }
 
 // mayAdministerGroups: RCON admin and server admins (Design 2.2).
@@ -261,6 +264,18 @@ func (s *Service) UpdateGroup(ctx context.Context, req Request, id string, up Gr
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
+	// Optimistic locking in one statement (revision 2.4 candidate 24);
+	// the version is required, checked after role and scope.
+	if up.Version == nil {
+		return Group{}, ErrPreconditionRequired
+	}
+	n, err := q.BumpUserGroupVersion(ctx, sqlitedb.BumpUserGroupVersionParams{ID: id, Version: *up.Version})
+	if err != nil {
+		return Group{}, err
+	}
+	if n == 0 {
+		return Group{}, ErrConflict
+	}
 	now := store.Now()
 	if name != g.Name || list != g.CommandListID {
 		if err := q.UpdateGroup(ctx, sqlitedb.UpdateGroupParams{Name: name, CommandListID: list, UpdatedAt: now, ID: id}); err != nil {

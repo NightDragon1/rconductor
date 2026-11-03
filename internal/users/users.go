@@ -28,6 +28,11 @@ var (
 	// ErrForbidden means the caller may see the user but not make this
 	// change, for example raise a role to his own level.
 	ErrForbidden = errors.New("not allowed")
+	// ErrConflict means the object changed since the caller read it
+	// (revision 2.4 candidate 24).
+	ErrConflict = errors.New("changed by someone else")
+	// ErrPreconditionRequired means a versioned write named no version.
+	ErrPreconditionRequired = errors.New("the version read before is required")
 )
 
 // InvalidError is a request that breaks a rule of the data.

@@ -199,7 +199,7 @@ func (s *Service) CreateCommandList(ctx context.Context, req Request, name strin
 // UpdateCommandList renames a list or replaces its entries. The rights of
 // moderators and supporters follow on their next request; their sessions
 // stay, because their own assignments did not change.
-func (s *Service) UpdateCommandList(ctx context.Context, req Request, id string, name *string, entries *[]Entry) (CommandList, error) {
+func (s *Service) UpdateCommandList(ctx context.Context, req Request, id string, name *string, entries *[]Entry, version *int64) (CommandList, error) {
 	l, err := s.commandList(ctx, req, id, "command_list.update")
 	if err != nil {
 		return CommandList{}, err
@@ -222,6 +222,18 @@ func (s *Service) UpdateCommandList(ctx context.Context, req Request, id string,
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
+	// Optimistic locking in one statement (revision 2.4 candidate 24);
+	// the version is required, checked after role and scope.
+	if version == nil {
+		return CommandList{}, ErrPreconditionRequired
+	}
+	n, err := q.BumpCommandListVersion(ctx, sqlitedb.BumpCommandListVersionParams{ID: id, Version: *version})
+	if err != nil {
+		return CommandList{}, err
+	}
+	if n == 0 {
+		return CommandList{}, ErrConflict
+	}
 	changes := map[string]any{}
 	if newName != l.Name {
 		if err := q.RenameCommandList(ctx, sqlitedb.RenameCommandListParams{Name: newName, UpdatedAt: store.Now(), ID: id}); err != nil {

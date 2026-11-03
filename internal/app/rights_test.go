@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -95,6 +96,13 @@ func (f *rightsFixture) rawBody(role, method, path string, body any) (int, []byt
 	req.Header.Set("Origin", f.base)
 	if c := f.c[role]; c != nil && c.cookie != nil {
 		req.AddCookie(c.cookie)
+		// Versioned writes name the version the role reads (revision 2.4
+		// candidate 24); a role that cannot read sends none.
+		if method == http.MethodPatch && versionedPath.MatchString(path) {
+			if v := c.version(path); v != "" {
+				req.Header.Set("If-Match", v)
+			}
+		}
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -825,8 +833,8 @@ func (f *rightsFixture) guarded(c *client, method, path, ifMatch string, body an
 // TestOptimisticLocking covers revision 2.4 candidate 24 with two
 // sessions of the RCON admin: a write naming a stale version is refused
 // with 409 conflict and writes nothing; the current version passes; a
-// write without If-Match is not guarded. For every object saved as a
-// whole: user group, command list, server, server group, settings.
+// write without If-Match is refused with 428. For every object saved as
+// a whole: user group, command list, server, server group, settings.
 func TestOptimisticLocking(t *testing.T) {
 	f := newRightsFixture(t)
 	one, two := f.as(rA), login(t, f.base, "admin", matrixPassword)
@@ -889,17 +897,51 @@ func TestOptimisticLocking(t *testing.T) {
 		if o.read() != after {
 			t.Errorf("%s: a stale write changed the object", o.name)
 		}
-		// With the version read again it passes; without If-Match too.
+		// With the version read again it passes; without If-Match it is
+		// refused (428), and nothing is written.
 		if st, reason, _ := f.guarded(one, http.MethodPatch, o.path, `"`+o.version()+`"`, o.change(3)); st != http.StatusOK {
 			t.Errorf("%s: fresh write = %d %s", o.name, st, reason)
 		}
-		if st, _, _ := f.guarded(one, http.MethodPatch, o.path, "", o.change(4)); st != http.StatusOK {
-			t.Errorf("%s: write without If-Match = %d", o.name, st)
+		before := o.read()
+		if st, reason, _ := f.guarded(one, http.MethodPatch, o.path, "", o.change(4)); st != http.StatusPreconditionRequired || reason != "precondition_required" {
+			t.Errorf("%s: write without If-Match = %d %s, want 428 precondition_required", o.name, st, reason)
+		}
+		if o.read() != before {
+			t.Errorf("%s: a write without If-Match changed the object", o.name)
 		}
 	}
 	// The role comes before the version: a server admin may read the
-	// server group but not change it, stale version or not.
-	if st, reason, _ := f.guarded(f.as(rSI), http.MethodPatch, "/server-groups/"+f.serverGroup, "stale", map[string]any{"name": "x"}); st != http.StatusForbidden {
-		t.Errorf("server admin with a stale version = %d %s, want 403", st, reason)
+	// server group but not change it, stale version, none or not; a
+	// moderator gets 403 on a server without If-Match, not 428.
+	for _, h := range []string{"stale", ""} {
+		if st, reason, _ := f.guarded(f.as(rSI), http.MethodPatch, "/server-groups/"+f.serverGroup, h, map[string]any{"name": "x"}); st != http.StatusForbidden {
+			t.Errorf("server admin with If-Match %q = %d %s, want 403", h, st, reason)
+		}
+	}
+	if st, reason, _ := f.guarded(f.as(rMR), http.MethodPatch, "/servers/"+f.server, "", map[string]any{"name": "x"}); st != http.StatusForbidden {
+		t.Errorf("moderator without If-Match = %d %s, want 403", st, reason)
+	}
+}
+
+// TestVersionIsAtomic: two writes with the same version at the same time,
+// from two sessions; the database lets exactly one pass (revision 2.4
+// candidate 24, NFR-011).
+func TestVersionIsAtomic(t *testing.T) {
+	f := newRightsFixture(t)
+	sessions := []*client{f.as(rA), login(t, f.base, "admin", matrixPassword)}
+	for round := range 10 {
+		v := sessions[0].version("/command-lists/" + f.list)
+		var wg sync.WaitGroup
+		codes := make([]int, len(sessions))
+		for i, c := range sessions {
+			wg.Go(func() {
+				codes[i], _, _ = f.guarded(c, http.MethodPatch, "/command-lists/"+f.list, v, map[string]any{"name": fmt.Sprintf("race-%d-%d", round, i)})
+			})
+		}
+		wg.Wait()
+		slices.Sort(codes)
+		if !slices.Equal(codes, []int{http.StatusOK, http.StatusConflict}) {
+			t.Fatalf("round %d: %v, want one 200 and one 409", round, codes)
+		}
 	}
 }

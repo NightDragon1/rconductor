@@ -88,6 +88,9 @@ type Input struct {
 	// agent; "" clears them (SRV-001 rev. 2).
 	AgentID       *string
 	ContainerName *string
+	// Version is the version read before (required); the write is refused
+	// with ErrConflict if it is stale.
+	Version *int64
 }
 
 // Service administers servers and server groups.
@@ -549,6 +552,18 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
+	// Optimistic locking in one statement (revision 2.4 candidate 24);
+	// the version is required, checked after role and scope.
+	if in.Version == nil {
+		return Server{}, users.ErrPreconditionRequired
+	}
+	n, err := q.BumpServerVersion(ctx, sqlitedb.BumpServerVersionParams{ID: id, Version: *in.Version})
+	if err != nil {
+		return Server{}, err
+	}
+	if n == 0 {
+		return Server{}, users.ErrConflict
+	}
 	now := store.Now()
 	if err := q.UpdateServer(ctx, sqlitedb.UpdateServerParams{
 		Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: f.profileID != ""}, Protocol: f.protocol,

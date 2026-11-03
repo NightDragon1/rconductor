@@ -27,7 +27,6 @@ func toAPIGroup(g users.Group) api.UserGroup {
 	for _, t := range g.Grants {
 		out.Grants = append(out.Grants, api.Target{ServerId: uuidPtr(t.ServerID), ServerGroupId: uuidPtr(t.ServerGroupID)})
 	}
-	out.Version = versionOf(out)
 	return out
 }
 
@@ -46,7 +45,7 @@ func (s *apiServer) ListUserGroups(ctx context.Context, _ api.ListUserGroupsRequ
 	}
 	out := api.UserGroupList{Items: make([]api.UserGroup, 0, len(gs))}
 	for _, g := range gs {
-		out.Items = append(out.Items, toAPIGroup(g))
+		out.Items = append(out.Items, s.apiGroup(ctx, g))
 	}
 	return api.ListUserGroups200JSONResponse(out), nil
 }
@@ -59,7 +58,7 @@ func (s *apiServer) CreateUserGroup(ctx context.Context, req api.CreateUserGroup
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.CreateUserGroup201JSONResponse(toAPIGroup(g)), nil
+	return api.CreateUserGroup201JSONResponse(s.apiGroup(ctx, g)), nil
 }
 
 func (s *apiServer) GetUserGroup(ctx context.Context, req api.GetUserGroupRequestObject) (api.GetUserGroupResponseObject, error) {
@@ -67,25 +66,14 @@ func (s *apiServer) GetUserGroup(ctx context.Context, req api.GetUserGroupReques
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.GetUserGroup200JSONResponse(toAPIGroup(g)), nil
+	return api.GetUserGroup200JSONResponse(s.apiGroup(ctx, g)), nil
 }
 
 func (s *apiServer) UpdateUserGroup(ctx context.Context, req api.UpdateUserGroupRequestObject) (api.UpdateUserGroupResponseObject, error) {
 	if req.Body == nil {
 		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "body required"}
 	}
-	unlock := s.locks.lock("user-group:" + req.Id.String())
-	defer unlock()
-	if req.Params.IfMatch != nil {
-		cur, err := s.users.Group(ctx, adminRequest(ctx), req.Id.String())
-		if err != nil {
-			return nil, adminError(err)
-		}
-		if !matches(req.Params.IfMatch, toAPIGroup(cur).Version) {
-			return nil, errConflict()
-		}
-	}
-	up := users.GroupUpdate{Name: req.Body.Name, CommandListID: req.Body.CommandListId}
+	up := users.GroupUpdate{Name: req.Body.Name, CommandListID: req.Body.CommandListId, Version: ifMatch(req.Params.IfMatch)}
 	if req.Body.CommandListId != nil && *req.Body.CommandListId != "" {
 		if _, err := uuid.Parse(*req.Body.CommandListId); err != nil {
 			return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "command_list_id is not a UUID"}
@@ -106,7 +94,7 @@ func (s *apiServer) UpdateUserGroup(ctx context.Context, req api.UpdateUserGroup
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.UpdateUserGroup200JSONResponse(toAPIGroup(g)), nil
+	return api.UpdateUserGroup200JSONResponse(s.apiGroup(ctx, g)), nil
 }
 
 func (s *apiServer) DeleteUserGroup(ctx context.Context, req api.DeleteUserGroupRequestObject) (api.DeleteUserGroupResponseObject, error) {
@@ -114,4 +102,11 @@ func (s *apiServer) DeleteUserGroup(ctx context.Context, req api.DeleteUserGroup
 		return nil, adminError(err)
 	}
 	return api.DeleteUserGroup204Response{}, nil
+}
+
+// apiGroup adds the stored version (revision 2.4 candidate 24).
+func (s *apiServer) apiGroup(ctx context.Context, g users.Group) api.UserGroup {
+	out := toAPIGroup(g)
+	out.Version = s.groupVersions(ctx)[g.ID]
+	return out
 }

@@ -4,66 +4,72 @@ package web
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
-	"net/http"
+	"strconv"
 	"strings"
-	"sync"
-	"time"
 
-	"github.com/NightDragon1/rconductor/internal/api"
-	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 )
 
 // Optimistic locking for objects saved as a whole (revision 2.4
-// candidate 24): reading gives a version, writing names it in If-Match,
-// and a stale one is refused with 409 conflict before anything is
-// written.
+// candidate 24): reading gives the stored version, a write names it in
+// If-Match, and the database checks and raises it in one statement, so
+// that it holds with Postgres and several panels too (NFR-011). Without
+// If-Match the write is refused (428) after the role check; a stale or
+// unreadable version gives 409.
 
-// versionOf is the version of an object: a hash of its JSON form, read
-// with an empty version field.
-func versionOf(v any) string {
-	b, _ := json.Marshal(v)
-	h := sha256.Sum256(b)
-	return base64.RawURLEncoding.EncodeToString(h[:12])
-}
-
-// matches reports whether If-Match names the current version; without
-// If-Match the write is not guarded. Quotes and a weak prefix are ignored.
-func matches(ifMatch *string, current string) bool {
-	if ifMatch == nil {
-		return true
+// ifMatch reads the version named in If-Match; nil when there is none. A
+// value that is no version can never match.
+func ifMatch(h *string) *int64 {
+	if h == nil {
+		return nil
 	}
-	m := strings.Trim(strings.TrimPrefix(strings.TrimSpace(*ifMatch), "W/"), `"`)
-	return m == "*" || m == current
+	v, err := strconv.ParseInt(strings.Trim(strings.TrimPrefix(strings.TrimSpace(*h), "W/"), `"`), 10, 64)
+	if err != nil {
+		v = -1
+	}
+	return &v
 }
 
-func errConflict() error {
-	return &problem{status: http.StatusConflict, reason: api.ReasonCodeConflict, detail: "changed by someone else since it was read"}
+func versionString(v int64) string { return strconv.FormatInt(v, 10) }
+
+// versions maps the IDs of one kind of object to their versions.
+type versions map[string]string
+
+func (s *apiServer) groupVersions(ctx context.Context) versions {
+	rows, _ := s.store.Queries.ListUserGroupVersions(ctx)
+	return mapVersions(rows, func(r sqlitedb.ListUserGroupVersionsRow) (string, int64) { return r.ID, r.Version })
 }
 
-// keyLocks serializes check and write per object within the panel, so
-// that two writes with the same version cannot both pass.
-type keyLocks struct{ m sync.Map }
-
-func (k *keyLocks) lock(key string) func() {
-	v, _ := k.m.LoadOrStore(key, &sync.Mutex{})
-	mu := v.(*sync.Mutex) //nolint:forcetypeassert // only mutexes are stored
-	mu.Lock()
-	return mu.Unlock
+func (s *apiServer) listVersions(ctx context.Context) versions {
+	rows, _ := s.store.Queries.ListCommandListVersions(ctx)
+	return mapVersions(rows, func(r sqlitedb.ListCommandListVersionsRow) (string, int64) { return r.ID, r.Version })
 }
 
-// serverVersion covers the configuration of a server, not its live
-// status and runtime data.
-func serverVersion(s api.Server) string {
-	s.Status, s.StatusSince, s.Runtime, s.Version = "", time.Time{}, nil, ""
-	return versionOf(s)
+func (s *apiServer) serverVersions(ctx context.Context) versions {
+	rows, _ := s.store.Queries.ListServerVersions(ctx)
+	return mapVersions(rows, func(r sqlitedb.ListServerVersionsRow) (string, int64) { return r.ID, r.Version })
 }
 
-// isRCONAdmin: only he changes servers and server groups, so only his
-// writes compare versions there; others are refused by role first.
-func isRCONAdmin(ctx context.Context) bool {
-	p, _ := principal(ctx)
-	return p.Role == string(perm.RCONAdmin)
+func (s *apiServer) serverGroupVersions(ctx context.Context) versions {
+	rows, _ := s.store.Queries.ListServerGroupVersions(ctx)
+	return mapVersions(rows, func(r sqlitedb.ListServerGroupVersionsRow) (string, int64) { return r.ID, r.Version })
+}
+
+func mapVersions[R any](rows []R, f func(R) (string, int64)) versions {
+	out := versions{}
+	for _, r := range rows {
+		id, v := f(r)
+		out[id] = versionString(v)
+	}
+	return out
+}
+
+// settingsETag is the version of the global settings as ETag.
+func (s *apiServer) settingsETag(ctx context.Context) *string {
+	v, err := s.users.SettingsVersion(ctx)
+	if err != nil {
+		return nil
+	}
+	e := `"` + versionString(v) + `"`
+	return &e
 }
