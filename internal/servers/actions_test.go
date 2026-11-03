@@ -33,6 +33,10 @@ func (a *fakeAgents) Request(_ context.Context, agentID, typ string, payload any
 	return agentproto.Result{Code: a.code}, nil
 }
 
+func (a *fakeAgents) RequestData(ctx context.Context, agentID, typ string, payload any, _ func(agentproto.Envelope)) (agentproto.Result, error) {
+	return a.Request(ctx, agentID, typ, payload)
+}
+
 type fakeRCON struct {
 	cmds []string
 	err  error

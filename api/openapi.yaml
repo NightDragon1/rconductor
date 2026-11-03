@@ -395,6 +395,63 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+  /servers/{id}/logs:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: getServerLogs
+      summary: The last log lines of the server's container over the agent (UI-009, logs.tail).
+      description: >-
+        Earlier lines than the live view holds (Gesamtkonzept 5, revision
+        2.4 candidate 20). RCON admin everywhere, server admin in his
+        scope, only with a connected agent; moderators and supporters
+        never (403). The lines are foreign data, cleaned and bounded
+        (SEC-006). The agent's rate limit per container applies (429).
+      tags: [servers]
+      parameters:
+        - name: lines
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+      responses:
+        "200":
+          description: The lines, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogTail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          description: The agent or Docker could not read the logs (action_failed).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: No agent assigned or connected (agent_unavailable).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "504":
+          description: The agent did not answer in time.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
   /server-groups:
     get:
       operationId: listServerGroups
@@ -1837,6 +1894,24 @@ components:
           type: integer
         max:
           type: integer
+
+    LogTail:
+      type: object
+      required: [server_id, container, lines, truncated]
+      properties:
+        server_id:
+          type: string
+          format: uuid
+        container:
+          type: string
+        lines:
+          type: array
+          description: Foreign data from the container (SEC-006).
+          items:
+            type: string
+        truncated:
+          type: boolean
+          description: Lines or the whole were cut to the limits.
 
     AllowedCommands:
       type: object

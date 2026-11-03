@@ -128,7 +128,20 @@ func (h *Hub) Request(ctx context.Context, agentID, typ string, payload any) (ag
 	if s == nil {
 		return agentproto.Result{}, ErrNotConnected
 	}
-	return s.request(ctx, typ, payload)
+	return s.request(ctx, typ, payload, nil)
+}
+
+// RequestData sends an order whose answer brings data before its result,
+// such as logs.tail: those messages go to collect, not to the general
+// receiver (Design 1.5).
+func (h *Hub) RequestData(ctx context.Context, agentID, typ string, payload any, collect func(agentproto.Envelope)) (agentproto.Result, error) {
+	h.mu.Lock()
+	s := h.sessions[agentID]
+	h.mu.Unlock()
+	if s == nil {
+		return agentproto.Result{}, ErrNotConnected
+	}
+	return s.request(ctx, typ, payload, collect)
 }
 
 // New returns a hub with the panel identity.

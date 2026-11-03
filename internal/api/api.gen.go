@@ -690,6 +690,18 @@ type InviteRedeem struct {
 	Token     string `json:"token"`
 }
 
+// LogTail defines model for LogTail.
+type LogTail struct {
+	Container string `json:"container"`
+
+	// Lines Foreign data from the container (SEC-006).
+	Lines    []string           `json:"lines"`
+	ServerId openapi_types.UUID `json:"server_id"`
+
+	// Truncated Lines or the whole were cut to the limits.
+	Truncated bool `json:"truncated"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Password  string `json:"password"`
@@ -1068,6 +1080,11 @@ type GetHistoryParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// GetServerLogsParams defines parameters for GetServerLogs.
+type GetServerLogsParams struct {
+	Lines *int `form:"lines,omitempty" json:"lines,omitempty"`
+}
+
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
 	Role *Role `form:"role,omitempty" json:"role,omitempty"`
@@ -1255,6 +1272,9 @@ type ServerInterface interface {
 	// GetHistory Command history of a server, newest first (Design 2.2).
 	// (GET /servers/{id}/history)
 	GetHistory(w http.ResponseWriter, r *http.Request, id ServerID, params GetHistoryParams)
+	// GetServerLogs The last log lines of the server's container over the agent (UI-009, logs.tail).
+	// (GET /servers/{id}/logs)
+	GetServerLogs(w http.ResponseWriter, r *http.Request, id ServerID, params GetServerLogsParams)
 	// GetPlayers Players online, from the cache (SRV-006, Overview 4.6).
 	// (GET /servers/{id}/players)
 	GetPlayers(w http.ResponseWriter, r *http.Request, id ServerID)
@@ -2168,6 +2188,48 @@ func (siw *ServerInterfaceWrapper) GetHistory(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetServerLogs operation middleware
+func (siw *ServerInterfaceWrapper) GetServerLogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ServerID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetServerLogsParams
+
+	// ------------- Optional query parameter "lines" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "lines", r.URL.Query(), &params.Lines, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "lines"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lines", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServerLogs(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetPlayers operation middleware
 func (siw *ServerInterfaceWrapper) GetPlayers(w http.ResponseWriter, r *http.Request) {
 
@@ -2704,6 +2766,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/players", wrapper.GetPlayers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/history", wrapper.GetHistory)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers/{id}/actions", wrapper.ServerAction)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/logs", wrapper.GetServerLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups", wrapper.ListServerGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/server-groups", wrapper.CreateServerGroup)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/server-groups/{id}", wrapper.DeleteServerGroup)
@@ -5517,6 +5580,154 @@ func (response GetHistory422ApplicationProblemPlusJSONResponse) VisitGetHistoryR
 	return err
 }
 
+type GetServerLogsRequestObject struct {
+	Id     ServerID `json:"id"`
+	Params GetServerLogsParams
+}
+
+type GetServerLogsResponseObject interface {
+	VisitGetServerLogsResponse(w http.ResponseWriter) error
+}
+
+type GetServerLogs200JSONResponse LogTail
+
+func (response GetServerLogs200JSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerLogs400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerLogs400ApplicationProblemPlusJSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerLogs401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerLogs401ApplicationProblemPlusJSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerLogs403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerLogs403ApplicationProblemPlusJSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerLogs404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerLogs404ApplicationProblemPlusJSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerLogs429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerLogs429ApplicationProblemPlusJSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerLogs502ApplicationProblemPlusJSONResponse Problem
+
+func (response GetServerLogs502ApplicationProblemPlusJSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerLogs503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetServerLogs503ApplicationProblemPlusJSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerLogs504ApplicationProblemPlusJSONResponse Problem
+
+func (response GetServerLogs504ApplicationProblemPlusJSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetPlayersRequestObject struct {
 	Id ServerID `json:"id"`
 }
@@ -6795,6 +7006,9 @@ type StrictServerInterface interface {
 	// GetHistory Command history of a server, newest first (Design 2.2).
 	// (GET /servers/{id}/history)
 	GetHistory(ctx context.Context, request GetHistoryRequestObject) (GetHistoryResponseObject, error)
+	// GetServerLogs The last log lines of the server's container over the agent (UI-009, logs.tail).
+	// (GET /servers/{id}/logs)
+	GetServerLogs(ctx context.Context, request GetServerLogsRequestObject) (GetServerLogsResponseObject, error)
 	// GetPlayers Players online, from the cache (SRV-006, Overview 4.6).
 	// (GET /servers/{id}/players)
 	GetPlayers(ctx context.Context, request GetPlayersRequestObject) (GetPlayersResponseObject, error)
@@ -7979,6 +8193,33 @@ func (sh *strictHandler) GetHistory(w http.ResponseWriter, r *http.Request, id S
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHistoryResponseObject); ok {
 		if err := validResponse.VisitGetHistoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetServerLogs operation middleware
+func (sh *strictHandler) GetServerLogs(w http.ResponseWriter, r *http.Request, id ServerID, params GetServerLogsParams) {
+	var request GetServerLogsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetServerLogs(ctx, request.(GetServerLogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetServerLogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetServerLogsResponseObject); ok {
+		if err := validResponse.VisitGetServerLogsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

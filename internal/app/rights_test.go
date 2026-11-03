@@ -277,6 +277,9 @@ func classify(status int, reason string) byte {
 		return 'F'
 	case status == http.StatusNotFound:
 		return 'N'
+	case status == http.StatusServiceUnavailable && reason == "agent_unavailable":
+		// Rights passed; the server has no connected agent.
+		return 'A'
 	}
 	return '?'
 }
@@ -356,6 +359,9 @@ func matrix() []matrixOp {
 		{"POST", "/servers/{id}/actions", "OONFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/servers/" + f.server + "/actions", body: map[string]string{"action": "restart"}}
 		}, false},
+		// The server has no agent: admins pass the rights and get 503
+		// agent_unavailable (revision 2.4 candidate 20).
+		{"GET", "/servers/{id}/logs", "AANFFFUP", serverPath("/logs"), false},
 
 		{"GET", "/server-groups", "OOOFFFUP", at("/server-groups"), false},
 		{"POST", "/server-groups", "OFFFFFUP", func(f *rightsFixture, _ string) request {

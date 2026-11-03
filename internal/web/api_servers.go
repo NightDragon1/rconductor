@@ -201,6 +201,26 @@ func (s *apiServer) ServerAction(ctx context.Context, req api.ServerActionReques
 	}), nil
 }
 
+func (s *apiServer) GetServerLogs(ctx context.Context, req api.GetServerLogsRequestObject) (api.GetServerLogsResponseObject, error) {
+	n := servers.DefaultTailLines
+	if req.Params.Lines != nil {
+		n = *req.Params.Lines
+	}
+	if n < 1 || n > servers.MaxTailLines {
+		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "lines must be 1 to 500"}
+	}
+	t, err := s.servers.Logs(ctx, adminRequest(ctx), req.Id.String(), n)
+	if err != nil {
+		return nil, actionError(err)
+	}
+	id, _ := uuid.Parse(t.ServerID)
+	lines := t.Lines
+	if lines == nil {
+		lines = []string{}
+	}
+	return api.GetServerLogs200JSONResponse(api.LogTail{ServerId: id, Container: t.Container, Lines: lines, Truncated: t.Truncated}), nil
+}
+
 // actionError maps the errors of an action to Design 3.5 (revision 2.3
 // candidate 6).
 func actionError(err error) error {
