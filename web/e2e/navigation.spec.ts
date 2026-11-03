@@ -54,8 +54,14 @@ test('moderator without the global supporter switch', async ({ page, playwright,
     baseURL: state.base_url,
     extraHTTPHeaders: { Origin: origin },
   });
+  // Settings are versioned: the write names the ETag just read (revision
+  // 2.4 candidate 24).
   const set = async (on: boolean) => {
-    const r = await admin.patch('api/v1/settings', { data: { 'supporters.enabled': on } });
+    const etag = (await admin.get('api/v1/settings')).headers()['etag'] ?? '';
+    const r = await admin.patch('api/v1/settings', {
+      data: { 'supporters.enabled': on },
+      headers: { 'If-Match': etag },
+    });
     expect(r.status()).toBe(200);
   };
   expect(
