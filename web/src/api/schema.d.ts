@@ -1226,6 +1226,8 @@ export interface components {
                 shortcuts_enabled: boolean;
                 /** @description The global supporter switch (ROLE-006); with the user's own release it decides whether a moderator manages supporters (Design 6.2). */
                 supporters_enabled: boolean;
+                /** @description The user's own supporter release (moderators); with supporters_enabled it shows whether he manages supporters. The interface needs nothing else to hide entries. */
+                supporters_allowed: boolean;
             };
             /** @description Until the password is changed only /me/password, /auth/logout and /auth/session are allowed (AUTH-010). */
             must_change_password: boolean;

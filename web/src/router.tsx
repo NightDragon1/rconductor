@@ -8,7 +8,6 @@ import {
   notFound,
   redirect,
 } from '@tanstack/react-router';
-import { fetchMe, meKey } from '@/api/me';
 import { fetchSession, sessionKey } from '@/api/session';
 import { entryFor } from '@/nav';
 import { placeholder } from '@/pages/Placeholder';
@@ -61,6 +60,8 @@ const appRoute = createRoute({
 const homeRoute = createRoute({ getParentRoute: () => appRoute, path: '/', component: HomePage });
 
 // A page outside the role's navigation does not exist for it (Design 6.2).
+// The guard needs only the session: no other request goes out for a page
+// the role may not see. The backend checks every request anyway.
 function guarded(path: string, key: string) {
   return createRoute({
     getParentRoute: () => appRoute,
@@ -69,14 +70,10 @@ function guarded(path: string, key: string) {
       const entry = entryFor(path);
       const s = await sessionRoute(context);
       if (!entry || !s) throw notFound();
-      const me =
-        s.user.role === 'moderator'
-          ? await context.queryClient.fetchQuery({ queryKey: meKey, queryFn: fetchMe })
-          : undefined;
       if (
         !entry.allowed(s.user.role, {
           supportersEnabled: s.ui.supporters_enabled,
-          supportersAllowed: me?.supporters_allowed ?? false,
+          supportersAllowed: s.ui.supporters_allowed,
         })
       )
         throw notFound();

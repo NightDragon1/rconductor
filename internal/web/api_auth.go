@@ -74,6 +74,9 @@ func (s *apiServer) sessionOf(ctx context.Context, p auth.Principal) api.Session
 		if s.store.GlobalSetting(ctx, perm.SettingSupportersEnabled, &supporters) == nil {
 			out.Ui.SupportersEnabled = supporters
 		}
+		if u, err := s.store.Queries.GetRightsUser(ctx, p.UserID); err == nil {
+			out.Ui.SupportersAllowed = u.SupportersAllowed == 1
+		}
 	}
 	return out
 }
