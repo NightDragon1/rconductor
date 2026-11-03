@@ -19,14 +19,36 @@ export function pattern(c: Command): string {
   return [c.path, ...c.params.map((p) => `{${p.name}}`)].join(' ');
 }
 
+// playerRule builds the check of a player name from the profile's
+// player_pattern (RE2, which plain patterns share with JavaScript); without
+// one, or if the browser cannot read it, selectors such as @a, quoted
+// forms and control characters are kept out, as in the backend.
+export function playerRule(pattern?: string): (name: string) => boolean {
+  if (pattern) {
+    try {
+      const re = new RegExp(`^(?:${pattern})$`);
+      return (name) => re.test(name);
+    } catch {
+      // Fall back below; the backend checks anyway.
+    }
+  }
+  // eslint-disable-next-line no-control-regex
+  return (name) => name !== '' && !/^@|["'`\s\u0000-\u001f\u007f]/.test(name);
+}
+
 // fieldError checks one value as the backend does for moderator and
 // supporter (revision 2.4 candidate 19); it returns a text key or null.
-export function fieldError(p: Param, v: string): string | null {
+export function fieldError(
+  p: Param,
+  v: string,
+  isPlayer: (name: string) => boolean = playerRule(),
+): string | null {
   const value = v.trim();
   if (value === '') return p.optional ? null : 'form.required';
   switch (p.type) {
     case 'player':
-      return /\s/.test(value) ? 'form.oneWord' : null;
+      if (/\s/.test(value)) return 'form.oneWord';
+      return isPlayer(value) ? null : 'form.player';
     case 'choice':
       return (p.values ?? []).includes(value) ? null : 'form.choice';
     case 'number': {
@@ -44,13 +66,17 @@ export function fieldError(p: Param, v: string): string | null {
 
 // formErrors checks all fields; an optional parameter may stay empty only
 // if all after it are empty too, as the arguments are positional.
-export function formErrors(c: Command, values: Values): Record<string, string> {
+export function formErrors(
+  c: Command,
+  values: Values,
+  isPlayer: (name: string) => boolean = playerRule(),
+): Record<string, string> {
   const out: Record<string, string> = {};
   if (!fromCatalog(c)) return out;
   let gap = '';
   for (const p of c.params) {
     const v = (values[p.name] ?? '').trim();
-    const e = fieldError(p, v);
+    const e = fieldError(p, v, isPlayer);
     if (e) out[p.name] = e;
     else if (v === '' && !gap) gap = p.name;
     else if (v !== '' && gap) out[gap] = 'form.required';

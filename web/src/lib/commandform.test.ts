@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { buildCommand, FREE, formErrors, pattern, type Command } from './commandform';
+import { buildCommand, FREE, formErrors, pattern, playerRule, type Command } from './commandform';
 
 const kick: Command = {
   path: 'kick',
@@ -50,5 +50,19 @@ describe('command form (CMD-003)', () => {
     expect(formErrors(count, { player: 'a', amount: '101' })).toEqual({ amount: 'form.range' });
     expect(formErrors(count, { player: 'a', amount: '7' })).toEqual({});
     expect(formErrors(free, {})).toEqual({});
+  });
+
+  it('keeps selectors and odd names out of player fields (revision 2.4 candidate 19)', () => {
+    const mc = playerRule('^[A-Za-z0-9_]{1,16}$');
+    expect(formErrors(kick, { player: '@a' }, mc)).toEqual({ player: 'form.player' });
+    expect(formErrors(kick, { player: 'Steve_92' }, mc)).toEqual({});
+    expect(formErrors(kick, { player: '<b>Alex</b>' }, mc)).toEqual({ player: 'form.player' });
+    const plain = playerRule();
+    for (const bad of ['@a', '@e[type=player]', '"x"', "'x'", 'a\u0007b']) {
+      expect(plain(bad)).toBe(false);
+    }
+    expect(plain('Ünal-2')).toBe(true);
+    // A pattern the browser cannot read falls back to the plain rule.
+    expect(playerRule('(?<x')('@a')).toBe(false);
   });
 });

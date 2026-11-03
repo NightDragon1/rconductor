@@ -27,6 +27,7 @@ describe('command cards', () => {
             players={['Steve']}
             listId="p"
             busy={false}
+            isPlayer={() => true}
             onChange={() => undefined}
             onFocusPlayer={() => undefined}
             onRun={() => undefined}

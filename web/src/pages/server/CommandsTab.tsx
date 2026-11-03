@@ -12,6 +12,7 @@ import {
   FREE,
   fromCatalog,
   pattern,
+  playerRule,
   type Command,
   type Param,
   type Values,
@@ -117,6 +118,7 @@ export function CommandCard({
   players,
   listId,
   busy,
+  isPlayer,
   onChange,
   onFocusPlayer,
   onRun,
@@ -126,12 +128,13 @@ export function CommandCard({
   players: string[];
   listId: string;
   busy: boolean;
+  isPlayer: (name: string) => boolean;
   onChange: (name: string, v: string) => void;
   onFocusPlayer: (name: string) => void;
   onRun: () => void;
 }) {
   const { t } = useTranslation();
-  const errors = formErrors(c, values);
+  const errors = formErrors(c, values, isPlayer);
   const command = buildCommand(c, values);
   const ok = Object.keys(errors).length === 0;
   const freeId = useId();
@@ -248,6 +251,7 @@ export function CommandsTab() {
   if (!server) return null;
 
   const names = players.data?.players ?? [];
+  const isPlayer = playerRule(allowed.data?.player_pattern);
   const set = (path: string, name: string, v: string) =>
     setValues((all) => ({ ...all, [path]: { ...all[path], [name]: v } }));
   const commands = allowed.data?.commands ?? [];
@@ -277,6 +281,7 @@ export function CommandsTab() {
               players={names}
               listId={listId}
               busy={send.isPending}
+              isPlayer={isPlayer}
               onChange={(name, v) => set(c.path, name, v)}
               onFocusPlayer={(param) => setActive({ path: c.path, param })}
               onRun={() => send.mutate(buildCommand(c, values[c.path] ?? {}))}
@@ -303,8 +308,8 @@ export function CommandsTab() {
           )}
           <ul className="flex flex-wrap gap-2">
             {names.map((n) => {
-              // A name with white space cannot be one argument.
-              const usable = !/\s/.test(n);
+              // Only a name the backend takes as player can be picked.
+              const usable = isPlayer(n);
               return (
                 <li key={n}>
                   <button
