@@ -99,6 +99,9 @@ type Filter struct {
 
 // List returns the users the caller manages.
 func (s *Service) List(ctx context.Context, req Request, f Filter) ([]User, error) {
+	if err := s.mayManageUsers(ctx, req, "user.list"); err != nil {
+		return nil, err
+	}
 	managed, err := s.perm.Managed(ctx, req.Actor)
 	if err != nil {
 		return nil, err
@@ -140,9 +143,27 @@ func (s *Service) load(ctx context.Context, id string) (User, error) {
 	return toUser(sqlitedb.ListUsersRow(r)), nil
 }
 
-// mustManage rejects targets outside the caller's scope with ErrNotFound,
+// mayManageUsers rejects callers without user administration with
+// ErrForbidden, logged as perm.denied and audited (Design 2.2, 3.6).
+func (s *Service) mayManageUsers(ctx context.Context, req Request, action string) error {
+	ok, err := s.perm.MayManageUsers(ctx, req.Actor)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		s.deniedOn(ctx, req, action, "user", "", "forbidden", nil)
+		return ErrForbidden
+	}
+	return nil
+}
+
+// mustManage rejects callers without user administration with
+// ErrForbidden and targets outside the caller's scope with ErrNotFound,
 // logged as perm.denied and audited (ROLE-004, ROLE-008).
 func (s *Service) mustManage(ctx context.Context, req Request, target, action string) error {
+	if err := s.mayManageUsers(ctx, req, action); err != nil {
+		return err
+	}
 	ok, err := s.perm.Manages(ctx, req.Actor, target)
 	if err != nil {
 		return err

@@ -197,8 +197,9 @@ func TestSupporterRelease(t *testing.T) {
 	if !slices.Contains(f.revoked, f.ids["sup"]) {
 		t.Error("supporter's sessions not ended")
 	}
-	// The moderator cannot assign supporters any more.
-	if _, err := f.svc.UpdateAssignments(ctx, f.as("m"), f.ids["sup"], AssignmentsUpdate{SupporterGrants: &grant}); !errors.Is(err, ErrNotFound) {
+	// The moderator cannot assign supporters any more: without the release
+	// he has no user administration (Design 2.2, 3.6).
+	if _, err := f.svc.UpdateAssignments(ctx, f.as("m"), f.ids["sup"], AssignmentsUpdate{SupporterGrants: &grant}); !errors.Is(err, ErrForbidden) {
 		t.Errorf("assign after the release ended: %v", err)
 	}
 }

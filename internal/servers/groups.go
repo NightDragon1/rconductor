@@ -35,6 +35,16 @@ func (s *Service) groupMembers(ctx context.Context) (map[string][]string, error)
 	return out, nil
 }
 
+// mayReadGroups rejects roles without server groups: only the RCON admin
+// and server admins see them (Design 2.2).
+func (s *Service) mayReadGroups(ctx context.Context, req users.Request, action, target string) error {
+	if req.Actor.Role == perm.RCONAdmin || req.Actor.Role == perm.ServerAdmin {
+		return nil
+	}
+	s.denied(ctx, req, action, "server_group", target, "forbidden")
+	return users.ErrForbidden
+}
+
 // groupInScope: the RCON admin sees every group; a server admin sees a
 // group only if it is not empty and all its servers are in his scope.
 func (s *Service) groupInScope(ctx context.Context, req users.Request, id string) (bool, error) {
@@ -66,6 +76,9 @@ func (s *Service) groupInScope(ctx context.Context, req users.Request, id string
 // Groups lists the server groups the caller may see (Design 2.2: RCON
 // admin all, server admin readable in his scope).
 func (s *Service) Groups(ctx context.Context, req users.Request) ([]Group, error) {
+	if err := s.mayReadGroups(ctx, req, "server_group.list", ""); err != nil {
+		return nil, err
+	}
 	rows, err := s.st.Queries.ListServerGroups(ctx)
 	if err != nil {
 		return nil, err
@@ -96,6 +109,9 @@ func nonNil(v []string) []string {
 
 // Group returns a server group the caller may see.
 func (s *Service) Group(ctx context.Context, req users.Request, id string) (Group, error) {
+	if err := s.mayReadGroups(ctx, req, "server_group.read", id); err != nil {
+		return Group{}, err
+	}
 	r, err := s.st.Queries.GetServerGroup(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Group{}, users.ErrNotFound
