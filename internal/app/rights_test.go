@@ -793,3 +793,110 @@ func TestCatalogParams(t *testing.T) {
 		t.Errorf("cmd.denied with invalid = %d, want 7: %+v", denied, audit.Items)
 	}
 }
+
+// guarded sends a write with If-Match as role and returns status, reason
+// and the response headers.
+func (f *rightsFixture) guarded(c *client, method, path, ifMatch string, body any) (int, string, http.Header) {
+	f.t.Helper()
+	b, _ := json.Marshal(body)
+	req, _ := http.NewRequestWithContext(context.Background(), method, f.base+"/api/v1"+path, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", f.base)
+	if ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
+	}
+	req.AddCookie(c.cookie)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var p struct{ Reason, Detail string }
+	_ = json.NewDecoder(resp.Body).Decode(&p)
+	if p.Detail != "" && resp.StatusCode != http.StatusConflict {
+		f.t.Logf("%s %s: %s", method, path, p.Detail)
+	}
+	return resp.StatusCode, p.Reason, resp.Header
+}
+
+// TestOptimisticLocking covers revision 2.4 candidate 24 with two
+// sessions of the RCON admin: a write naming a stale version is refused
+// with 409 conflict and writes nothing; the current version passes; a
+// write without If-Match is not guarded. For every object saved as a
+// whole: user group, command list, server, server group, settings.
+func TestOptimisticLocking(t *testing.T) {
+	f := newRightsFixture(t)
+	one, two := f.as(rA), login(t, f.base, "admin", matrixPassword)
+	type object struct {
+		name    string
+		path    string
+		version func() string
+		change  func(n int) any
+		read    func() string
+	}
+	field := func(path, key string) func() string {
+		return func() string {
+			var m map[string]any
+			one.must(http.MethodGet, path, nil, &m, http.StatusOK)
+			s, _ := m[key].(string)
+			return s
+		}
+	}
+	settingsETag := func() string {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, f.base+"/api/v1/settings", nil)
+		req.AddCookie(one.cookie)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.Header.Get("ETag")
+	}
+	named := func(prefix string) func(n int) any {
+		return func(n int) any { return map[string]any{"name": fmt.Sprintf("%s-%d", prefix, n)} }
+	}
+	objects := []object{
+		{"user group", "/user-groups/" + f.group, field("/user-groups/"+f.group, "version"), named("lock-grp"), field("/user-groups/"+f.group, "name")},
+		{"command list", "/command-lists/" + f.list, field("/command-lists/"+f.list, "version"), named("lock-lst"), field("/command-lists/"+f.list, "name")},
+		{"server", "/servers/" + f.server, field("/servers/"+f.server, "version"), named("lock-srv"), field("/servers/"+f.server, "name")},
+		{"server group", "/server-groups/" + f.serverGroup, field("/server-groups/"+f.serverGroup, "version"), named("lock-sg"), field("/server-groups/"+f.serverGroup, "name")},
+		{"settings", "/settings", settingsETag, func(n int) any {
+			return map[string]any{"invite.lifetime": fmt.Sprintf("%dh", 70+n)}
+		}, func() string {
+			var m map[string]any
+			one.must(http.MethodGet, "/settings", nil, &m, http.StatusOK)
+			s, _ := m["invite.lifetime"].(string)
+			return s
+		}},
+	}
+	for _, o := range objects {
+		old := o.version()
+		if old == "" {
+			t.Fatalf("%s: no version", o.name)
+		}
+		// The second session changes the object with the current version.
+		if st, reason, _ := f.guarded(two, http.MethodPatch, o.path, old, o.change(1)); st != http.StatusOK {
+			t.Fatalf("%s: second session = %d %s", o.name, st, reason)
+		}
+		after := o.read()
+		// The first still holds the old version: refused, nothing written.
+		if st, reason, _ := f.guarded(one, http.MethodPatch, o.path, old, o.change(2)); st != http.StatusConflict || reason != "conflict" {
+			t.Errorf("%s: stale write = %d %s, want 409 conflict", o.name, st, reason)
+		}
+		if o.read() != after {
+			t.Errorf("%s: a stale write changed the object", o.name)
+		}
+		// With the version read again it passes; without If-Match too.
+		if st, reason, _ := f.guarded(one, http.MethodPatch, o.path, `"`+o.version()+`"`, o.change(3)); st != http.StatusOK {
+			t.Errorf("%s: fresh write = %d %s", o.name, st, reason)
+		}
+		if st, _, _ := f.guarded(one, http.MethodPatch, o.path, "", o.change(4)); st != http.StatusOK {
+			t.Errorf("%s: write without If-Match = %d", o.name, st)
+		}
+	}
+	// The role comes before the version: a server admin may read the
+	// server group but not change it, stale version or not.
+	if st, reason, _ := f.guarded(f.as(rSI), http.MethodPatch, "/server-groups/"+f.serverGroup, "stale", map[string]any{"name": "x"}); st != http.StatusForbidden {
+		t.Errorf("server admin with a stale version = %d %s, want 403", st, reason)
+	}
+}

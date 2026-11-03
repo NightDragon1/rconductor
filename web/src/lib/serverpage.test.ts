@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import type { Server } from '@/api/servers';
 import { actionMode, actionState, defaultTab, stripCodes, tabsFor } from './serverpage';
 
-const base: Server = { id: 's1', name: 'mc', groups: [], status: 'connected', status_since: '' };
+const base: Server = {
+  id: 's1',
+  name: 'mc',
+  groups: [],
+  status: 'connected',
+  status_since: '',
+  version: 'v',
+};
 
 function agentServer(state: string, connected = true): Server {
   return {

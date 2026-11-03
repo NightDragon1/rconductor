@@ -897,6 +897,8 @@ export interface components {
             next_cursor?: string;
         };
         Server: {
+            /** @description Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24). */
+            version: string;
             /**
              * @description Reachability over RCON (SRV-004).
              * @enum {string}
@@ -999,6 +1001,8 @@ export interface components {
             via: "agent" | "rcon";
         };
         ServerGroup: {
+            /** @description Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24). */
+            version: string;
             /** Format: uuid */
             id: string;
             name: string;
@@ -1169,6 +1173,8 @@ export interface components {
             passable: boolean;
         };
         CommandList: {
+            /** @description Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24). */
+            version: string;
             /** Format: uuid */
             id: string;
             name: string;
@@ -1190,6 +1196,8 @@ export interface components {
         /** @enum {string} */
         GroupKind: "general" | "moderator";
         UserGroup: {
+            /** @description Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24). */
+            version: string;
             /** Format: uuid */
             id: string;
             name: string;
@@ -1297,7 +1305,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "action_failed";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "action_failed" | "conflict";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
@@ -1383,8 +1391,19 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description The object changed since it was read: If-Match does not name its current version (conflict, revision 2.4 candidate 24). */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
     };
     parameters: {
+        /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+        IfMatch: string;
         AgentID: string;
         ServerID: string;
         ServerGroupID: string;
@@ -1589,7 +1608,10 @@ export interface operations {
     updateServer: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 id: components["parameters"]["ServerID"];
             };
@@ -1614,6 +1636,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
         };
     };
@@ -1949,7 +1972,10 @@ export interface operations {
     updateServerGroup: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 id: components["parameters"]["ServerGroupID"];
             };
@@ -1974,6 +2000,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
         };
     };
@@ -2370,7 +2397,10 @@ export interface operations {
     updateUserGroup: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 id: components["parameters"]["GroupID"];
             };
@@ -2394,6 +2424,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
         };
     };
@@ -2495,7 +2526,10 @@ export interface operations {
     updateCommandList: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 id: components["parameters"]["CommandListID"];
             };
@@ -2519,6 +2553,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
         };
     };
@@ -2905,6 +2940,8 @@ export interface operations {
             /** @description All global settings. */
             200: {
                 headers: {
+                    /** @description Version of the settings for If-Match (revision 2.4 candidate 24). */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2918,7 +2955,10 @@ export interface operations {
     updateSettings: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -2931,6 +2971,8 @@ export interface operations {
             /** @description All global settings after the change. */
             200: {
                 headers: {
+                    /** @description Version of the settings for If-Match (revision 2.4 candidate 24). */
+                    ETag?: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -2940,6 +2982,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
         };
     };

@@ -47,6 +47,7 @@ const full: Server[] = [
     groups: ['g1'],
     status: 'connected',
     status_since: now,
+    version: 'v',
     runtime: { kind: 'runtime', server_id: 's1', players: 3, container },
   },
   {
@@ -56,6 +57,7 @@ const full: Server[] = [
     groups: [],
     status: 'auth_failed',
     status_since: now,
+    version: 'v',
     runtime: {
       kind: 'runtime',
       server_id: 's2',
@@ -65,15 +67,18 @@ const full: Server[] = [
 ];
 
 // What the API gives a moderator: no agent data (UI-006).
-const reduced: Server[] = full.map(({ id, name, profile_id, groups, status, status_since }) => ({
-  id,
-  name,
-  profile_id,
-  groups,
-  status,
-  status_since,
-  runtime: { kind: 'runtime', server_id: id, players: 2 },
-}));
+const reduced: Server[] = full.map(
+  ({ id, name, profile_id, groups, status, status_since, version }) => ({
+    id,
+    version,
+    name,
+    profile_id,
+    groups,
+    status,
+    status_since,
+    runtime: { kind: 'runtime', server_id: id, players: 2 },
+  }),
+);
 
 const profiles = [{ id: 'p1', name: 'Minecraft Java' }];
 const groups = [{ id: 'g1', name: 'main', server_ids: ['s1'] }];
@@ -128,6 +133,7 @@ describe('landing pages', () => {
       groups: [],
       status: 'offline',
       status_since: now,
+      version: 'v',
       runtime: state
         ? {
             kind: 'runtime',

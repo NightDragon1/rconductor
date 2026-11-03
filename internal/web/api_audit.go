@@ -63,7 +63,9 @@ func (s *apiServer) GetSettings(ctx context.Context, _ api.GetSettingsRequestObj
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.GetSettings200JSONResponse(toAPISettings(set)), nil
+	out := toAPISettings(set)
+	etag := `"` + versionOf(out) + `"`
+	return api.GetSettings200JSONResponse{Body: out, Headers: api.GetSettings200ResponseHeaders{ETag: &etag}}, nil
 }
 
 func (s *apiServer) UpdateSettings(ctx context.Context, req api.UpdateSettingsRequestObject) (api.UpdateSettingsResponseObject, error) {
@@ -78,9 +80,22 @@ func (s *apiServer) UpdateSettings(ctx context.Context, req api.UpdateSettingsRe
 		}
 		in[k] = b
 	}
+	unlock := s.locks.lock("settings")
+	defer unlock()
+	if req.Params.IfMatch != nil {
+		cur, err := s.users.Settings(ctx, adminRequest(ctx))
+		if err != nil {
+			return nil, adminError(err)
+		}
+		if !matches(req.Params.IfMatch, versionOf(toAPISettings(cur))) {
+			return nil, errConflict()
+		}
+	}
 	set, err := s.users.UpdateSettings(ctx, adminRequest(ctx), in)
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.UpdateSettings200JSONResponse(toAPISettings(set)), nil
+	out := toAPISettings(set)
+	etag := `"` + versionOf(out) + `"`
+	return api.UpdateSettings200JSONResponse{Body: out, Headers: api.UpdateSettings200ResponseHeaders{ETag: &etag}}, nil
 }

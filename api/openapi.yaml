@@ -164,6 +164,8 @@ paths:
       operationId: updateServer
       summary: Change a server; a password replaces the stored one; RCON admin only.
       tags: [servers]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -171,6 +173,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ServerInput"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The changed server.
           content:
@@ -513,6 +517,8 @@ paths:
       operationId: updateServerGroup
       summary: Rename a group or replace its servers; RCON admin only.
       tags: [servers]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -520,6 +526,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ServerGroupInput"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The changed group.
           content:
@@ -895,6 +903,8 @@ paths:
         the caller's and the owner's scope. Members whose rights change
         lose their sessions.
       tags: [groups]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -902,6 +912,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UserGroupUpdate"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The changed group.
           content:
@@ -992,6 +1004,8 @@ paths:
       operationId: updateCommandList
       summary: Rename a list or replace its entries (ROLE-007).
       tags: [command-lists]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -999,6 +1013,8 @@ paths:
             schema:
               $ref: "#/components/schemas/CommandListUpdate"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The changed list.
           content:
@@ -1382,6 +1398,11 @@ paths:
       responses:
         "200":
           description: All global settings.
+          headers:
+            ETag:
+              description: Version of the settings for If-Match (revision 2.4 candidate 24).
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1398,6 +1419,8 @@ paths:
         audit.retention_days, supporters.enabled, session.idle_timeout.
         Switching supporters off ends the sessions of all supporters.
       tags: [settings]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -1405,8 +1428,15 @@ paths:
             schema:
               $ref: "#/components/schemas/Settings"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: All global settings after the change.
+          headers:
+            ETag:
+              description: Version of the settings for If-Match (revision 2.4 candidate 24).
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1422,6 +1452,17 @@ paths:
 
 components:
   parameters:
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        The version read before (version field, or ETag of /settings).
+        If it is not the current one, the change is refused with 409
+        conflict and nothing is written (revision 2.4 candidate 24).
+      schema:
+        type: string
+        maxLength: 128
     AgentID:
       name: id
       in: path
@@ -1673,8 +1714,14 @@ components:
 
     Server:
       type: object
-      required: [id, name, groups, status, status_since]
+      required: [id, name, groups, status, status_since, version]
       properties:
+        version:
+          type: string
+          description: >-
+            Version of the stored object for optimistic locking; send it
+            as If-Match when changing the object (revision 2.4 candidate
+            24).
         status:
           type: string
           enum: [connected, auth_failed, offline]
@@ -1860,8 +1907,14 @@ components:
 
     ServerGroup:
       type: object
-      required: [id, name, server_ids]
+      required: [id, name, server_ids, version]
       properties:
+        version:
+          type: string
+          description: >-
+            Version of the stored object for optimistic locking; send it
+            as If-Match when changing the object (revision 2.4 candidate
+            24).
         id:
           type: string
           format: uuid
@@ -2229,8 +2282,14 @@ components:
 
     CommandList:
       type: object
-      required: [id, name, owner_id, entries]
+      required: [id, name, owner_id, entries, version]
       properties:
+        version:
+          type: string
+          description: >-
+            Version of the stored object for optimistic locking; send it
+            as If-Match when changing the object (revision 2.4 candidate
+            24).
         id:
           type: string
           format: uuid
@@ -2284,8 +2343,14 @@ components:
 
     UserGroup:
       type: object
-      required: [id, name, kind, owner_id, members, grants]
+      required: [id, name, kind, owner_id, members, grants, version]
       properties:
+        version:
+          type: string
+          description: >-
+            Version of the stored object for optimistic locking; send it
+            as If-Match when changing the object (revision 2.4 candidate
+            24).
         id:
           type: string
           format: uuid
@@ -2538,6 +2603,7 @@ components:
         - timeout
         - agent_unavailable
         - action_failed
+        - conflict
 
     Problem:
       type: object
@@ -2619,6 +2685,14 @@ components:
             $ref: "#/components/schemas/Problem"
     NotFound:
       description: Resource does not exist or is outside the caller's scope.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: >-
+        The object changed since it was read: If-Match does not name its
+        current version (conflict, revision 2.4 candidate 24).
       content:
         application/problem+json:
           schema:
