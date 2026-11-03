@@ -177,11 +177,12 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 
 ## 24. Optimistische Sperre für Objekte, die als Ganzes gespeichert werden
 
-- **Fundstelle:** Design 2.1 (Fehler, Problem Details), 3.5 (Grund-Codes), 6.1 (Rückgängig statt Bestätigung); UI-007, UI-008. Mehrere Verwaltende können dasselbe Objekt gleichzeitig bearbeiten; ohne Sperre überschreibt der Spätere den Früheren unbemerkt.
+- **Fundstelle:** Design 2.1 (Fehler, Problem Details), 3.5 (Grund-Codes), 4 (Datenmodell), 6.1 (Rückgängig statt Bestätigung); UI-007, UI-008; NFR-011. Mehrere Verwaltende können dasselbe Objekt gleichzeitig bearbeiten; ohne Sperre überschreibt der Spätere den Früheren unbemerkt.
 - **Entscheidung (M4, Schritt 8):**
-  - Benutzergruppen, Befehlslisten, Server und Servergruppen tragen ein Feld version, /settings einen ETag-Header (Hash des gespeicherten Stands; bei Servern nur die Konfiguration, nicht Status und Laufzeitdaten).
-  - Schreiben nennt die gelesene Version in If-Match; ist sie veraltet, antwortet das Panel mit 409 und dem neuen Grund-Code conflict, nichts wird geschrieben. Prüfung und Schreiben laufen je Objekt unter einer Sperre im Panel.
-  - Ohne If-Match ist ein Schreiben nicht geschützt (für Werkzeuge außerhalb der Oberfläche); die Oberfläche sendet es immer.
-  - Die Rolle wird vor der Version geprüft (Kandidat 14): wer ein Objekt nicht ändern darf, erhält 403, nicht 409.
+  - Benutzergruppen, Befehlslisten, Server und Servergruppen haben eine Spalte version, die globalen Einstellungen eine gemeinsame Version (Tabelle settings\_version). Die API liefert sie als Feld version bzw. bei /settings als ETag.
+  - Jede Änderung erhöht die Version, auch über andere Wege (Mitglieder über Zuweisungen, Einträge, Servergruppen-Mitglieder, Einstellungen); dafür sorgen Trigger in der Datenbank.
+  - Schreiben nennt die gelesene Version in If-Match; er ist Pflicht. Fehlt er, antwortet das Panel mit 428 und dem Grund-Code precondition\_required.
+  - Die Prüfung ist atomar in der Datenbank: UPDATE … SET version = version + 1 WHERE id = ? AND version = ? in derselben Transaktion wie das Schreiben; 0 Zeilen ergeben 409 mit dem Grund-Code conflict, nichts wird geschrieben. Es gibt keine Sperre im Speicher; das funktioniert ebenso mit Postgres und mehreren Panel-Instanzen (NFR-011, R2).
+  - Rolle und Scope werden vor der Version geprüft (Kandidat 14): wer ein Objekt nicht ändern darf, erhält 403, nicht 409 oder 428.
   - Die Oberfläche zeigt bei 409 „Changed by someone else – reload“; der Entwurf wird nicht gesendet, „Reload“ lädt den aktuellen Stand.
-- **Vorschlag:** Design 2.1 um eine Zeile „Gleichzeitige Änderungen“ ergänzen, Design 3.5 um 409 conflict.
+- **Vorschlag:** Design 2.1 um eine Zeile „Gleichzeitige Änderungen“, Design 3.5 um 409 conflict und 428 precondition\_required, Design 4 um die Spalten version und die Trigger ergänzen; für Postgres (R2) dieselben Trigger in der Postgres-Migration.
