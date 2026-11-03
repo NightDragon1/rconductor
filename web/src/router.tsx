@@ -15,6 +15,7 @@ import { ChangePasswordPage } from '@/pages/ChangePassword';
 import { HomePage } from '@/pages/Home';
 import { serversQuery } from '@/api/servers';
 import { defaultTab, tabsFor, type Tab } from '@/lib/serverpage';
+import { ConsoleTab } from '@/pages/server/ConsoleTab';
 import { HistoryTab } from '@/pages/server/HistoryTab';
 import { laterTab } from '@/pages/server/LaterTab';
 import { OverviewTab } from '@/pages/server/OverviewTab';
@@ -150,7 +151,7 @@ function serverTab(tab: Tab, component: () => React.JSX.Element | null) {
 }
 const serverTabs = [
   serverTab('overview', OverviewTab),
-  serverTab('console', laterTab()),
+  serverTab('console', ConsoleTab),
   serverTab('commands', laterTab()),
   serverTab('logs', laterTab()),
   serverTab('history', HistoryTab),

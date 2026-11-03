@@ -17,12 +17,26 @@ async function settled(page: Page) {
   if (await survival.count()) await expect(survival).toContainText('Players');
 }
 
-async function shoot(page: Page, name: string) {
+// shoot grows the window to the page unless the page holds a box sized by
+// the window (the console); then it takes the whole page as it is.
+async function shoot(page: Page, name: string, grow = true) {
   mkdirSync(dir, { recursive: true });
+  if (!grow) {
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate((t) => {
+        document.documentElement.dataset.theme = t;
+        localStorage.setItem('rcd.theme', t);
+      }, theme);
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${dir}/${name}-${theme}.png`, fullPage: true });
+    }
+    return;
+  }
   // The window grows to the page, so the sticky sidebar reaches down too.
   const width = page.viewportSize()?.width ?? 1440;
   const height = await page.evaluate(() => document.documentElement.scrollHeight);
   await page.setViewportSize({ width, height: Math.max(height, 844) });
+  await page.evaluate(() => window.scrollTo(0, 0));
   for (const theme of ['dark', 'light']) {
     await page.evaluate((t) => {
       document.documentElement.dataset.theme = t;
@@ -71,3 +85,24 @@ test('screenshot phone moderator', async ({ page, state }) => {
   await settled(page);
   await shoot(page, 'phone-overview-moderator');
 });
+
+// The console with history, a fresh answer, logs and open suggestions
+// (step 5).
+for (const [width, name] of [
+  [1440, 'console-admin'],
+  [390, 'phone-console-admin'],
+] as const) {
+  test(`screenshot ${name}`, async ({ page, state }) => {
+    await page.setViewportSize({ width, height: width < 500 ? 844 : 900 });
+    await login(page, 'admin', secret(state, 'admin'));
+    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    await page.goto(`servers/${state.servers.survival}/console`);
+    const input = page.getByRole('textbox', { name: 'Command' });
+    await input.fill('list');
+    await input.press('Enter');
+    await expect(page.getByRole('article', { name: 'list', exact: true }).last()).toBeVisible();
+    await input.fill('whitelist');
+    await page.waitForTimeout(500);
+    await shoot(page, name, false);
+  });
+}

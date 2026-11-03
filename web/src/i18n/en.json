@@ -145,7 +145,9 @@
       "commands": "Commands",
       "logs": "Logs",
       "history": "History"
-    }
+    },
+    "favorite": "Add to favorites",
+    "unfavorite": "Remove from favorites"
   },
   "actions": {
     "label": "Server actions",
@@ -207,12 +209,38 @@
     "response": "Answer",
     "truncated": "The answer was cut at 64 KiB.",
     "copy": "Copy the answer",
-    "copied": "Copied",
     "result": {
       "ok": "OK",
       "denied": "denied",
       "error": "error",
       "timeout": "timeout"
     }
+  },
+  "copy": {
+    "copy": "Copy",
+    "copied": "Copied",
+    "pressCtrlC": "Selected. Press Ctrl+C to copy."
+  },
+  "console": {
+    "tracks": "Tracks",
+    "own": "Own commands",
+    "others": "Others' commands",
+    "logs": "Logs",
+    "filter": "Filter …",
+    "filterLabel": "Filter the console",
+    "timeline": "Timeline",
+    "jump": "Go to {{what}}",
+    "logLines": "Log lines",
+    "older": "Load older commands",
+    "empty": "No commands yet.",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "copy": "Copy the block",
+    "input": "Command",
+    "send": "Send",
+    "suggestions": "Suggestions",
+    "tab": "Tab",
+    "hint": "Tab takes the first suggestion · arrow keys walk your own commands",
+    "favorites": "Favorites"
   }
 }
