@@ -177,6 +177,7 @@ const (
 	ReasonCodeActionFailed           ReasonCode = "action_failed"
 	ReasonCodeAgentUnavailable       ReasonCode = "agent_unavailable"
 	ReasonCodeBusy                   ReasonCode = "busy"
+	ReasonCodeConflict               ReasonCode = "conflict"
 	ReasonCodeForbidden              ReasonCode = "forbidden"
 	ReasonCodeInvalid                ReasonCode = "invalid"
 	ReasonCodeNotFound               ReasonCode = "not_found"
@@ -197,6 +198,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeAgentUnavailable:
 		return true
 	case ReasonCodeBusy:
+		return true
+	case ReasonCodeConflict:
 		return true
 	case ReasonCodeForbidden:
 		return true
@@ -511,6 +514,9 @@ type CommandList struct {
 	Id      openapi_types.UUID `json:"id"`
 	Name    string             `json:"name"`
 	OwnerId openapi_types.UUID `json:"owner_id"`
+
+	// Version Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24).
+	Version string `json:"version"`
 }
 
 // CommandListCreate defines model for CommandListCreate.
@@ -820,6 +826,9 @@ type Server struct {
 	// Status Reachability over RCON (SRV-004).
 	Status      ServerStatus `json:"status"`
 	StatusSince time.Time    `json:"status_since"`
+
+	// Version Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24).
+	Version string `json:"version"`
 }
 
 // ServerCredentials Admins only. reenter: the credentials were encrypted with another master key and must be entered again (SRV-002).
@@ -855,6 +864,9 @@ type ServerGroup struct {
 	Id        openapi_types.UUID   `json:"id"`
 	Name      string               `json:"name"`
 	ServerIds []openapi_types.UUID `json:"server_ids"`
+
+	// Version Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24).
+	Version string `json:"version"`
 }
 
 // ServerGroupInput defines model for ServerGroupInput.
@@ -982,6 +994,9 @@ type UserGroup struct {
 	Members []openapi_types.UUID `json:"members"`
 	Name    string               `json:"name"`
 	OwnerId openapi_types.UUID   `json:"owner_id"`
+
+	// Version Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24).
+	Version string `json:"version"`
 }
 
 // UserGroupCreate defines model for UserGroupCreate.
@@ -1030,6 +1045,9 @@ type CommandListID = openapi_types.UUID
 // GroupID defines model for GroupID.
 type GroupID = openapi_types.UUID
 
+// IfMatch defines model for IfMatch.
+type IfMatch = string
+
 // InviteID defines model for InviteID.
 type InviteID = openapi_types.UUID
 
@@ -1047,6 +1065,9 @@ type BadRequest = Problem
 
 // Busy Problem Details for HTTP APIs (RFC 9457).
 type Busy = Problem
+
+// Conflict Problem Details for HTTP APIs (RFC 9457).
+type Conflict = Problem
 
 // Forbidden Problem Details for HTTP APIs (RFC 9457).
 type Forbidden = Problem
@@ -1074,6 +1095,24 @@ type ListAuditParams struct {
 // ListAuditParamsKind defines parameters for ListAudit.
 type ListAuditParamsKind string
 
+// UpdateCommandListParams defines parameters for UpdateCommandList.
+type UpdateCommandListParams struct {
+	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// UpdateServerGroupParams defines parameters for UpdateServerGroup.
+type UpdateServerGroupParams struct {
+	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// UpdateServerParams defines parameters for UpdateServer.
+type UpdateServerParams struct {
+	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
 // GetHistoryParams defines parameters for GetHistory.
 type GetHistoryParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1083,6 +1122,18 @@ type GetHistoryParams struct {
 // GetServerLogsParams defines parameters for GetServerLogs.
 type GetServerLogsParams struct {
 	Lines *int `form:"lines,omitempty" json:"lines,omitempty"`
+}
+
+// UpdateSettingsParams defines parameters for UpdateSettings.
+type UpdateSettingsParams struct {
+	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// UpdateUserGroupParams defines parameters for UpdateUserGroup.
+type UpdateUserGroupParams struct {
+	// IfMatch The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24).
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
 // ListUsersParams defines parameters for ListUsers.
@@ -1193,7 +1244,7 @@ type ServerInterface interface {
 	GetCommandList(w http.ResponseWriter, r *http.Request, id CommandListID)
 	// UpdateCommandList Rename a list or replace its entries (ROLE-007).
 	// (PATCH /command-lists/{id})
-	UpdateCommandList(w http.ResponseWriter, r *http.Request, id CommandListID)
+	UpdateCommandList(w http.ResponseWriter, r *http.Request, id CommandListID, params UpdateCommandListParams)
 	// ListInvites Invitations of the caller; the RCON admin sees all (UI-008).
 	// (GET /invites)
 	ListInvites(w http.ResponseWriter, r *http.Request)
@@ -1244,7 +1295,7 @@ type ServerInterface interface {
 	GetServerGroup(w http.ResponseWriter, r *http.Request, id ServerGroupID)
 	// UpdateServerGroup Rename a group or replace its servers; RCON admin only.
 	// (PATCH /server-groups/{id})
-	UpdateServerGroup(w http.ResponseWriter, r *http.Request, id ServerGroupID)
+	UpdateServerGroup(w http.ResponseWriter, r *http.Request, id ServerGroupID, params UpdateServerGroupParams)
 	// ListServers Servers in the caller's scope (ROLE-003).
 	// (GET /servers)
 	ListServers(w http.ResponseWriter, r *http.Request)
@@ -1259,7 +1310,7 @@ type ServerInterface interface {
 	GetServer(w http.ResponseWriter, r *http.Request, id ServerID)
 	// UpdateServer Change a server; a password replaces the stored one; RCON admin only.
 	// (PATCH /servers/{id})
-	UpdateServer(w http.ResponseWriter, r *http.Request, id ServerID)
+	UpdateServer(w http.ResponseWriter, r *http.Request, id ServerID, params UpdateServerParams)
 	// ServerAction Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
 	// (POST /servers/{id}/actions)
 	ServerAction(w http.ResponseWriter, r *http.Request, id ServerID)
@@ -1283,7 +1334,7 @@ type ServerInterface interface {
 	GetSettings(w http.ResponseWriter, r *http.Request)
 	// UpdateSettings Change global settings; RCON admin only (AUD-003).
 	// (PATCH /settings)
-	UpdateSettings(w http.ResponseWriter, r *http.Request)
+	UpdateSettings(w http.ResponseWriter, r *http.Request, params UpdateSettingsParams)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(w http.ResponseWriter, r *http.Request)
@@ -1298,7 +1349,7 @@ type ServerInterface interface {
 	GetUserGroup(w http.ResponseWriter, r *http.Request, id GroupID)
 	// UpdateUserGroup Rename, set the list, replace members or group-wide grants.
 	// (PATCH /user-groups/{id})
-	UpdateUserGroup(w http.ResponseWriter, r *http.Request, id GroupID)
+	UpdateUserGroup(w http.ResponseWriter, r *http.Request, id GroupID, params UpdateUserGroupParams)
 	// ListUsers Users the caller manages (Design 2.2, 3.6).
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -1655,8 +1706,32 @@ func (siw *ServerInterfaceWrapper) UpdateCommandList(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateCommandListParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateCommandList(w, r, id)
+		siw.Handler.UpdateCommandList(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1941,8 +2016,32 @@ func (siw *ServerInterfaceWrapper) UpdateServerGroup(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateServerGroupParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateServerGroup(w, r, id)
+		siw.Handler.UpdateServerGroup(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2047,8 +2146,32 @@ func (siw *ServerInterfaceWrapper) UpdateServer(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateServerParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateServer(w, r, id)
+		siw.Handler.UpdateServer(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2276,8 +2399,35 @@ func (siw *ServerInterfaceWrapper) GetSettings(w http.ResponseWriter, r *http.Re
 // UpdateSettings operation middleware
 func (siw *ServerInterfaceWrapper) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateSettingsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateSettings(w, r)
+		siw.Handler.UpdateSettings(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2382,8 +2532,32 @@ func (siw *ServerInterfaceWrapper) UpdateUserGroup(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateUserGroupParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateUserGroup(w, r, id)
+		siw.Handler.UpdateUserGroup(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2854,6 +3028,8 @@ type BusyApplicationProblemPlusJSONResponse struct {
 
 	Headers BusyResponseHeaders
 }
+
+type ConflictApplicationProblemPlusJSONResponse Problem
 
 type ForbiddenApplicationProblemPlusJSONResponse Problem
 
@@ -3670,8 +3846,9 @@ func (response GetCommandList404ApplicationProblemPlusJSONResponse) VisitGetComm
 }
 
 type UpdateCommandListRequestObject struct {
-	Id   CommandListID `json:"id"`
-	Body *UpdateCommandListJSONRequestBody
+	Id     CommandListID `json:"id"`
+	Params UpdateCommandListParams
+	Body   *UpdateCommandListJSONRequestBody
 }
 
 type UpdateCommandListResponseObject interface {
@@ -3736,6 +3913,22 @@ func (response UpdateCommandList404ApplicationProblemPlusJSONResponse) VisitUpda
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCommandList409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCommandList409ApplicationProblemPlusJSONResponse) VisitUpdateCommandListResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -4736,8 +4929,9 @@ func (response GetServerGroup404ApplicationProblemPlusJSONResponse) VisitGetServ
 }
 
 type UpdateServerGroupRequestObject struct {
-	Id   ServerGroupID `json:"id"`
-	Body *UpdateServerGroupJSONRequestBody
+	Id     ServerGroupID `json:"id"`
+	Params UpdateServerGroupParams
+	Body   *UpdateServerGroupJSONRequestBody
 }
 
 type UpdateServerGroupResponseObject interface {
@@ -4818,6 +5012,22 @@ func (response UpdateServerGroup404ApplicationProblemPlusJSONResponse) VisitUpda
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateServerGroup409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateServerGroup409ApplicationProblemPlusJSONResponse) VisitUpdateServerGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -5080,8 +5290,9 @@ func (response GetServer404ApplicationProblemPlusJSONResponse) VisitGetServerRes
 }
 
 type UpdateServerRequestObject struct {
-	Id   ServerID `json:"id"`
-	Body *UpdateServerJSONRequestBody
+	Id     ServerID `json:"id"`
+	Params UpdateServerParams
+	Body   *UpdateServerJSONRequestBody
 }
 
 type UpdateServerResponseObject interface {
@@ -5162,6 +5373,22 @@ func (response UpdateServer404ApplicationProblemPlusJSONResponse) VisitUpdateSer
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateServer409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateServer409ApplicationProblemPlusJSONResponse) VisitUpdateServerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -5838,15 +6065,25 @@ type GetSettingsResponseObject interface {
 	VisitGetSettingsResponse(w http.ResponseWriter) error
 }
 
-type GetSettings200JSONResponse Settings
+type GetSettings200ResponseHeaders struct {
+	ETag *string
+}
+
+type GetSettings200JSONResponse struct {
+	Body    Settings
+	Headers GetSettings200ResponseHeaders
+}
 
 func (response GetSettings200JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
@@ -5885,22 +6122,33 @@ func (response GetSettings403ApplicationProblemPlusJSONResponse) VisitGetSetting
 }
 
 type UpdateSettingsRequestObject struct {
-	Body *UpdateSettingsJSONRequestBody
+	Params UpdateSettingsParams
+	Body   *UpdateSettingsJSONRequestBody
 }
 
 type UpdateSettingsResponseObject interface {
 	VisitUpdateSettingsResponse(w http.ResponseWriter) error
 }
 
-type UpdateSettings200JSONResponse Settings
+type UpdateSettings200ResponseHeaders struct {
+	ETag *string
+}
+
+type UpdateSettings200JSONResponse struct {
+	Body    Settings
+	Headers UpdateSettings200ResponseHeaders
+}
 
 func (response UpdateSettings200JSONResponse) VisitUpdateSettingsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.ETag != nil {
+		w.Header().Set("ETag", fmt.Sprint(*response.Headers.ETag))
+	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
@@ -5950,6 +6198,22 @@ func (response UpdateSettings403ApplicationProblemPlusJSONResponse) VisitUpdateS
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSettings409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSettings409ApplicationProblemPlusJSONResponse) VisitUpdateSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -6212,8 +6476,9 @@ func (response GetUserGroup404ApplicationProblemPlusJSONResponse) VisitGetUserGr
 }
 
 type UpdateUserGroupRequestObject struct {
-	Id   GroupID `json:"id"`
-	Body *UpdateUserGroupJSONRequestBody
+	Id     GroupID `json:"id"`
+	Params UpdateUserGroupParams
+	Body   *UpdateUserGroupJSONRequestBody
 }
 
 type UpdateUserGroupResponseObject interface {
@@ -6278,6 +6543,22 @@ func (response UpdateUserGroup404ApplicationProblemPlusJSONResponse) VisitUpdate
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserGroup409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateUserGroup409ApplicationProblemPlusJSONResponse) VisitUpdateUserGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7537,10 +7818,11 @@ func (sh *strictHandler) GetCommandList(w http.ResponseWriter, r *http.Request, 
 }
 
 // UpdateCommandList operation middleware
-func (sh *strictHandler) UpdateCommandList(w http.ResponseWriter, r *http.Request, id CommandListID) {
+func (sh *strictHandler) UpdateCommandList(w http.ResponseWriter, r *http.Request, id CommandListID, params UpdateCommandListParams) {
 	var request UpdateCommandListRequestObject
 
 	request.Id = id
+	request.Params = params
 
 	var body UpdateCommandListJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {
@@ -8006,10 +8288,11 @@ func (sh *strictHandler) GetServerGroup(w http.ResponseWriter, r *http.Request, 
 }
 
 // UpdateServerGroup operation middleware
-func (sh *strictHandler) UpdateServerGroup(w http.ResponseWriter, r *http.Request, id ServerGroupID) {
+func (sh *strictHandler) UpdateServerGroup(w http.ResponseWriter, r *http.Request, id ServerGroupID, params UpdateServerGroupParams) {
 	var request UpdateServerGroupRequestObject
 
 	request.Id = id
+	request.Params = params
 
 	var body UpdateServerGroupJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {
@@ -8146,10 +8429,11 @@ func (sh *strictHandler) GetServer(w http.ResponseWriter, r *http.Request, id Se
 }
 
 // UpdateServer operation middleware
-func (sh *strictHandler) UpdateServer(w http.ResponseWriter, r *http.Request, id ServerID) {
+func (sh *strictHandler) UpdateServer(w http.ResponseWriter, r *http.Request, id ServerID, params UpdateServerParams) {
 	var request UpdateServerRequestObject
 
 	request.Id = id
+	request.Params = params
 
 	var body UpdateServerJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {
@@ -8375,8 +8659,10 @@ func (sh *strictHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateSettings operation middleware
-func (sh *strictHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) UpdateSettings(w http.ResponseWriter, r *http.Request, params UpdateSettingsParams) {
 	var request UpdateSettingsRequestObject
+
+	request.Params = params
 
 	var body UpdateSettingsJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {
@@ -8513,10 +8799,11 @@ func (sh *strictHandler) GetUserGroup(w http.ResponseWriter, r *http.Request, id
 }
 
 // UpdateUserGroup operation middleware
-func (sh *strictHandler) UpdateUserGroup(w http.ResponseWriter, r *http.Request, id GroupID) {
+func (sh *strictHandler) UpdateUserGroup(w http.ResponseWriter, r *http.Request, id GroupID, params UpdateUserGroupParams) {
 	var request UpdateUserGroupRequestObject
 
 	request.Id = id
+	request.Params = params
 
 	var body UpdateUserGroupJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {

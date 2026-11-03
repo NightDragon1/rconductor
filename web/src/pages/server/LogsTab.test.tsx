@@ -11,6 +11,7 @@ const server: Server = {
   groups: [],
   status: 'connected',
   status_since: '2026-11-03T10:00:00Z',
+  version: 'v',
   agent_id: 'a1',
   runtime: {
     kind: 'runtime',

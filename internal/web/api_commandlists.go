@@ -19,6 +19,7 @@ func toAPIList(l users.CommandList) api.CommandList {
 	for _, e := range l.Entries {
 		out.Entries = append(out.Entries, api.CommandListEntry{Path: e.Path, Passable: e.Passable})
 	}
+	out.Version = versionOf(out)
 	return out
 }
 
@@ -71,6 +72,17 @@ func (s *apiServer) GetCommandList(ctx context.Context, req api.GetCommandListRe
 func (s *apiServer) UpdateCommandList(ctx context.Context, req api.UpdateCommandListRequestObject) (api.UpdateCommandListResponseObject, error) {
 	if req.Body == nil {
 		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "body required"}
+	}
+	unlock := s.locks.lock("command-list:" + req.Id.String())
+	defer unlock()
+	if req.Params.IfMatch != nil {
+		cur, err := s.users.CommandList(ctx, adminRequest(ctx), req.Id.String())
+		if err != nil {
+			return nil, adminError(err)
+		}
+		if !matches(req.Params.IfMatch, toAPIList(cur).Version) {
+			return nil, errConflict()
+		}
 	}
 	l, err := s.users.UpdateCommandList(ctx, adminRequest(ctx), req.Id.String(), req.Body.Name, entriesOf(req.Body.Entries))
 	if err != nil {

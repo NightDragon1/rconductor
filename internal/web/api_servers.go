@@ -105,6 +105,19 @@ func (s *apiServer) UpdateServer(ctx context.Context, req api.UpdateServerReques
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
+	unlock := s.locks.lock("server:" + req.Id.String())
+	defer unlock()
+	// Only the RCON admin changes servers: the role comes before the
+	// version (revision 2.4 candidate 14).
+	if req.Params.IfMatch != nil && isRCONAdmin(ctx) {
+		cur, err := s.servers.Get(ctx, adminRequest(ctx), req.Id.String())
+		if err != nil {
+			return nil, adminError(err)
+		}
+		if !matches(req.Params.IfMatch, serverVersion(toAPIServer(cur))) {
+			return nil, errConflict()
+		}
+	}
 	sv, err := s.servers.Update(ctx, adminRequest(ctx), req.Id.String(), serverInput(req.Body))
 	if err != nil {
 		return nil, adminError(err)
@@ -121,7 +134,9 @@ func (s *apiServer) DeleteServer(ctx context.Context, req api.DeleteServerReques
 
 func toAPIServerGroup(g servers.Group) api.ServerGroup {
 	id, _ := uuid.Parse(g.ID)
-	return api.ServerGroup{Id: id, Name: g.Name, ServerIds: uuids(g.ServerIDs)}
+	out := api.ServerGroup{Id: id, Name: g.Name, ServerIds: uuids(g.ServerIDs)}
+	out.Version = versionOf(out)
+	return out
 }
 
 func idStrings(in *[]uuid.UUID) *[]string {
@@ -173,6 +188,17 @@ func (s *apiServer) GetServerGroup(ctx context.Context, req api.GetServerGroupRe
 func (s *apiServer) UpdateServerGroup(ctx context.Context, req api.UpdateServerGroupRequestObject) (api.UpdateServerGroupResponseObject, error) {
 	if req.Body == nil {
 		return nil, bodyRequired()
+	}
+	unlock := s.locks.lock("server-group:" + req.Id.String())
+	defer unlock()
+	if req.Params.IfMatch != nil && isRCONAdmin(ctx) {
+		cur, err := s.servers.Group(ctx, adminRequest(ctx), req.Id.String())
+		if err != nil {
+			return nil, adminError(err)
+		}
+		if !matches(req.Params.IfMatch, toAPIServerGroup(cur).Version) {
+			return nil, errConflict()
+		}
 	}
 	g, err := s.servers.UpdateGroup(ctx, adminRequest(ctx), req.Id.String(), req.Body.Name, idStrings(req.Body.ServerIds))
 	if err != nil {
@@ -249,6 +275,7 @@ type RuntimeSource interface {
 // who see the server's details, the admins in scope (UI-006).
 func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Server {
 	out := toAPIServer(sv)
+	out.Version = serverVersion(out)
 	if s.runtime == nil {
 		return out
 	}

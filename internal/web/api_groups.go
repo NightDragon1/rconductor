@@ -27,6 +27,7 @@ func toAPIGroup(g users.Group) api.UserGroup {
 	for _, t := range g.Grants {
 		out.Grants = append(out.Grants, api.Target{ServerId: uuidPtr(t.ServerID), ServerGroupId: uuidPtr(t.ServerGroupID)})
 	}
+	out.Version = versionOf(out)
 	return out
 }
 
@@ -72,6 +73,17 @@ func (s *apiServer) GetUserGroup(ctx context.Context, req api.GetUserGroupReques
 func (s *apiServer) UpdateUserGroup(ctx context.Context, req api.UpdateUserGroupRequestObject) (api.UpdateUserGroupResponseObject, error) {
 	if req.Body == nil {
 		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "body required"}
+	}
+	unlock := s.locks.lock("user-group:" + req.Id.String())
+	defer unlock()
+	if req.Params.IfMatch != nil {
+		cur, err := s.users.Group(ctx, adminRequest(ctx), req.Id.String())
+		if err != nil {
+			return nil, adminError(err)
+		}
+		if !matches(req.Params.IfMatch, toAPIGroup(cur).Version) {
+			return nil, errConflict()
+		}
 	}
 	up := users.GroupUpdate{Name: req.Body.Name, CommandListID: req.Body.CommandListId}
 	if req.Body.CommandListId != nil && *req.Body.CommandListId != "" {

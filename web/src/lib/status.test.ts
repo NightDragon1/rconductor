@@ -9,6 +9,7 @@ const base: Server = {
   groups: [],
   status: 'connected',
   status_since: '2026-11-03T10:00:00Z',
+  version: 'v',
 };
 
 function withContainer(
