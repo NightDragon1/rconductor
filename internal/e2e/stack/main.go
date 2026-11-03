@@ -84,13 +84,14 @@ func main() {
 	dist := flag.String("dist", "internal/webui/dist", "built web interface")
 	base := flag.String("base", "/", "base path (RCD_BASE_PATH)")
 	statePath := flag.String("state", "", "file for the state JSON")
+	host := flag.String("host", "", "host name the browser uses instead of the address, e.g. rcon.lan for a page outside a secure context")
 	flag.Parse()
-	if err := run(*addr, *dist, *base, *statePath); err != nil {
+	if err := run(*addr, *host, *dist, *base, *statePath); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(addr, dist, base, statePath string) error {
+func run(addr, host, dist, base, statePath string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	root, err := os.MkdirTemp("", "rcd-e2e-")
@@ -99,7 +100,12 @@ func run(addr, dist, base, statePath string) error {
 	}
 	defer func() { _ = os.RemoveAll(root) }()
 	base = "/" + strings.Trim(base, "/")
-	public := "http://" + addr + strings.TrimSuffix(base, "/")
+	hostport := addr
+	if host != "" {
+		_, port, _ := net.SplitHostPort(addr)
+		hostport = net.JoinHostPort(host, port)
+	}
+	public := "http://" + hostport + strings.TrimSuffix(base, "/")
 	cfg, err := config.LoadPanel(func(k string) (string, bool) {
 		v, ok := map[string]string{
 			"RCD_HTTP_ADDR": "127.0.0.1:0", "RCD_AGENT_ADDR": "127.0.0.1:0", "RCD_PUBLIC_URL": public, "RCD_BASE_PATH": base,

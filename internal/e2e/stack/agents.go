@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agent"
@@ -28,14 +29,16 @@ const (
 
 // fakeHost stands in for Docker: survival and arena run, creative restarts
 // three times within minutes (a restart loop), lobby is stopped.
-type fakeHost struct{}
+type fakeHost struct {
+	followed sync.Map // containers whose logs were followed once
+}
 
-func (fakeHost) Name() string { return "docker" }
-func (fakeHost) Capabilities() []string {
+func (*fakeHost) Name() string { return "docker" }
+func (*fakeHost) Capabilities() []string {
 	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics, agentproto.CapRestartInfo}
 }
 
-func (fakeHost) Run(ctx context.Context, out agent.Sender) error {
+func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
 	now := time.Now().UTC()
 	creative := func(ago time.Duration, n int) agentproto.Container {
 		return agentproto.Container{ID: "c2", Name: "mc-creative", Image: imageCreativ, State: "running", StartedAt: now.Add(-ago), RestartCount: n}
@@ -74,12 +77,23 @@ func (fakeHost) Run(ctx context.Context, out agent.Sender) error {
 	}
 }
 
-func (fakeHost) Handle(ctx context.Context, e agentproto.Envelope, out agent.Sender) {
+// Handle answers every order. The first follow of a container's logs
+// brings two lines; like Docker, a later follow starts at the present and
+// the panel's ring holds the earlier lines (UI-009, CMD-014).
+func (h *fakeHost) Handle(ctx context.Context, e agentproto.Envelope, out agent.Sender) {
+	if e.Type == agentproto.TypeLogsFollow {
+		f, err := agentproto.Payload[agentproto.LogsFollow](e)
+		if _, again := h.followed.LoadOrStore(f.Container, true); err == nil && !again {
+			_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: f.Container, Lines: []string{
+				"[Server thread/INFO]: Steve joined the game", "[Server thread/INFO]: §6Done§r (1.2s)!",
+			}})
+		}
+	}
 	_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeOK})
 }
 
 // idleHost has no containers; its agent leaves again at once.
-type idleHost struct{ fakeHost }
+type idleHost struct{ *fakeHost }
 
 func (idleHost) Run(ctx context.Context, out agent.Sender) error {
 	if err := out.Send(ctx, agentproto.TypeSnapshot, "", agentproto.Snapshot{Containers: []agentproto.Container{}}); err != nil {
@@ -160,12 +174,12 @@ func closedPort() (int, error) {
 // test host, two server groups and a locked user: everything the overview
 // shows (UI-002 to UI-004, UI-006).
 func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, gameAddr, profile string, st *State) error {
-	hostID, err := startAgent(ctx, admin, agentAddr, "host-1", root, fakeHost{})
+	hostID, err := startAgent(ctx, admin, agentAddr, "host-1", root, &fakeHost{})
 	if err != nil {
 		return err
 	}
 	gone, cancel := context.WithCancel(ctx)
-	spareID, err := startAgent(gone, admin, agentAddr, "host-2", root, idleHost{})
+	spareID, err := startAgent(gone, admin, agentAddr, "host-2", root, idleHost{&fakeHost{}})
 	if err != nil {
 		cancel()
 		return err
