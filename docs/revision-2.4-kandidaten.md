@@ -129,3 +129,17 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
   - Alte RCON-Container nach dem Umzug auf RCONductor abschalten.
   - Backup-Läufe als bekannte Ursache für vereinzelt falsche oder leere Antworten nennen.
   - Verweis auf #104.
+
+## 19. Prüfung der Katalogparameter im Backend (R1)
+
+- **Fundstelle:** Design 7.3 (Spalte „Prüfung im Backend“ je Parametertyp) gegenüber Design 3.3 Schritt 7 („Argument-Einschränkung folgt in R2“) und CMD-009 (R2).
+- **Entscheidung (M4, Schritt 6, W7 B):** Für Moderator und Supporter prüft das Backend in R1 Befehle mit Katalogeintrag gegen die Katalogparameter des Spielprofils:
+  - player ein Token ohne Leerzeichen;
+  - choice nur die genannten Werte (Groß-/Kleinschreibung laut Profil);
+  - number ganzzahlig im Bereich min/max;
+  - text nur als letzter Parameter (Rest der Zeile);
+  - Pflichtparameter vorhanden.
+
+  Bei Abweichung antwortet das Backend mit 422 invalid und dem Parameternamen im Detail; der Audit-Eintrag ist cmd.denied. Maßgeblich ist der längste Katalogpfad, mit dem der Befehl beginnt. Weitere Tokens nach den Parametern bleiben erlaubt wie nach jedem Listeneintrag (CMD-004: whitelist add x y). Befehle ohne Katalogeintrag und die freie Eingabe von RCON-Admin und Server-Admin bleiben unverändert.
+- **Abgrenzung zu CMD-009 (R2):** Dort geht es um Einschränkungen je Listeneintrag, die ein Server-Admin festlegt, z. B. nur bestimmte Spielernamen oder Werte für einen Eintrag einer Befehlsliste. Die R1-Prüfung kennt nur die festen Parameter aus dem Spielprofil und gilt für alle Listen gleich.
+- **Vorschlag:** Design 3.3 um den Schritt „7b: Katalogparameter (Moderator, Supporter)“ ergänzen; Design 7.3 verweist für Einschränkungen je Listeneintrag auf CMD-009.
