@@ -5,7 +5,6 @@ import { ChevronsLeft, ChevronsRight, LogOut, Menu, SunMoon, Terminal } from 'lu
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/client';
-import { useMe } from '@/api/me';
 import { useSession } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -109,11 +108,10 @@ function Brand({ collapsed }: { collapsed: boolean }) {
 function Navigation({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { t } = useTranslation();
   const { data: session } = useSession();
-  const { data: me } = useMe();
   if (!session) return null;
   const ctx = {
     supportersEnabled: session.ui.supporters_enabled,
-    supportersAllowed: me?.supporters_allowed ?? false,
+    supportersAllowed: session.ui.supporters_allowed,
   };
   const visible = (list: NavEntry[]) => list.filter((e) => e.allowed(session.user.role, ctx));
   const admin = visible(adminNav);

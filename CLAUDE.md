@@ -56,7 +56,8 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - docs/                  Konzept, nicht verändern
 
 ## Sicherheit (nicht verhandelbar)
-- Rechte werden ausschließlich im Backend geprüft; Standard ist Ablehnung.
+- Rechte werden ausschließlich im Backend geprüft und durchgesetzt; Standard ist Ablehnung.
+  Die Oberfläche blendet nur aus, was eine Rolle nicht darf; sie entscheidet nie über Rechte.
 - Das Panel greift nie auf den Docker-Socket zu, nur der Agent.
 - Keine Geheimnisse in Logs (SEC-012). Einzige Ausnahme: einmalige Ausgabe des
   Initialpassworts (AUTH-007).

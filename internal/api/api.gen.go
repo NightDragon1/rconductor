@@ -903,6 +903,9 @@ type Session struct {
 		// ShortcutsEnabled Keyboard shortcuts, off by default (UI-008).
 		ShortcutsEnabled bool `json:"shortcuts_enabled"`
 
+		// SupportersAllowed The user's own supporter release (moderators); with supporters_enabled it shows whether he manages supporters. The interface needs nothing else to hide entries.
+		SupportersAllowed bool `json:"supporters_allowed"`
+
 		// SupportersEnabled The global supporter switch (ROLE-006); with the user's own release it decides whether a moderator manages supporters (Design 6.2).
 		SupportersEnabled bool `json:"supporters_enabled"`
 	} `json:"ui"`

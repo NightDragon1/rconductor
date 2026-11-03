@@ -2381,7 +2381,7 @@ components:
           description: >-
             Global interface settings everyone needs (revision 2.4
             candidate 7); only the RCON admin changes them in /settings.
-          required: [shortcuts_enabled, supporters_enabled]
+          required: [shortcuts_enabled, supporters_enabled, supporters_allowed]
           properties:
             shortcuts_enabled:
               type: boolean
@@ -2392,6 +2392,12 @@ components:
                 The global supporter switch (ROLE-006); with the user's own
                 release it decides whether a moderator manages supporters
                 (Design 6.2).
+            supporters_allowed:
+              type: boolean
+              description: >-
+                The user's own supporter release (moderators); with
+                supporters_enabled it shows whether he manages supporters.
+                The interface needs nothing else to hide entries.
         must_change_password:
           type: boolean
           description: >-
