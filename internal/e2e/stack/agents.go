@@ -238,6 +238,10 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 		return err
 	}
 
+	if err := pendingAgent(ctx, admin, agentAddr, root); err != nil {
+		return err
+	}
+
 	host, port, _ := net.SplitHostPort(gameAddr)
 	p, _ := strconv.Atoi(port)
 	closed, err := closedPort()
@@ -330,4 +334,40 @@ func waitConnected(admin *client, id string) error {
 		time.Sleep(50 * time.Millisecond)
 	}
 	return errors.New("server not connected")
+}
+
+// pendingAgent leaves an agent waiting for approval by fingerprint (way
+// B, AGT-005): pairing by fingerprint is on only until it waits, then off
+// again, as by default. The agent keeps trying and connects once approved.
+func pendingAgent(ctx context.Context, admin *client, agentAddr, root string) error {
+	if err := admin.call(http.MethodPatch, "/settings", map[string]bool{"agents.fingerprint_pairing": true}, nil); err != nil {
+		return err
+	}
+	dir, err := os.MkdirTemp(root, "agent-")
+	if err != nil {
+		return err
+	}
+	cfg := config.Agent{PanelAddr: agentAddr, SecretsDir: dir, Name: "host-3",
+		LabelKey: "rcon.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
+	a, err := agent.New(cfg, slog.New(slog.NewJSONHandler(io.Discard, nil)), idleHost{&fakeHost{}})
+	if err != nil {
+		return err
+	}
+	go func() { _ = a.Run(ctx) }()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		var list struct {
+			Items []struct{ Name, Status string }
+		}
+		if err := admin.call(http.MethodGet, "/agents", nil, &list); err != nil {
+			return err
+		}
+		for _, it := range list.Items {
+			if it.Name == "host-3" && it.Status == "pending" {
+				return admin.call(http.MethodPatch, "/settings", map[string]bool{"agents.fingerprint_pairing": false}, nil)
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return errors.New("agent host-3 not pending")
 }
