@@ -4,14 +4,18 @@ import { expect, login, secret, test } from './fixtures';
 
 // The stack has survival (running, sha256 image), creative (restart
 // loop), lobby (stopped) and arena (container running, RCON password
-// rejected) on agent host-1, a disconnected agent host-2 and a locked
-// user (internal/e2e/stack).
+// rejected) on agent host-1, outpost without agent, a disconnected agent
+// host-2 and a locked user (internal/e2e/stack).
 const card = (page: Page, name: string) => page.getByRole('article', { name, exact: true });
 
 test('every role lands on its overview (UI-002)', async ({ page, state, csp }) => {
   void csp;
   const landing: Record<string, { health: boolean; cards: string[]; load: boolean }> = {
-    admin: { health: true, cards: ['survival', 'creative', 'lobby', 'arena'], load: true },
+    admin: {
+      health: true,
+      cards: ['survival', 'creative', 'lobby', 'arena', 'outpost'],
+      load: true,
+    },
     sadmin: { health: false, cards: ['survival'], load: true },
     mod: { health: false, cards: ['survival'], load: false },
     sup: { health: false, cards: ['survival'], load: false },
@@ -35,7 +39,7 @@ test('the health overview names every problem with a link (UI-003)', async ({
   void csp;
   await login(page, 'admin', secret(state, 'admin'));
   const tile = (name: string) => page.getByRole('region', { name, exact: true });
-  await expect(tile('Servers')).toContainText('1 / 4');
+  await expect(tile('Servers')).toContainText('2 / 5');
   await expect(tile('Servers')).toContainText('1 stopped');
   await expect(tile('Agents')).toContainText('1 / 2');
   await expect(tile('RCON errors')).toContainText('1');
@@ -59,7 +63,7 @@ test('the health overview names every problem with a link (UI-003)', async ({
   );
   // The jump leads to the object.
   await row('arena').getByRole('link', { name: 'Open server' }).click();
-  await expect(page).toHaveURL(new RegExp(`servers/${state.servers.arena}$`));
+  await expect(page).toHaveURL(new RegExp(`servers/${state.servers.arena}(/console)?$`));
 });
 
 test('cards show only fields with a source (UI-004)', async ({ page, state, csp }) => {

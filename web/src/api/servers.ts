@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { queryOptions, useInfiniteQuery, useQuery, type QueryClient } from '@tanstack/react-query';
 import { api, must } from './client';
 import type { components } from './schema';
 
@@ -16,10 +16,50 @@ export const profilesKey = ['profiles'] as const;
 export const agentsKey = ['agents'] as const;
 export const usersKey = ['users'] as const;
 
+export type HistoryEntry = components['schemas']['HistoryEntry'];
+export type PlayerList = components['schemas']['PlayerList'];
+export type AllowedCommands = components['schemas']['AllowedCommands'];
+
+// serversQuery is the list of servers in scope; the server page and its
+// guards read a server from it.
+export const serversQuery = queryOptions({
+  queryKey: serversKey,
+  queryFn: async () => must(await api.GET('/servers')).items,
+});
+
 export function useServers() {
+  return useQuery(serversQuery);
+}
+
+export function usePlayers(id: string) {
   return useQuery({
-    queryKey: serversKey,
-    queryFn: async () => must(await api.GET('/servers')).items,
+    queryKey: ['players', id],
+    queryFn: async () => must(await api.GET('/servers/{id}/players', { params: { path: { id } } })),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useAllowedCommands(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['allowed-commands', id],
+    queryFn: async () =>
+      must(await api.GET('/servers/{id}/commands', { params: { path: { id } } })),
+    enabled,
+  });
+}
+
+// useHistory pages through the command history, newest first.
+export function useHistory(id: string) {
+  return useInfiniteQuery({
+    queryKey: ['history', id],
+    queryFn: async ({ pageParam }) =>
+      must(
+        await api.GET('/servers/{id}/history', {
+          params: { path: { id }, query: { limit: 50, cursor: pageParam } },
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor || undefined,
   });
 }
 
