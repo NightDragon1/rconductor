@@ -77,24 +77,33 @@ func startMinecraft(t *testing.T) string {
 }
 
 // direct is a plain RCON client, independent of the panel's adapter: it
-// sends one command and collects packets until the server is quiet.
+// sends one command and collects packets until the server is quiet. Every
+// packet goes to the test log with ID, type and length (issue #104).
 func direct(t *testing.T, addr, command string) string {
 	t.Helper()
-	var d net.Dialer
-	conn, err := d.DialContext(context.Background(), "tcp", addr)
+	out, err := directErr(addr, command, t.Logf)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return out
+}
+
+// directErr is direct without testing.T, for use in goroutines.
+func directErr(addr, command string, logf func(string, ...any)) (string, error) {
+	var d net.Dialer
+	conn, err := d.DialContext(context.Background(), "tcp", addr)
+	if err != nil {
+		return "", err
+	}
 	defer func() { _ = conn.Close() }()
-	write := func(id, typ int32, body string) {
+	write := func(id, typ int32, body string) error {
 		b := make([]byte, 14+len(body))
 		binary.LittleEndian.PutUint32(b[0:], uint32(10+len(body))) //nolint:gosec // test commands are short
 		binary.LittleEndian.PutUint32(b[4:], uint32(id))           //nolint:gosec // small constants
 		binary.LittleEndian.PutUint32(b[8:], uint32(typ))          //nolint:gosec // small constants
 		copy(b[12:], body)
-		if _, err := conn.Write(b); err != nil {
-			t.Fatal(err)
-		}
+		_, err := conn.Write(b)
+		return err
 	}
 	read := func(quiet time.Duration) (int32, string, error) {
 		_ = conn.SetReadDeadline(time.Now().Add(quiet))
@@ -106,26 +115,69 @@ func direct(t *testing.T, addr, command string) string {
 		if _, err := io.ReadFull(conn, body); err != nil {
 			return 0, "", err
 		}
-		return int32(binary.LittleEndian.Uint32(head[4:])), strings.TrimRight(string(body), "\x00"), nil //nolint:gosec // packet ID
+		id := int32(binary.LittleEndian.Uint32(head[4:]))  //nolint:gosec // packet ID
+		typ := int32(binary.LittleEndian.Uint32(head[8:])) //nolint:gosec // packet type
+		logf("direct %q: packet id=%d type=%d len=%d", command, id, typ, len(body))
+		return id, strings.TrimRight(string(body), "\x00"), nil
 	}
-	write(1, 3, "rconpw")
+	if err := write(1, 3, "rconpw"); err != nil {
+		return "", err
+	}
 	if id, _, err := read(5 * time.Second); err != nil || id != 1 {
-		t.Fatalf("direct auth: %d %v", id, err)
+		return "", fmt.Errorf("direct auth: %d %w", id, err)
 	}
-	write(2, 2, command)
+	if err := write(2, 2, command); err != nil {
+		return "", err
+	}
 	var out strings.Builder
 	for {
 		id, body, err := read(2 * time.Second)
 		var ne net.Error
 		if errors.As(err, &ne) && ne.Timeout() && out.Len() > 0 {
-			return out.String()
+			return out.String(), nil
 		}
 		if err != nil {
-			t.Fatalf("direct read: %v", err)
+			return "", fmt.Errorf("direct read: %w", err)
 		}
 		if id == 2 {
 			out.WriteString(body)
 		}
+	}
+}
+
+// TestMinecraftConcurrentClients is the diagnosis of issue #104: two RCON
+// clients send list at the same moment, twenty times. If Minecraft gives
+// a client the output of both, the answer holds the player line twice.
+func TestMinecraftConcurrentClients(t *testing.T) {
+	addr := startMinecraft(t)
+	crossed := 0
+	for round := range 20 {
+		var wg sync.WaitGroup
+		var answers [2]string
+		var errs [2]error
+		start := make(chan struct{})
+		for i := range 2 {
+			wg.Go(func() {
+				<-start
+				answers[i], errs[i] = directErr(addr, "list", func(f string, a ...any) {
+					t.Logf("round %d client %d: "+f, append([]any{round, i}, a...)...)
+				})
+			})
+		}
+		close(start)
+		wg.Wait()
+		for i := range 2 {
+			if errs[i] != nil {
+				t.Fatalf("round %d client %d: %v", round, i, errs[i])
+			}
+			if strings.Count(answers[i], "players online") > 1 {
+				crossed++
+				t.Logf("round %d client %d got %q", round, i, answers[i])
+			}
+		}
+	}
+	if crossed > 0 {
+		t.Errorf("Minecraft mixed the answers of two RCON clients %d times in 20 rounds", crossed)
 	}
 }
 
