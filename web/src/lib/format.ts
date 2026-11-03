@@ -20,6 +20,12 @@ export function clock(lng: string, iso: string): string {
   return new Intl.DateTimeFormat(lng, { hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 }
 
+export function dateTime(lng: string, iso: string): string {
+  return new Intl.DateTimeFormat(lng, { dateStyle: 'short', timeStyle: 'short' }).format(
+    new Date(iso),
+  );
+}
+
 export function decimal(lng: string, v: number, digits = 1): string {
   return new Intl.NumberFormat(lng, {
     minimumFractionDigits: digits,

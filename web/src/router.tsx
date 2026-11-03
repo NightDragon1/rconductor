@@ -13,6 +13,13 @@ import { entryFor } from '@/nav';
 import { placeholder } from '@/pages/Placeholder';
 import { ChangePasswordPage } from '@/pages/ChangePassword';
 import { HomePage } from '@/pages/Home';
+import { serversQuery } from '@/api/servers';
+import { defaultTab, tabsFor, type Tab } from '@/lib/serverpage';
+import { HistoryTab } from '@/pages/server/HistoryTab';
+import { laterTab } from '@/pages/server/LaterTab';
+import { OverviewTab } from '@/pages/server/OverviewTab';
+import { ServerLayout } from '@/pages/server/ServerLayout';
+import { ServersPage } from '@/pages/Servers';
 import { LoginPage } from '@/pages/Login';
 import { NotFoundPage } from '@/pages/NotFound';
 import { Shell } from '@/pages/Shell';
@@ -83,7 +90,6 @@ function guarded(path: string, key: string) {
 }
 
 const pages = [
-  guarded('/servers', 'servers'),
   guarded('/audit', 'audit'),
   guarded('/admin/users', 'users'),
   guarded('/admin/groups', 'groups'),
@@ -92,13 +98,63 @@ const pages = [
   guarded('/admin/agents', 'agents'),
   guarded('/admin/settings', 'settings'),
 ];
-// The server page follows in step 4; every role may open it, the backend
-// answers only for servers in scope.
+const serversRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'servers',
+  component: ServersPage,
+});
+
+// The server page (Design 6.3, 6.4): the loader reads the server from the
+// list in scope; a server outside it does not exist (Design 3.1).
 const serverRoute = createRoute({
   getParentRoute: () => appRoute,
   path: 'servers/$serverId',
-  component: placeholder('server'),
+  loader: async ({ context, params }) => {
+    const list = await context.queryClient.ensureQueryData(serversQuery);
+    if (!list.some((s) => s.id === params.serverId)) throw notFound();
+  },
+  component: ServerLayout,
 });
+
+const serverIndexRoute = createRoute({
+  getParentRoute: () => serverRoute,
+  path: '/',
+  beforeLoad: async ({ context, params }) => {
+    const s = await sessionRoute(context);
+    throw redirect({
+      to: `/servers/$serverId/${defaultTab(s?.user.role)}`,
+      params: { serverId: params.serverId },
+      replace: true,
+    });
+  },
+});
+
+// A tab the role may not see does not exist for it (Design 6.3): the
+// guard needs only the session, so no other request goes out. Logs need
+// an agent; without one the tab does not exist either (F11).
+function serverTab(tab: Tab, component: () => React.JSX.Element | null) {
+  return createRoute({
+    getParentRoute: () => serverRoute,
+    path: tab,
+    beforeLoad: async ({ context, params }) => {
+      const s = await sessionRoute(context);
+      const role = s?.user.role;
+      if (!tabsFor(role, true).includes(tab)) throw notFound();
+      if (tab === 'logs') {
+        const list = await context.queryClient.ensureQueryData(serversQuery);
+        if (!list.find((x) => x.id === params.serverId)?.agent_id) throw notFound();
+      }
+    },
+    component,
+  });
+}
+const serverTabs = [
+  serverTab('overview', OverviewTab),
+  serverTab('console', laterTab()),
+  serverTab('commands', laterTab()),
+  serverTab('logs', laterTab()),
+  serverTab('history', HistoryTab),
+];
 const profileRoute = createRoute({
   getParentRoute: () => appRoute,
   path: 'profile',
@@ -108,7 +164,13 @@ const profileRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   loginRoute,
   changePasswordRoute,
-  appRoute.addChildren([homeRoute, serverRoute, profileRoute, ...pages]),
+  appRoute.addChildren([
+    homeRoute,
+    serversRoute,
+    serverRoute.addChildren([serverIndexRoute, ...serverTabs]),
+    profileRoute,
+    ...pages,
+  ]),
 ]);
 
 // The base path comes from <base href> (RCD_BASE_PATH, issue #88).

@@ -43,8 +43,7 @@
     "serverAdmin": "Servers and groups",
     "agents": "Agents",
     "settings": "Settings",
-    "profile": "Your profile",
-    "server": "Server"
+    "profile": "Your profile"
   },
   "home": {
     "title": "Overview",
@@ -127,5 +126,93 @@
     "hours": "{{count}} h",
     "days": "{{count}} d",
     "ago": "{{span}} ago"
+  },
+  "server": {
+    "breadcrumb": "Breadcrumb",
+    "tabs": "Server tabs",
+    "runningSince": "running for {{span}}",
+    "profile": "Profile",
+    "players": "Players",
+    "agent": "Agent",
+    "agentConnected": "connected",
+    "agentGone": "disconnected",
+    "commandList": "Command list",
+    "commandCount_one": "{{count}} command",
+    "commandCount_other": "{{count}} commands",
+    "tab": {
+      "overview": "Overview",
+      "console": "Console",
+      "commands": "Commands",
+      "logs": "Logs",
+      "history": "History"
+    }
+  },
+  "actions": {
+    "label": "Server actions",
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "restartRcon": "Restart over RCON",
+    "cancel": "Cancel",
+    "agentGone": "The agent is disconnected; actions are not possible.",
+    "confirm": {
+      "stopTitle": "Stop {{name}}?",
+      "stop": "The container stops. Players are disconnected; the server stays down until it is started again.",
+      "restartTitle": "Restart {{name}}?",
+      "restart": "The container restarts. Players are disconnected for a moment.",
+      "rconTitle": "Restart {{name}} over RCON?",
+      "rcon": "The server is stopped with its stop command. It starts again only if a restart mechanism applies (for example Docker restart: always or unless-stopped; on-failure does not apply to a clean shutdown)."
+    },
+    "done": {
+      "start": "Start sent.",
+      "stop": "Stop sent.",
+      "restart": "Restart sent.",
+      "rcon": "Stop command sent."
+    },
+    "error": {
+      "agent_unavailable": "The agent is not connected.",
+      "action_failed": "The agent or Docker refused the action.",
+      "rate_limited": "Too many actions. Please wait a moment.",
+      "timeout": "The agent did not answer in time.",
+      "server_unavailable": "The server is not reachable over RCON.",
+      "forbidden": "This action is not allowed.",
+      "other": "The action failed."
+    }
+  },
+  "overview": {
+    "status": "Status",
+    "since": "since {{time}}",
+    "players": "Players online",
+    "noPlayers": "Nobody is online.",
+    "noPlayerList": "The game profile has no player list.",
+    "playersAt": "updated {{ago}}",
+    "stale": "stale",
+    "load": "Load",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "net": "Network",
+    "disk": "Disk",
+    "netValue": "↓ {{rx}} · ↑ {{tx}}",
+    "diskValue": "read {{read}} · written {{write}}",
+    "bytes": "{{value}} {{unit}}",
+    "metricsAt": "measured {{ago}}",
+    "noMetrics": "No measurements yet.",
+    "rcon": "RCON state"
+  },
+  "history": {
+    "title": "History",
+    "empty": "No commands yet.",
+    "ownOnly": "You see your own commands only.",
+    "more": "Load more",
+    "response": "Answer",
+    "truncated": "The answer was cut at 64 KiB.",
+    "copy": "Copy the answer",
+    "copied": "Copied",
+    "result": {
+      "ok": "OK",
+      "denied": "denied",
+      "error": "error",
+      "timeout": "timeout"
+    }
   }
 }

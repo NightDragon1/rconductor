@@ -112,7 +112,7 @@ test('on a phone the navigation is a menu', async ({ page, state, csp }) => {
   const dialog = page.getByRole('dialog', { name: 'Menu' });
   await dialog.getByRole('link', { name: 'Servers', exact: true }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole('heading', { name: 'Servers' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Servers', level: 1 })).toBeVisible();
   const width = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(width).toBeLessThanOrEqual(390);
 });
