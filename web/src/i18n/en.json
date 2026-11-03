@@ -271,6 +271,7 @@
     "oneWord": "One word, no spaces",
     "choice": "Pick one of the values",
     "whole": "A whole number",
-    "range": "Out of range"
+    "range": "Out of range",
+    "player": "Not a player name"
   }
 }

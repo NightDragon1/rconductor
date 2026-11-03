@@ -69,13 +69,28 @@ test('players come from the player list; the answer shows in the history (CMD-00
   await expect(page.getByRole('region', { name: 'History' })).toContainText('weather clear 600');
 });
 
-test('a player field takes no spaces', async ({ page, state, csp }) => {
+test('a player field takes only player names (revision 2.4 candidate 19)', async ({
+  page,
+  state,
+  csp,
+}) => {
   void csp;
   await open(page, state, 'mod');
   const wl = card(page, 'whitelist add');
-  await wl.getByLabel('player', { exact: true }).fill('two words');
+  const field = wl.getByLabel('player', { exact: true });
+  await field.fill('two words');
   await expect(wl).toContainText('One word, no spaces');
   await expect(wl.getByRole('button', { name: 'Run' })).toBeDisabled();
+  for (const selector of ['@a', '@e[type=player]', '"x"']) {
+    await field.fill(selector);
+    await expect(wl).toContainText('Not a player name');
+    await expect(wl.getByRole('button', { name: 'Run' })).toBeDisabled();
+  }
+  // A name outside the profile's player_pattern cannot be picked.
+  await field.click();
+  const players = page.getByRole('region', { name: 'Players online' });
+  await expect(players.getByRole('button', { name: '<b>Alex</b>' })).toBeDisabled();
+  await expect(players.getByRole('button', { name: 'Steve' })).toBeEnabled();
 });
 
 test('the supporter sees only passable commands (CMD-003, ROLE-007)', async ({
