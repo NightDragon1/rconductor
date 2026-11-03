@@ -225,7 +225,7 @@ func newRightsFixture(t *testing.T) *rightsFixture {
 	si := f.c[rSI]
 	var list struct{ ID string }
 	si.must(http.MethodPost, "/command-lists", map[string]any{"name": "mods", "entries": []map[string]any{
-		{"path": "kick", "passable": false}, {"path": "say", "passable": true},
+		{"path": "kick", "passable": false}, {"path": "say", "passable": true}, {"path": "time set", "passable": true},
 	}}, &list, http.StatusCreated)
 	f.list = list.ID
 	var g struct{ ID string }
@@ -731,4 +731,50 @@ func wsTopics(t *testing.T) []string {
 		t.Fatalf("topics from the API: %v", out)
 	}
 	return out
+}
+
+// TestCatalogParams covers revision 2.4 candidate 19 over the API: for
+// moderator and supporter a command with catalog entry must fit its
+// parameters (422 invalid with the parameter in the detail, audited as
+// cmd.denied); admins keep free input.
+func TestCatalogParams(t *testing.T) {
+	f := newRightsFixture(t)
+	path := "/servers/" + f.server + "/commands"
+	cases := []struct {
+		role, command string
+		status        int
+		detail        string
+	}{
+		{rA, "time set dusk", http.StatusOK, ""},
+		{rSI, "time set dusk", http.StatusOK, ""},
+		{rMR, "time set dusk", http.StatusUnprocessableEntity, "parameter time"},
+		{rSU, "time set dusk", http.StatusUnprocessableEntity, "parameter time"},
+		{rMR, "time set day", http.StatusOK, ""},
+		{rMR, "kick", http.StatusUnprocessableEntity, "parameter player: missing"},
+		{rMR, "kick steve spamming in chat", http.StatusOK, ""},
+	}
+	for _, c := range cases {
+		status, body := f.rawBody(c.role, http.MethodPost, path, map[string]string{"command": c.command})
+		var p struct{ Reason, Detail string }
+		_ = json.Unmarshal(body, &p)
+		if status != c.status || (c.detail != "" && (p.Reason != "invalid" || !strings.Contains(p.Detail, c.detail))) {
+			t.Errorf("%s %q = %d %s, want %d %q", c.role, c.command, status, body, c.status, c.detail)
+		}
+	}
+	var audit struct {
+		Items []struct {
+			Action, Result, Reason string
+			ActorRole              string `json:"actor_role"`
+		}
+	}
+	f.as(rA).must(http.MethodGet, "/audit?kind=command", nil, &audit, http.StatusOK)
+	denied := 0
+	for _, e := range audit.Items {
+		if e.Action == "cmd.denied" && e.Reason == "invalid" {
+			denied++
+		}
+	}
+	if denied != 3 {
+		t.Errorf("cmd.denied with invalid = %d, want 3: %+v", denied, audit.Items)
+	}
 }

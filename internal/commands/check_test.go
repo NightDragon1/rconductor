@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/NightDragon1/rconductor/internal/profiles"
 )
 
 var minecraft = Syntax{StripPrefix: "/", MaxLength: 1000, Wrappers: []string{"execute"}}
@@ -112,5 +114,55 @@ func TestRateLimit(t *testing.T) {
 	}
 	if ok, _ := l.take("u", "s", lim, now.Add(3*time.Second)); !ok {
 		t.Error("token not refilled after 3 s")
+	}
+}
+
+// TestCheckParams covers the rules of revision 2.4 candidate 19.
+func TestCheckParams(t *testing.T) {
+	lo, hi := 1, 10
+	params := []profiles.Param{
+		{Name: "player", Type: profiles.ParamPlayer},
+		{Name: "mode", Type: profiles.ParamChoice, Values: []string{"day", "night"}},
+		{Name: "count", Type: profiles.ParamNumber, Min: &lo, Max: &hi, Optional: true},
+		{Name: "note", Type: profiles.ParamText, Optional: true},
+	}
+	cases := []struct {
+		args       string
+		name, prob string
+	}{
+		{"steve day", "", ""},
+		{"steve day 5 hello there", "", ""},
+		{"steve", "mode", "missing"},
+		{"", "player", "missing"},
+		{"steve dusk", "mode", "not one of day, night"},
+		{"steve DAY", "", ""},
+		{"steve day 0", "count", "out of range"},
+		{"steve day 11", "count", "out of range"},
+		{"steve day 2.5", "count", "not a whole number"},
+		{"steve day x", "count", "not a whole number"},
+	}
+	for _, c := range cases {
+		name, prob, ok := CheckParams(Tokens(c.args), params, false)
+		if name != c.name || prob != c.prob || ok != (c.name == "") {
+			t.Errorf("%q = %q %q %v, want %q %q", c.args, name, prob, ok, c.name, c.prob)
+		}
+	}
+	if _, _, ok := CheckParams(Tokens("steve DAY"), params, true); ok {
+		t.Error("case-sensitive profile took DAY for day")
+	}
+	// Extra tokens pass like after any list entry (CMD-004).
+	if _, _, ok := CheckParams(Tokens("x y"), []profiles.Param{{Name: "player", Type: profiles.ParamPlayer}}, false); !ok {
+		t.Error("whitelist add x y refused")
+	}
+}
+
+// TestCatalogEntry: the longest catalog path that starts the command.
+func TestCatalogEntry(t *testing.T) {
+	catalog := []profiles.Command{{Path: "whitelist"}, {Path: "whitelist add"}, {Path: "say"}}
+	if c, ok := CatalogEntry(Tokens("whitelist add steve"), catalog, false); !ok || c.Path != "whitelist add" {
+		t.Errorf("entry = %+v %v", c, ok)
+	}
+	if _, ok := CatalogEntry(Tokens("sayhi"), catalog, false); ok {
+		t.Error("sayhi matched say")
 	}
 }

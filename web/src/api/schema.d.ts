@@ -137,7 +137,7 @@ export interface paths {
         put?: never;
         /**
          * Send a command over the server's one RCON connection (Design 3.3).
-         * @description RCON admin and server admin may send any command (CMD-002); moderators and supporters only commands of the list that applies to them on this server, never wrappers (CMD-004, CMD-005). The answer comes synchronously and as event to the console; the request ID is also the ID of the first audit entry (CMD-007). The command has 10 s from its acceptance, the wait in the server's queue included, then 504 timeout; a full queue answers 503 busy at once, no RCON connection 503 server_unavailable (Design 3.8).
+         * @description RCON admin and server admin may send any command (CMD-002); moderators and supporters only commands of the list that applies to them on this server, never wrappers (CMD-004, CMD-005). For them a command with catalog entry must also fit its parameters (player one token, choice one of its values, number a whole number in range, text the rest, required ones present), else 422 invalid with the parameter in the detail (revision 2.4 candidate 19); commands without catalog entry pass as they are. The answer comes synchronously and as event to the console; the request ID is also the ID of the first audit entry (CMD-007). The command has 10 s from its acceptance, the wait in the server's queue included, then 504 timeout; a full queue answers 503 busy at once, no RCON connection 503 server_unavailable (Design 3.8).
          */
         post: operations["sendCommand"];
         delete?: never;

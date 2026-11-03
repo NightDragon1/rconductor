@@ -21,7 +21,11 @@ func commandError(err error) error {
 	case errors.As(err, &denied):
 		switch denied.Reason {
 		case commands.ReasonInvalid:
-			return &problem{status: http.StatusUnprocessableEntity, reason: api.ReasonCodeInvalid, detail: "empty or too long after cleaning"}
+			detail := denied.Detail
+			if detail == "" {
+				detail = "empty or too long after cleaning"
+			}
+			return &problem{status: http.StatusUnprocessableEntity, reason: api.ReasonCodeInvalid, detail: detail}
 		case commands.ReasonRateLimited:
 			return &problem{status: http.StatusTooManyRequests, reason: api.ReasonCodeRateLimited,
 				retryAfter: max(1, int(math.Ceil(denied.RetryAfter.Seconds())))}
