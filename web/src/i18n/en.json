@@ -465,5 +465,88 @@
     "undo": {
       "changed": "Group {{name}} changed"
     }
+  },
+  "servers": {
+    "new": "New server",
+    "create": "Create server",
+    "save": "Save",
+    "delete": "Delete server …",
+    "deleteTitle": "Delete the server {{name}}?",
+    "deleteText": "Its history stays in the audit; groups and grants lose it at once. This cannot be undone.",
+    "name": "Name",
+    "profile": "Game profile",
+    "choose": "Choose …",
+    "host": "Host",
+    "port": "RCON port",
+    "password": "RCON password",
+    "newPassword": "New RCON password",
+    "unchanged": "unchanged",
+    "agent": "Agent",
+    "noAgent": "No agent",
+    "agentSet": "set",
+    "container": "Container",
+    "containerOption": "{{name}} · {{state}}",
+    "agentAway": "The agent is disconnected; the containers are the last known ones.",
+    "ownPorts": "Own game ports instead of the profile's",
+    "portNumber": "Port",
+    "proto": "Protocol",
+    "portName": "Name",
+    "addPort": "+ Port",
+    "address": "Address",
+    "groups": "Groups",
+    "serverGroups": "Server groups",
+    "groupServers": "Servers of the group",
+    "addToGroup": "+ Server",
+    "newGroupName": "Name of a new server group",
+    "createGroup": "Create group",
+    "noGroups": "No server groups.",
+    "deleteGroup": "Delete group …",
+    "deleteGroupTitle": "Delete the server group {{name}}?",
+    "deleteGroupText": "Grants and scopes on this group end at once; the servers stay. This cannot be undone.",
+    "explainAdmin": "Create servers, set agent and container, form server groups.",
+    "explainRead": "The servers and server groups of your scope, read only.",
+    "credentials": {
+      "missing": "No RCON password stored. Enter one.",
+      "reenter": "The RCON password was stored with another master key. Enter it again."
+    },
+    "credentialsShort": {
+      "missing": "password missing",
+      "reenter": "enter password again"
+    },
+    "undo": {
+      "changed": "Server {{name}} changed",
+      "groupChanged": "Server group {{name}} changed"
+    }
+  },
+  "agents": {
+    "summary": "{{count}} paired · {{connected}} connected",
+    "pair": "Pair an agent",
+    "pairTitle": "Pair an agent",
+    "pairExplain": "Make a one-time token. The Compose service below starts the agent on the game host with it.",
+    "makeToken": "Make token",
+    "compose": "Compose service",
+    "copyCompose": "Copy the Compose service",
+    "once": "The token is in this service and shown only now; it is valid once for 24 hours.",
+    "fingerprint": "Fingerprint",
+    "fingerprintPairing": "Pairing by fingerprint",
+    "fingerprintHint": "Off by default. Waiting agents appear below to approve; it switches itself off after 30 minutes.",
+    "name": "Name",
+    "version": "Version",
+    "lastSeen": "Last seen",
+    "none": "No agents yet.",
+    "connected": "connected",
+    "disconnected": "disconnected",
+    "status": {
+      "pending": "waiting for approval",
+      "revoked": "revoked",
+      "active": "active"
+    },
+    "approve": "Approve",
+    "approved": "{{name}} approved.",
+    "reject": "Reject …",
+    "revoke": "Revoke …",
+    "revokeTitle": "Revoke {{name}}?",
+    "revokeText": "The agent loses its connection at once; servers on it lose agent and container. This cannot be undone.",
+    "revoked": "{{name}} revoked."
   }
 }
