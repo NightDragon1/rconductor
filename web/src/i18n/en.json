@@ -572,7 +572,78 @@
       "interface": "Interface",
       "backups": "Backups",
       "other": "Other"
-    }
+    },
+    "key": {
+      "backup_interval": {
+        "label": "Backup interval",
+        "help": "How often the panel makes a backup of its database."
+      },
+      "backup_keep_auto": {
+        "label": "Automatic backups kept",
+        "help": "How many regular backups stay; older ones are removed."
+      },
+      "backup_keep_pre_migration": {
+        "label": "Backups before updates kept",
+        "help": "Backups made before a database update that stay."
+      },
+      "session_idle_timeout": {
+        "label": "Session idle time",
+        "help": "A session without activity ends after this time."
+      },
+      "session_max_lifetime": {
+        "label": "Session lifetime",
+        "help": "A session ends after this time at the latest."
+      },
+      "login_max_failures": {
+        "label": "Failed sign-ins before lock",
+        "help": "Wrong passwords per account and address before a lock."
+      },
+      "login_lockout_duration": {
+        "label": "Lock after failed sign-ins",
+        "help": "How long sign-in stays locked after too many failures."
+      },
+      "invite_lifetime": {
+        "label": "Invitation lifetime",
+        "help": "How long an invitation link can be used."
+      },
+      "supporters_enabled": {
+        "label": "Supporters",
+        "help": "Moderators may have supporters. Off ends all supporter sessions."
+      },
+      "audit_retention_days": {
+        "label": "Audit retention (days)",
+        "help": "Audit entries older than this are removed."
+      },
+      "ws_max_sockets_per_session": {
+        "label": "Live connections per session",
+        "help": "Above this the oldest connection of a session closes."
+      },
+      "ws_max_subscriptions_per_socket": {
+        "label": "Subscriptions per connection",
+        "help": "Live topics one browser tab may follow at once."
+      },
+      "profiles_poll_interval": {
+        "label": "Game profile check",
+        "help": "How often the panel looks for changed profile files."
+      },
+      "agents_fingerprint_pairing": {
+        "label": "Pairing by fingerprint",
+        "help": "Waiting agents can be approved; switches itself off after 30 minutes."
+      },
+      "ui_shortcuts_enabled": {
+        "label": "Keyboard shortcuts",
+        "help": "Single keys for frequent actions, for everyone."
+      },
+      "ratelimit_per_minute": {
+        "label": "Commands per minute: {{role}}",
+        "help": "Rate limit per user and server."
+      },
+      "ratelimit_burst": {
+        "label": "Commands in a row: {{role}}",
+        "help": "How many may come at once before the limit."
+      }
+    },
+    "badDuration": "Use a number and h, min or s, e.g. 72 h."
   },
   "audit": {
     "explain": "Who did what and when. Server admins see their scope.",
