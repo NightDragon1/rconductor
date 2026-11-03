@@ -93,3 +93,18 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Vorschlag:** PRJ-002 um „kopierte Komponenten mit kompatibler Lizenz, gekennzeichnet“ ergänzen; Technologie 3 verweist auf THIRD\_PARTY\_NOTICES.
 - **Begründung:** shadcn/ui ist eine Vorlage zum Kopieren, keine Abhängigkeit; ohne Kennzeichnung wäre es Fremdcode im Sinne von PRJ-002.
 
+
+## 14. Ablehnung nach Rolle vor dem Objekt
+
+- **Fundstelle:** Design 2.2 (Rollen je Ressource), 3.1 (Standard ist Ablehnung; Server außerhalb des Scopes 404), 3.5 (403 forbidden); offen war der Status für Rollen, die eine Ressource gar nicht nutzen.
+- **Entscheidung (M4, Rechtematrix):**
+  - Darf eine Rolle die Ressourcenart nicht nutzen, antwortet das Panel mit 403 forbidden.
+  - Darf sie sie nutzen und liegt das Objekt außerhalb ihres Scopes, antwortet es mit 404 not\_found.
+  - Die Rollenprüfung kommt immer vor dem Objekt-Lookup; für eine abgelehnte Rolle sind die Antworten bei existierender und nicht existierender ID gleich.
+- **Vorschlag:** Design 3.1 und 3.5 um diese Regel ergänzen.
+
+## 15. Supporter-Freigabe in der Session
+
+- **Fundstelle:** Design 2.2 (/auth/session), 6.2 (Navigation je Rolle); UI-011, ROLE-006.
+- **Entscheidung (M4, Schritt 2):** Session.ui enthält zusätzlich supporters\_enabled (globaler Schalter) und supporters\_allowed (Freigabe des Moderators), damit Navigation und Router-Guards allein aus der Session entscheiden. Über Rechte entscheidet weiter nur das Backend.
+- **Vorschlag:** Design 2.2 bei /auth/session um die Felder ergänzen.
