@@ -134,12 +134,13 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 
 - **Fundstelle:** Design 7.3 (Spalte „Prüfung im Backend“ je Parametertyp) gegenüber Design 3.3 Schritt 7 („Argument-Einschränkung folgt in R2“) und CMD-009 (R2).
 - **Entscheidung (M4, Schritt 6, W7 B):** Für Moderator und Supporter prüft das Backend in R1 Befehle mit Katalogeintrag gegen die Katalogparameter des Spielprofils:
-  - player ein Token ohne Leerzeichen;
+  - player ein Spielername: passend zum neuen Profilfeld syntax.player_pattern (RE2, ganzer Name; Minecraft Java: ^[A-Za-z0-9_]{1,16}$). Ohne Muster werden mindestens ein führendes @ (Selektoren wie @a, @e[type=player]), Anführungszeichen und Steuerzeichen abgelehnt;
   - choice nur die genannten Werte (Groß-/Kleinschreibung laut Profil);
   - number ganzzahlig im Bereich min/max;
   - text nur als letzter Parameter (Rest der Zeile);
   - Pflichtparameter vorhanden.
 
-  Bei Abweichung antwortet das Backend mit 422 invalid und dem Parameternamen im Detail; der Audit-Eintrag ist cmd.denied. Maßgeblich ist der längste Katalogpfad, mit dem der Befehl beginnt. Weitere Tokens nach den Parametern bleiben erlaubt wie nach jedem Listeneintrag (CMD-004: whitelist add x y). Befehle ohne Katalogeintrag und die freie Eingabe von RCON-Admin und Server-Admin bleiben unverändert.
+  Bei Abweichung antwortet das Backend mit 422 invalid und dem Parameternamen im Detail; der Audit-Eintrag ist cmd.denied. Maßgeblich ist der längste Katalogpfad, mit dem der Befehl beginnt. Weitere Tokens nach den Katalogparametern sind nur erlaubt, wenn der letzte Parameter vom Typ text ist; sonst 422 invalid mit „unexpected argument“ (z. B. time set day extra, whitelist add x y). Befehle ohne Katalogeintrag und die freie Eingabe von RCON-Admin und Server-Admin bleiben unverändert. Die Befehlsseite prüft nach denselben Regeln; GET /servers/{id}/commands liefert dafür player_pattern mit.
+- **Abgrenzung zu CMD-004:** CMD-004 regelt den Pfad (ganze Tokens am Anfang), nicht die Form der Argumente. Das Abnahmekriterium „Mit Eintrag whitelist add sind whitelist add x und whitelist add x y erlaubt“ gilt für den Pfadabgleich; mit Katalogeintrag lehnt die Parameterprüfung whitelist add x y für Moderator und Supporter ab.
 - **Abgrenzung zu CMD-009 (R2):** Dort geht es um Einschränkungen je Listeneintrag, die ein Server-Admin festlegt, z. B. nur bestimmte Spielernamen oder Werte für einen Eintrag einer Befehlsliste. Die R1-Prüfung kennt nur die festen Parameter aus dem Spielprofil und gilt für alle Listen gleich.
-- **Vorschlag:** Design 3.3 um den Schritt „7b: Katalogparameter (Moderator, Supporter)“ ergänzen; Design 7.3 verweist für Einschränkungen je Listeneintrag auf CMD-009.
+- **Vorschlag:** Design 3.3 um den Schritt „7b: Katalogparameter (Moderator, Supporter)“ ergänzen; Design 7.2 um das Feld syntax.player_pattern; Design 7.3 Spalte „Prüfung im Backend“ an diese Regeln angleichen und für Einschränkungen je Listeneintrag auf CMD-009 verweisen; Abnahme CMD-004 auf „Pfadabgleich“ präzisieren.
