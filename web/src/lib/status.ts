@@ -44,12 +44,14 @@ export function cardStatus(s: Server): CardStatus {
 }
 
 // rconFailing reports an RCON problem that the overview lists (UI-003): a
-// server that should answer but does not, also in a restart loop. A
-// stopped container or one of unknown state is not one.
+// server that should answer but does not, also in a restart loop. Without
+// an agent, or while its agent is gone (state unknown), nothing tells that
+// the server is stopped, so RCON offline is an error. Only a container
+// known to be stopped is not one.
 export function rconFailing(s: Server): boolean {
   if (s.status === 'connected') return false;
   const c = s.runtime?.container;
-  return !c || c.state === 'running';
+  return !c || c.state === 'running' || c.state === 'unknown';
 }
 
 // shownImage is the image of a card; a bare digest says nothing, so the

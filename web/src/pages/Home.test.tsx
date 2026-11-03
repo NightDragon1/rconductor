@@ -120,6 +120,52 @@ describe('landing pages', () => {
     expect(links).toEqual(['/servers/s2', '/servers/s2', '/admin/agents#a2', '/admin/users#u1']);
   });
 
+  it('counts RCON offline as an error while the container state is unknown (UI-003)', async () => {
+    setLanguage('en');
+    const offline = (id: string, name: string, state?: string): Server => ({
+      id,
+      name,
+      groups: [],
+      status: 'offline',
+      status_since: now,
+      runtime: state
+        ? {
+            kind: 'runtime',
+            server_id: id,
+            container: {
+              ...container,
+              name,
+              state,
+              stale: true,
+              agent_connected: state !== 'unknown',
+            },
+          }
+        : { kind: 'runtime', server_id: id },
+    });
+    await renderPage(HomePage, [
+      [sessionKey, session('rcon_admin')],
+      [
+        serversKey,
+        [
+          offline('n1', 'noagent'),
+          offline('n2', 'agentgone', 'unknown'),
+          offline('n3', 'halted', 'exited'),
+        ],
+      ],
+      [profilesKey, profiles],
+      [serverGroupsKey, []],
+      [agentsKey, []],
+      [usersKey, []],
+    ]);
+    const rcon = screen.getByRole('region', { name: 'RCON errors' });
+    expect(within(rcon).getByText('2')).toBeTruthy();
+    expect(within(rcon).getByText('noagent, agentgone')).toBeTruthy();
+    const rows = within(screen.getByRole('region', { name: 'Notices' })).getAllByRole('listitem');
+    expect(rows.map((r) => r.querySelector('bdi')?.textContent)).toEqual(['noagent', 'agentgone']);
+    expect(rows[0]?.textContent).toContain('RCON not reachable');
+    expect(rows[0]?.textContent).not.toContain('container running');
+  });
+
   it('groups the cards and shows agent data to admins (UI-004)', async () => {
     setLanguage('en');
     await renderPage(HomePage, adminData('server_admin'));

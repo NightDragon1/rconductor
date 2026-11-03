@@ -56,7 +56,19 @@ describe('cardStatus', () => {
     expect(rconFailing(withContainer('exited', {}, 'offline'))).toBe(false);
     expect(rconFailing(withContainer('running'))).toBe(false);
     expect(rconFailing(withContainer('running', { restart_loop: true }, 'offline'))).toBe(true);
-    expect(rconFailing(withContainer('unknown', {}, 'offline'))).toBe(false);
+  });
+
+  it('counts RCON offline as a failure when the container state is unknown (UI-003)', () => {
+    // No agent: the API sends no container part.
+    expect(rconFailing({ ...base, status: 'offline' })).toBe(true);
+    expect(rconFailing({ ...base, status: 'auth_failed' })).toBe(true);
+    // The agent is gone: the state is unknown.
+    expect(
+      rconFailing(withContainer('unknown', { stale: true, agent_connected: false }, 'offline')),
+    ).toBe(true);
+    expect(rconFailing(withContainer('unknown', { stale: true, agent_connected: false }))).toBe(
+      false,
+    );
   });
 });
 
