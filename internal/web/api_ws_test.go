@@ -529,3 +529,34 @@ func TestLogsWithoutDuplicates(t *testing.T) {
 		t.Errorf("extra message %+v", m)
 	}
 }
+
+// TestEndUserSessions covers revision 2.4 candidate 21 (AUTH-006): whoever
+// manages a user ends his sessions; his socket closes at once and his
+// cookie no longer works; the moderator may not do it to his manager.
+func TestEndUserSessions(t *testing.T) {
+	w := newWSFixture(t)
+	w.grantModerator(t)
+	admin := w.login(t, "Boss")
+	mod := w.login(t, "Mod")
+	c, _, err := w.dial(t, mod, w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := w.do(t, call{method: http.MethodDelete, path: "/api/v1/users/" + w.adminID + "/sessions", cookies: []*http.Cookie{mod}, origin: "http://panel.lan"}); rec.Code != http.StatusForbidden && rec.Code != http.StatusNotFound {
+		t.Errorf("moderator ends the admin's sessions = %d", rec.Code)
+	}
+	if rec := w.do(t, call{method: http.MethodDelete, path: "/api/v1/users/" + w.userID + "/sessions", cookies: []*http.Cookie{admin}, origin: "http://panel.lan"}); rec.Code != http.StatusNoContent {
+		t.Fatalf("end sessions = %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := next(t, c, 5*time.Second); err == nil {
+		t.Error("socket still open after the sessions ended")
+	}
+	if rec := w.do(t, call{method: http.MethodGet, path: "/api/v1/auth/session", cookies: []*http.Cookie{mod}}); rec.Code != http.StatusUnauthorized {
+		t.Errorf("session after end = %d", rec.Code)
+	}
+	var n int
+	_ = w.st.DB.QueryRowContext(context.Background(), `SELECT count(*) FROM audit_log WHERE action = 'user.sessions.end' AND target_id = ?`, w.userID).Scan(&n)
+	if n != 1 {
+		t.Errorf("audit entries = %d", n)
+	}
+}

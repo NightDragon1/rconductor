@@ -410,6 +410,10 @@ func matrix() []matrixOp {
 			return request{path: "/users/" + freshSupporter(f, role) + "/password-reset"}
 		}, false},
 		{"GET", "/users/{id}/avatar", "OONONOUP", userPath("/avatar"), false},
+		// A fresh supporter, so that the matrix keeps its own sessions.
+		{"DELETE", "/users/{id}/sessions", "OONOFFUP", func(f *rightsFixture, role string) request {
+			return request{path: "/users/" + freshSupporter(f, role) + "/sessions"}
+		}, false},
 
 		{"GET", "/user-groups", "OOOFFFUP", at("/user-groups"), false},
 		{"POST", "/user-groups", "OOOFFFUP", func(f *rightsFixture, _ string) request {

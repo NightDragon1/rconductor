@@ -102,6 +102,13 @@ func (s *apiServer) DeleteUser(ctx context.Context, req api.DeleteUserRequestObj
 	return api.DeleteUser204Response{}, nil
 }
 
+func (s *apiServer) EndUserSessions(ctx context.Context, req api.EndUserSessionsRequestObject) (api.EndUserSessionsResponseObject, error) {
+	if err := s.users.EndSessions(ctx, adminRequest(ctx), req.Id.String()); err != nil {
+		return nil, adminError(err)
+	}
+	return api.EndUserSessions204Response{}, nil
+}
+
 func uuidPtr(s string) *uuid.UUID {
 	if s == "" {
 		return nil
