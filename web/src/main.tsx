@@ -3,11 +3,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { setNonce } from 'get-nonce';
 import { initI18n } from '@/i18n';
 import { applyTheme, storedTheme } from '@/lib/theme';
 import { makeRouter } from '@/router';
 import './index.css';
 
+// The panel gives each page a nonce for style elements (SEC-009); dialogs
+// need one to lock scrolling.
+const nonce = document.querySelector<HTMLMetaElement>('meta[name="rcd-style-nonce"]')?.content;
+if (nonce) setNonce(nonce);
 applyTheme(storedTheme());
 initI18n();
 const queryClient = new QueryClient({

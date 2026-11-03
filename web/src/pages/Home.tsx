@@ -7,13 +7,13 @@ export function HomePage() {
   const { t } = useTranslation();
   const { data } = useSession();
   return (
-    <main>
+    <>
       <h1 className="mb-2 text-2xl font-semibold">{t('home.title')}</h1>
       {data && (
         <p className="text-muted">
           {t('home.welcome', { name: data.user.pseudonym, role: t(`role.${data.user.role}`) })}
         </p>
       )}
-    </main>
+    </>
   );
 }

@@ -6,7 +6,9 @@ package webui
 
 import (
 	"bytes"
+	"crypto/rand"
 	"embed"
+	"encoding/base64"
 	"html"
 	"io"
 	"io/fs"
@@ -28,9 +30,20 @@ const indexFile = "index.html"
 
 // Policy is the Content-Security-Policy of the interface (SEC-009): only
 // own scripts, styles, fonts and images, no inline script, the WebSocket
-// to the panel itself, never framed.
+// to the panel itself, never framed. The page itself gets PagePolicy.
 const Policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; " +
 	"connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+
+// PagePolicy is Policy for index.html with a nonce for style elements
+// only: dialogs of the component library add a style element to lock
+// scrolling. Scripts stay 'self' without exception.
+func PagePolicy(nonce string) string {
+	return strings.Replace(Policy, "style-src 'self'", "style-src 'self' 'nonce-"+nonce+"'", 1)
+}
+
+// NonceMeta names the meta element that hands the style nonce to the
+// interface.
+const NonceMeta = "rcd-style-nonce"
 
 // Handler serves the embedded build below basePath (RCD_BASE_PATH).
 func Handler(basePath string) http.Handler {
@@ -71,6 +84,9 @@ func NewAt(fsys fs.FS, basePath string) http.Handler {
 	})
 }
 
+// nonceSlot marks where each answer puts its nonce meta element.
+const nonceSlot = "<!--rcd-nonce-->"
+
 // withBase reads index.html once and puts the base element first into its
 // head.
 func withBase(fsys fs.FS, basePath string) ([]byte, bool) {
@@ -79,7 +95,7 @@ func withBase(fsys fs.FS, basePath string) ([]byte, bool) {
 		return nil, false
 	}
 	href := strings.TrimSuffix(basePath, "/") + "/"
-	tag := `<base href="` + html.EscapeString(href) + `">`
+	tag := `<base href="` + html.EscapeString(href) + `">` + nonceSlot
 	s := string(b)
 	if i := strings.Index(s, "<head>"); i >= 0 {
 		s = s[:i+len("<head>")] + tag + s[i+len("<head>"):]
@@ -94,6 +110,15 @@ func serveIndex(w http.ResponseWriter, r *http.Request, index []byte, ok bool) {
 		web.WriteProblem(w, http.StatusServiceUnavailable, "", "web UI is not built")
 		return
 	}
+	// A fresh nonce for every page (SEC-009).
+	b := make([]byte, 18)
+	if _, err := rand.Read(b); err != nil {
+		web.WriteProblem(w, http.StatusInternalServerError, "", "")
+		return
+	}
+	nonce := base64.RawStdEncoding.EncodeToString(b)
+	w.Header().Set("Content-Security-Policy", PagePolicy(nonce))
+	index = bytes.Replace(index, []byte(nonceSlot), []byte(`<meta name="`+NonceMeta+`" content="`+nonce+`">`), 1)
 	// The index references hashed assets and must always be revalidated.
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Content-Type-Options", "nosniff")

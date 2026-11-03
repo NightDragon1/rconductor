@@ -5,6 +5,7 @@ package webui
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -28,7 +29,7 @@ func TestIndexAndClientRoutes(t *testing.T) {
 	h := New(built)
 	for _, target := range []string{"/", "/index.html", "/servers/42", "/admin/users/", "/a/../b"} {
 		rec := get(t, h, http.MethodGet, target)
-		if rec.Code != http.StatusOK || rec.Body.String() != `<!doctype html><html><head><base href="/"><title>ui</title></head></html>` {
+		if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Body.String(), `<!doctype html><html><head><base href="/"><meta name="rcd-style-nonce" content="`) {
 			t.Errorf("%s: %d %q, want index.html", target, rec.Code, rec.Body.String())
 		}
 		if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
@@ -118,10 +119,20 @@ func TestBaseHref(t *testing.T) {
 	if strings.Contains(get(t, h, http.MethodGet, "/").Body.String(), "<script>") {
 		t.Error("base path not escaped")
 	}
-	for _, target := range []string{"/", "/assets/app-1.js", "/assets/missing.js"} {
+	for _, target := range []string{"/assets/app-1.js", "/assets/missing.js"} {
 		csp := get(t, NewAt(built, "/"), http.MethodGet, target).Header().Get("Content-Security-Policy")
 		if csp != Policy || strings.Contains(csp, "unsafe-inline") || !strings.Contains(csp, "frame-ancestors 'none'") {
 			t.Errorf("%s: policy %q", target, csp)
 		}
+	}
+	// The page has a fresh style nonce, in header and meta element alike;
+	// scripts get none.
+	first, second := get(t, h, http.MethodGet, "/"), get(t, NewAt(built, "/"), http.MethodGet, "/")
+	m := regexp.MustCompile(`'nonce-([A-Za-z0-9+/]+)'`).FindStringSubmatch(first.Header().Get("Content-Security-Policy"))
+	if m == nil || !strings.Contains(first.Body.String(), `content="`+m[1]+`"`) || strings.Contains(second.Body.String(), m[1]) {
+		t.Errorf("nonce: %q / %s", first.Header().Get("Content-Security-Policy"), first.Body.String())
+	}
+	if strings.Contains(first.Header().Get("Content-Security-Policy"), "script-src 'self' 'nonce") {
+		t.Error("scripts got a nonce")
 	}
 }

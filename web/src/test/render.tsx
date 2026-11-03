@@ -26,14 +26,20 @@ export function setLanguage(lng: 'en' | 'xx') {
 }
 
 // renderPage renders a page component on its own route.
-export async function renderPage(Page: () => React.JSX.Element) {
+export async function renderPage(
+  Page: () => React.JSX.Element | null,
+  data: [readonly unknown[], unknown][] = [],
+) {
   const root = createRootRoute();
   const route = createRoute({ getParentRoute: () => root, path: '/', component: Page });
   const router = createRouter({
     routeTree: root.addChildren([route]),
     history: createMemoryHistory(),
   });
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  for (const [key, value] of data) qc.setQueryData(key, value);
   const r = render(
     <QueryClientProvider client={qc}>
       <RouterProvider router={router} />
