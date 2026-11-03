@@ -548,5 +548,63 @@
     "revokeTitle": "Revoke {{name}}?",
     "revokeText": "The agent loses its connection at once; servers on it lose agent and container. This cannot be undone.",
     "revoked": "{{name}} revoked."
+  },
+  "settings": {
+    "explain": "Global settings of the panel (Design 5.6). Changes wait a few seconds for Undo.",
+    "save_one": "Save {{count}} change",
+    "save_other": "Save {{count}} changes",
+    "discard": "Discard",
+    "undo_one": "{{count}} setting changed",
+    "undo_other": "{{count}} settings changed",
+    "supportersOffTitle": "Switch supporters off?",
+    "supportersOffText": "All supporters lose their access and their sessions end at once.",
+    "supportersOff": "Switch off",
+    "section": {
+      "sessions": "Sessions",
+      "login": "Sign-in protection",
+      "invitations": "Invitations",
+      "supporters": "Supporters",
+      "ratelimits": "Rate limits",
+      "audit": "Audit",
+      "websocket": "Live connections",
+      "profiles": "Game profiles",
+      "agents": "Agents",
+      "interface": "Interface",
+      "backups": "Backups",
+      "other": "Other"
+    }
+  },
+  "audit": {
+    "explain": "Who did what and when. Server admins see their scope.",
+    "kind": "Kind",
+    "allKinds": "Kind: all",
+    "server": "Server",
+    "allServers": "Server: all",
+    "kinds": {
+      "command": "Command",
+      "agent": "Agent",
+      "admin": "Administration",
+      "auth": "Sign-in"
+    },
+    "entries": "Audit entries",
+    "details": "Details",
+    "none": "No entries."
+  },
+  "profile": {
+    "explain": "Others see you by your pseudonym; real name, picture and contacts only those who manage you.",
+    "about": "About you",
+    "contacts": "Contacts",
+    "contactKind": "Kind of contact",
+    "contactValue": "Contact",
+    "addContact": "+ Contact",
+    "picture": "Profile picture",
+    "pictureAlt": "Your profile picture",
+    "choosePicture": "Choose a picture (PNG, JPEG or WebP)",
+    "removePicture": "Remove picture",
+    "pictureSaved": "Picture saved.",
+    "pictureRefused": "The picture was refused. Use a small PNG, JPEG or WebP.",
+    "pictureRemoved": "Picture removed.",
+    "passwordHint": "Your other sessions end when the password changes.",
+    "passwordChanged": "Password changed."
   }
 }
