@@ -1282,6 +1282,26 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/Busy"
+  /users/{id}/sessions:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    delete:
+      operationId: endUserSessions
+      summary: End all sessions of a managed user (AUTH-006).
+      description: >-
+        Whoever manages the user ends his sessions and closes his
+        WebSockets at once; audited, logged as auth.session.revoked
+        (revision 2.4 candidate 21).
+      tags: [users]
+      responses:
+        "204":
+          description: All sessions ended.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /users/{id}/avatar:
     parameters:
       - $ref: "#/components/parameters/UserID"

@@ -310,6 +310,30 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	return s.rightsChanged(ctx, req, "user.delete", id)
 }
 
+// EndSessions ends all sessions of a managed user (AUTH-006, revision 2.4
+// candidate 21); the revoker logs auth.session.revoked and closes his
+// sockets.
+func (s *Service) EndSessions(ctx context.Context, req Request, id string) error {
+	if err := s.mustManage(ctx, req, id, "user.sessions.end"); err != nil {
+		return err
+	}
+	tx, err := s.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.audit(ctx, tx, req, "user.sessions.end", id, nil); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("end sessions: %w", err)
+	}
+	if s.revoke == nil {
+		return nil
+	}
+	return s.revoke(ctx, id, "user.sessions.end", req.RequestID)
+}
+
 func clearAssignments(ctx context.Context, q *sqlitedb.Queries, id string) error {
 	grants := func(ctx context.Context, id string) error {
 		return q.DeleteUserGrants(ctx, sql.NullString{String: id, Valid: true})

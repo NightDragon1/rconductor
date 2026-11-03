@@ -1323,6 +1323,9 @@ type ServerInterface interface {
 	// ResetPassword Set a temporary password for a managed user (AUTH-010).
 	// (POST /users/{id}/password-reset)
 	ResetPassword(w http.ResponseWriter, r *http.Request, id UserID)
+	// EndUserSessions End all sessions of a managed user (AUTH-006).
+	// (DELETE /users/{id}/sessions)
+	EndUserSessions(w http.ResponseWriter, r *http.Request, id UserID)
 	// OpenWebSocket WebSocket for live data (Design 2.3).
 	// (GET /ws)
 	OpenWebSocket(w http.ResponseWriter, r *http.Request)
@@ -2618,6 +2621,32 @@ func (siw *ServerInterfaceWrapper) ResetPassword(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// EndUserSessions operation middleware
+func (siw *ServerInterfaceWrapper) EndUserSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EndUserSessions(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // OpenWebSocket operation middleware
 func (siw *ServerInterfaceWrapper) OpenWebSocket(w http.ResponseWriter, r *http.Request) {
 
@@ -2806,6 +2835,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/avatar", wrapper.DeleteMyAvatar)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/me/avatar", wrapper.SetMyAvatar)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/users/{id}/password-reset", wrapper.ResetPassword)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}/sessions", wrapper.EndUserSessions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users/{id}/avatar", wrapper.GetUserAvatar)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit", wrapper.ListAudit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings", wrapper.GetSettings)
@@ -6837,6 +6867,70 @@ func (response ResetPassword503ApplicationProblemPlusJSONResponse) VisitResetPas
 	return err
 }
 
+type EndUserSessionsRequestObject struct {
+	Id UserID `json:"id"`
+}
+
+type EndUserSessionsResponseObject interface {
+	VisitEndUserSessionsResponse(w http.ResponseWriter) error
+}
+
+type EndUserSessions204Response struct {
+}
+
+func (response EndUserSessions204Response) VisitEndUserSessionsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EndUserSessions401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response EndUserSessions401ApplicationProblemPlusJSONResponse) VisitEndUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndUserSessions403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response EndUserSessions403ApplicationProblemPlusJSONResponse) VisitEndUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndUserSessions404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response EndUserSessions404ApplicationProblemPlusJSONResponse) VisitEndUserSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type OpenWebSocketRequestObject struct {
 }
 
@@ -7057,6 +7151,9 @@ type StrictServerInterface interface {
 	// ResetPassword Set a temporary password for a managed user (AUTH-010).
 	// (POST /users/{id}/password-reset)
 	ResetPassword(ctx context.Context, request ResetPasswordRequestObject) (ResetPasswordResponseObject, error)
+	// EndUserSessions End all sessions of a managed user (AUTH-006).
+	// (DELETE /users/{id}/sessions)
+	EndUserSessions(ctx context.Context, request EndUserSessionsRequestObject) (EndUserSessionsResponseObject, error)
 	// OpenWebSocket WebSocket for live data (Design 2.3).
 	// (GET /ws)
 	OpenWebSocket(ctx context.Context, request OpenWebSocketRequestObject) (OpenWebSocketResponseObject, error)
@@ -8663,6 +8760,32 @@ func (sh *strictHandler) ResetPassword(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ResetPasswordResponseObject); ok {
 		if err := validResponse.VisitResetPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EndUserSessions operation middleware
+func (sh *strictHandler) EndUserSessions(w http.ResponseWriter, r *http.Request, id UserID) {
+	var request EndUserSessionsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EndUserSessions(ctx, request.(EndUserSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EndUserSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EndUserSessionsResponseObject); ok {
+		if err := validResponse.VisitEndUserSessionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
