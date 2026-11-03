@@ -226,6 +226,15 @@ func (c *client) call(method, path string, body, out any) error {
 	if c.cookie != nil {
 		req.AddCookie(c.cookie)
 	}
+	// Versioned writes name the version just read (revision 2.4
+	// candidate 24).
+	if method == http.MethodPatch && versionedPath.MatchString(path) {
+		v, err := c.version(path)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("If-Match", v)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -244,6 +253,30 @@ func (c *client) call(method, path string, body, out any) error {
 		return json.NewDecoder(resp.Body).Decode(out)
 	}
 	return nil
+}
+
+var versionedPath = regexp.MustCompile(`^/(user-groups|command-lists|servers|server-groups)/[^/?]+$|^/settings$`)
+
+// version reads the current version of a versioned object.
+func (c *client) version(path string) (string, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, c.base+"/api/v1"+path, nil)
+	if err != nil {
+		return "", err
+	}
+	if c.cookie != nil {
+		req.AddCookie(c.cookie)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if path == "/settings" {
+		return resp.Header.Get("ETag"), nil
+	}
+	var o struct{ Version string }
+	err = json.NewDecoder(resp.Body).Decode(&o)
+	return o.Version, err
 }
 
 func origin(public string) string {
