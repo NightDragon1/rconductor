@@ -203,6 +203,15 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 		}
 		ids[s.name] = srv.ID
 	}
+	// outpost has no agent: only the restart over RCON (revision 2.4
+	// candidate 16).
+	var outpost struct{ ID string }
+	if err := admin.call(http.MethodPost, "/servers", map[string]any{
+		"name": "outpost", "profile_id": profile, "host": host, "port": p, "password": rconPassword,
+	}, &outpost); err != nil {
+		return err
+	}
+	ids["outpost"] = outpost.ID
 	st.Servers = ids
 	for _, g := range []struct {
 		name    string
@@ -220,5 +229,42 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 		return err
 	}
 	st.LockedUserID = lockedID
-	return admin.call(http.MethodPatch, "/users/"+lockedID, map[string]bool{"disabled": true}, nil)
+	if err := admin.call(http.MethodPatch, "/users/"+lockedID, map[string]bool{"disabled": true}, nil); err != nil {
+		return err
+	}
+	return seedHistory(admin, panel, o, ids["survival"])
+}
+
+// seedHistory sends commands of the admin and of the moderator to
+// survival, for the history tab; one answer carries color codes.
+func seedHistory(admin *client, panel, o, server string) error {
+	if err := waitConnected(admin, server); err != nil {
+		return err
+	}
+	for _, c := range []string{"list", "say §ahello §lworld"} {
+		if err := admin.call(http.MethodPost, "/servers/"+server+"/commands", map[string]string{"command": c}, nil); err != nil {
+			return err
+		}
+	}
+	mod := &client{base: panel, origin: o}
+	if err := mod.call(http.MethodPost, "/auth/login", map[string]string{"pseudonym": "mod", "password": userPassword}, nil); err != nil {
+		return err
+	}
+	return mod.call(http.MethodPost, "/servers/"+server+"/commands", map[string]string{"command": "say hi from mod"}, nil)
+}
+
+// waitConnected waits until the panel reaches the server over RCON.
+func waitConnected(admin *client, id string) error {
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		var s struct{ Status string }
+		if err := admin.call(http.MethodGet, "/servers/"+id, nil, &s); err != nil {
+			return err
+		}
+		if s.Status == "connected" {
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return errors.New("server not connected")
 }
