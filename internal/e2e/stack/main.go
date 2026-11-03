@@ -2,7 +2,8 @@
 
 // Command stack runs a panel for the end-to-end tests of the web interface
 // (Playwright): the freshly built UI from -dist, a Minecraft-like RCON test
-// server, test users and a game server created over the API. With -base
+// server, an in-process agent with a stand-in for Docker, test users and
+// game servers created over the API. With -base
 // it stands behind a small proxy that strips the base path, as a reverse
 // proxy does (NFR-003). The addresses and passwords go to -state as JSON.
 // It is a test tool only and never part of a release.
@@ -54,6 +55,11 @@ type State struct {
 	ResetPassword string `json:"reset_password"`
 	ServerID      string `json:"server_id"`
 	ServerName    string `json:"server_name"`
+	// Servers holds the IDs of all game servers by name; LockedUserID is
+	// a disabled supporter (UI-003).
+	Servers      map[string]string `json:"servers"`
+	LockedUserID string            `json:"locked_user_id"`
+	profile      string
 }
 
 type buffer struct {
@@ -117,12 +123,13 @@ func run(addr, dist, base, statePath string) error {
 	defer game.Close()
 
 	var logs, console buffer
-	ready := make(chan net.Addr, 1)
+	ready, agentReady := make(chan net.Addr, 1), make(chan net.Addr, 1)
 	done := make(chan error, 1)
 	fast := password.Params{Time: 1, MemoryKiB: 64, Threads: 1, SaltLen: 16, KeyLen: 32}
 	go func() {
 		done <- app.RunPanel(ctx, cfg, &logs, app.PanelOptions{
-			UI: webui.NewAt(os.DirFS(dist), base), Ready: func(a net.Addr) { ready <- a }, Console: &console, HashParams: &fast,
+			UI: webui.NewAt(os.DirFS(dist), base), Ready: func(a net.Addr) { ready <- a },
+			AgentReady: func(a net.Addr) { agentReady <- a }, Console: &console, HashParams: &fast,
 		})
 	}()
 	var panelAddr net.Addr
@@ -145,9 +152,17 @@ func run(addr, dist, base, statePath string) error {
 	go func() { _ = srv.Serve(ln) }()
 	defer func() { _ = srv.Close() }()
 
-	st, err := seed("http://"+panelAddr.String(), public, console.String(), game.Addr)
+	panelURL := "http://" + panelAddr.String()
+	st, err := seed(panelURL, public, console.String(), game.Addr)
 	if err != nil {
 		return fmt.Errorf("seed: %w\n%s", err, logs.String())
+	}
+	admin := &client{base: panelURL, origin: origin(public)}
+	if err := admin.call(http.MethodPost, "/auth/login", map[string]string{"pseudonym": "admin", "password": adminPassword}, nil); err != nil {
+		return err
+	}
+	if err := seedHosts(ctx, admin, panelURL, origin(public), (<-agentReady).String(), root, game.Addr, st.profile, &st); err != nil {
+		return fmt.Errorf("seed hosts: %w\n%s", err, logs.String())
 	}
 	st.BaseURL = public + "/"
 	if statePath != "" {
@@ -248,7 +263,7 @@ func seed(panel, public, console, gameAddr string) (State, error) {
 	}, &srv); err != nil {
 		return st, err
 	}
-	st.ServerID = srv.ID
+	st.ServerID, st.profile = srv.ID, profile
 
 	for _, u := range []struct{ name, role string }{{"sadmin", "server_admin"}, {"reset", "server_admin"}} {
 		var inv struct{ Token string }
