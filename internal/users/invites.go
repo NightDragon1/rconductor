@@ -106,18 +106,7 @@ func (iv *Invites) mayInvite(ctx context.Context, req Request, role perm.Role) (
 	if !role.Valid() || !req.Actor.Role.Above(role) {
 		return false, nil
 	}
-	if req.Actor.Role != perm.Moderator {
-		return true, nil
-	}
-	var enabled bool
-	if err := iv.users.st.GlobalSetting(ctx, perm.SettingSupportersEnabled, &enabled); err != nil || !enabled {
-		return false, nil //nolint:nilerr // a missing switch means off
-	}
-	me, err := iv.users.load(ctx, req.Actor.ID)
-	if err != nil {
-		return false, err
-	}
-	return me.SupportersAllowed, nil
+	return iv.users.perm.MayManageUsers(ctx, req.Actor)
 }
 
 // Create makes an invitation and returns it with its token, which is
@@ -189,6 +178,9 @@ func toInvite(r sqlitedb.ListInvitesRow) Invite {
 
 // List returns the invitations of the caller; the RCON admin sees all.
 func (iv *Invites) List(ctx context.Context, req Request) ([]Invite, error) {
+	if err := iv.users.mayManageUsers(ctx, req, "invite.list"); err != nil {
+		return nil, err
+	}
 	rows, err := iv.users.st.Queries.ListInvites(ctx)
 	if err != nil {
 		return nil, err
@@ -206,6 +198,9 @@ func (iv *Invites) List(ctx context.Context, req Request) ([]Invite, error) {
 // admin).
 func (iv *Invites) Delete(ctx context.Context, req Request, id string) error {
 	s := iv.users
+	if err := s.mayManageUsers(ctx, req, "invite.delete"); err != nil {
+		return err
+	}
 	r, err := s.st.Queries.GetInvite(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && req.Actor.Role != perm.RCONAdmin && r.CreatedBy != req.Actor.ID) {
 		s.deniedOn(ctx, req, "invite.delete", "invite", id, "not_found", nil)

@@ -34,9 +34,10 @@ func TestUsersAPI(t *testing.T) {
 		t.Errorf("admin lists %+v", list.Items)
 	}
 
-	// Outside the scope looks like not existing (Design 3.1).
+	// A moderator without supporter release has no user administration
+	// (Design 2.2, 3.6).
 	rec = f.do(t, call{method: http.MethodGet, path: "/api/v1/users/" + f.adminID, cookies: []*http.Cookie{mod}})
-	if rec.Code != http.StatusNotFound {
+	if rec.Code != http.StatusForbidden {
 		t.Errorf("moderator reads the admin = %d", rec.Code)
 	}
 	// ROLE-008: no promotion to the caller's level.

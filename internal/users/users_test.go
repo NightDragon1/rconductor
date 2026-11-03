@@ -138,8 +138,10 @@ func TestRightsFlowDownwards(t *testing.T) {
 		{"server admin promotes his moderator to his level", "sa", "m", Update{Role: &sa}, ErrForbidden},
 		{"RCON admin promotes to RCON admin", "admin", "sa", Update{Role: &admin}, ErrForbidden},
 		{"server admin touches a moderator outside his scope", "sa", "m2", Update{Role: &mod}, ErrNotFound},
-		{"moderator changes himself", "m", "m", Update{Role: &mod}, ErrNotFound},
-		{"supporter locks his moderator", "sup", "m", Update{Disabled: new(true)}, ErrNotFound},
+		// Without a supporter release a moderator, and a supporter always,
+		// has no user administration at all (Design 2.2, 3.6).
+		{"moderator changes himself", "m", "m", Update{Role: &mod}, ErrForbidden},
+		{"supporter locks his moderator", "sup", "m", Update{Disabled: new(true)}, ErrForbidden},
 	}
 	for _, a := range attempts {
 		if _, err := f.svc.Update(ctx, f.as(a.actor), f.ids[a.target], a.update); !errors.Is(err, a.want) {

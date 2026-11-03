@@ -78,7 +78,8 @@ func checkEntries(in []Entry) ([]Entry, error) {
 // admin, his own for a server admin.
 func (s *Service) CommandLists(ctx context.Context, req Request) ([]CommandList, error) {
 	if !mayAdministerGroups(req.Actor.Role) {
-		return []CommandList{}, nil
+		s.deniedOn(ctx, req, "command_list.list", "command_list", "", "forbidden", nil)
+		return nil, ErrForbidden
 	}
 	rows, err := s.st.Queries.ListCommandLists(ctx)
 	if err != nil {
@@ -111,9 +112,12 @@ func (s *Service) listDetails(ctx context.Context, r sqlitedb.GetCommandListRow)
 }
 
 func (s *Service) commandList(ctx context.Context, req Request, id, action string) (sqlitedb.GetCommandListRow, error) {
+	if !mayAdministerGroups(req.Actor.Role) {
+		s.deniedOn(ctx, req, action, "command_list", id, "forbidden", nil)
+		return sqlitedb.GetCommandListRow{}, ErrForbidden
+	}
 	l, err := s.st.Queries.GetCommandList(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && (!mayAdministerGroups(req.Actor.Role) ||
-		(req.Actor.Role != perm.RCONAdmin && l.OwnerID != req.Actor.ID))) {
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && req.Actor.Role != perm.RCONAdmin && l.OwnerID != req.Actor.ID) {
 		s.deniedOn(ctx, req, action, "command_list", id, "not_found", nil)
 		return l, ErrNotFound
 	}

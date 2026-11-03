@@ -60,7 +60,8 @@ func validName(name string) (string, error) {
 // his own for a server admin.
 func (s *Service) Groups(ctx context.Context, req Request) ([]Group, error) {
 	if !mayAdministerGroups(req.Actor.Role) {
-		return []Group{}, nil
+		s.deniedOn(ctx, req, "group.list", "user_group", "", "forbidden", nil)
+		return nil, ErrForbidden
 	}
 	rows, err := s.st.Queries.ListGroups(ctx)
 	if err != nil {
@@ -96,11 +97,15 @@ func (s *Service) groupDetails(ctx context.Context, r sqlitedb.GetGroupRow) (Gro
 	return g, nil
 }
 
-// group loads a group the caller administers, else ErrNotFound (logged).
+// group loads a group the caller administers, else ErrForbidden for a
+// role without groups or ErrNotFound (logged).
 func (s *Service) group(ctx context.Context, req Request, id, action string) (sqlitedb.GetGroupRow, error) {
+	if !mayAdministerGroups(req.Actor.Role) {
+		s.deniedOn(ctx, req, action, "user_group", id, "forbidden", nil)
+		return sqlitedb.GetGroupRow{}, ErrForbidden
+	}
 	g, err := s.st.Queries.GetGroup(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && (!mayAdministerGroups(req.Actor.Role) ||
-		(req.Actor.Role != perm.RCONAdmin && g.OwnerID != req.Actor.ID))) {
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && req.Actor.Role != perm.RCONAdmin && g.OwnerID != req.Actor.ID) {
 		s.deniedOn(ctx, req, action, "user_group", id, "not_found", nil)
 		return g, ErrNotFound
 	}

@@ -124,6 +124,28 @@ func (c *Checker) dropNonRole(ids map[string]bool, users []sqlitedbUser, roles .
 	}
 }
 
+// MayManageUsers reports whether actor may use the user administration at
+// all (Design 2.2, 3.6): the RCON admin and server admins; a moderator only
+// while supporters are released globally and for him; a supporter never.
+func (c *Checker) MayManageUsers(ctx context.Context, actor Actor) (bool, error) {
+	switch actor.Role {
+	case RCONAdmin, ServerAdmin:
+		return true, nil
+	case Moderator:
+	default:
+		return false, nil
+	}
+	var enabled bool
+	if err := c.st.GlobalSetting(ctx, SettingSupportersEnabled, &enabled); err != nil || !enabled {
+		return false, nil //nolint:nilerr // a missing switch means off
+	}
+	u, err := c.st.Queries.GetRightsUser(ctx, actor.ID)
+	if err != nil {
+		return false, fmt.Errorf("load user: %w", err)
+	}
+	return u.SupportersAllowed == 1, nil
+}
+
 // Manages reports whether actor may manage the user target.
 func (c *Checker) Manages(ctx context.Context, actor Actor, target string) (bool, error) {
 	m, err := c.Managed(ctx, actor)
