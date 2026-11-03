@@ -23,6 +23,9 @@ import { OverviewTab } from '@/pages/server/OverviewTab';
 import { ServerLayout } from '@/pages/server/ServerLayout';
 import { ServersPage } from '@/pages/Servers';
 import { AgentsPage } from '@/pages/admin/Agents';
+import { SettingsPage } from '@/pages/admin/Settings';
+import { AuditPage } from '@/pages/Audit';
+import { ProfilePage } from '@/pages/Profile';
 import { CommandListsPage } from '@/pages/admin/CommandLists';
 import { ServersAdminPage } from '@/pages/admin/ServersAdmin';
 import { GroupsPage } from '@/pages/admin/Groups';
@@ -106,13 +109,13 @@ function guarded(path: string, key: string, component?: () => React.JSX.Element 
 }
 
 const pages = [
-  guarded('/audit', 'audit'),
+  guarded('/audit', 'audit', AuditPage),
   guarded('/admin/users', 'users', UsersPage),
   guarded('/admin/groups', 'groups', GroupsPage),
   guarded('/admin/command-lists', 'commandLists', CommandListsPage),
   guarded('/admin/servers', 'serverAdmin', ServersAdminPage),
   guarded('/admin/agents', 'agents', AgentsPage),
-  guarded('/admin/settings', 'settings'),
+  guarded('/admin/settings', 'settings', SettingsPage),
 ];
 const serversRoute = createRoute({
   getParentRoute: () => appRoute,
@@ -174,7 +177,7 @@ const serverTabs = [
 const profileRoute = createRoute({
   getParentRoute: () => appRoute,
   path: 'profile',
-  component: placeholder('profile'),
+  component: ProfilePage,
 });
 
 const routeTree = rootRoute.addChildren([

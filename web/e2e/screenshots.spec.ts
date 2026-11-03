@@ -50,7 +50,7 @@ async function shoot(page: Page, name: string, grow = true) {
 
 const pages: [string, string, string][] = [
   ['admin', './', 'overview-admin'],
-  ['admin', 'admin/agents', 'agents-admin'],
+
   ['sadmin', './', 'overview-server-admin'],
   ['mod', './', 'overview-moderator'],
   ['mod2', './', 'overview-moderator-without-release'],
@@ -132,3 +132,35 @@ for (const [user, width, name] of [
     await shoot(page, name);
   });
 }
+
+// The administration (step 8): every page, some with the side panel open.
+for (const [user, path, open, name] of [
+  ['admin', 'admin/groups', 'moderators', 'groups-admin'],
+  ['admin', 'admin/command-lists', 'moderation', 'command-lists-admin'],
+  ['admin', 'admin/servers', 'survival', 'servers-admin'],
+  ['sadmin', 'admin/servers', 'survival', 'servers-server-admin'],
+  ['admin', 'admin/agents', '', 'agents-admin'],
+  ['admin', 'admin/settings', '', 'settings-admin'],
+  ['admin', 'audit', '', 'audit-admin'],
+  ['mod', 'profile', '', 'profile-moderator'],
+] as const) {
+  test(`screenshot ${name}`, async ({ page, state }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await login(page, user, secret(state, user));
+    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    await page.goto(path);
+    await page.waitForLoadState('networkidle');
+    if (open) await page.getByRole('button', { name: open, exact: true }).first().click();
+    await page.waitForTimeout(300);
+    await shoot(page, name);
+  });
+}
+
+test('screenshot phone-settings-admin', async ({ page, state }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, 'admin', secret(state, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await page.goto('admin/settings');
+  await page.waitForLoadState('networkidle');
+  await shoot(page, 'phone-settings-admin');
+});
