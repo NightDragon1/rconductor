@@ -8,9 +8,13 @@ package commands
 
 import (
 	"errors"
+	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/NightDragon1/rconductor/internal/profiles"
 )
 
 // Reasons of a refused command (Design 3.5).
@@ -106,4 +110,55 @@ func AllowedByList(tokens []string, list []string, caseSensitive bool) bool {
 		}
 	}
 	return false
+}
+
+// CatalogEntry returns the catalog command whose path starts the command;
+// of several, the longest path wins.
+func CatalogEntry(tokens []string, catalog []profiles.Command, caseSensitive bool) (profiles.Command, bool) {
+	var best profiles.Command
+	found := false
+	for _, c := range catalog {
+		path := Tokens(c.Path)
+		if Allowed(tokens, path, caseSensitive) && (!found || len(path) > len(Tokens(best.Path))) {
+			best, found = c, true
+		}
+	}
+	return best, found
+}
+
+// CheckParams checks the arguments after a catalog path against its
+// parameters for moderators and supporters (revision 2.4 candidate 19):
+// a player is one token, a choice one of its values, a number a whole
+// number in range, text the rest of the line; required parameters must be
+// there. Further tokens pass, as after any list entry (CMD-004). It
+// returns the first parameter that does not fit and why.
+func CheckParams(args []string, params []profiles.Param, caseSensitive bool) (name, problem string, ok bool) {
+	for i, p := range params {
+		if i >= len(args) {
+			if p.Optional {
+				return "", "", true
+			}
+			return p.Name, "missing", false
+		}
+		a := args[i]
+		switch p.Type {
+		case profiles.ParamText:
+			return "", "", true // the rest of the line
+		case profiles.ParamPlayer:
+			// Tokens never hold white space; a player is one token.
+		case profiles.ParamChoice:
+			if !slices.ContainsFunc(p.Values, func(v string) bool { return equal(a, v, caseSensitive) }) {
+				return p.Name, "not one of " + strings.Join(p.Values, ", "), false
+			}
+		case profiles.ParamNumber:
+			n, err := strconv.Atoi(a)
+			if err != nil {
+				return p.Name, "not a whole number", false
+			}
+			if (p.Min != nil && n < *p.Min) || (p.Max != nil && n > *p.Max) {
+				return p.Name, "out of range", false
+			}
+		}
+	}
+	return "", "", true
 }

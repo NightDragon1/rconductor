@@ -79,6 +79,9 @@ type Executor interface {
 type DeniedError struct {
 	Reason     string
 	RetryAfter time.Duration
+	// Detail names what is wrong, e.g. the parameter of a catalog
+	// command; it holds no foreign data.
+	Detail string
 }
 
 func (e *DeniedError) Error() string { return "command refused: " + e.Reason }
@@ -274,6 +277,23 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 		}
 		if !AllowedByList(tokens, sr.Commands, syn.CaseSensitive) {
 			return Result{}, s.deny(ctx, req, serverID, cmd, ReasonNotInList, 0)
+		}
+		// 7b: a command with catalog entry must fit its parameters
+		// (revision 2.4 candidate 19); commands without one pass as
+		// they are.
+		catalog, err := s.catalog(ctx, serverID)
+		if err != nil {
+			return Result{}, err
+		}
+		if c, found := CatalogEntry(tokens, catalog, syn.CaseSensitive); found {
+			if name, problem, ok := CheckParams(tokens[len(Tokens(c.Path)):], c.Params, syn.CaseSensitive); !ok {
+				err := s.deny(ctx, req, serverID, cmd, ReasonInvalid, 0)
+				var d *DeniedError
+				if errors.As(err, &d) {
+					d.Detail = "parameter " + name + ": " + problem
+				}
+				return Result{}, err
+			}
 		}
 	}
 	// 8: rate limit (CMD-019).

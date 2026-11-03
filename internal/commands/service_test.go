@@ -134,7 +134,7 @@ func newWorld(t *testing.T) *world {
 	for i, e := range []struct {
 		path     string
 		passable int
-	}{{"whitelist add", 1}, {"kick", 0}, {"execute", 0}} {
+	}{{"whitelist add", 1}, {"kick", 0}, {"execute", 0}, {"time set", 1}} {
 		w.exec(`INSERT INTO command_list_entries (id, command_list_id, path, passable) VALUES (?, 'l', ?, ?)`, "e"+strconv.Itoa(i), e.path, e.passable)
 	}
 	w.exec(`INSERT INTO user_groups (id, name, kind, owner_id, command_list_id, created_at, updated_at) VALUES ('mg', 'mg', 'moderator', ?, 'l', 't', 't')`, w.ids["sa"])
@@ -514,7 +514,7 @@ func TestAllowedCommands(t *testing.T) {
 			t.Errorf("whitelist add without its catalog entry: %+v", c)
 		}
 	}
-	if strings.Join(paths, ",") != "kick,whitelist add" {
+	if strings.Join(paths, ",") != "kick,time set,whitelist add" {
 		t.Errorf("moderator paths = %v", paths)
 	}
 	admin, err := w.svc.AllowedCommands(ctx, w.as("admin"), w.server)
@@ -526,11 +526,48 @@ func TestAllowedCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range sup.Commands {
-		if c.Path != "whitelist add" {
+		if c.Path != "whitelist add" && c.Path != "time set" {
 			t.Errorf("supporter sees %s, only passable commands allowed", c.Path)
 		}
 	}
 	if _, err := w.svc.AllowedCommands(ctx, w.as("m"), "nope"); !errors.Is(err, users.ErrNotFound) {
 		t.Errorf("unknown server: %v", err)
+	}
+}
+
+// TestCatalogParamsInPipeline covers revision 2.4 candidate 19: for
+// moderator and supporter a command with catalog entry must fit its
+// parameters; it is refused as invalid before the rate limit and never
+// reaches the game server. Admins and commands without catalog entry are
+// not affected.
+func TestCatalogParamsInPipeline(t *testing.T) {
+	w := newWorld(t)
+	for _, who := range []string{"m", "sup"} {
+		_, err := w.send(who, "time set dusk")
+		var d *DeniedError
+		if !errors.As(err, &d) || d.Reason != ReasonInvalid || !strings.HasPrefix(d.Detail, "parameter time: not one of day, night") {
+			t.Errorf("%s time set dusk: %v %+v", who, err, d)
+		}
+	}
+	if _, err := w.send("m", "kick"); reason(err) != ReasonInvalid {
+		t.Errorf("kick without player: %v", err)
+	}
+	for _, ok := range []string{"time set day", "TIME SET Night", "kick steve", "kick steve for spam", "whitelist add x y"} {
+		if _, err := w.send("m", ok); err != nil {
+			t.Errorf("moderator %q: %v", ok, err)
+		}
+	}
+	if _, err := w.send("admin", "time set dusk"); err != nil {
+		t.Errorf("admin free input: %v", err)
+	}
+	// Only the admin's time set dusk reached the game server.
+	if n := strings.Count(strings.Join(w.gameReceived(), "\n"), "time set dusk"); n != 1 {
+		t.Errorf("time set dusk reached the game server %d times, want 1", n)
+	}
+	var n int
+	_ = w.st.DB.QueryRowContext(context.Background(),
+		`SELECT count(*) FROM audit_log WHERE action = 'cmd.denied' AND reason_code = 'invalid'`).Scan(&n)
+	if n != 3 {
+		t.Errorf("cmd.denied invalid = %d, want 3", n)
 	}
 }
