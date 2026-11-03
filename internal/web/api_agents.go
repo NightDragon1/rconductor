@@ -44,6 +44,37 @@ func (s *apiServer) GetAgent(ctx context.Context, req api.GetAgentRequestObject)
 	return api.GetAgent200JSONResponse(toAPIAgent(a)), nil
 }
 
+func (s *apiServer) ListAgentContainers(ctx context.Context, req api.ListAgentContainersRequestObject) (api.ListAgentContainersResponseObject, error) {
+	// The agent's own check decides: RCON admin only, 404 for an unknown
+	// agent (revision 2.4 candidate 22).
+	if _, err := s.agents.Get(ctx, adminRequest(ctx), req.Id.String()); err != nil {
+		return nil, adminError(err)
+	}
+	out := api.AgentContainers{Items: []struct {
+		Image *string `json:"image,omitempty"`
+		Name  string  `json:"name"`
+		State string  `json:"state"`
+	}{}}
+	if s.runtime == nil {
+		return api.ListAgentContainers200JSONResponse(out), nil
+	}
+	list, connected := s.runtime.Containers(req.Id.String())
+	out.Connected = connected
+	for _, c := range list {
+		item := struct {
+			Image *string `json:"image,omitempty"`
+			Name  string  `json:"name"`
+			State string  `json:"state"`
+		}{Name: c.Name, State: c.State}
+		if c.Image != "" {
+			img := c.Image
+			item.Image = &img
+		}
+		out.Items = append(out.Items, item)
+	}
+	return api.ListAgentContainers200JSONResponse(out), nil
+}
+
 func (s *apiServer) DeleteAgent(ctx context.Context, req api.DeleteAgentRequestObject) (api.DeleteAgentResponseObject, error) {
 	if err := s.agents.Delete(ctx, adminRequest(ctx), req.Id.String()); err != nil {
 		return nil, adminError(err)

@@ -336,6 +336,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{id}/containers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AgentID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The containers an agent offers, for the server form (SRV-001).
+         * @description From the panel's cache: only containers with the agent's label (AGT-002), with image and state; foreign data (SEC-006). While the agent is away the list is the last known one and connected is false. RCON admin only (revision 2.4 candidate 22).
+         */
+        get: operations["listAgentContainers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents/{id}/approve": {
         parameters: {
             query?: never;
@@ -1023,6 +1045,14 @@ export interface components {
             values?: string[];
             min?: number;
             max?: number;
+        };
+        AgentContainers: {
+            connected: boolean;
+            items: {
+                name: string;
+                image?: string;
+                state: string;
+            }[];
         };
         LogTail: {
             /** Format: uuid */
@@ -2090,6 +2120,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAgentContainers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AgentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The containers, by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentContainers"];
+                };
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];

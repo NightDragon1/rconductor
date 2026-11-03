@@ -634,6 +634,31 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /agents/{id}/containers:
+    parameters:
+      - $ref: "#/components/parameters/AgentID"
+    get:
+      operationId: listAgentContainers
+      summary: The containers an agent offers, for the server form (SRV-001).
+      description: >-
+        From the panel's cache: only containers with the agent's label
+        (AGT-002), with image and state; foreign data (SEC-006). While the
+        agent is away the list is the last known one and connected is
+        false. RCON admin only (revision 2.4 candidate 22).
+      tags: [agents]
+      responses:
+        "200":
+          description: The containers, by name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentContainers"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /agents/{id}/approve:
     parameters:
       - $ref: "#/components/parameters/AgentID"
@@ -1967,6 +1992,25 @@ components:
           type: integer
         max:
           type: integer
+
+    AgentContainers:
+      type: object
+      required: [connected, items]
+      properties:
+        connected:
+          type: boolean
+        items:
+          type: array
+          items:
+            type: object
+            required: [name, state]
+            properties:
+              name:
+                type: string
+              image:
+                type: string
+              state:
+                type: string
 
     LogTail:
       type: object

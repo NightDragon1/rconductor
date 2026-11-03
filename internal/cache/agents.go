@@ -311,6 +311,28 @@ func (d *AgentData) Container(agentID, name string) (ContainerView, bool) {
 	return v, true
 }
 
+// Containers lists the allowed containers of an agent by name, with their
+// state (unknown while the agent is away).
+func (d *AgentData) Containers(agentID string) []ContainerView {
+	d.mu.Lock()
+	a := d.agents[agentID]
+	var names []string
+	if a != nil {
+		for n := range a.containers {
+			names = append(names, n)
+		}
+	}
+	d.mu.Unlock()
+	slices.Sort(names)
+	out := make([]ContainerView, 0, len(names))
+	for _, n := range names {
+		if v, ok := d.Container(agentID, n); ok {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // Metric returns the last sample of a container.
 func (d *AgentData) Metric(agentID, name string) (MetricView, bool) {
 	d.mu.Lock()

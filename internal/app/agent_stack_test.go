@@ -156,6 +156,16 @@ func TestAgentThroughTheStack(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	// The server form offers the agent's containers (revision 2.4
+	// candidate 22).
+	var containers struct {
+		Connected bool
+		Items     []struct{ Name, Image, State string }
+	}
+	admin.must(http.MethodGet, "/agents/"+agentID+"/containers", nil, &containers, http.StatusOK)
+	if !containers.Connected || len(containers.Items) != 1 || containers.Items[0].Name != "mc" || containers.Items[0].State != "running" {
+		t.Errorf("containers = %+v", containers)
+	}
 	admin.must(http.MethodPatch, "/servers/"+s.server, map[string]string{"agent_id": agentID, "container_name": "mc"}, nil, http.StatusOK)
 
 	ws := s.console("admin")

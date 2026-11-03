@@ -269,6 +269,7 @@ func actionError(err error) error {
 // RuntimeSource provides the runtime data of a server (agentview).
 type RuntimeSource interface {
 	Runtime(ctx context.Context, serverID string, agentData bool) agentview.Runtime
+	Containers(agentID string) ([]agentview.Container, bool)
 }
 
 // withRuntime adds the runtime data; the container part only for those

@@ -147,6 +147,23 @@ func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Run
 	return rt
 }
 
+// Container is a container an agent offers, for the server form.
+type Container struct {
+	Name  string
+	Image string
+	State string
+}
+
+// Containers lists the containers of an agent and whether it is
+// connected (revision 2.4 candidate 22).
+func (v *View) Containers(agentID string) ([]Container, bool) {
+	var out []Container
+	for _, c := range v.data.Containers(agentID) {
+		out = append(out, Container{Name: c.Name, Image: c.Image, State: c.State})
+	}
+	return out, v.data.Connected(agentID)
+}
+
 func (v *View) publishRuntime(ctx context.Context, serverID string) {
 	v.bus.PublishRuntime(serverID, v.Runtime(ctx, serverID, true), v.Runtime(ctx, serverID, false))
 }

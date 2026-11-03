@@ -390,6 +390,9 @@ func matrix() []matrixOp {
 		{"DELETE", "/agents/{id}", "OFFFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/agents/" + f.agentRow("active")}
 		}, false},
+		{"GET", "/agents/{id}/containers", "OFFFFFUP", func(f *rightsFixture, _ string) request {
+			return request{path: "/agents/" + f.agentRow("active") + "/containers"}
+		}, false},
 		{"POST", "/agents/{id}/approve", "OFFFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/agents/" + f.agentRow("pending") + "/approve"}
 		}, false},
