@@ -919,7 +919,7 @@ export interface components {
             next_cursor?: string;
         };
         Server: {
-            /** @description Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24). */
+            /** @description Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24). */
             version: string;
             /**
              * @description Reachability over RCON (SRV-004).
@@ -1023,7 +1023,7 @@ export interface components {
             via: "agent" | "rcon";
         };
         ServerGroup: {
-            /** @description Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24). */
+            /** @description Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24). */
             version: string;
             /** Format: uuid */
             id: string;
@@ -1203,7 +1203,7 @@ export interface components {
             passable: boolean;
         };
         CommandList: {
-            /** @description Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24). */
+            /** @description Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24). */
             version: string;
             /** Format: uuid */
             id: string;
@@ -1226,7 +1226,7 @@ export interface components {
         /** @enum {string} */
         GroupKind: "general" | "moderator";
         UserGroup: {
-            /** @description Version of the stored object for optimistic locking; send it as If-Match when changing the object (revision 2.4 candidate 24). */
+            /** @description Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24). */
             version: string;
             /** Format: uuid */
             id: string;
@@ -1335,7 +1335,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "action_failed" | "conflict";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "action_failed" | "conflict" | "precondition_required";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
@@ -1421,6 +1421,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description A versioned write without If-Match (precondition_required, revision 2.4 candidate 24). */
+        PreconditionRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description The object changed since it was read: If-Match does not name its current version (conflict, revision 2.4 candidate 24). */
         Conflict: {
             headers: {
@@ -1432,7 +1441,7 @@ export interface components {
         };
     };
     parameters: {
-        /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+        /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first. */
         IfMatch: string;
         AgentID: string;
         ServerID: string;
@@ -1639,7 +1648,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first. */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
             path: {
@@ -1668,6 +1677,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
+            428: components["responses"]["PreconditionRequired"];
         };
     };
     listAllowedCommands: {
@@ -2003,7 +2013,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first. */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
             path: {
@@ -2032,6 +2042,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
+            428: components["responses"]["PreconditionRequired"];
         };
     };
     listAgents: {
@@ -2453,7 +2464,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first. */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
             path: {
@@ -2481,6 +2492,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
+            428: components["responses"]["PreconditionRequired"];
         };
     };
     listCommandLists: {
@@ -2582,7 +2594,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first. */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
             path: {
@@ -2610,6 +2622,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
+            428: components["responses"]["PreconditionRequired"];
         };
     };
     listInvites: {
@@ -3011,7 +3024,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description The version read before (version field, or ETag of /settings). If it is not the current one, the change is refused with 409 conflict and nothing is written (revision 2.4 candidate 24). */
+                /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first. */
                 "If-Match"?: components["parameters"]["IfMatch"];
             };
             path?: never;
@@ -3039,6 +3052,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
+            428: components["responses"]["PreconditionRequired"];
         };
     };
 }

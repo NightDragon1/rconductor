@@ -105,13 +105,13 @@ func TestSettingsOnlyRCONAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := map[string]json.RawMessage{SettingAuditRetentionDays: json.RawMessage("30")}
-	if _, err := f.svc.UpdateSettings(ctx, f.as("sa"), in); !errors.Is(err, ErrForbidden) {
+	if _, err := f.svc.UpdateSettings(ctx, f.as("sa"), in, f.version("settings", "")); !errors.Is(err, ErrForbidden) {
 		t.Errorf("server admin changes the retention: %v", err)
 	}
 	if f.count(`SELECT count(*) FROM audit_log WHERE action = 'settings.update' AND result = 'denied'`) != 1 {
 		t.Error("refused attempt not audited")
 	}
-	set, err := f.svc.UpdateSettings(ctx, f.as("admin"), in)
+	set, err := f.svc.UpdateSettings(ctx, f.as("admin"), in, f.version("settings", ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestSettingsOnlyRCONAdmin(t *testing.T) {
 		"out of range": {SettingAuditRetentionDays: json.RawMessage("0")},
 		"wrong type":   {"backup.interval": json.RawMessage("24")},
 	} {
-		if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), bad); !errors.As(err, &inv) {
+		if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), bad, f.version("settings", "")); !errors.As(err, &inv) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -134,12 +134,12 @@ func TestSupporterSwitchOffEndsSessions(t *testing.T) {
 	f := withMore(t)
 	ctx := context.Background()
 	on := map[string]json.RawMessage{perm.SettingSupportersEnabled: json.RawMessage("true")}
-	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), on); err != nil {
+	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), on, f.version("settings", "")); err != nil {
 		t.Fatal(err)
 	}
 	f.revoked = nil
 	off := map[string]json.RawMessage{perm.SettingSupportersEnabled: json.RawMessage("false")}
-	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), off); err != nil {
+	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), off, f.version("settings", "")); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(f.revoked, []string{f.ids["sup"]}) {

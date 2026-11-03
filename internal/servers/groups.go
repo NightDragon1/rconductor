@@ -203,7 +203,7 @@ func (s *Service) CreateGroup(ctx context.Context, req users.Request, name strin
 // UpdateGroup renames a group or replaces its servers. Scopes and grants on
 // the group follow at once; sessions stay, because nobody's own
 // assignments changed.
-func (s *Service) UpdateGroup(ctx context.Context, req users.Request, id string, name *string, servers *[]string) (Group, error) {
+func (s *Service) UpdateGroup(ctx context.Context, req users.Request, id string, name *string, servers *[]string, version *int64) (Group, error) {
 	if err := s.mustBeAdmin(ctx, req, "server_group.update", "server_group", id); err != nil {
 		return Group{}, err
 	}
@@ -232,6 +232,18 @@ func (s *Service) UpdateGroup(ctx context.Context, req users.Request, id string,
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
+	// Optimistic locking in one statement (revision 2.4 candidate 24);
+	// the version is required, checked after role and scope.
+	if version == nil {
+		return Group{}, users.ErrPreconditionRequired
+	}
+	n, err := q.BumpServerGroupVersion(ctx, sqlitedb.BumpServerGroupVersionParams{ID: id, Version: *version})
+	if err != nil {
+		return Group{}, err
+	}
+	if n == 0 {
+		return Group{}, users.ErrConflict
+	}
 	changes := map[string]any{}
 	if newName != r.Name {
 		if err := q.RenameServerGroup(ctx, sqlitedb.RenameServerGroupParams{Name: newName, UpdatedAt: store.Now(), ID: id}); err != nil {

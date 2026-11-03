@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -151,10 +152,25 @@ func (f *apiFixture) do(t *testing.T, c call) *httptest.ResponseRecorder {
 	for _, ck := range c.cookies {
 		r.AddCookie(ck)
 	}
+	// Versioned writes name the version the session reads (revision 2.4
+	// candidate 24), unless the test sets If-Match itself.
+	if c.method == http.MethodPatch && r.Header.Get("If-Match") == "" && versionedPath.MatchString(strings.TrimPrefix(c.path, "/api/v1")) {
+		read := f.do(t, call{method: http.MethodGet, path: c.path, cookies: c.cookies})
+		if read.Code == http.StatusOK {
+			v := read.Header().Get("ETag")
+			var o struct{ Version string }
+			if json.Unmarshal(read.Body.Bytes(), &o) == nil && o.Version != "" {
+				v = o.Version
+			}
+			r.Header.Set("If-Match", v)
+		}
+	}
 	rec := httptest.NewRecorder()
 	f.h.ServeHTTP(rec, r)
 	return rec
 }
+
+var versionedPath = regexp.MustCompile(`^/(user-groups|command-lists|servers|server-groups)/[^/?]+$|^/settings$`)
 
 func loginBody(pseudonym, pw string) string {
 	b, _ := json.Marshal(api.LoginRequest{Pseudonym: pseudonym, Password: pw})

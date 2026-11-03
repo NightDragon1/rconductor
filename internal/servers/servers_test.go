@@ -112,12 +112,12 @@ func TestCreateServer(t *testing.T) {
 		t.Errorf("game ports from the profile = %+v", s.GamePorts)
 	}
 	over := []profiles.GamePort{{Port: 25566, Proto: "udp", Name: "voice"}}
-	s, err := f.svc.Update(ctx, f.as("admin"), s.ID, Input{GamePorts: &over})
+	s, err := f.svc.Update(ctx, f.as("admin"), s.ID, Input{GamePorts: &over, Version: f.version(s.ID)})
 	if err != nil || !s.GamePortsOverride || s.GamePorts[0].Port != 25566 {
 		t.Fatalf("override = %+v %v", s, err)
 	}
 	none := []profiles.GamePort{}
-	if s, _ = f.svc.Update(ctx, f.as("admin"), s.ID, Input{GamePorts: &none}); s.GamePortsOverride || s.GamePorts[0].Port != 25565 {
+	if s, _ = f.svc.Update(ctx, f.as("admin"), s.ID, Input{GamePorts: &none, Version: f.version(s.ID)}); s.GamePortsOverride || s.GamePorts[0].Port != 25565 {
 		t.Errorf("back to the profile = %+v", s.GamePorts)
 	}
 
@@ -236,7 +236,7 @@ func TestOtherMasterKey(t *testing.T) {
 		t.Errorf("open with another key: %v", err)
 	}
 	pw := logging.Secret("new password")
-	if got, _ = other.Update(ctx, f.as("admin"), s.ID, Input{Password: &pw}); got.Credentials != CredentialsOK {
+	if got, _ = other.Update(ctx, f.as("admin"), s.ID, Input{Password: &pw, Version: f.version(s.ID)}); got.Credentials != CredentialsOK {
 		t.Errorf("after entering again: %s", got.Credentials)
 	}
 }
@@ -284,7 +284,7 @@ func TestConnectsWithStoredCredentials(t *testing.T) {
 	}
 	waitFor(connmgr.AuthFailed)
 	right := logging.Secret(rconPassword)
-	if _, err := f.svc.Update(ctx, f.as("admin"), s.ID, Input{Password: &right}); err != nil {
+	if _, err := f.svc.Update(ctx, f.as("admin"), s.ID, Input{Password: &right, Version: f.version(s.ID)}); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(connmgr.Connected)
@@ -297,4 +297,15 @@ func TestConnectsWithStoredCredentials(t *testing.T) {
 	if _, err := m.Execute(ctx, s.ID, "list"); !errors.Is(err, connmgr.ErrUnknownServer) {
 		t.Errorf("deleted server still connected: %v", err)
 	}
+}
+
+// version reads the stored version of a server (revision 2.4 candidate
+// 24).
+func (f *fixture) version(id string) *int64 {
+	f.t.Helper()
+	var v int64
+	if err := f.st.DB.QueryRowContext(context.Background(), `SELECT version FROM servers WHERE id = ?`, id).Scan(&v); err != nil {
+		f.t.Fatal(err)
+	}
+	return &v
 }

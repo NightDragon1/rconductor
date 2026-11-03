@@ -105,20 +105,9 @@ func (s *apiServer) UpdateServer(ctx context.Context, req api.UpdateServerReques
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	unlock := s.locks.lock("server:" + req.Id.String())
-	defer unlock()
-	// Only the RCON admin changes servers: the role comes before the
-	// version (revision 2.4 candidate 14).
-	if req.Params.IfMatch != nil && isRCONAdmin(ctx) {
-		cur, err := s.servers.Get(ctx, adminRequest(ctx), req.Id.String())
-		if err != nil {
-			return nil, adminError(err)
-		}
-		if !matches(req.Params.IfMatch, serverVersion(toAPIServer(cur))) {
-			return nil, errConflict()
-		}
-	}
-	sv, err := s.servers.Update(ctx, adminRequest(ctx), req.Id.String(), serverInput(req.Body))
+	in := serverInput(req.Body)
+	in.Version = ifMatch(req.Params.IfMatch)
+	sv, err := s.servers.Update(ctx, adminRequest(ctx), req.Id.String(), in)
 	if err != nil {
 		return nil, adminError(err)
 	}
@@ -135,7 +124,6 @@ func (s *apiServer) DeleteServer(ctx context.Context, req api.DeleteServerReques
 func toAPIServerGroup(g servers.Group) api.ServerGroup {
 	id, _ := uuid.Parse(g.ID)
 	out := api.ServerGroup{Id: id, Name: g.Name, ServerIds: uuids(g.ServerIDs)}
-	out.Version = versionOf(out)
 	return out
 }
 
@@ -157,7 +145,7 @@ func (s *apiServer) ListServerGroups(ctx context.Context, _ api.ListServerGroups
 	}
 	out := api.ServerGroupList{Items: make([]api.ServerGroup, 0, len(gs))}
 	for _, g := range gs {
-		out.Items = append(out.Items, toAPIServerGroup(g))
+		out.Items = append(out.Items, s.apiServerGroup(ctx, g))
 	}
 	return api.ListServerGroups200JSONResponse(out), nil
 }
@@ -174,7 +162,7 @@ func (s *apiServer) CreateServerGroup(ctx context.Context, req api.CreateServerG
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.CreateServerGroup201JSONResponse(toAPIServerGroup(g)), nil
+	return api.CreateServerGroup201JSONResponse(s.apiServerGroup(ctx, g)), nil
 }
 
 func (s *apiServer) GetServerGroup(ctx context.Context, req api.GetServerGroupRequestObject) (api.GetServerGroupResponseObject, error) {
@@ -182,29 +170,18 @@ func (s *apiServer) GetServerGroup(ctx context.Context, req api.GetServerGroupRe
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.GetServerGroup200JSONResponse(toAPIServerGroup(g)), nil
+	return api.GetServerGroup200JSONResponse(s.apiServerGroup(ctx, g)), nil
 }
 
 func (s *apiServer) UpdateServerGroup(ctx context.Context, req api.UpdateServerGroupRequestObject) (api.UpdateServerGroupResponseObject, error) {
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	unlock := s.locks.lock("server-group:" + req.Id.String())
-	defer unlock()
-	if req.Params.IfMatch != nil && isRCONAdmin(ctx) {
-		cur, err := s.servers.Group(ctx, adminRequest(ctx), req.Id.String())
-		if err != nil {
-			return nil, adminError(err)
-		}
-		if !matches(req.Params.IfMatch, toAPIServerGroup(cur).Version) {
-			return nil, errConflict()
-		}
-	}
-	g, err := s.servers.UpdateGroup(ctx, adminRequest(ctx), req.Id.String(), req.Body.Name, idStrings(req.Body.ServerIds))
+	g, err := s.servers.UpdateGroup(ctx, adminRequest(ctx), req.Id.String(), req.Body.Name, idStrings(req.Body.ServerIds), ifMatch(req.Params.IfMatch))
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.UpdateServerGroup200JSONResponse(toAPIServerGroup(g)), nil
+	return api.UpdateServerGroup200JSONResponse(s.apiServerGroup(ctx, g)), nil
 }
 
 func (s *apiServer) DeleteServerGroup(ctx context.Context, req api.DeleteServerGroupRequestObject) (api.DeleteServerGroupResponseObject, error) {
@@ -276,7 +253,7 @@ type RuntimeSource interface {
 // who see the server's details, the admins in scope (UI-006).
 func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Server {
 	out := toAPIServer(sv)
-	out.Version = serverVersion(out)
+	out.Version = s.serverVersions(ctx)[sv.ID]
 	if s.runtime == nil {
 		return out
 	}
@@ -305,5 +282,12 @@ func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Serv
 		ar.Container = ac
 	}
 	out.Runtime = ar
+	return out
+}
+
+// apiServerGroup adds the stored version (revision 2.4 candidate 24).
+func (s *apiServer) apiServerGroup(ctx context.Context, g servers.Group) api.ServerGroup {
+	out := toAPIServerGroup(g)
+	out.Version = s.serverGroupVersions(ctx)[g.ID]
 	return out
 }

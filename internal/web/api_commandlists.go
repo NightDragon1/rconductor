@@ -19,7 +19,6 @@ func toAPIList(l users.CommandList) api.CommandList {
 	for _, e := range l.Entries {
 		out.Entries = append(out.Entries, api.CommandListEntry{Path: e.Path, Passable: e.Passable})
 	}
-	out.Version = versionOf(out)
 	return out
 }
 
@@ -41,7 +40,7 @@ func (s *apiServer) ListCommandLists(ctx context.Context, _ api.ListCommandLists
 	}
 	out := api.CommandListList{Items: make([]api.CommandList, 0, len(ls))}
 	for _, l := range ls {
-		out.Items = append(out.Items, toAPIList(l))
+		out.Items = append(out.Items, s.apiList(ctx, l))
 	}
 	return api.ListCommandLists200JSONResponse(out), nil
 }
@@ -58,7 +57,7 @@ func (s *apiServer) CreateCommandList(ctx context.Context, req api.CreateCommand
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.CreateCommandList201JSONResponse(toAPIList(l)), nil
+	return api.CreateCommandList201JSONResponse(s.apiList(ctx, l)), nil
 }
 
 func (s *apiServer) GetCommandList(ctx context.Context, req api.GetCommandListRequestObject) (api.GetCommandListResponseObject, error) {
@@ -66,29 +65,18 @@ func (s *apiServer) GetCommandList(ctx context.Context, req api.GetCommandListRe
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.GetCommandList200JSONResponse(toAPIList(l)), nil
+	return api.GetCommandList200JSONResponse(s.apiList(ctx, l)), nil
 }
 
 func (s *apiServer) UpdateCommandList(ctx context.Context, req api.UpdateCommandListRequestObject) (api.UpdateCommandListResponseObject, error) {
 	if req.Body == nil {
 		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "body required"}
 	}
-	unlock := s.locks.lock("command-list:" + req.Id.String())
-	defer unlock()
-	if req.Params.IfMatch != nil {
-		cur, err := s.users.CommandList(ctx, adminRequest(ctx), req.Id.String())
-		if err != nil {
-			return nil, adminError(err)
-		}
-		if !matches(req.Params.IfMatch, toAPIList(cur).Version) {
-			return nil, errConflict()
-		}
-	}
-	l, err := s.users.UpdateCommandList(ctx, adminRequest(ctx), req.Id.String(), req.Body.Name, entriesOf(req.Body.Entries))
+	l, err := s.users.UpdateCommandList(ctx, adminRequest(ctx), req.Id.String(), req.Body.Name, entriesOf(req.Body.Entries), ifMatch(req.Params.IfMatch))
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.UpdateCommandList200JSONResponse(toAPIList(l)), nil
+	return api.UpdateCommandList200JSONResponse(s.apiList(ctx, l)), nil
 }
 
 func (s *apiServer) DeleteCommandList(ctx context.Context, req api.DeleteCommandListRequestObject) (api.DeleteCommandListResponseObject, error) {
@@ -96,4 +84,11 @@ func (s *apiServer) DeleteCommandList(ctx context.Context, req api.DeleteCommand
 		return nil, adminError(err)
 	}
 	return api.DeleteCommandList204Response{}, nil
+}
+
+// apiList adds the stored version (revision 2.4 candidate 24).
+func (s *apiServer) apiList(ctx context.Context, l users.CommandList) api.CommandList {
+	out := toAPIList(l)
+	out.Version = s.listVersions(ctx)[l.ID]
+	return out
 }
