@@ -131,3 +131,13 @@ func TestRestartLoop(t *testing.T) {
 		t.Error("the loop did not end when the starts got old")
 	}
 }
+
+// TestAgentDataUTC: every time of the agent data is in UTC (Design 4.1).
+func TestAgentDataUTC(t *testing.T) {
+	d := NewAgentData(logging.New(&lockedLog{}, "panel", config.Log{Format: "json"}).Module("cache"))
+	d.Snapshot("a1", agentproto.Snapshot{Containers: []agentproto.Container{running("1", "mc")}})
+	d.Metrics("a1", agentproto.Metrics{Containers: []agentproto.Metric{{Name: "mc"}}})
+	if m, _ := d.Metric("a1", "mc"); m.At.Location() != time.UTC {
+		t.Errorf("metric time in %v, want UTC", m.At.Location())
+	}
+}
