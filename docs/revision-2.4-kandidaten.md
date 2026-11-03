@@ -163,6 +163,12 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Entscheidung (M4, Schritt 8, K1 B):** DELETE /users/{id}/sessions beendet alle Sessions eines verwalteten Benutzers und schließt seine WebSockets sofort. Berechtigt ist, wer den Benutzer verwaltet (3.6); Audit-Eintrag user.sessions.end, Ereigniscode auth.session.revoked wie bei Sperre und Rechteänderung.
 - **Vorschlag:** Design 2.2 um /users/{id}/sessions (DELETE, wie /users) ergänzen.
 
+## 22. Container eines Agents für das Serverformular
+
+- **Fundstelle:** SRV-001 (Abnahme: „Agent und Container sind optional und wählbar“); Design 2.2 kennt nur /agents und /agents/{id}, keinen Endpunkt für die Container eines Agents.
+- **Entscheidung (M4, Schritt 8, W9 A):** GET /agents/{id}/containers liefert aus dem Cache des Panels die Container eines Agents mit Name, Image und Zustand, nur solche mit dem Label des Agents (AGT-002), als Fremddaten; dazu connected. Ist der Agent getrennt, ist die Liste die zuletzt bekannte und der Zustand unknown. Nur RCON-Admin. Das Serverformular bietet diese Container zur Auswahl an.
+- **Vorschlag:** Design 2.2 um /agents/{id}/containers (GET, RCON-Admin) ergänzen.
+
 ## 23. Einladungstoken nur im Fragment
 
 - **Fundstelle:** Design 2.2 (/invites, /invites/redeem), D-046, SEC-012 (keine Geheimnisse in Logs); UI-008 (Einladungslink).
