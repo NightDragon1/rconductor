@@ -22,7 +22,9 @@ import { LogsTab } from '@/pages/server/LogsTab';
 import { OverviewTab } from '@/pages/server/OverviewTab';
 import { ServerLayout } from '@/pages/server/ServerLayout';
 import { ServersPage } from '@/pages/Servers';
+import { AgentsPage } from '@/pages/admin/Agents';
 import { CommandListsPage } from '@/pages/admin/CommandLists';
+import { ServersAdminPage } from '@/pages/admin/ServersAdmin';
 import { GroupsPage } from '@/pages/admin/Groups';
 import { UsersPage } from '@/pages/admin/Users';
 import { InvitePage } from '@/pages/Invite';
@@ -108,8 +110,8 @@ const pages = [
   guarded('/admin/users', 'users', UsersPage),
   guarded('/admin/groups', 'groups', GroupsPage),
   guarded('/admin/command-lists', 'commandLists', CommandListsPage),
-  guarded('/admin/servers', 'serverAdmin'),
-  guarded('/admin/agents', 'agents'),
+  guarded('/admin/servers', 'serverAdmin', ServersAdminPage),
+  guarded('/admin/agents', 'agents', AgentsPage),
   guarded('/admin/settings', 'settings'),
 ];
 const serversRoute = createRoute({
