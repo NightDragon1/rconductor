@@ -77,24 +77,33 @@ func startMinecraft(t *testing.T) string {
 }
 
 // direct is a plain RCON client, independent of the panel's adapter: it
-// sends one command and collects packets until the server is quiet.
+// sends one command and collects packets until the server is quiet. Every
+// packet goes to the test log with ID, type and length (issue #104).
 func direct(t *testing.T, addr, command string) string {
 	t.Helper()
-	var d net.Dialer
-	conn, err := d.DialContext(context.Background(), "tcp", addr)
+	out, err := directErr(addr, command, t.Logf)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return out
+}
+
+// directErr is direct without testing.T, for use in goroutines.
+func directErr(addr, command string, logf func(string, ...any)) (string, error) {
+	var d net.Dialer
+	conn, err := d.DialContext(context.Background(), "tcp", addr)
+	if err != nil {
+		return "", err
+	}
 	defer func() { _ = conn.Close() }()
-	write := func(id, typ int32, body string) {
+	write := func(id, typ int32, body string) error {
 		b := make([]byte, 14+len(body))
 		binary.LittleEndian.PutUint32(b[0:], uint32(10+len(body))) //nolint:gosec // test commands are short
 		binary.LittleEndian.PutUint32(b[4:], uint32(id))           //nolint:gosec // small constants
 		binary.LittleEndian.PutUint32(b[8:], uint32(typ))          //nolint:gosec // small constants
 		copy(b[12:], body)
-		if _, err := conn.Write(b); err != nil {
-			t.Fatal(err)
-		}
+		_, err := conn.Write(b)
+		return err
 	}
 	read := func(quiet time.Duration) (int32, string, error) {
 		_ = conn.SetReadDeadline(time.Now().Add(quiet))
@@ -106,22 +115,29 @@ func direct(t *testing.T, addr, command string) string {
 		if _, err := io.ReadFull(conn, body); err != nil {
 			return 0, "", err
 		}
-		return int32(binary.LittleEndian.Uint32(head[4:])), strings.TrimRight(string(body), "\x00"), nil //nolint:gosec // packet ID
+		id := int32(binary.LittleEndian.Uint32(head[4:]))  //nolint:gosec // packet ID
+		typ := int32(binary.LittleEndian.Uint32(head[8:])) //nolint:gosec // packet type
+		logf("direct %q: packet id=%d type=%d len=%d", command, id, typ, len(body))
+		return id, strings.TrimRight(string(body), "\x00"), nil
 	}
-	write(1, 3, "rconpw")
+	if err := write(1, 3, "rconpw"); err != nil {
+		return "", err
+	}
 	if id, _, err := read(5 * time.Second); err != nil || id != 1 {
-		t.Fatalf("direct auth: %d %v", id, err)
+		return "", fmt.Errorf("direct auth: %d %w", id, err)
 	}
-	write(2, 2, command)
+	if err := write(2, 2, command); err != nil {
+		return "", err
+	}
 	var out strings.Builder
 	for {
 		id, body, err := read(2 * time.Second)
 		var ne net.Error
 		if errors.As(err, &ne) && ne.Timeout() && out.Len() > 0 {
-			return out.String()
+			return out.String(), nil
 		}
 		if err != nil {
-			t.Fatalf("direct read: %v", err)
+			return "", fmt.Errorf("direct read: %w", err)
 		}
 		if id == 2 {
 			out.WriteString(body)
@@ -135,6 +151,13 @@ func direct(t *testing.T, addr, command string) string {
 // with every answer at its sender (PROT-002).
 func TestMinecraft(t *testing.T) {
 	addr := startMinecraft(t)
+	// Minecraft gathers the RCON output of all connections in one place:
+	// commands of two connections at the same moment mix their answers
+	// (issue #104). The reference answers therefore come before the panel
+	// talks to the server, which since a7d3dd9 sends list at once for the
+	// first viewer.
+	wantList := direct(t, addr, "list")
+	wantHelp := direct(t, addr, "help")
 	s := newStack(t, addr, "rconpw")
 
 	t.Cleanup(func() {
@@ -148,7 +171,7 @@ func TestMinecraft(t *testing.T) {
 	})
 	ws := s.console("admin")
 	r, code := s.send("admin", "list")
-	if want := direct(t, addr, "list"); code != http.StatusOK || r.Response != want {
+	if want := wantList; code != http.StatusOK || r.Response != want {
 		t.Errorf("list = %d %q, direct %q", code, r.Response, want)
 	}
 	var ev struct {
@@ -159,7 +182,7 @@ func TestMinecraft(t *testing.T) {
 		t.Errorf("console event = %+v %v", ev, err)
 	}
 	r, code = s.send("admin", "help")
-	if want := direct(t, addr, "help"); code != http.StatusOK || r.Response != want || len(want) <= 4096 {
+	if want := wantHelp; code != http.StatusOK || r.Response != want || len(want) <= 4096 {
 		t.Errorf("help = %d, %d bytes; direct %d bytes; equal %v", code, len(r.Response), len(want), r.Response == want)
 	}
 
