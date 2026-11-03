@@ -276,19 +276,21 @@ func (c *Cache) Watch(ctx context.Context, serverID string) func() {
 	}
 }
 
+// refreshLoop fetches the player list at once for the first viewer and
+// then every refresh interval while someone views (Gesamtkonzept 4.6).
 func (c *Cache) refreshLoop(ctx context.Context, serverID string, stop chan struct{}) {
 	t := time.NewTicker(c.refresh)
 	defer t.Stop()
 	for {
+		if err := c.fetch(ctx, serverID); err != nil && !errors.Is(err, ErrNoPlayerList) {
+			c.log.Debug("player list not refreshed", slog.String(logging.KeyServer, serverID), slog.Any("err", err))
+		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-stop:
 			return
 		case <-t.C:
-			if err := c.fetch(ctx, serverID); err != nil && !errors.Is(err, ErrNoPlayerList) {
-				c.log.Debug("player list not refreshed", slog.String(logging.KeyServer, serverID), slog.Any("err", err))
-			}
 		}
 	}
 }
