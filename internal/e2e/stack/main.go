@@ -275,5 +275,65 @@ func seed(panel, public, console, gameAddr string) (State, error) {
 		}
 		st.Users[u.name] = userPassword
 	}
+	if err := seedModeration(admin, panel, o, &st); err != nil {
+		return st, err
+	}
 	return st, nil
+}
+
+// invite creates a user with a role through an invitation by inviter.
+func invite(inviter *client, panel, o, role, name string) (string, error) {
+	var inv struct{ Token string }
+	if err := inviter.call(http.MethodPost, "/invites", map[string]string{"role": role}, &inv); err != nil {
+		return "", err
+	}
+	var created struct{ ID string }
+	anon := &client{base: panel, origin: o}
+	err := anon.call(http.MethodPost, "/invites/redeem", map[string]string{"token": inv.Token, "pseudonym": name, "password": userPassword}, &created)
+	return created.ID, err
+}
+
+// seedModeration adds a moderator with a command list on the game server
+// and a supporter of his.
+func seedModeration(admin *client, panel, o string, st *State) error {
+	var list struct{ ID string }
+	if err := admin.call(http.MethodPost, "/command-lists", map[string]any{"name": "moderation", "entries": []map[string]any{
+		{"path": "kick", "passable": false}, {"path": "whitelist add", "passable": true}, {"path": "say", "passable": true},
+	}}, &list); err != nil {
+		return err
+	}
+	var group struct{ ID string }
+	if err := admin.call(http.MethodPost, "/user-groups", map[string]any{"name": "moderators", "kind": "moderator", "command_list_id": list.ID}, &group); err != nil {
+		return err
+	}
+	modID, err := invite(admin, panel, o, "moderator", "mod")
+	if err != nil {
+		return err
+	}
+	if err := admin.call(http.MethodPut, "/users/"+modID+"/assignments", map[string]any{
+		"groups": []string{group.ID}, "grants": []map[string]string{{"group_id": group.ID, "server_id": st.ServerID}},
+	}, nil); err != nil {
+		return err
+	}
+	if err := admin.call(http.MethodPatch, "/settings", map[string]bool{"supporters.enabled": true}, nil); err != nil {
+		return err
+	}
+	if err := admin.call(http.MethodPatch, "/users/"+modID, map[string]bool{"supporters_allowed": true}, nil); err != nil {
+		return err
+	}
+	mod := &client{base: panel, origin: o}
+	if err := mod.call(http.MethodPost, "/auth/login", map[string]string{"pseudonym": "mod", "password": userPassword}, nil); err != nil {
+		return err
+	}
+	supID, err := invite(mod, panel, o, "supporter", "sup")
+	if err != nil {
+		return err
+	}
+	if err := mod.call(http.MethodPut, "/users/"+supID+"/assignments", map[string]any{
+		"supporter_grants": []map[string]string{{"moderator_id": modID, "server_id": st.ServerID}},
+	}, nil); err != nil {
+		return err
+	}
+	st.Users["mod"], st.Users["sup"] = userPassword, userPassword
+	return nil
 }

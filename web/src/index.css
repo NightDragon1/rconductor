@@ -4,18 +4,18 @@
 /* Dark is the default design, light can be chosen (Design 6.1, UI-001).
    Colours are tokens, so both designs share every component. */
 :root {
-  --background: #0f1115;
-  --surface: #171a21;
-  --surface-raised: #1e222b;
-  --border: #2a2f3a;
-  --text: #e6e8ec;
-  --text-muted: #a3a9b6;
-  --accent: #5b9dff;
-  --accent-text: #0b1220;
-  --ok: #3ccf91;
-  --warn: #f2b84b;
-  --danger: #ff6b6b;
-  --focus: #8fbcff;
+  --background: #0b0d12;
+  --surface: #12151c;
+  --surface-raised: #1a1e27;
+  --border: #262b36;
+  --text: #e8eaef;
+  --text-muted: #9aa1ae;
+  --accent: #a78bfa;
+  --accent-text: #160b33;
+  --ok: #4ade80;
+  --warn: #fb923c;
+  --danger: #f87171;
+  --focus: #c4b5fd;
   color-scheme: dark;
 }
 
@@ -26,12 +26,12 @@
   --border: #d5d9e0;
   --text: #15181e;
   --text-muted: #4d5563;
-  --accent: #1f5fd1;
+  --accent: #6d28d9;
   --accent-text: #ffffff;
-  --ok: #157a52;
-  --warn: #8a5a00;
-  --danger: #c22a2a;
-  --focus: #1f5fd1;
+  --ok: #15803d;
+  --warn: #b45309;
+  --danger: #b91c1c;
+  --focus: #6d28d9;
   color-scheme: light;
 }
 

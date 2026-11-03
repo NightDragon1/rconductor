@@ -5,9 +5,13 @@ import {
   createRoute,
   createRouter,
   Outlet,
+  notFound,
   redirect,
 } from '@tanstack/react-router';
+import { fetchMe, meKey } from '@/api/me';
 import { fetchSession, sessionKey } from '@/api/session';
+import { entryFor } from '@/nav';
+import { placeholder } from '@/pages/Placeholder';
 import { ChangePasswordPage } from '@/pages/ChangePassword';
 import { HomePage } from '@/pages/Home';
 import { LoginPage } from '@/pages/Login';
@@ -56,10 +60,46 @@ const appRoute = createRoute({
 
 const homeRoute = createRoute({ getParentRoute: () => appRoute, path: '/', component: HomePage });
 
+// A page outside the role's navigation does not exist for it (Design 6.2).
+function guarded(path: string, key: string) {
+  return createRoute({
+    getParentRoute: () => appRoute,
+    path,
+    beforeLoad: async ({ context }) => {
+      const entry = entryFor(path);
+      const s = await sessionRoute(context);
+      if (!entry || !s) throw notFound();
+      const me =
+        s.user.role === 'moderator'
+          ? await context.queryClient.fetchQuery({ queryKey: meKey, queryFn: fetchMe })
+          : undefined;
+      if (!entry.allowed(s.user.role, { supportersAllowed: me?.supporters_allowed ?? false }))
+        throw notFound();
+    },
+    component: placeholder(key),
+  });
+}
+
+const pages = [
+  guarded('/servers', 'servers'),
+  guarded('/audit', 'audit'),
+  guarded('/admin/users', 'users'),
+  guarded('/admin/groups', 'groups'),
+  guarded('/admin/command-lists', 'commandLists'),
+  guarded('/admin/servers', 'serverAdmin'),
+  guarded('/admin/agents', 'agents'),
+  guarded('/admin/settings', 'settings'),
+];
+const profileRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'profile',
+  component: placeholder('profile'),
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   changePasswordRoute,
-  appRoute.addChildren([homeRoute]),
+  appRoute.addChildren([homeRoute, profileRoute, ...pages]),
 ]);
 
 // The base path comes from <base href> (RCD_BASE_PATH, issue #88).

@@ -2,3 +2,6 @@
 
 node_modules
 src/api/schema.d.ts
+e2e/.state-*.json
+test-results
+playwright-report

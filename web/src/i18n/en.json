@@ -2,7 +2,9 @@
   "app": {
     "name": "RCONductor",
     "loading": "Loading…",
-    "error": "Something went wrong. Please try again."
+    "error": "Something went wrong. Please try again.",
+    "org": "ShadowGhost.NET",
+    "later": "This page follows in a later step."
   },
   "login": {
     "title": "Sign in",
@@ -26,7 +28,22 @@
   },
   "nav": {
     "logout": "Sign out",
-    "theme": "Switch between dark and light design"
+    "theme": "Switch between dark and light design",
+    "label": "Main navigation",
+    "menu": "Menu",
+    "collapse": "Collapse",
+    "expand": "Expand the navigation",
+    "overview": "Overview",
+    "servers": "Servers",
+    "audit": "Audit",
+    "admin": "Administration",
+    "users": "Users",
+    "groups": "Groups",
+    "commandLists": "Command lists",
+    "serverAdmin": "Servers and groups",
+    "agents": "Agents",
+    "settings": "Settings",
+    "profile": "Your profile"
   },
   "home": {
     "title": "Overview",
