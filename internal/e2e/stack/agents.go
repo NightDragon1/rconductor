@@ -31,6 +31,7 @@ const (
 // three times within minutes (a restart loop), lobby is stopped.
 type fakeHost struct {
 	followed sync.Map // containers whose logs were followed once
+	ticking  sync.Map // container → stop of its tick lines
 }
 
 func (*fakeHost) Name() string { return "docker" }
@@ -77,19 +78,67 @@ func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
 	}
 }
 
+// Lines of the test logs: earlier ones only over logs.tail, then the two
+// of the first follow.
+var (
+	earlyLines = []string{"[Server thread/INFO]: Starting minecraft server version 26.3", "[Server thread/INFO]: Preparing level \"world\""}
+	firstLines = []string{"[Server thread/INFO]: Steve joined the game", "[Server thread/INFO]: §6Done§r (1.2s)!"}
+)
+
 // Handle answers every order. The first follow of a container's logs
 // brings two lines; like Docker, a later follow starts at the present and
-// the panel's ring holds the earlier lines (UI-009, CMD-014).
+// the panel's ring holds the earlier lines. While followed, a tick line
+// comes every three seconds; logs.tail gives the earlier lines and the
+// first two (UI-009, CMD-014, revision 2.4 candidate 20).
 func (h *fakeHost) Handle(ctx context.Context, e agentproto.Envelope, out agent.Sender) {
-	if e.Type == agentproto.TypeLogsFollow {
+	switch e.Type {
+	case agentproto.TypeLogsFollow:
 		f, err := agentproto.Payload[agentproto.LogsFollow](e)
-		if _, again := h.followed.LoadOrStore(f.Container, true); err == nil && !again {
-			_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: f.Container, Lines: []string{
-				"[Server thread/INFO]: Steve joined the game", "[Server thread/INFO]: §6Done§r (1.2s)!",
-			}})
+		if err != nil {
+			break
+		}
+		if _, again := h.followed.LoadOrStore(f.Container, true); !again {
+			_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: f.Container, Lines: firstLines})
+		}
+		tctx, stop := context.WithCancel(context.WithoutCancel(ctx))
+		if _, running := h.ticking.LoadOrStore(f.Container, stop); running {
+			stop()
+			break
+		}
+		go h.tick(tctx, f.Container, e.ID, out)
+	case agentproto.TypeLogsStop:
+		if f, err := agentproto.Payload[agentproto.LogsFollow](e); err == nil {
+			if stop, ok := h.ticking.LoadAndDelete(f.Container); ok {
+				stop.(context.CancelFunc)()
+			}
+		}
+	case agentproto.TypeLogsTail:
+		if t, err := agentproto.Payload[agentproto.LogsTail](e); err == nil {
+			lines := append(append([]string{}, earlyLines...), firstLines...)
+			if len(lines) > t.Lines {
+				lines = lines[len(lines)-t.Lines:]
+			}
+			_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: t.Container, Lines: lines})
 		}
 	}
 	_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeOK})
+}
+
+func (h *fakeHost) tick(ctx context.Context, container, ref string, out agent.Sender) {
+	t := time.NewTicker(3 * time.Second)
+	defer t.Stop()
+	for n := 1; ; n++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		line := fmt.Sprintf("[Server thread/INFO]: tick %d", n)
+		if out.Send(ctx, agentproto.TypeLogLines, ref, agentproto.LogLines{Container: container, Lines: []string{line}}) != nil {
+			h.ticking.Delete(container)
+			return
+		}
+	}
 }
 
 // idleHost has no containers; its agent leaves again at once.
