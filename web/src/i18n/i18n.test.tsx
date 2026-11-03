@@ -26,7 +26,7 @@ describe('language files', () => {
       user: { id: '1', pseudonym: 'admin', role: 'rcon_admin' },
       expires_at: '2026-11-03T00:00:00Z',
       must_change_password: false,
-      ui: { shortcuts_enabled: false },
+      ui: { shortcuts_enabled: false, supporters_enabled: false },
     };
     const { container } = await renderPage(Shell, [
       [sessionKey, session],

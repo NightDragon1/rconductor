@@ -119,7 +119,7 @@ func TestShortcutsInSession(t *testing.T) {
 	session := func(c *http.Cookie) string {
 		return f.do(t, call{method: http.MethodGet, path: "/api/v1/auth/session", cookies: []*http.Cookie{c}}).Body.String()
 	}
-	if !strings.Contains(session(mod), `"ui":{"shortcuts_enabled":false}`) {
+	if !strings.Contains(session(mod), `"shortcuts_enabled":false`) {
 		t.Errorf("default = %s", session(mod))
 	}
 	if rec := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{mod}, origin: "http://panel.lan",
@@ -130,7 +130,7 @@ func TestShortcutsInSession(t *testing.T) {
 		body: `{"ui.shortcuts_enabled":true}`}); rec.Code != http.StatusOK {
 		t.Fatalf("admin switches shortcuts: %d %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(session(mod), `"ui":{"shortcuts_enabled":true}`) {
+	if !strings.Contains(session(mod), `"shortcuts_enabled":true`) {
 		t.Errorf("after switching = %s", session(mod))
 	}
 }

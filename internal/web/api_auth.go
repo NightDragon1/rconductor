@@ -14,6 +14,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
+	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
@@ -66,9 +67,12 @@ func (s *apiServer) sessionOf(ctx context.Context, p auth.Principal) api.Session
 		MustChangePassword: p.MustChangePassword,
 	}
 	if s.store != nil {
-		var on bool
+		var on, supporters bool
 		if s.store.GlobalSetting(ctx, users.SettingShortcuts, &on) == nil {
 			out.Ui.ShortcutsEnabled = on
+		}
+		if s.store.GlobalSetting(ctx, perm.SettingSupportersEnabled, &supporters) == nil {
+			out.Ui.SupportersEnabled = supporters
 		}
 	}
 	return out
