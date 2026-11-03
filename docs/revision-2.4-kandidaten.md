@@ -156,3 +156,9 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
   - Neuer Ereigniscode logs.tail (Agent-Funktion im Panel).
   - Der Logs-Reiter hat einen Knopf „Load earlier lines“.
 - **Vorschlag:** Design 2.2 um /servers/{id}/logs (GET, RCON-Admin; Server-Admin im Scope) ergänzen, Design 8.3 in der Zeile „Agent selbst“ um logs.tail.
+
+## 21. Sitzungen eines Benutzers beenden
+
+- **Fundstelle:** Mockup „Verwaltung · Benutzer“ (Knopf „Sitzungen beenden“ im Seitenpanel); Design 2.2 ohne Endpunkt dafür; AUTH-006.
+- **Entscheidung (M4, Schritt 8, K1 B):** DELETE /users/{id}/sessions beendet alle Sessions eines verwalteten Benutzers und schließt seine WebSockets sofort. Berechtigt ist, wer den Benutzer verwaltet (3.6); Audit-Eintrag user.sessions.end, Ereigniscode auth.session.revoked wie bei Sperre und Rechteänderung.
+- **Vorschlag:** Design 2.2 um /users/{id}/sessions (DELETE, wie /users) ergänzen.
