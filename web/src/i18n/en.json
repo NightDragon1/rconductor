@@ -344,7 +344,8 @@
       "invalid": "Not possible this way",
       "rate_limited": "Too many changes, try again shortly",
       "busy": "The panel is busy, try again",
-      "other": "Failed"
+      "other": "Failed",
+      "conflict": "Changed by someone else – reload"
     },
     "lock": "Lock",
     "unlock": "Unlock",
@@ -406,7 +407,9 @@
     "summary_one": "{{count}} user · {{locked}} locked",
     "summary_other": "{{count}} users · {{locked}} locked",
     "invitesOpen_one": "{{count}} invitation open",
-    "invitesOpen_other": "{{count}} invitations open"
+    "invitesOpen_other": "{{count}} invitations open",
+    "conflict": "Changed by someone else – reload",
+    "reload": "Reload"
   },
   "lists": {
     "summary_one": "{{count}} command list",

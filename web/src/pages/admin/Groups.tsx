@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, must } from '@/api/client';
 import { useServerGroups, useServers } from '@/api/servers';
@@ -100,6 +100,11 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
   const [draft, setDraft] = useState<UserGroup>(group);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  // The version of the last saved state goes along as If-Match (revision
+  // 2.4 candidate 24).
+  const base = useRef(group);
+  const groups = useUserGroups(true);
   const listId = useId();
 
   const userName = (id: string) => users.data?.find((u) => u.id === id)?.pseudonym ?? id;
@@ -111,14 +116,15 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
   );
 
   const change = (next: UserGroup, label: string) => {
+    if (conflict) return;
     setDraft(next);
     schedule(
       label,
       async (keepalive) => {
-        const r = await outcome(group.id, async () =>
-          must(
+        const r = await outcome(group.id, async () => {
+          base.current = must(
             await api.PATCH('/user-groups/{id}', {
-              params: { path: { id: group.id } },
+              params: { path: { id: group.id }, header: { 'If-Match': base.current.version } },
               body: {
                 name: next.name,
                 command_list_id: next.command_list_id ?? '',
@@ -127,17 +133,22 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
               },
               keepalive,
             }),
-          ),
-        );
+          );
+        });
+        if (r.reason === 'conflict') {
+          setConflict(true);
+          setMessage({ ok: false, text: t('admin.conflict') });
+          return;
+        }
         setMessage(
           r.ok
             ? { ok: true, text: t('admin.saved') }
             : { ok: false, text: reasonText(t, r.reason) },
         );
-        if (!r.ok) setDraft(group);
+        if (!r.ok) setDraft(base.current);
         void qc.invalidateQueries({ queryKey: userGroupsKey });
       },
-      { key: `group:${group.id}`, onUndo: () => setDraft(group) },
+      { key: `group:${group.id}`, onUndo: () => setDraft(base.current) },
     );
   };
   const label = t('groups.undo.changed', { name: draft.name });
@@ -248,6 +259,23 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
         >
           {message.text}
         </p>
+      )}
+      {conflict && (
+        <Button
+          variant="outline"
+          className="self-start"
+          onClick={async () => {
+            const fresh = (await groups.refetch()).data?.find((x) => x.id === group.id);
+            if (fresh) {
+              base.current = fresh;
+              setDraft(fresh);
+            }
+            setConflict(false);
+            setMessage(null);
+          }}
+        >
+          {t('admin.reload')}
+        </Button>
       )}
       <Button
         variant="outline"

@@ -2,7 +2,7 @@
 import type { CommandListEntry } from '@/api/users';
 
 // Reason codes with their own text (Design 3.5).
-const known = ['forbidden', 'not_found', 'invalid', 'rate_limited', 'busy'];
+const known = ['forbidden', 'not_found', 'invalid', 'rate_limited', 'busy', 'conflict'];
 
 export function reasonText(t: (k: string) => string, reason?: string): string {
   return t(known.includes(reason ?? '') ? `admin.reason.${reason}` : 'admin.reason.other');
