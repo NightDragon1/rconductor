@@ -114,3 +114,9 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Fundstelle:** Design 6.3 (Aktionen im Kopf nur, wenn der Server einem Agent zugeordnet ist) gegenüber AGT-009 (R1, Kann: ohne Agent Neustart per stop-Befehl und Restart-Policy unless-stopped) und Design 2.2 (/servers/{id}/actions).
 - **Entscheidung (M4, Schritt 4, W6 B):** Ohne Agent zeigt der Kopf für RCON-Admin und Server-Admin im Scope nur „Neustart über RCON (stop-Befehl)“. Der Bestätigungsdialog sagt: Der Server wird über den stop-Befehl beendet. Er startet nur neu, wenn ein Neustart-Mechanismus greift (z. B. Docker restart: always oder unless-stopped; on-failure greift bei sauberem Beenden nicht). Start und Stopp gibt es nur mit Agent.
 - **Vorschlag:** Design 6.3, Absatz zu den Aktionen, um diesen Fall ergänzen.
+
+## 17. Kopieren ohne sicheren Kontext
+
+- **Fundstelle:** D-011 (kein HTTPS für die Weboberfläche, TLS am Reverse Proxy) gegenüber CMD-012 (Blöcke kopierbar) und dem Verlauf (Design 6.3). Browser bieten navigator.clipboard nur in einem sicheren Kontext (https oder localhost), nicht über http://lan-ip.
+- **Entscheidung (M4, Schritt 5):** Ohne Clipboard-API markiert der Kopieren-Knopf den Text und zeigt den Hinweis „Press Ctrl+C“. E2E-Test über http mit einem Namen statt localhost.
+- **Vorschlag:** Design 6.1 um eine Zeile „Kopieren“ ergänzen; Hinweis in der Betriebsdoku, dass HTTPS über den Reverse Proxy das direkte Kopieren ermöglicht.
