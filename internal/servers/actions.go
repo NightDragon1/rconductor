@@ -72,6 +72,11 @@ func (s *Service) Action(ctx context.Context, req users.Request, id, action stri
 	if action != agentproto.ActionStart && action != agentproto.ActionStop && action != agentproto.ActionRestart {
 		return ActionResult{}, &users.InvalidError{Detail: "action must be start, stop or restart"}
 	}
+	// Actions are for the RCON admin and server admins only (Design 2.2);
+	// the role is checked before the server is looked up.
+	if req.Actor.Role != perm.RCONAdmin && req.Actor.Role != perm.ServerAdmin {
+		return ActionResult{}, s.actionForbidden(ctx, req, id, action)
+	}
 	rights, err := s.perm.For(ctx, req.Actor.ID)
 	if err != nil {
 		return ActionResult{}, err
@@ -82,12 +87,7 @@ func (s *Service) Action(ctx context.Context, req users.Request, id, action stri
 		return ActionResult{}, users.ErrNotFound
 	}
 	if !sr.Agent {
-		s.actionAudit(ctx, req, id, action, "", audit.ResultDenied, "forbidden", nil)
-		perm.LogDenied(s.log, perm.Denial{
-			RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym,
-			Role: req.Actor.Role, Server: id, Reason: "forbidden", Action: "server.action",
-		})
-		return ActionResult{}, users.ErrForbidden
+		return ActionResult{}, s.actionForbidden(ctx, req, id, action)
 	}
 	r, err := s.st.Queries.GetServer(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -104,6 +104,15 @@ func (s *Service) Action(ctx context.Context, req users.Request, id, action stri
 		return ActionResult{}, ErrAgentUnavailable
 	}
 	return s.rconRestart(ctx, req, id, r.ProfileID)
+}
+
+func (s *Service) actionForbidden(ctx context.Context, req users.Request, id, action string) error {
+	s.actionAudit(ctx, req, id, action, "", audit.ResultDenied, "forbidden", nil)
+	perm.LogDenied(s.log, perm.Denial{
+		RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym,
+		Role: req.Actor.Role, Server: id, Reason: "forbidden", Action: "server.action",
+	})
+	return users.ErrForbidden
 }
 
 func (s *Service) agentAction(ctx context.Context, req users.Request, id, agentID, container, action string) (ActionResult, error) {
