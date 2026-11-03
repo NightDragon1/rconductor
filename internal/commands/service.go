@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"time"
 	"unicode/utf8"
 
@@ -189,6 +190,13 @@ func (s *Service) syntax(ctx context.Context, serverID string) (Syntax, error) {
 		syn.MaxLength = rules.Syntax.MaxLength
 	}
 	syn.Wrappers = rules.Syntax.Wrappers
+	if pp := rules.Syntax.PlayerPattern; pp != "" {
+		// The import has checked the pattern; one that does not compile
+		// leaves the fallback rules.
+		if re, err := regexp.Compile("^(?:" + pp + ")$"); err == nil {
+			syn.Player, syn.PlayerPattern = re, pp
+		}
+	}
 	return syn, nil
 }
 
@@ -286,11 +294,14 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 			return Result{}, err
 		}
 		if c, found := CatalogEntry(tokens, catalog, syn.CaseSensitive); found {
-			if name, problem, ok := CheckParams(tokens[len(Tokens(c.Path)):], c.Params, syn.CaseSensitive); !ok {
+			if name, problem, ok := CheckParams(tokens[len(Tokens(c.Path)):], c.Params, syn); !ok {
 				err := s.deny(ctx, req, serverID, cmd, ReasonInvalid, 0)
 				var d *DeniedError
 				if errors.As(err, &d) {
-					d.Detail = "parameter " + name + ": " + problem
+					d.Detail = problem
+					if name != "" {
+						d.Detail = "parameter " + name + ": " + problem
+					}
 				}
 				return Result{}, err
 			}

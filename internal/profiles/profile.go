@@ -85,6 +85,9 @@ type Syntax struct {
 	StripPrefix   *string  `yaml:"strip_prefix" json:"strip_prefix"`
 	MaxLength     int      `yaml:"max_length" json:"max_length"`
 	Wrappers      []string `yaml:"wrappers" json:"wrappers"`
+	// PlayerPattern is an RE2 pattern a player parameter must match as a
+	// whole, e.g. ^[A-Za-z0-9_]{1,16}$ (revision 2.4 candidate 19).
+	PlayerPattern string `yaml:"player_pattern" json:"player_pattern,omitempty"`
 }
 
 // Players tells how to read the player list.
@@ -210,6 +213,11 @@ func (p *Profile) check() []string {
 	for i, w := range p.Syntax.Wrappers {
 		if NormalizePath(w) == "" || strings.Contains(NormalizePath(w), " ") {
 			bad("syntax.wrappers[%d] must be a single command name", i)
+		}
+	}
+	if pp := p.Syntax.PlayerPattern; pp != "" {
+		if _, err := regexp.Compile(pp); err != nil || len(pp) > 256 {
+			bad("syntax.player_pattern must be an RE2 pattern of at most 256 characters")
 		}
 	}
 	if pl := p.Players; pl != nil {

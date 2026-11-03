@@ -4,6 +4,7 @@ package commands
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -126,6 +127,7 @@ func TestCheckParams(t *testing.T) {
 		{Name: "count", Type: profiles.ParamNumber, Min: &lo, Max: &hi, Optional: true},
 		{Name: "note", Type: profiles.ParamText, Optional: true},
 	}
+	mc := Syntax{Player: regexp.MustCompile(`^(?:^[A-Za-z0-9_]{1,16}$)$`)}
 	cases := []struct {
 		args       string
 		name, prob string
@@ -140,19 +142,41 @@ func TestCheckParams(t *testing.T) {
 		{"steve day 11", "count", "out of range"},
 		{"steve day 2.5", "count", "not a whole number"},
 		{"steve day x", "count", "not a whole number"},
+		{"@a day", "player", "not a player name"},
+		{"@e[type=player] day", "player", "not a player name"},
+		{`"x" day`, "player", "not a player name"},
+		{"Steve_The_Seventeen day", "player", "not a player name"},
 	}
 	for _, c := range cases {
-		name, prob, ok := CheckParams(Tokens(c.args), params, false)
-		if name != c.name || prob != c.prob || ok != (c.name == "") {
+		name, prob, ok := CheckParams(Tokens(c.args), params, mc)
+		if name != c.name || prob != c.prob || ok != (c.prob == "") {
 			t.Errorf("%q = %q %q %v, want %q %q", c.args, name, prob, ok, c.name, c.prob)
 		}
 	}
-	if _, _, ok := CheckParams(Tokens("steve DAY"), params, true); ok {
+	if _, _, ok := CheckParams(Tokens("steve DAY"), params, Syntax{CaseSensitive: true, Player: mc.Player}); ok {
 		t.Error("case-sensitive profile took DAY for day")
 	}
-	// Extra tokens pass like after any list entry (CMD-004).
-	if _, _, ok := CheckParams(Tokens("x y"), []profiles.Param{{Name: "player", Type: profiles.ParamPlayer}}, false); !ok {
-		t.Error("whitelist add x y refused")
+	// Further arguments only after a text parameter: CMD-004 rules the
+	// path, not the form of the arguments.
+	player := []profiles.Param{{Name: "player", Type: profiles.ParamPlayer}}
+	if name, prob, ok := CheckParams(Tokens("x y"), player, mc); ok || name != "" || prob != "unexpected argument" {
+		t.Errorf("whitelist add x y = %q %q %v", name, prob, ok)
+	}
+	if _, prob, ok := CheckParams(Tokens("extra"), nil, mc); ok || prob != "unexpected argument" {
+		t.Errorf("list extra = %q %v", prob, ok)
+	}
+}
+
+// TestPlayerNameWithoutPattern: a profile without player_pattern still
+// keeps selectors, quoted forms and control characters out.
+func TestPlayerNameWithoutPattern(t *testing.T) {
+	for name, want := range map[string]bool{
+		"steve": true, "Ünal-2": true, "@a": false, "@e[type=player]": false,
+		`"x"`: false, "'x'": false, "a`b": false, "a\x07b": false, "": false,
+	} {
+		if got := PlayerName(name, Syntax{}); got != want {
+			t.Errorf("%q = %v, want %v", name, got, want)
+		}
 	}
 }
 

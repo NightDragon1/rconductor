@@ -21,6 +21,9 @@ type AllowedCommands struct {
 	// Commands are the allowed paths with the catalog entry of the
 	// profile where one exists; for admins the whole catalog.
 	Commands []profiles.Command
+	// PlayerPattern is the profile's syntax.player_pattern, so that the
+	// command page checks player fields as the pipeline does.
+	PlayerPattern string
 }
 
 // AllowedCommands lists the commands the caller may send on a server (revision 2.4
@@ -51,6 +54,7 @@ func (s *Service) AllowedCommands(ctx context.Context, req users.Request, server
 	if err != nil {
 		return AllowedCommands{}, err
 	}
+	out.PlayerPattern = syn.PlayerPattern
 	byPath := map[string]profiles.Command{}
 	for _, c := range catalog {
 		byPath[c.Path] = c

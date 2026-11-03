@@ -89,6 +89,9 @@ func (s *apiServer) ListAllowedCommands(ctx context.Context, req api.ListAllowed
 		return nil, adminError(err)
 	}
 	out := api.AllowedCommands{FreeInput: a.FreeInput, Commands: make([]api.CatalogCommand, 0, len(a.Commands))}
+	if a.PlayerPattern != "" {
+		out.PlayerPattern = &a.PlayerPattern
+	}
 	for _, c := range a.Commands {
 		out.Commands = append(out.Commands, toAPICatalog(c))
 	}

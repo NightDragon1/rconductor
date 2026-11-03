@@ -8,6 +8,7 @@ package commands
 
 import (
 	"errors"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,6 +32,10 @@ type Syntax struct {
 	StripPrefix   string
 	MaxLength     int
 	Wrappers      []string
+	// Player is the profile's player_pattern (PlayerPattern), anchored;
+	// nil without one.
+	Player        *regexp.Regexp
+	PlayerPattern string
 }
 
 // ErrInvalid means the command is empty or too long after cleaning.
@@ -128,11 +133,13 @@ func CatalogEntry(tokens []string, catalog []profiles.Command, caseSensitive boo
 
 // CheckParams checks the arguments after a catalog path against its
 // parameters for moderators and supporters (revision 2.4 candidate 19):
-// a player is one token, a choice one of its values, a number a whole
-// number in range, text the rest of the line; required parameters must be
-// there. Further tokens pass, as after any list entry (CMD-004). It
-// returns the first parameter that does not fit and why.
-func CheckParams(args []string, params []profiles.Param, caseSensitive bool) (name, problem string, ok bool) {
+// a player is a name after the profile's pattern, never a selector or a
+// quoted form; a choice one of its values; a number a whole number in
+// range; text the rest of the line; required parameters must be there.
+// Further arguments are allowed only after a text parameter: CMD-004
+// rules the path, not the form of the arguments. It returns the first
+// parameter that does not fit (empty for an unexpected argument) and why.
+func CheckParams(args []string, params []profiles.Param, syn Syntax) (name, problem string, ok bool) {
 	for i, p := range params {
 		if i >= len(args) {
 			if p.Optional {
@@ -145,9 +152,11 @@ func CheckParams(args []string, params []profiles.Param, caseSensitive bool) (na
 		case profiles.ParamText:
 			return "", "", true // the rest of the line
 		case profiles.ParamPlayer:
-			// Tokens never hold white space; a player is one token.
+			if !PlayerName(a, syn) {
+				return p.Name, "not a player name", false
+			}
 		case profiles.ParamChoice:
-			if !slices.ContainsFunc(p.Values, func(v string) bool { return equal(a, v, caseSensitive) }) {
+			if !slices.ContainsFunc(p.Values, func(v string) bool { return equal(a, v, syn.CaseSensitive) }) {
 				return p.Name, "not one of " + strings.Join(p.Values, ", "), false
 			}
 		case profiles.ParamNumber:
@@ -160,5 +169,21 @@ func CheckParams(args []string, params []profiles.Param, caseSensitive bool) (na
 			}
 		}
 	}
+	if len(args) > len(params) {
+		return "", "unexpected argument", false
+	}
 	return "", "", true
+}
+
+// PlayerName reports whether a token may stand for a player: after the
+// profile's pattern, or else not a selector (@a, @e[...]), not quoted and
+// without control characters.
+func PlayerName(a string, syn Syntax) bool {
+	if syn.Player != nil {
+		return syn.Player.MatchString(a)
+	}
+	if a == "" || strings.HasPrefix(a, "@") || strings.ContainsAny(a, "\"'`") {
+		return false
+	}
+	return !strings.ContainsFunc(a, unicode.IsControl)
 }
