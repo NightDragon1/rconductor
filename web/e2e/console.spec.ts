@@ -60,12 +60,17 @@ test('timeline markers jump to their block; errors are red (CMD-013)', async ({
   await expect(failed).toHaveAttribute('data-tone', 'error');
   const timeline = page.getByRole('navigation', { name: 'Timeline' });
   const markers = timeline.getByRole('button');
-  // One marker per block: commands and log deliveries.
+  // One marker per block: commands and log deliveries. Tick lines keep
+  // coming, so both are counted at the same moment.
   await expect(consoleOf(page).getByRole('region', { name: 'Log lines' }).first()).toBeVisible();
-  const blocks =
-    (await consoleOf(page).getByRole('article').count()) +
-    (await consoleOf(page).getByRole('region', { name: 'Log lines' }).count());
-  await expect(markers).toHaveCount(blocks);
+  const counts = await page.evaluate(() => {
+    const c = document.querySelector('[aria-label="Console"]');
+    return {
+      blocks: c?.querySelectorAll('article, section[aria-label="Log lines"]').length ?? -1,
+      markers: c?.querySelectorAll('nav[aria-label="Timeline"] button').length ?? -2,
+    };
+  });
+  expect(counts.markers).toBe(counts.blocks);
   await expect(markers.last()).toHaveAttribute('data-tone', 'error');
   await expect(markers.last()).toHaveClass(/bg-danger/);
 

@@ -18,7 +18,7 @@ import { defaultTab, tabsFor, type Tab } from '@/lib/serverpage';
 import { CommandsTab } from '@/pages/server/CommandsTab';
 import { ConsoleTab } from '@/pages/server/ConsoleTab';
 import { HistoryTab } from '@/pages/server/HistoryTab';
-import { laterTab } from '@/pages/server/LaterTab';
+import { LogsTab } from '@/pages/server/LogsTab';
 import { OverviewTab } from '@/pages/server/OverviewTab';
 import { ServerLayout } from '@/pages/server/ServerLayout';
 import { ServersPage } from '@/pages/Servers';
@@ -154,7 +154,7 @@ const serverTabs = [
   serverTab('overview', OverviewTab),
   serverTab('console', ConsoleTab),
   serverTab('commands', CommandsTab),
-  serverTab('logs', laterTab()),
+  serverTab('logs', LogsTab),
   serverTab('history', HistoryTab),
 ];
 const profileRoute = createRoute({

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addCommands,
   addLogLines,
+  prependTail,
   emptyBuffer,
   MAX_COMMANDS,
   MAX_LOG_LINES,
@@ -82,5 +83,36 @@ describe('input (CMD-015)', () => {
       cmd('d', 4, 'me', { command: 'say hi' }),
     ]);
     expect(ownCommands(b, 'me')).toEqual(['say hi', 'list']);
+  });
+});
+
+describe('earlier log lines (revision 2.4 candidate 20)', () => {
+  it('puts only the lines before the overlap in front', () => {
+    const b = addLogLines(emptyBuffer, ['c', 'd', 'e'], at(10));
+    const after = prependTail(b, ['a', 'b', 'c', 'd']);
+    expect(after.logs.flatMap((l) => l.lines)).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(Date.parse(after.logs[0]?.ts ?? '')).toBeLessThan(Date.parse(at(10)));
+    // Nothing new: the buffer stays.
+    expect(prependTail(after, ['a', 'b'])).toBe(after);
+    // No overlap: all lines go in front.
+    expect(prependTail(b, ['x', 'y']).logs.flatMap((l) => l.lines)).toEqual([
+      'x',
+      'y',
+      'c',
+      'd',
+      'e',
+    ]);
+  });
+
+  it('keeps the limit of log lines', () => {
+    const b = addLogLines(
+      emptyBuffer,
+      Array.from({ length: MAX_LOG_LINES - 2 }, (_, i) => `n${i}`),
+      at(5),
+    );
+    const after = prependTail(b, ['o1', 'o2', 'o3', 'o4']);
+    const lines = after.logs.flatMap((l) => l.lines);
+    expect(lines).toHaveLength(MAX_LOG_LINES);
+    expect(lines.slice(0, 3)).toEqual(['o3', 'o4', 'n0']);
   });
 });

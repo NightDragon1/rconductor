@@ -40,6 +40,19 @@ const fromWire = (e: Wire): CmdBlock => ({
   reason: e.reason,
 });
 
+// useLogsFeed puts the live log lines of a server into its buffer while
+// on: subscribed means followed, so only while someone views the logs
+// (UI-009, G2).
+export function useLogsFeed(id: string, on: boolean) {
+  useTopic(id && on ? `server.${id}.logs` : undefined, (m) => {
+    const d = m.data as { lines?: unknown } | undefined;
+    if (m.type === 'event' && Array.isArray(d?.lines)) {
+      const lines = d.lines.filter((l): l is string => typeof l === 'string');
+      updateBuffer(id, (b) => addLogLines(b, lines, new Date().toISOString()));
+    }
+  });
+}
+
 // useConsoleFeed feeds the command buffer of a server for the console
 // and the command page: the last 50 commands from the history (G1), then
 // live over server.<id>.console, the logs while wanted (G2), and sending
@@ -75,13 +88,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
       updateBuffer(id, (b) => addCommands(b, [fromWire(m.data as Wire)]));
     }
   });
-  useTopic(id && logs ? `server.${id}.logs` : undefined, (m) => {
-    const d = m.data as { lines?: unknown } | undefined;
-    if (m.type === 'event' && Array.isArray(d?.lines)) {
-      const lines = d.lines.filter((l): l is string => typeof l === 'string');
-      updateBuffer(id, (b) => addLogLines(b, lines, new Date().toISOString()));
-    }
-  });
+  useLogsFeed(id, logs);
 
   const own = { userId: me, pseudonym: session?.user.pseudonym, role: session?.user.role };
   const send = useMutation({
