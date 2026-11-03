@@ -287,5 +287,14 @@
     "agentGone": "The agent is disconnected; no new lines arrive.",
     "rateLimited": "Too many requests for this container. Try again in {{s}} s.",
     "failed": "The earlier lines could not be read."
+  },
+  "invite": {
+    "title": "Accept the invitation",
+    "explain": "Choose your pseudonym and password. Others see you by your pseudonym.",
+    "submit": "Create my account",
+    "done": "Your account is ready. Sign in with your pseudonym and password.",
+    "noToken": "This link holds no invitation. Open the link you got once more.",
+    "expired": "This invitation is not valid or has expired. Ask for a new link.",
+    "rejected": "The pseudonym is taken or not allowed. Choose another one."
   }
 }

@@ -22,7 +22,7 @@ export default defineConfig({
   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   webServer: stacks.map((s) => ({
     // From the repository root: web/ has its own go.mod as a barrier.
-    command: `go run ./internal/e2e/stack -addr 127.0.0.1:${s.port} -base ${s.base}${s.host ? ` -host ${s.host}` : ''} -dist internal/webui/dist -state web/e2e/.state-${s.name}.json`,
+    command: `go run ./internal/e2e/stack -addr 127.0.0.1:${s.port} -base ${s.base}${s.host ? ` -host ${s.host}` : ''} -dist internal/webui/dist -state web/e2e/.state-${s.name}.json -log web/e2e/.panel-${s.name}.log`,
     cwd: '..',
     url: `http://127.0.0.1:${s.port}${s.base === '/' ? '' : s.base}/`,
     reuseExistingServer: false,
