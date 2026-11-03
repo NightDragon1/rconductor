@@ -88,3 +88,16 @@ export function rolesBelow(role: string | undefined): Role[] {
   const i = order.indexOf(role as Role);
   return i < 0 ? [] : order.slice(i + 1);
 }
+
+export type CommandList = components['schemas']['CommandList'];
+export type CommandListEntry = components['schemas']['CommandListEntry'];
+export const commandListsKey = ['command-lists'] as const;
+
+// Command lists are for RCON admin and server admin (Design 2.2).
+export function useCommandLists(enabled: boolean) {
+  return useQuery({
+    queryKey: commandListsKey,
+    queryFn: async () => must(await api.GET('/command-lists')).items,
+    enabled,
+  });
+}

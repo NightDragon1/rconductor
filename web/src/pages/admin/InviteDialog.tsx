@@ -13,7 +13,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { reasonText } from './BulkResults';
+import { reasonText } from '@/lib/admin';
 
 // InviteDialog creates an invitation link (UI-008, D-046), from a template
 // user if one is chosen: the new user gets his rights and assignments.

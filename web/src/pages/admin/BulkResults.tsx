@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useTranslation } from 'react-i18next';
 import type { Outcome, User } from '@/api/users';
+import { reasonText } from '@/lib/admin';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -9,13 +10,6 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
-
-// Reason codes with their own text (Design 3.5).
-const known = ['forbidden', 'not_found', 'invalid', 'rate_limited', 'busy'];
-
-export function reasonText(t: (k: string) => string, reason?: string): string {
-  return t(known.includes(reason ?? '') ? `admin.reason.${reason}` : 'admin.reason.other');
-}
 
 // BulkResults lists the outcome of a mass action per user: a partial
 // failure never reads as success.
