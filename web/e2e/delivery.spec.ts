@@ -35,4 +35,21 @@ test('every answer carries the security headers', async ({ page, request, state 
   expect(api.headers()['content-security-policy']).toBe(
     "default-src 'none'; frame-ancestors 'none'",
   );
+
+  // Every kind of answer of the web port (revision 2.4 candidate 29).
+  const asset = await page.evaluate(
+    () => document.querySelector<HTMLScriptElement>('script[src]')?.src ?? '',
+  );
+  expect(asset).not.toBe('');
+  for (const url of [
+    asset,
+    `${state.base_url}api/v1/does-not-exist`,
+    `${state.base_url}assets/does-not-exist.js`,
+    `${state.base_url}api/v1/users`,
+  ]) {
+    const r = await request.get(url);
+    expect(r.headers()['x-content-type-options'], url).toBe('nosniff');
+    expect(r.headers()['referrer-policy'], url).toBe('no-referrer');
+    expect(r.headers()['content-security-policy'], url).toContain("frame-ancestors 'none'");
+  }
 });
