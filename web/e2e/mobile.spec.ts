@@ -144,6 +144,11 @@ test('commands: one card open, players in the sheet (Design 6.6)', async ({ page
   await expect(card('kick').getByLabel('player', { exact: true })).toHaveCount(0);
   await card('kick').getByRole('button', { expanded: false }).tap();
   await fits(page);
+  // The search opens the first match that has fields.
+  const search = page.getByRole('searchbox', { name: 'Search commands' });
+  await search.fill('whitelist');
+  await expect(card('whitelist add').getByLabel('player', { exact: true })).toBeVisible();
+  await search.fill('');
 
   const sheet = page.getByRole('region', { name: 'Players online' });
   await expect(sheet).toBeInViewport();
@@ -256,9 +261,10 @@ test('users: search and details read; lock and end sessions ask (candidate 26)',
     await expect(dialog).toContainText('Lock sup?');
     await dialog.getByRole('button', { name: 'Lock' }).tap();
     await expect(panel.getByRole('status')).toContainText('Saved');
-    // Unlocking is no emergency: it stays on a larger screen.
-    await expect(panel.getByRole('button', { name: 'Unlock' })).toHaveCount(0);
-    await expect(panel.getByRole('button', { name: 'Lock' })).toHaveCount(0);
+    await panel.getByRole('button', { name: 'Unlock' }).tap();
+    await expect(dialog).toContainText('Unlock sup?');
+    await dialog.getByRole('button', { name: 'Unlock' }).tap();
+    await expect(panel.getByRole('button', { name: 'Lock' })).toBeVisible();
   } finally {
     const r = await page.request.patch(`${state.base_url}api/v1/users/${id}`, {
       headers: { Origin: new URL(state.base_url).origin },

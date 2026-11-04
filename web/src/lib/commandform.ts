@@ -86,6 +86,13 @@ export function formErrors(
 
 // buildCommand puts the path and the values together in the order of the
 // parameters; empty optional ones at the end are left out.
+// matches tells whether a command fits the search text, by path or
+// description.
+export function matches(c: Command, text: string): boolean {
+  const q = text.trim().toLowerCase();
+  return !q || c.path.toLowerCase().includes(q) || c.description.toLowerCase().includes(q);
+}
+
 export function buildCommand(c: Command, values: Values): string {
   if (!fromCatalog(c)) {
     return [c.path, (values[FREE] ?? '').trim()].filter(Boolean).join(' ');

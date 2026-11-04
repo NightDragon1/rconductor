@@ -88,8 +88,8 @@ function Chips({
 // UserPanel shows a managed user beside the list (Design 6.1): role,
 // groups, scope, supporter release and grants, and the actions. Only what
 // the caller's role offers is shown; the backend decides (CLAUDE.md). On
-// a phone it reads; locking and ending sessions stay, each behind a
-// dialog (revision 2.4 candidate 26).
+// a phone it reads; locking, unlocking and ending sessions stay, each
+// behind a dialog (revision 2.4 candidate 26).
 export function UserPanel({
   user,
   callerRole,
@@ -119,9 +119,9 @@ export function UserPanel({
   const qc = useQueryClient();
   const { schedule } = useUndo();
   const a = useAssignments(user.id);
-  const [confirm, setConfirm] = useState<'role' | 'reset' | 'remove' | 'lock' | 'sessions' | null>(
-    null,
-  );
+  const [confirm, setConfirm] = useState<
+    'role' | 'reset' | 'remove' | 'lock' | 'unlock' | 'sessions' | null
+  >(null);
   const panel = useReveal<HTMLElement>();
   const [newRole, setNewRole] = useState<Role | ''>('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -444,35 +444,24 @@ export function UserPanel({
             {t('admin.resetPassword')}
           </Button>
         )}
-        {readOnly ? (
-          !user.disabled && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-danger text-danger"
-              onClick={() => setConfirm('lock')}
-            >
-              {t('admin.lock')}
-            </Button>
-          )
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            className={user.disabled ? '' : 'border-danger text-danger'}
-            onClick={() =>
-              later(
-                t(user.disabled ? 'admin.undo.unlocked' : 'admin.undo.locked', {
-                  name: user.pseudonym,
-                }),
-                patch({ disabled: !user.disabled }),
-                t('admin.saved'),
-              )
-            }
-          >
-            {t(user.disabled ? 'admin.unlock' : 'admin.lock')}
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className={user.disabled ? '' : 'border-danger text-danger'}
+          onClick={() =>
+            readOnly
+              ? setConfirm(user.disabled ? 'unlock' : 'lock')
+              : later(
+                  t(user.disabled ? 'admin.undo.unlocked' : 'admin.undo.locked', {
+                    name: user.pseudonym,
+                  }),
+                  patch({ disabled: !user.disabled }),
+                  t('admin.saved'),
+                )
+          }
+        >
+          {t(user.disabled ? 'admin.unlock' : 'admin.lock')}
+        </Button>
         {!readOnly && (
           <Button
             variant="outline"
@@ -494,6 +483,18 @@ export function UserPanel({
         onConfirm={() => {
           setConfirm(null);
           void report(patch({ disabled: true }), t('admin.saved'));
+        }}
+      />
+      <ConfirmDialog
+        open={confirm === 'unlock'}
+        danger={false}
+        title={t('admin.unlockTitle', { name: user.pseudonym })}
+        text={t('admin.unlockText')}
+        action={t('admin.unlock')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          void report(patch({ disabled: false }), t('admin.saved'));
         }}
       />
       <ConfirmDialog

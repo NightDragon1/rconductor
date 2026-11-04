@@ -12,6 +12,7 @@ import {
   formErrors,
   FREE,
   fromCatalog,
+  matches,
   pattern,
   playerRule,
   type Command,
@@ -278,6 +279,7 @@ export function CommandsTab() {
   // The open card on a phone; null when all are folded.
   const [open, setOpen] = useState<string | null>();
   const [sheet, setSheet] = useState(true);
+  const [search, setSearch] = useState('');
   if (!server) return null;
 
   const names = players.data?.players ?? [];
@@ -288,7 +290,9 @@ export function CommandsTab() {
   // A command without fields has nothing to fold. The first card with
   // fields is open until someone picks another.
   const folds = (c: Command) => !fromCatalog(c) || c.params.length > 0;
-  const openPath = open === undefined ? commands.find(folds)?.path : open;
+  const shown = commands.filter((c) => matches(c, search));
+  const openPath =
+    open === null || shown.some((c) => c.path === open) ? open : shown.find(folds)?.path;
   const head = (
     <>
       {t('commands.players')}
@@ -314,8 +318,21 @@ export function CommandsTab() {
         {allowed.isSuccess && commands.length === 0 && (
           <p className="text-muted">{t('commands.none')}</p>
         )}
+        {commands.length > 0 && (
+          <Input
+            type="search"
+            className="mb-3"
+            placeholder={t('commands.search')}
+            aria-label={t('commands.search')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        )}
+        {commands.length > 0 && shown.length === 0 && (
+          <p className="text-muted">{t('commands.noMatch')}</p>
+        )}
         <div className="grid gap-3 md:grid-cols-2">
-          {commands.map((c) => (
+          {shown.map((c) => (
             <CommandCard
               key={c.path}
               c={c}
