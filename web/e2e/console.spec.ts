@@ -23,10 +23,8 @@ async function send(page: Page, command: string) {
 test('blocks with time, user and role; collapse and copy (CMD-012)', async ({
   page,
   state,
-  csp,
   context,
 }) => {
-  void csp;
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await openConsole(page, state, 'survival');
   // The history comes first (G1).
@@ -46,12 +44,7 @@ test('blocks with time, user and role; collapse and copy (CMD-012)', async ({
   expect(copied).toContain('list\nThere are 2 of a max of 20 players online');
 });
 
-test('timeline markers jump to their block; errors are red (CMD-013)', async ({
-  page,
-  state,
-  csp,
-}) => {
-  void csp;
+test('timeline markers jump to their block; errors are red (CMD-013)', async ({ page, state }) => {
   await openConsole(page, state, 'arena');
   // arena rejects the RCON password: the command fails.
   await input(page).fill('list');
@@ -82,8 +75,7 @@ test('timeline markers jump to their block; errors are red (CMD-013)', async ({
   await expect(block(page, name).first()).toBeInViewport();
 });
 
-test('tracks and filter; others live (CMD-014)', async ({ page, state, csp, browser }) => {
-  void csp;
+test('tracks and filter; others live (CMD-014)', async ({ page, state, browser }) => {
   await openConsole(page, state, 'survival');
   // Logs of the agent arrive while the track is on (G2).
   const logs = consoleOf(page).getByRole('region', { name: 'Log lines' });
@@ -128,8 +120,7 @@ test('tracks and filter; others live (CMD-014)', async ({ page, state, csp, brow
   await expect(consoleOf(page).getByRole('article')).toHaveCount(1);
 });
 
-test('completion with Tab and own commands on arrow up (CMD-015)', async ({ page, state, csp }) => {
-  void csp;
+test('completion with Tab and own commands on arrow up (CMD-015)', async ({ page, state }) => {
   await openConsole(page, state, 'survival');
   await send(page, 'say first');
   await input(page).fill('whi');
@@ -145,8 +136,7 @@ test('completion with Tab and own commands on arrow up (CMD-015)', async ({ page
   await expect(input(page)).toHaveValue('');
 });
 
-test('favorites switch servers without a reload (CMD-001)', async ({ page, state, csp }) => {
-  void csp;
+test('favorites switch servers without a reload (CMD-001)', async ({ page, state }) => {
   await openConsole(page, state, 'creative');
   const star = page.getByRole('button', { name: 'Add to favorites' });
   if (await star.count()) await star.click();

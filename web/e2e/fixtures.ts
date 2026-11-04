@@ -20,8 +20,8 @@ interface Fixtures {
   csp: string[];
 }
 
-// state is what the e2e stack wrote; csp collects policy violations of the
-// page, which must stay empty (SEC-009).
+// state is what the e2e stack wrote; csp runs with every test and collects
+// the policy violations of the page, which must stay empty (SEC-009).
 export const test = base.extend<Fixtures>({
   stack: ['root', { option: true }],
   state: async ({ stack }, use) => {
@@ -30,19 +30,24 @@ export const test = base.extend<Fixtures>({
   baseURL: async ({ state }, use) => {
     await use(state.base_url);
   },
-  csp: async ({ page }, use) => {
-    const violations: string[] = [];
-    page.on('console', (m) => {
-      if (/Content.Security.Policy/i.test(m.text())) violations.push(m.text());
-    });
-    await page.addInitScript(() => {
-      document.addEventListener('securitypolicyviolation', (e: SecurityPolicyViolationEvent) => {
-        console.error(`Content-Security-Policy violation: ${e.violatedDirective} ${e.blockedURI}`);
+  csp: [
+    async ({ page }, use) => {
+      const violations: string[] = [];
+      page.on('console', (m) => {
+        if (/Content.Security.Policy/i.test(m.text())) violations.push(m.text());
       });
-    });
-    await use(violations);
-    expect(violations, 'CSP violations').toEqual([]);
-  },
+      await page.addInitScript(() => {
+        document.addEventListener('securitypolicyviolation', (e: SecurityPolicyViolationEvent) => {
+          console.error(
+            `Content-Security-Policy violation: ${e.violatedDirective} ${e.blockedURI}`,
+          );
+        });
+      });
+      await use(violations);
+      expect(violations, 'CSP violations').toEqual([]);
+    },
+    { auto: true },
+  ],
 });
 
 export { expect };

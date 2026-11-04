@@ -36,8 +36,7 @@ async function visibleEntries(page: Page) {
 }
 
 for (const [user, want] of Object.entries(design62)) {
-  test(`navigation of ${user} matches Design 6.2`, async ({ page, state, csp }) => {
-    void csp;
+  test(`navigation of ${user} matches Design 6.2`, async ({ page, state }) => {
     await login(page, user, secret(state, user));
     expect(await visibleEntries(page)).toEqual(want);
     // The profile is in the user block for every role.
@@ -47,8 +46,7 @@ for (const [user, want] of Object.entries(design62)) {
 
 // With the global supporter switch off, no moderator manages supporters,
 // also one with his own release.
-test('moderator without the global supporter switch', async ({ page, playwright, state, csp }) => {
-  void csp;
+test('moderator without the global supporter switch', async ({ page, playwright, state }) => {
   const origin = new URL(state.base_url).origin;
   const admin = await playwright.request.newContext({
     baseURL: state.base_url,
@@ -83,8 +81,7 @@ test('moderator without the global supporter switch', async ({ page, playwright,
   }
 });
 
-test('pages outside the role do not exist', async ({ page, state, csp }) => {
-  void csp;
+test('pages outside the role do not exist', async ({ page, state }) => {
   await login(page, 'mod', secret(state, 'mod'));
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   for (const path of ['admin/agents', 'admin/settings', 'audit', 'admin/groups']) {
@@ -95,8 +92,7 @@ test('pages outside the role do not exist', async ({ page, state, csp }) => {
   await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
 });
 
-test('the sidebar collapses and stays collapsed', async ({ page, state, csp }) => {
-  void csp;
+test('the sidebar collapses and stays collapsed', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   const width = () => nav.evaluate((el) => el.closest('aside')?.getBoundingClientRect().width ?? 0);
@@ -109,8 +105,7 @@ test('the sidebar collapses and stays collapsed', async ({ page, state, csp }) =
   await expect(page.getByRole('button', { name: 'Expand the navigation' })).toBeVisible();
 });
 
-test('on a phone the navigation is a menu', async ({ page, state, csp }) => {
-  void csp;
+test('on a phone the navigation is a menu', async ({ page, state }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeHidden();
@@ -123,8 +118,7 @@ test('on a phone the navigation is a menu', async ({ page, state, csp }) => {
   expect(width).toBeLessThanOrEqual(390);
 });
 
-test('the design switches between dark and light', async ({ page, state, csp }) => {
-  void csp;
+test('the design switches between dark and light', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   const theme = () => page.evaluate(() => document.documentElement.dataset.theme);
   expect(await theme()).toBe('dark');
