@@ -100,6 +100,7 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - run: scripts/pull-test-images.sh internal/integration
       - run: make test-integration
 
   minecraft:
@@ -118,6 +119,7 @@ jobs:
         with:
           path: .cache/minecraft
           key: minecraft-server-${{ hashFiles('scripts/minecraft-server.sh') }}
+      - run: scripts/pull-test-images.sh internal/app
       # Running the test server means accepting the Minecraft EULA
       # (https://aka.ms/MinecraftEULA), see README.
       - run: make test-minecraft
