@@ -220,7 +220,7 @@ function UserBlock({ collapsed }: { collapsed: boolean }) {
           <span className="sr-only">{t('nav.profile')}</span>
         ) : (
           <span className="min-w-0 leading-tight">
-            <span className="block truncate text-sm font-medium">{name}</span>
+            <span className="block wrap-anywhere md:truncate text-sm font-medium">{name}</span>
             <span className="block text-xs text-muted">{t(`role.${session.user.role}`)}</span>
           </span>
         )}

@@ -92,7 +92,7 @@ export function ServerCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate font-mono font-semibold">
+          <h3 className="wrap-anywhere md:truncate font-mono font-semibold">
             <Link
               to="/servers/$serverId"
               params={{ serverId: server.id }}
@@ -103,7 +103,7 @@ export function ServerCard({
             </Link>
           </h3>
           {(image ?? profile) && (
-            <p className="truncate font-mono text-sm text-muted">
+            <p className="wrap-anywhere md:truncate font-mono text-sm text-muted">
               {image ? <bdi>{image}</bdi> : t('card.profile', { name: profile })}
             </p>
           )}

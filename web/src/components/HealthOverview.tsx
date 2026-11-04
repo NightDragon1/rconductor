@@ -36,7 +36,7 @@ function Tile({
       >
         {value}
       </p>
-      <p className="truncate text-sm text-muted">{sub}</p>
+      <p className="wrap-anywhere md:truncate text-sm text-muted">{sub}</p>
     </section>
   );
 }
@@ -187,7 +187,9 @@ export function HealthOverview({
                     className={cn('size-2 shrink-0 self-center rounded-full', dot[n.tone])}
                     aria-hidden
                   />
-                  <bdi className="min-w-0 truncate font-mono font-semibold">{n.name}</bdi>
+                  <bdi className="min-w-0 wrap-anywhere md:truncate font-mono font-semibold">
+                    {n.name}
+                  </bdi>
                   <span className="min-w-0 text-muted">{n.text}</span>
                 </div>
                 <div className="ml-5 flex items-baseline gap-x-3 sm:ml-auto">

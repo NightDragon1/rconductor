@@ -14,6 +14,7 @@ import { useShortcuts } from '@/lib/shortcuts';
 import { useUndo } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { lockedOk, reasonText } from '@/lib/admin';
+import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
 
 function ListPanel({
@@ -100,7 +101,7 @@ function ListPanel({
       className="flex w-full flex-col gap-4 rounded-lg border border-border bg-surface p-5 xl:w-[28rem]"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 className="truncate text-lg font-semibold">
+        <h2 className="wrap-anywhere md:truncate text-lg font-semibold">
           <bdi>{draft.name}</bdi>
         </h2>
         <Button variant="ghost" size="sm" aria-label={t('admin.closePanel')} onClick={onClose}>
@@ -108,60 +109,75 @@ function ListPanel({
         </Button>
       </div>
       <p className="text-sm text-muted">{t('lists.explain')}</p>
-      <table className="w-full text-sm">
-        <thead className="text-left text-muted">
-          <tr>
-            <th className="py-2 font-medium">{t('lists.path')}</th>
-            <th className="py-2 font-medium">{t('lists.passable')}</th>
-            <th className="w-8" />
-          </tr>
-        </thead>
-        <tbody>
-          {draft.entries.map((e, i) => (
-            <tr key={e.path} className="border-t border-border">
-              <td className="py-2 font-mono">
-                <bdi>{e.path}</bdi>
-              </td>
-              <td className="py-2">
-                <input
-                  type="checkbox"
-                  aria-label={t('lists.passableFor', { path: e.path })}
-                  disabled={readOnly}
-                  checked={e.passable}
-                  onChange={(ev) =>
-                    change(
-                      {
-                        ...draft,
-                        entries: draft.entries.map((x, j) =>
-                          j === i ? { ...x, passable: ev.target.checked } : x,
-                        ),
-                      },
-                      t('lists.undo.changed', { name: draft.name }),
-                    )
-                  }
-                />
-              </td>
-              <td className="py-2">
-                {!readOnly && (
-                  <button
-                    type="button"
-                    className="text-muted hover:text-danger"
-                    aria-label={t('admin.removeItem', { name: e.path })}
-                    onClick={() =>
+      {readOnly ? (
+        <Cards label={t('lists.entries')}>
+          {draft.entries.map((e) => (
+            <Card
+              key={e.path}
+              mono
+              title={<bdi>{e.path}</bdi>}
+              facts={[
+                { label: t('lists.passable'), value: t(e.passable ? 'lists.yes' : 'lists.no') },
+              ]}
+            />
+          ))}
+        </Cards>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="text-left text-muted">
+            <tr>
+              <th className="py-2 font-medium">{t('lists.path')}</th>
+              <th className="py-2 font-medium">{t('lists.passable')}</th>
+              <th className="w-8" />
+            </tr>
+          </thead>
+          <tbody>
+            {draft.entries.map((e, i) => (
+              <tr key={e.path} className="border-t border-border">
+                <td className="py-2 font-mono">
+                  <bdi>{e.path}</bdi>
+                </td>
+                <td className="py-2">
+                  <input
+                    type="checkbox"
+                    aria-label={t('lists.passableFor', { path: e.path })}
+                    disabled={readOnly}
+                    checked={e.passable}
+                    onChange={(ev) =>
                       change(
-                        { ...draft, entries: draft.entries.filter((_, j) => j !== i) },
+                        {
+                          ...draft,
+                          entries: draft.entries.map((x, j) =>
+                            j === i ? { ...x, passable: ev.target.checked } : x,
+                          ),
+                        },
                         t('lists.undo.changed', { name: draft.name }),
                       )
                     }
-                  >
-                    <X aria-hidden className="size-4" />
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                  />
+                </td>
+                <td className="py-2">
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      className="text-muted hover:text-danger"
+                      aria-label={t('admin.removeItem', { name: e.path })}
+                      onClick={() =>
+                        change(
+                          { ...draft, entries: draft.entries.filter((_, j) => j !== i) },
+                          t('lists.undo.changed', { name: draft.name }),
+                        )
+                      }
+                    >
+                      <X aria-hidden className="size-4" />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       {!readOnly && (
         <form onSubmit={add} className="flex gap-2">
           <label htmlFor={pathId} className="sr-only">
@@ -318,50 +334,82 @@ export function CommandListsPage() {
             {error}
           </p>
         )}
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted">
-              <tr>
-                <th className="p-3 font-medium">{t('lists.name')}</th>
-                <th className="p-3 font-medium">{t('lists.entries')}</th>
-                <th className="p-3 font-medium">{t('lists.passable')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((l) => (
-                <tr
-                  key={l.id}
-                  className={cn('border-t border-border', open === l.id && 'bg-surface-raised')}
-                >
-                  <td className="p-3">
-                    <button
-                      type="button"
-                      className="tap hover:underline"
-                      onClick={() => setOpen(l.id)}
-                    >
-                      <bdi>{l.name}</bdi>
-                    </button>
-                  </td>
-                  <td className="max-w-80 truncate p-3 font-mono">
-                    <bdi>{l.entries.map((e) => e.path).join(', ')}</bdi>
-                  </td>
-                  <td className="p-3">
-                    {t('lists.passableCount', {
+        {phone ? (
+          <Cards
+            label={t('nav.commandLists')}
+            empty={
+              shown.length === 0 ? t(lists.isPending ? 'app.loading' : 'lists.none') : undefined
+            }
+          >
+            {shown.map((l) => (
+              <Card
+                key={l.id}
+                title={<bdi>{l.name}</bdi>}
+                selected={open === l.id}
+                onOpen={() => setOpen(l.id)}
+                facts={[
+                  {
+                    label: t('lists.entries'),
+                    value: (
+                      <bdi className="font-mono">{l.entries.map((e) => e.path).join(', ')}</bdi>
+                    ),
+                  },
+                  {
+                    label: t('lists.passable'),
+                    value: t('lists.passableCount', {
                       count: l.entries.filter((e) => e.passable).length,
-                    })}
-                  </td>
-                </tr>
-              ))}
-              {shown.length === 0 && (
+                    }),
+                  },
+                ]}
+              />
+            ))}
+          </Cards>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <table className="w-full text-sm">
+              <thead className="text-left text-muted">
                 <tr>
-                  <td colSpan={3} className="p-6 text-center text-muted">
-                    {t(lists.isPending ? 'app.loading' : 'lists.none')}
-                  </td>
+                  <th className="p-3 font-medium">{t('lists.name')}</th>
+                  <th className="p-3 font-medium">{t('lists.entries')}</th>
+                  <th className="p-3 font-medium">{t('lists.passable')}</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {shown.map((l) => (
+                  <tr
+                    key={l.id}
+                    className={cn('border-t border-border', open === l.id && 'bg-surface-raised')}
+                  >
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        className="hover:underline"
+                        onClick={() => setOpen(l.id)}
+                      >
+                        <bdi>{l.name}</bdi>
+                      </button>
+                    </td>
+                    <td className="max-w-80 wrap-anywhere md:truncate p-3 font-mono">
+                      <bdi>{l.entries.map((e) => e.path).join(', ')}</bdi>
+                    </td>
+                    <td className="p-3">
+                      {t('lists.passableCount', {
+                        count: l.entries.filter((e) => e.passable).length,
+                      })}
+                    </td>
+                  </tr>
+                ))}
+                {shown.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="p-6 text-center text-muted">
+                      {t(lists.isPending ? 'app.loading' : 'lists.none')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
       {current && (
         <ListPanel key={current.id} list={current} readOnly={phone} onClose={() => setOpen(null)} />

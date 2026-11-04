@@ -80,7 +80,7 @@ describe('users page on a phone (UI-012, candidate 26)', () => {
   it('reads, and only locks and ends sessions behind a dialog', async () => {
     await open('nyx');
     expect(screen.queryAllByRole('checkbox', { name: /Select/ })).toHaveLength(0);
-    expect(names().filter(Boolean)).toEqual(['NYnyx', 'KIkiwi', 'End sessions', 'Lock']);
+    expect(names().filter(Boolean)).toEqual(['nyx', 'kiwi', 'End sessions', 'Lock']);
     expect((screen.getByRole('combobox', { name: 'Role' }) as HTMLSelectElement).disabled).toBe(
       true,
     );

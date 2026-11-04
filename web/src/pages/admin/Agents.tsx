@@ -20,6 +20,7 @@ import { reasonText } from '@/lib/admin';
 import { ago, useNow } from '@/lib/format';
 import { usePhone } from '@/lib/phone';
 import { cn } from '@/lib/utils';
+import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
 
 type Token = components['schemas']['AgentToken'];
@@ -160,53 +161,84 @@ export function AgentsPage() {
           {message.text}
         </p>
       )}
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-        <table className="w-full text-sm">
-          <thead className="text-left text-muted">
-            <tr>
-              <th className="p-3 font-medium">{t('agents.name')}</th>
-              <th className="p-3 font-medium">{t('admin.statusLabel')}</th>
-              <th className="p-3 font-medium">{t('agents.version')}</th>
-              <th className="p-3 font-medium">{t('agents.fingerprint')}</th>
-              <th className="p-3 font-medium">{t('agents.lastSeen')}</th>
-              {!phone && <th className="p-3" />}
-            </tr>
-          </thead>
-          <tbody>
-            {all.map((a) => (
-              <tr key={a.id} id={a.id} className="border-t border-border">
-                <td className="p-3 font-mono">
-                  <bdi>{a.name}</bdi>
-                </td>
-                <td
-                  className={cn(
-                    'p-3',
-                    a.status === 'pending'
-                      ? 'text-warn'
-                      : a.connected
-                        ? 'text-ok'
-                        : a.status === 'active'
-                          ? 'text-danger'
-                          : 'text-muted',
-                  )}
-                >
-                  {a.status === 'active'
-                    ? t(a.connected ? 'agents.connected' : 'agents.disconnected')
-                    : t(`agents.status.${a.status}`)}
-                </td>
-                <td className="p-3 font-mono">
-                  <bdi>{a.version}</bdi>
-                </td>
-                <td
-                  className="max-w-56 p-3 font-mono text-xs break-all md:truncate"
-                  title={a.fingerprint}
-                >
-                  {a.fingerprint}
-                </td>
-                <td className="p-3 text-muted">
-                  {a.last_seen_at ? ago(t, a.last_seen_at, now) : ''}
-                </td>
-                {!phone && (
+      {phone ? (
+        <Cards
+          label={t('nav.agents')}
+          empty={all.length === 0 ? t(agents.isPending ? 'app.loading' : 'agents.none') : undefined}
+        >
+          {all.map((a) => (
+            <Card
+              key={a.id}
+              mono
+              title={<bdi>{a.name}</bdi>}
+              facts={[
+                {
+                  label: t('admin.statusLabel'),
+                  value:
+                    a.status === 'active'
+                      ? t(a.connected ? 'agents.connected' : 'agents.disconnected')
+                      : t(`agents.status.${a.status}`),
+                },
+                { label: t('agents.version'), value: <bdi className="font-mono">{a.version}</bdi> },
+                {
+                  label: t('agents.fingerprint'),
+                  value: <span className="font-mono text-xs">{a.fingerprint}</span>,
+                },
+                {
+                  label: t('agents.lastSeen'),
+                  value: a.last_seen_at ? ago(t, a.last_seen_at, now) : '',
+                },
+              ]}
+            />
+          ))}
+        </Cards>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+          <table className="w-full text-sm">
+            <thead className="text-left text-muted">
+              <tr>
+                <th className="p-3 font-medium">{t('agents.name')}</th>
+                <th className="p-3 font-medium">{t('admin.statusLabel')}</th>
+                <th className="p-3 font-medium">{t('agents.version')}</th>
+                <th className="p-3 font-medium">{t('agents.fingerprint')}</th>
+                <th className="p-3 font-medium">{t('agents.lastSeen')}</th>
+                <th className="p-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {all.map((a) => (
+                <tr key={a.id} id={a.id} className="border-t border-border">
+                  <td className="p-3 font-mono">
+                    <bdi>{a.name}</bdi>
+                  </td>
+                  <td
+                    className={cn(
+                      'p-3',
+                      a.status === 'pending'
+                        ? 'text-warn'
+                        : a.connected
+                          ? 'text-ok'
+                          : a.status === 'active'
+                            ? 'text-danger'
+                            : 'text-muted',
+                    )}
+                  >
+                    {a.status === 'active'
+                      ? t(a.connected ? 'agents.connected' : 'agents.disconnected')
+                      : t(`agents.status.${a.status}`)}
+                  </td>
+                  <td className="p-3 font-mono">
+                    <bdi>{a.version}</bdi>
+                  </td>
+                  <td
+                    className="max-w-56 wrap-anywhere md:truncate p-3 font-mono text-xs"
+                    title={a.fingerprint}
+                  >
+                    {a.fingerprint}
+                  </td>
+                  <td className="p-3 text-muted">
+                    {a.last_seen_at ? ago(t, a.last_seen_at, now) : ''}
+                  </td>
                   <td className="p-3 text-right">
                     {a.status === 'pending' && (
                       <Button
@@ -238,19 +270,19 @@ export function AgentsPage() {
                       </Button>
                     )}
                   </td>
-                )}
-              </tr>
-            ))}
-            {all.length === 0 && (
-              <tr>
-                <td colSpan={6} className="p-6 text-center text-muted">
-                  {t(agents.isPending ? 'app.loading' : 'agents.none')}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                </tr>
+              ))}
+              {all.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-6 text-center text-muted">
+                    {t(agents.isPending ? 'app.loading' : 'agents.none')}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
       {pairing && <PairDialog onClose={() => setPairing(false)} />}
       <ConfirmDialog
         open={!!revoke}

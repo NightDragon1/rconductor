@@ -10,11 +10,11 @@ async function enter(page: Page, state: StackState, user: string) {
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
 }
 
-// fits checks the whole page: no sideways scrolling, and every control
-// that can be used measures at least 44 px each way.
-async function fits(page: Page) {
-  await page.waitForLoadState('networkidle');
-  const r = await page.evaluate(() => {
+// measure looks at the whole page: sideways scrolling, controls below
+// 44 px, and text that is cut off. Rows of chips and tabs scroll on purpose
+// and say so with data-scrolls.
+const measure = (page: Page) =>
+  page.evaluate(() => {
     const small: string[] = [];
     const controls = 'a,button,input,select,textarea,summary,[role=menuitem]';
     for (const e of Array.from(document.querySelectorAll(controls))) {
@@ -29,12 +29,45 @@ async function fits(page: Page) {
         );
       }
     }
+    const cut: string[] = [];
+    for (const e of Array.from(document.querySelectorAll('body *'))) {
+      // Screen reader text is 1 px wide; form controls scroll by themselves.
+      if (e.clientWidth <= 1 || e.matches('input,select,textarea,option')) continue;
+      if (e.closest('[data-scrolls]')) continue;
+      const css = getComputedStyle(e);
+      const clips = css.textOverflow === 'ellipsis' || css.overflowX !== 'visible';
+      if (clips && e.scrollWidth > e.clientWidth + 1) {
+        cut.push(`${e.tagName} ${e.scrollWidth}>${e.clientWidth} ${e.textContent?.slice(0, 40)}`);
+      }
+    }
     const d = document.documentElement;
-    return { scroll: d.scrollWidth, width: d.clientWidth, small };
+    return { scroll: d.scrollWidth, width: d.clientWidth, small, cut };
   });
+
+async function fits(page: Page) {
+  await page.waitForLoadState('networkidle');
+  const r = await measure(page);
   expect(r.scroll, 'sideways scrolling').toBeLessThanOrEqual(r.width);
   expect(r.small, 'tap targets below 44 px').toEqual([]);
+  expect(r.cut, 'text cut off').toEqual([]);
 }
+
+test('the check finds text that is cut off', async ({ page }) => {
+  await page.goto('login');
+  await page.evaluate(() => {
+    const text = 'a text far too long for the narrow box it has to live in';
+    for (const css of [
+      'width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',
+      'width:80px;overflow-x:auto;white-space:nowrap',
+    ]) {
+      const box = document.createElement('p');
+      box.style.cssText = css;
+      box.textContent = text;
+      document.body.append(box);
+    }
+  });
+  expect((await measure(page)).cut).toHaveLength(2);
+});
 
 test('login fits a phone (UI-012)', async ({ page, csp }) => {
   void csp;
@@ -172,10 +205,11 @@ async function readsOnly(page: Page, extra: RegExp = /^$/) {
   await page.waitForLoadState('networkidle');
   await expect(page.getByText('Read-only on a phone')).toBeVisible();
   const main = page.getByRole('main');
+  await expect(main.getByRole('table')).toHaveCount(0);
   for (const e of await main.getByRole('button').all()) {
     if (!(await e.isEnabled())) continue;
     const name = (await e.getAttribute('aria-label')) ?? (await e.textContent()) ?? '';
-    const opens = (await e.locator('xpath=ancestor::td').count()) > 0;
+    const opens = (await e.locator('xpath=ancestor::li').count()) > 0;
     expect(opens || reading.test(name) || extra.test(name), `button "${name}"`).toBe(true);
   }
   await expect(main.getByRole('checkbox', { disabled: false })).toHaveCount(0);
@@ -204,6 +238,9 @@ test('the administration reads on a phone (UI-012)', async ({ page, state, csp }
   await page.goto('admin/servers');
   await expect(page.getByRole('button', { name: 'New server' })).toHaveCount(0);
   await readsOnly(page);
+  const server = page.getByRole('list', { name: 'Servers' }).getByRole('listitem');
+  await expect(server.filter({ hasText: 'survival' })).toContainText('Minecraft');
+  await expect(server.filter({ hasText: 'survival' })).toContainText('Status');
   await page.getByRole('button', { name: 'survival', exact: true }).tap();
   await readsOnly(page);
   await expect(page.getByRole('complementary').getByLabel('Name')).toBeDisabled();
@@ -235,7 +272,11 @@ test('users: search and details read; lock and end sessions ask (candidate 26)',
   await enter(page, state, 'admin');
   await page.goto('admin/users');
   await expect(page.getByRole('heading', { name: 'Users', level: 1 })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Invite user' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Create invitation link' })).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('table')).toHaveCount(0);
+  const cards = page.getByRole('list', { name: 'Users' });
+  await expect(cards.getByRole('listitem').first()).toContainText('Role');
+  await expect(cards.getByRole('listitem').first()).toContainText('Status');
   await expect(page.getByRole('checkbox', { name: /Select/ })).toHaveCount(0);
   await page.getByRole('searchbox', { name: 'Search users' }).fill('sup');
   await expect(page.getByRole('button', { name: 'mod', exact: true })).toHaveCount(0);
