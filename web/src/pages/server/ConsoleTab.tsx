@@ -69,7 +69,7 @@ function CommandView({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
         <button
           type="button"
-          className="text-muted"
+          className="tap justify-center text-muted"
           aria-expanded={!collapsed}
           aria-label={t(collapsed ? 'console.expand' : 'console.collapse')}
           title={t(collapsed ? 'console.expand' : 'console.collapse')}

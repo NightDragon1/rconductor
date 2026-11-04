@@ -173,7 +173,6 @@ function ProfileLink() {
     <Link
       to="/profile"
       aria-label={t('nav.profile')}
-      title={t('nav.profile')}
       className="ml-auto flex size-11 items-center justify-center"
     >
       <Initials name={session.user.pseudonym} />

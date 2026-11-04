@@ -40,7 +40,9 @@ function Entry({ e }: { e: HistoryEntry }) {
       </div>
       {answer && (
         <details className="text-sm">
-          <summary className="cursor-pointer text-muted">{t('history.response')}</summary>
+          <summary className="cursor-pointer text-muted max-md:py-3">
+            {t('history.response')}
+          </summary>
           <pre
             ref={pre}
             className="mt-1 overflow-x-auto rounded bg-surface-raised p-2 font-mono wrap-anywhere text-xs whitespace-pre-wrap"
