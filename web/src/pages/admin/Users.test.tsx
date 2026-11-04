@@ -91,10 +91,11 @@ describe('users page on a phone (UI-012, candidate 26)', () => {
     expect(screen.getByRole('dialog').textContent).toContain('Lock nyx?');
   });
 
-  it('does not unlock', async () => {
+  it('unlocks behind a dialog', async () => {
     await open('kiwi');
-    expect(names()).not.toContain('Unlock');
     expect(names()).toContain('End sessions');
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Unlock kiwi?');
   });
 });
 

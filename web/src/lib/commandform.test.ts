@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { buildCommand, FREE, formErrors, pattern, playerRule, type Command } from './commandform';
+import {
+  buildCommand,
+  FREE,
+  formErrors,
+  matches,
+  pattern,
+  playerRule,
+  type Command,
+} from './commandform';
 
 const kick: Command = {
   path: 'kick',
@@ -64,5 +72,16 @@ describe('command form (CMD-003)', () => {
     expect(plain('Ünal-2')).toBe(true);
     // A pattern the browser cannot read falls back to the plain rule.
     expect(playerRule('(?<x')('@a')).toBe(false);
+  });
+});
+
+describe('matches', () => {
+  it('finds by path and description, whatever the case', () => {
+    expect(matches(kick, 'KIC')).toBe(true);
+    expect(matches(kick, ' a player ')).toBe(true);
+    expect(matches(kick, 'ban')).toBe(false);
+  });
+  it('takes everything without a search text', () => {
+    expect(matches(kick, '  ')).toBe(true);
   });
 });

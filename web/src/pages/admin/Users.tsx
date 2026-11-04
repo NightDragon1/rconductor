@@ -45,7 +45,7 @@ const initials = (p: string) =>
 // managed users and open invitations with search, filters, multiple
 // selection with mass actions and a side panel. The backend limits all to
 // the caller's area (Design 3.6); the page only hides. A phone reads;
-// locking and ending sessions stay in the panel (UI-012, revision 2.4
+// locking, unlocking and ending sessions stay in the panel (UI-012, revision 2.4
 // candidate 26).
 export function UsersPage() {
   const { t } = useTranslation();

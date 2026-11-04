@@ -111,3 +111,19 @@ test('the supporter sees only passable commands (CMD-003, ROLE-007)', async ({
     'There are 2 of a max of 20',
   );
 });
+
+test('the search narrows the cards by path or description', async ({ page, state, csp }) => {
+  void csp;
+  await open(page, state, 'mod');
+  const search = page.getByRole('searchbox', { name: 'Search commands' });
+  await search.fill('WHITE');
+  await expect(cards(page)).toHaveCount(1);
+  await expect(card(page, 'whitelist add')).toBeVisible();
+  await search.fill('kick a player');
+  await expect(cards(page)).toHaveCount(1);
+  await search.fill('nothing like this');
+  await expect(cards(page)).toHaveCount(0);
+  await expect(page.getByText('No command matches.')).toBeVisible();
+  await search.fill('');
+  await expect(cards(page)).toHaveCount(6);
+});
