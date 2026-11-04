@@ -9,13 +9,24 @@ import { commandListsKey, outcome, useCommandLists, type CommandList } from '@/a
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { usePhone, useReveal } from '@/lib/phone';
 import { useShortcuts } from '@/lib/shortcuts';
 import { useUndo } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { lockedOk, reasonText } from '@/lib/admin';
+import { PhoneNote } from './PhoneNote';
 
-function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }) {
+function ListPanel({
+  list,
+  readOnly,
+  onClose,
+}: {
+  list: CommandList;
+  readOnly: boolean;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
+  const panel = useReveal<HTMLElement>();
   const qc = useQueryClient();
   const { schedule } = useUndo();
   const profiles = useProfiles();
@@ -84,6 +95,7 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
 
   return (
     <aside
+      ref={panel}
       aria-label={t('admin.panel', { name: draft.name })}
       className="flex w-full flex-col gap-4 rounded-lg border border-border bg-surface p-5 xl:w-[28rem]"
     >
@@ -114,6 +126,7 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
                 <input
                   type="checkbox"
                   aria-label={t('lists.passableFor', { path: e.path })}
+                  disabled={readOnly}
                   checked={e.passable}
                   onChange={(ev) =>
                     change(
@@ -129,46 +142,50 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
                 />
               </td>
               <td className="py-2">
-                <button
-                  type="button"
-                  className="text-muted hover:text-danger"
-                  aria-label={t('admin.removeItem', { name: e.path })}
-                  onClick={() =>
-                    change(
-                      { ...draft, entries: draft.entries.filter((_, j) => j !== i) },
-                      t('lists.undo.changed', { name: draft.name }),
-                    )
-                  }
-                >
-                  <X aria-hidden className="size-4" />
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="text-muted hover:text-danger"
+                    aria-label={t('admin.removeItem', { name: e.path })}
+                    onClick={() =>
+                      change(
+                        { ...draft, entries: draft.entries.filter((_, j) => j !== i) },
+                        t('lists.undo.changed', { name: draft.name }),
+                      )
+                    }
+                  >
+                    <X aria-hidden className="size-4" />
+                  </button>
+                )}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <form onSubmit={add} className="flex gap-2">
-        <label htmlFor={pathId} className="sr-only">
-          {t('lists.addLabel')}
-        </label>
-        <Input
-          id={pathId}
-          className="font-mono"
-          list={catalogId}
-          placeholder={t('lists.addPlaceholder')}
-          autoComplete="off"
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-        />
-        <datalist id={catalogId}>
-          {catalog.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
-        <Button type="submit" variant="outline">
-          {t('lists.add')}
-        </Button>
-      </form>
+      {!readOnly && (
+        <form onSubmit={add} className="flex gap-2">
+          <label htmlFor={pathId} className="sr-only">
+            {t('lists.addLabel')}
+          </label>
+          <Input
+            id={pathId}
+            className="font-mono"
+            list={catalogId}
+            placeholder={t('lists.addPlaceholder')}
+            autoComplete="off"
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+          />
+          <datalist id={catalogId}>
+            {catalog.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+          <Button type="submit" variant="outline">
+            {t('lists.add')}
+          </Button>
+        </form>
+      )}
       {message && (
         <p
           role={message.ok ? 'status' : 'alert'}
@@ -194,13 +211,15 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
           {t('admin.reload')}
         </Button>
       )}
-      <Button
-        variant="outline"
-        className="self-start border-danger text-danger"
-        onClick={() => setRemoving(true)}
-      >
-        {t('lists.delete')}
-      </Button>
+      {!readOnly && (
+        <Button
+          variant="outline"
+          className="self-start border-danger text-danger"
+          onClick={() => setRemoving(true)}
+        >
+          {t('lists.delete')}
+        </Button>
+      )}
       <ConfirmDialog
         open={removing}
         title={t('lists.deleteTitle', { name: draft.name })}
@@ -226,6 +245,7 @@ function ListPanel({ list, onClose }: { list: CommandList; onClose: () => void }
 // admin; the backend decides.
 export function CommandListsPage() {
   const { t } = useTranslation();
+  const phone = usePhone();
   const qc = useQueryClient();
   const lists = useCommandLists(true);
   const [q, setQ] = useState('');
@@ -266,6 +286,7 @@ export function CommandListsPage() {
           <h1 className="text-2xl font-semibold">{t('nav.commandLists')}</h1>
           <p className="text-sm text-muted">{t('lists.summary', { count: all.length })}</p>
         </div>
+        <PhoneNote />
         <div className="flex flex-wrap gap-2">
           <Input
             type="search"
@@ -275,20 +296,22 @@ export function CommandListsPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <form onSubmit={create} className="flex gap-2">
-            <label htmlFor={nameId} className="sr-only">
-              {t('lists.newName')}
-            </label>
-            <Input
-              id={nameId}
-              placeholder={t('lists.newName')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Button type="submit" disabled={!name.trim()}>
-              {t('lists.create')}
-            </Button>
-          </form>
+          {!phone && (
+            <form onSubmit={create} className="flex gap-2">
+              <label htmlFor={nameId} className="sr-only">
+                {t('lists.newName')}
+              </label>
+              <Input
+                id={nameId}
+                placeholder={t('lists.newName')}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <Button type="submit" disabled={!name.trim()}>
+                {t('lists.create')}
+              </Button>
+            </form>
+          )}
         </div>
         {error && (
           <p role="alert" className="text-sm text-danger">
@@ -311,7 +334,11 @@ export function CommandListsPage() {
                   className={cn('border-t border-border', open === l.id && 'bg-surface-raised')}
                 >
                   <td className="p-3">
-                    <button type="button" className="hover:underline" onClick={() => setOpen(l.id)}>
+                    <button
+                      type="button"
+                      className="tap hover:underline"
+                      onClick={() => setOpen(l.id)}
+                    >
                       <bdi>{l.name}</bdi>
                     </button>
                   </td>
@@ -336,7 +363,9 @@ export function CommandListsPage() {
           </table>
         </div>
       </div>
-      {current && <ListPanel key={current.id} list={current} onClose={() => setOpen(null)} />}
+      {current && (
+        <ListPanel key={current.id} list={current} readOnly={phone} onClose={() => setOpen(null)} />
+      )}
     </div>
   );
 }

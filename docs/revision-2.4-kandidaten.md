@@ -186,3 +186,15 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
   - Rolle und Scope werden vor der Version geprüft (Kandidat 14): wer ein Objekt nicht ändern darf, erhält 403, nicht 409 oder 428.
   - Die Oberfläche zeigt bei 409 „Changed by someone else – reload“; der Entwurf wird nicht gesendet, „Reload“ lädt den aktuellen Stand.
 - **Vorschlag:** Design 2.1 um eine Zeile „Gleichzeitige Änderungen“, Design 3.5 um 409 conflict und 428 precondition\_required, Design 4 um die Spalten version und die Trigger ergänzen; für Postgres (R2) dieselben Trigger in der Postgres-Migration.
+
+## 25. Mitteilungen auf dem Handy: bestätigt Kandidat 10
+
+- **Fundstelle:** UI-012 und Design 6.1 nennen Mitteilungen als mobil voll bedienbar; Kandidat 10 hält schon fest, dass sie erst mit R2 kommen.
+- **Entscheidung (M4, Schritt 9):** Schritt 9 lässt die Mitteilungen weg, wie in Kandidat 10. Die Abnahme UI-012 nennt sie nicht und bleibt erfüllbar.
+- **Vorschlag:** Wie Kandidat 10; bei der Revision beide zusammen behandeln und Design 6.1 mitändern.
+
+## 26. Sperren und Sitzungen beenden auf dem Handy
+
+- **Fundstelle:** UI-012 und Design 6.1, 6.6 („Verwaltung mobil nur lesend“), Abnahme UI-012 („Verwaltung ist nur lesbar“); AUTH-006.
+- **Entscheidung (M4, Schritt 9):** Die Verwaltung bleibt auf dem Handy lesend: Suche, Filter, Details und Kopieren sind erlaubt, alles Schreibende entfällt. Ausnahme für den Notfall unterwegs: Im Seitenpanel eines Benutzers bleiben „Sperren“ und „Sitzungen beenden“, jeweils mit Bestätigungsdialog statt Rückgängig. Entsperren gehört nicht dazu. Die Grenze liegt bei 768 px (Tailwinds md). Sie betrifft nur die Darstellung; das Backend prüft jede Anfrage wie auf dem Desktop.
+- **Vorschlag:** UI-012, Design 6.1 und 6.6 sowie die Abnahme UI-012 um diese Ausnahme ergänzen.

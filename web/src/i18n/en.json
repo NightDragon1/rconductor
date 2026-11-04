@@ -302,6 +302,12 @@
     "seconds": "{{s}} s"
   },
   "admin": {
+    "phoneReadOnly": "Read-only on a phone. Use a larger screen to make changes.",
+    "phoneReadOnlyUsers": "Read-only on a phone, apart from locking a user and ending sessions. Use a larger screen for other changes.",
+    "lockTitle": "Lock {{name}}?",
+    "lockText": "This user can no longer sign in and open sessions end. A larger screen is needed to unlock.",
+    "sessionsTitle": "End the sessions of {{name}}?",
+    "sessionsText": "This user is signed out everywhere and has to sign in again.",
     "search": "Pseudonym, group, server …",
     "searchLabel": "Search users",
     "filterRole": "Filter by role",

@@ -16,10 +16,12 @@ import {
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { usePhone, useReveal } from '@/lib/phone';
 import { useShortcuts } from '@/lib/shortcuts';
 import { useUndo } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { reasonText } from '@/lib/admin';
+import { PhoneNote } from './PhoneNote';
 
 type Kind = UserGroup['kind'];
 
@@ -63,7 +65,7 @@ function ChipList({
 }: {
   label: string;
   items: { key: string; text: string }[];
-  onRemove: (key: string) => void;
+  onRemove?: (key: string) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -75,22 +77,33 @@ function ChipList({
           className="flex items-center gap-1 rounded-md border border-border px-2 py-1 font-mono text-sm"
         >
           <bdi>{i.text}</bdi>
-          <button
-            type="button"
-            className="ml-1 text-muted hover:text-danger"
-            aria-label={t('admin.removeItem', { name: i.text })}
-            onClick={() => onRemove(i.key)}
-          >
-            <X aria-hidden className="size-4" />
-          </button>
+          {onRemove && (
+            <button
+              type="button"
+              className="ml-1 text-muted hover:text-danger"
+              aria-label={t('admin.removeItem', { name: i.text })}
+              onClick={() => onRemove(i.key)}
+            >
+              <X aria-hidden className="size-4" />
+            </button>
+          )}
         </li>
       ))}
     </ul>
   );
 }
 
-function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void }) {
+function GroupPanel({
+  group,
+  readOnly,
+  onClose,
+}: {
+  group: UserGroup;
+  readOnly: boolean;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
+  const panel = useReveal<HTMLElement>();
   const qc = useQueryClient();
   const { schedule } = useUndo();
   const users = useManagedUsers();
@@ -155,6 +168,7 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
 
   return (
     <aside
+      ref={panel}
       aria-label={t('admin.panel', { name: draft.name })}
       className="flex w-full flex-col gap-4 rounded-lg border border-border bg-surface p-5 xl:w-[28rem]"
     >
@@ -177,7 +191,8 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
           </label>
           <select
             id={listId}
-            className="h-11 rounded-md border border-border bg-surface px-3"
+            className="h-11 rounded-md border border-border bg-surface px-3 disabled:opacity-70"
+            disabled={readOnly}
             value={draft.command_list_id ?? ''}
             onChange={(e) =>
               change({ ...draft, command_list_id: e.target.value || undefined }, label)
@@ -198,15 +213,19 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
         <ChipList
           label={t('groups.members')}
           items={draft.members.map((m) => ({ key: m, text: userName(m) }))}
-          onRemove={(m) =>
-            change({ ...draft, members: draft.members.filter((x) => x !== m) }, label)
+          onRemove={
+            readOnly
+              ? undefined
+              : (m) => change({ ...draft, members: draft.members.filter((x) => x !== m) }, label)
           }
         />
-        <Picker
-          label={t('groups.addMember')}
-          options={candidates.map((u) => ({ value: u.id, text: u.pseudonym }))}
-          onPick={(m) => change({ ...draft, members: [...draft.members, m] }, label)}
-        />
+        {!readOnly && (
+          <Picker
+            label={t('groups.addMember')}
+            options={candidates.map((u) => ({ value: u.id, text: u.pseudonym }))}
+            onPick={(m) => change({ ...draft, members: [...draft.members, m] }, label)}
+          />
+        )}
       </section>
 
       <section aria-label={t('groups.grants')} className="flex flex-col gap-2">
@@ -217,39 +236,46 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
             key: g.server_id ?? g.server_group_id ?? '',
             text: g.server_id ? serverName(g.server_id) : sgName(g.server_group_id),
           }))}
-          onRemove={(k) =>
-            change(
-              {
-                ...draft,
-                grants: draft.grants.filter((g) => (g.server_id ?? g.server_group_id) !== k),
-              },
-              label,
-            )
+          onRemove={
+            readOnly
+              ? undefined
+              : (k) =>
+                  change(
+                    {
+                      ...draft,
+                      grants: draft.grants.filter((g) => (g.server_id ?? g.server_group_id) !== k),
+                    },
+                    label,
+                  )
           }
         />
-        <Picker
-          label={t('groups.addGrant')}
-          options={[
-            ...(serverGroups.data ?? [])
-              .filter((g) => !draft.grants.some((x) => x.server_group_id === g.id))
-              .map((g) => ({ value: `g:${g.id}`, text: g.name })),
-            ...(servers.data ?? [])
-              .filter((s) => !draft.grants.some((x) => x.server_id === s.id))
-              .map((s) => ({ value: `s:${s.id}`, text: s.name })),
-          ]}
-          onPick={(v) =>
-            change(
-              {
-                ...draft,
-                grants: [
-                  ...draft.grants,
-                  v.startsWith('g:') ? { server_group_id: v.slice(2) } : { server_id: v.slice(2) },
-                ],
-              },
-              label,
-            )
-          }
-        />
+        {!readOnly && (
+          <Picker
+            label={t('groups.addGrant')}
+            options={[
+              ...(serverGroups.data ?? [])
+                .filter((g) => !draft.grants.some((x) => x.server_group_id === g.id))
+                .map((g) => ({ value: `g:${g.id}`, text: g.name })),
+              ...(servers.data ?? [])
+                .filter((s) => !draft.grants.some((x) => x.server_id === s.id))
+                .map((s) => ({ value: `s:${s.id}`, text: s.name })),
+            ]}
+            onPick={(v) =>
+              change(
+                {
+                  ...draft,
+                  grants: [
+                    ...draft.grants,
+                    v.startsWith('g:')
+                      ? { server_group_id: v.slice(2) }
+                      : { server_id: v.slice(2) },
+                  ],
+                },
+                label,
+              )
+            }
+          />
+        )}
       </section>
 
       {message && (
@@ -277,13 +303,15 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
           {t('admin.reload')}
         </Button>
       )}
-      <Button
-        variant="outline"
-        className="self-start border-danger text-danger"
-        onClick={() => setRemoving(true)}
-      >
-        {t('groups.delete')}
-      </Button>
+      {!readOnly && (
+        <Button
+          variant="outline"
+          className="self-start border-danger text-danger"
+          onClick={() => setRemoving(true)}
+        >
+          {t('groups.delete')}
+        </Button>
+      )}
       <ConfirmDialog
         open={removing}
         title={t('groups.deleteTitle', { name: draft.name })}
@@ -309,6 +337,7 @@ function GroupPanel({ group, onClose }: { group: UserGroup; onClose: () => void 
 // his own for a server admin; the backend decides.
 export function GroupsPage() {
   const { t } = useTranslation();
+  const phone = usePhone();
   const qc = useQueryClient();
   const groups = useUserGroups(true);
   const lists = useCommandLists(true);
@@ -346,6 +375,7 @@ export function GroupsPage() {
           <h1 className="text-2xl font-semibold">{t('nav.groups')}</h1>
           <p className="text-sm text-muted">{t('groups.summary', { count: all.length })}</p>
         </div>
+        <PhoneNote />
         <div className="flex flex-wrap gap-2">
           <Input
             type="search"
@@ -355,35 +385,37 @@ export function GroupsPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <form onSubmit={create} className="flex flex-wrap gap-2">
-            <label htmlFor={nameId} className="sr-only">
-              {t('groups.newName')}
-            </label>
-            <Input
-              id={nameId}
-              placeholder={t('groups.newName')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <label htmlFor={kindId} className="sr-only">
-              {t('groups.kindLabel')}
-            </label>
-            <select
-              id={kindId}
-              className="h-11 rounded-md border border-border bg-surface px-3"
-              value={kind}
-              onChange={(e) => setKind(e.target.value as Kind)}
-            >
-              {(['moderator', 'general'] as const).map((k) => (
-                <option key={k} value={k}>
-                  {t(`groups.kind.${k}`)}
-                </option>
-              ))}
-            </select>
-            <Button type="submit" disabled={!name.trim()}>
-              {t('groups.create')}
-            </Button>
-          </form>
+          {!phone && (
+            <form onSubmit={create} className="flex flex-wrap gap-2">
+              <label htmlFor={nameId} className="sr-only">
+                {t('groups.newName')}
+              </label>
+              <Input
+                id={nameId}
+                placeholder={t('groups.newName')}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <label htmlFor={kindId} className="sr-only">
+                {t('groups.kindLabel')}
+              </label>
+              <select
+                id={kindId}
+                className="h-11 rounded-md border border-border bg-surface px-3"
+                value={kind}
+                onChange={(e) => setKind(e.target.value as Kind)}
+              >
+                {(['moderator', 'general'] as const).map((k) => (
+                  <option key={k} value={k}>
+                    {t(`groups.kind.${k}`)}
+                  </option>
+                ))}
+              </select>
+              <Button type="submit" disabled={!name.trim()}>
+                {t('groups.create')}
+              </Button>
+            </form>
+          )}
         </div>
         {error && (
           <p role="alert" className="text-sm text-danger">
@@ -407,7 +439,11 @@ export function GroupsPage() {
                   className={cn('border-t border-border', open === g.id && 'bg-surface-raised')}
                 >
                   <td className="p-3">
-                    <button type="button" className="hover:underline" onClick={() => setOpen(g.id)}>
+                    <button
+                      type="button"
+                      className="tap hover:underline"
+                      onClick={() => setOpen(g.id)}
+                    >
                       <bdi>{g.name}</bdi>
                     </button>
                   </td>
@@ -429,7 +465,14 @@ export function GroupsPage() {
           </table>
         </div>
       </div>
-      {current && <GroupPanel key={current.id} group={current} onClose={() => setOpen(null)} />}
+      {current && (
+        <GroupPanel
+          key={current.id}
+          group={current}
+          readOnly={phone}
+          onClose={() => setOpen(null)}
+        />
+      )}
     </div>
   );
 }
