@@ -124,7 +124,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
               <span>{p.label}</span>
               <button
                 type="button"
-                className="font-semibold text-accent"
+                className="tap font-semibold text-accent"
                 onClick={() => undo(p.id)}
               >
                 {t('undo.undo')}

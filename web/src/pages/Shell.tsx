@@ -81,6 +81,7 @@ export function Shell() {
             </SheetContent>
           </Sheet>
           <span className="font-semibold">{t('app.name')}</span>
+          <ProfileLink />
         </header>
         <main className="min-w-0 flex-1 p-4 md:p-8">
           <LiveProvider>
@@ -162,6 +163,35 @@ function Navigation({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
   );
 }
 
+// ProfileLink is the avatar in the head of a phone; signing out stays in
+// the menu.
+function ProfileLink() {
+  const { t } = useTranslation();
+  const { data: session } = useSession();
+  if (!session) return null;
+  return (
+    <Link
+      to="/profile"
+      aria-label={t('nav.profile')}
+      title={t('nav.profile')}
+      className="ml-auto flex size-11 items-center justify-center"
+    >
+      <Initials name={session.user.pseudonym} />
+    </Link>
+  );
+}
+
+function Initials({ name }: { name: string }) {
+  return (
+    <span
+      aria-hidden
+      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-semibold text-accent"
+    >
+      {name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
 function UserBlock({ collapsed }: { collapsed: boolean }) {
   const { t } = useTranslation();
   const { data: session } = useSession();
@@ -186,12 +216,7 @@ function UserBlock({ collapsed }: { collapsed: boolean }) {
         className="flex min-h-11 min-w-0 flex-1 items-center gap-3"
         title={t('nav.profile')}
       >
-        <span
-          aria-hidden
-          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-semibold text-accent"
-        >
-          {name.slice(0, 2).toUpperCase()}
-        </span>
+        <Initials name={name} />
         {collapsed ? (
           <span className="sr-only">{t('nav.profile')}</span>
         ) : (
