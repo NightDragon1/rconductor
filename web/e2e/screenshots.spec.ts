@@ -205,3 +205,28 @@ for (const [path, name] of [
     await shoot(page, name);
   });
 }
+
+// Foreign data of the server hostile (SEC-006), wide and on a phone; only
+// these with -g foreign.
+for (const [size, width, height] of [
+  ['wide', 1440, 900],
+  ['phone', 390, 844],
+] as const) {
+  for (const tab of ['overview', 'console', 'logs', 'history']) {
+    test(`screenshot foreign ${tab} ${size}`, async ({ page, state }) => {
+      await page.setViewportSize({ width, height });
+      await login(page, 'admin', secret(state, 'admin'));
+      await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+      await page.goto(`servers/${state.servers.hostile}/${tab}`);
+      if (tab === 'console') {
+        const input = page.getByRole('textbox', { name: 'Command' });
+        await input.fill(`say ${size}`);
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('article', { name: `say ${size}` })).toContainText('hello');
+      }
+      if (tab === 'history') await page.getByText('Answer', { exact: true }).first().click();
+      if (tab === 'logs') await expect(page.locator('pre')).toContainText('hello');
+      await shoot(page, `foreign-${tab}-${size}`, false, tab !== 'console');
+    });
+  }
+}
