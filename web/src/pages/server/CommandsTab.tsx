@@ -5,6 +5,7 @@ import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useServer } from '@/api/live-servers';
 import { useAllowedCommands, usePlayers } from '@/api/servers';
+import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -244,13 +245,17 @@ function HistoryItem({ b }: { b: CmdBlock }) {
           {clock(i18n.language, b.ts)}
         </time>
         <code className="min-w-0 flex-1 wrap-anywhere md:truncate font-mono">
-          <bdi>{b.command}</bdi>
+          <ForeignText text={b.command} />
         </code>
         <span className={b.result === 'ok' ? 'text-ok' : 'text-danger'}>
           {t(`history.result.${b.result}`)}
         </span>
       </div>
-      {answer && <pre className="font-mono text-xs whitespace-pre-wrap text-muted">{answer}</pre>}
+      {answer && (
+        <pre className="font-mono text-xs whitespace-pre-wrap text-muted">
+          <ForeignText text={answer} />
+        </pre>
+      )}
       {why && (
         <p className="text-xs text-danger">
           {why}
@@ -282,7 +287,8 @@ export function CommandsTab() {
   const [search, setSearch] = useState('');
   if (!server) return null;
 
-  const names = players.data?.players ?? [];
+  // Color codes are no part of a name (SEC-006).
+  const names = (players.data?.players ?? []).map(stripCodes);
   const isPlayer = playerRule(allowed.data?.player_pattern);
   const set = (path: string, name: string, v: string) =>
     setValues((all) => ({ ...all, [path]: { ...all[path], [name]: v } }));

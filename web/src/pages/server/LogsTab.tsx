@@ -5,6 +5,7 @@ import { api, ApiError, must } from '@/api/client';
 import { useServer } from '@/api/live-servers';
 import type { Server } from '@/api/servers';
 import { CopyButton } from '@/components/CopyButton';
+import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MAX_LOG_LINES, prependTail, updateBuffer, useBuffer } from '@/lib/console';
@@ -145,7 +146,7 @@ export function LogsView({ server }: { server: Server }) {
               wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre',
             )}
           >
-            {text}
+            <ForeignText text={text} />
           </pre>
         )}
       </div>
