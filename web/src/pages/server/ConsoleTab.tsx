@@ -100,7 +100,7 @@ function CommandView({
           <pre
             ref={pre}
             className={cn(
-              'overflow-x-auto font-mono text-sm whitespace-pre-wrap',
+              'overflow-x-auto font-mono text-sm wrap-anywhere whitespace-pre-wrap',
               b.result !== 'ok' && 'text-danger',
             )}
           >
@@ -121,7 +121,7 @@ function LogView({ b }: { b: Extract<Block, { kind: 'log' }> }) {
       data-tone="log"
       className="border-l-2 border-border py-1 pl-3"
     >
-      <pre className="overflow-x-auto font-mono text-xs whitespace-pre-wrap text-muted">
+      <pre className="overflow-x-auto font-mono text-xs wrap-anywhere whitespace-pre-wrap text-muted">
         {b.lines.map((l) => stripCodes(l)).join('\n')}
       </pre>
     </section>
@@ -148,7 +148,7 @@ function FavoritesBar({ current }: { current: string }) {
           params={{ serverId: s.id }}
           aria-current={s.id === current ? 'page' : undefined}
           className={cn(
-            'rounded-md border px-2.5 py-1 font-mono text-sm',
+            'tap rounded-md border px-2.5 py-1 font-mono text-sm',
             s.id === current ? 'border-accent text-text' : 'border-border text-muted',
           )}
         >
@@ -242,7 +242,7 @@ export function ConsoleTab() {
       aria-pressed={tracks[key]}
       onClick={() => setTracks((x) => ({ ...x, [key]: !x[key] }))}
       className={cn(
-        'flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-sm',
+        'flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm max-md:min-h-11',
         tracks[key] ? 'border-accent text-text' : 'border-border text-muted',
       )}
     >
@@ -259,10 +259,13 @@ export function ConsoleTab() {
         className="flex flex-col rounded-lg border border-border bg-surface"
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-          <span className="text-sm text-muted">{t('console.tracks')}</span>
-          {track('own', t('console.own'), markerClass.own)}
-          {track('others', t('console.others'), markerClass.others)}
-          {hasAgent && track('logs', t('console.logs'), markerClass.log)}
+          {/* One row of chips on a phone (Design 6.5). */}
+          <div className="flex max-w-full items-center gap-2 overflow-x-auto md:flex-wrap">
+            <span className="text-sm text-muted max-md:hidden">{t('console.tracks')}</span>
+            {track('own', t('console.own'), markerClass.own)}
+            {track('others', t('console.others'), markerClass.others)}
+            {hasAgent && track('logs', t('console.logs'), markerClass.log)}
+          </div>
           <Input
             type="search"
             className="ml-auto w-full sm:w-56"
@@ -354,18 +357,21 @@ export function ConsoleTab() {
             </div>
           </div>
         </div>
-        <form onSubmit={submit} className="relative border-t border-border p-3">
+        <form
+          onSubmit={submit}
+          className="relative border-t border-border bg-surface p-3 max-md:sticky max-md:bottom-0 max-md:z-10"
+        >
           {suggestions.length > 0 && (
             <ul
               aria-label={t('console.suggestions')}
-              className="absolute bottom-full left-3 mb-1 w-72 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-surface-raised py-1"
+              className="absolute bottom-full left-3 mb-1 w-72 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-surface-raised py-1 max-md:static max-md:mb-2 max-md:flex max-md:w-full max-md:max-w-full max-md:gap-2 max-md:overflow-x-auto max-md:border-0 max-md:bg-transparent max-md:py-0"
             >
               {suggestions.map((s, i) => (
-                <li key={s}>
+                <li key={s} className="max-md:shrink-0">
                   <button
                     type="button"
                     className={cn(
-                      'flex w-full justify-between px-3 py-1.5 text-left font-mono text-sm',
+                      'flex w-full justify-between px-3 py-1.5 text-left font-mono text-sm max-md:min-h-11 max-md:items-center max-md:rounded-md max-md:border max-md:border-border max-md:whitespace-nowrap',
                       i === 0 && 'bg-surface',
                     )}
                     onMouseDown={(e) => {
@@ -374,7 +380,9 @@ export function ConsoleTab() {
                     }}
                   >
                     {s}
-                    {i === 0 && <span className="text-xs text-muted">{t('console.tab')}</span>}
+                    {i === 0 && (
+                      <span className="text-xs text-muted max-md:hidden">{t('console.tab')}</span>
+                    )}
                   </button>
                 </li>
               ))}
@@ -399,7 +407,7 @@ export function ConsoleTab() {
               {t('console.send')}
             </Button>
           </div>
-          <p className="mt-1 text-xs text-muted">{t('console.hint')}</p>
+          <p className="mt-1 text-xs text-muted max-md:hidden">{t('console.hint')}</p>
         </form>
       </section>
     </div>
