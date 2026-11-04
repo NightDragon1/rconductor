@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Link } from '@tanstack/react-router';
+import { ChevronRight } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useServer } from '@/api/live-servers';
@@ -19,6 +20,7 @@ import {
 } from '@/lib/commandform';
 import type { CmdBlock } from '@/lib/console';
 import { ago, clock, useNow } from '@/lib/format';
+import { usePhone } from '@/lib/phone';
 import { stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
 import { useConsoleFeed } from './useConsoleFeed';
@@ -75,7 +77,7 @@ function Field({
                 aria-checked={value === v}
                 onClick={() => onChange(v)}
                 className={cn(
-                  'min-h-9 rounded-md border px-3 font-mono text-sm',
+                  'min-h-9 rounded-md border px-3 font-mono text-sm max-md:min-h-11',
                   value === v
                     ? 'border-accent bg-surface-raised text-text'
                     : 'border-border text-muted',
@@ -122,6 +124,8 @@ export function CommandCard({
   onChange,
   onFocusPlayer,
   onRun,
+  folded,
+  onToggle,
 }: {
   c: Command;
   values: Values;
@@ -132,12 +136,21 @@ export function CommandCard({
   onChange: (name: string, v: string) => void;
   onFocusPlayer: (name: string) => void;
   onRun: () => void;
+  // On a phone one card is open; undefined means it cannot fold.
+  folded?: boolean;
+  onToggle?: () => void;
 }) {
   const { t } = useTranslation();
   const errors = formErrors(c, values, isPlayer);
   const command = buildCommand(c, values);
   const ok = Object.keys(errors).length === 0;
   const freeId = useId();
+  const title = (
+    <div className="min-w-0">
+      <h3 className="font-semibold">{fromCatalog(c) ? c.description : c.path}</h3>
+      <p className="font-mono text-sm text-muted">{pattern(c)}</p>
+    </div>
+  );
   return (
     <form
       aria-label={c.path}
@@ -147,11 +160,20 @@ export function CommandCard({
       }}
       className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
     >
-      <div>
-        <h3 className="font-semibold">{fromCatalog(c) ? c.description : c.path}</h3>
-        <p className="font-mono text-sm text-muted">{pattern(c)}</p>
-      </div>
-      {fromCatalog(c) ? (
+      {onToggle ? (
+        <button
+          type="button"
+          aria-expanded={!folded}
+          onClick={onToggle}
+          className="flex min-h-11 items-center justify-between gap-3 text-left"
+        >
+          {title}
+          <ChevronRight aria-hidden className={cn('size-4 shrink-0', !folded && 'rotate-90')} />
+        </button>
+      ) : (
+        title
+      )}
+      {folded ? null : fromCatalog(c) ? (
         c.params.length > 0 && (
           <div className="grid gap-3 sm:grid-cols-2">
             {c.params.map((p) => (
@@ -183,15 +205,19 @@ export function CommandCard({
           />
         </div>
       )}
-      <p
-        className="truncate rounded bg-surface-raised px-2 py-1 font-mono text-sm"
-        aria-live="polite"
-      >
-        {t('commands.preview', { command })}
-      </p>
-      <Button type="submit" className="self-start" disabled={!ok || busy}>
-        {t('commands.run')}
-      </Button>
+      {!folded && (
+        <>
+          <p
+            className="truncate rounded bg-surface-raised px-2 py-1 font-mono text-sm"
+            aria-live="polite"
+          >
+            {t('commands.preview', { command })}
+          </p>
+          <Button type="submit" className="self-start max-md:self-stretch" disabled={!ok || busy}>
+            {t('commands.run')}
+          </Button>
+        </>
+      )}
     </form>
   );
 }
@@ -248,6 +274,10 @@ export function CommandsTab() {
   const listId = useId();
   const [values, setValues] = useState<Record<string, Values>>({});
   const [active, setActive] = useState<Active | null>(null);
+  const phone = usePhone();
+  // The open card on a phone; null when all are folded.
+  const [open, setOpen] = useState<string | null>();
+  const [sheet, setSheet] = useState(true);
   if (!server) return null;
 
   const names = players.data?.players ?? [];
@@ -255,13 +285,25 @@ export function CommandsTab() {
   const set = (path: string, name: string, v: string) =>
     setValues((all) => ({ ...all, [path]: { ...all[path], [name]: v } }));
   const commands = allowed.data?.commands ?? [];
+  // A command without fields has nothing to fold. The first card with
+  // fields is open until someone picks another.
+  const folds = (c: Command) => !fromCatalog(c) || c.params.length > 0;
+  const openPath = open === undefined ? commands.find(folds)?.path : open;
+  const head = (
+    <>
+      {t('commands.players')}
+      <span className="font-mono text-muted">
+        {t('card.playersValue', { count: names.length })}
+      </span>
+    </>
+  );
   const mine = buf.cmds
     .filter((c) => c.userId === me)
     .slice(-20)
     .reverse();
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid gap-4 max-md:pb-44 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <datalist id={listId}>
         {names.map((n) => (
           <option key={n} value={n} />
@@ -285,57 +327,74 @@ export function CommandsTab() {
               onChange={(name, v) => set(c.path, name, v)}
               onFocusPlayer={(param) => setActive({ path: c.path, param })}
               onRun={() => send.mutate(buildCommand(c, values[c.path] ?? {}))}
+              folded={phone && folds(c) ? openPath !== c.path : undefined}
+              onToggle={
+                phone && folds(c) ? () => setOpen(openPath === c.path ? null : c.path) : undefined
+              }
             />
           ))}
         </div>
       </section>
       <div className="flex min-w-0 flex-col gap-4">
+        {/* A sheet at the lower edge on a phone (Design 6.6). */}
         <section
           aria-label={t('commands.players')}
-          className="rounded-lg border border-border bg-surface p-4"
+          className="rounded-lg border border-border bg-surface p-4 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-30 max-md:rounded-b-none max-md:pt-1 max-md:shadow-lg"
         >
-          <h2 className="mb-3 flex justify-between text-sm font-semibold">
-            {t('commands.players')}
-            <span className="font-mono text-muted">
-              {t('card.playersValue', { count: names.length })}
-            </span>
+          <h2 className="mb-3 text-sm font-semibold max-md:mb-1">
+            {phone ? (
+              <button
+                type="button"
+                aria-expanded={sheet}
+                onClick={() => setSheet((s) => !s)}
+                className="flex min-h-11 w-full items-center justify-between"
+              >
+                {head}
+              </button>
+            ) : (
+              <span className="flex justify-between">{head}</span>
+            )}
           </h2>
-          {players.data && !players.data.available && (
-            <p className="text-sm text-muted">{t('overview.noPlayerList')}</p>
+          {!sheet && phone ? null : (
+            <>
+              {players.data && !players.data.available && (
+                <p className="text-sm text-muted">{t('overview.noPlayerList')}</p>
+              )}
+              {players.data?.available && names.length === 0 && (
+                <p className="text-sm text-muted">{t('overview.noPlayers')}</p>
+              )}
+              <ul className="flex gap-2 max-md:overflow-x-auto md:flex-wrap">
+                {names.map((n) => {
+                  // Only a name the backend takes as player can be picked.
+                  const usable = isPlayer(n);
+                  return (
+                    <li key={n} className="max-md:shrink-0">
+                      <button
+                        type="button"
+                        disabled={!usable || !active}
+                        title={t('commands.pick')}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => active && set(active.path, active.param, n)}
+                        className={cn(
+                          'min-h-9 rounded-md border px-2.5 font-mono text-sm max-md:min-h-11',
+                          active && values[active.path]?.[active.param] === n
+                            ? 'border-accent text-text'
+                            : 'border-border',
+                        )}
+                      >
+                        <bdi>{n}</bdi>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-3 text-xs text-muted">
+                {t('commands.pickHint')}
+                {players.data?.updated_at &&
+                  ` · ${t('overview.playersAt', { ago: ago(t, players.data.updated_at, now) })}`}
+              </p>
+            </>
           )}
-          {players.data?.available && names.length === 0 && (
-            <p className="text-sm text-muted">{t('overview.noPlayers')}</p>
-          )}
-          <ul className="flex flex-wrap gap-2">
-            {names.map((n) => {
-              // Only a name the backend takes as player can be picked.
-              const usable = isPlayer(n);
-              return (
-                <li key={n}>
-                  <button
-                    type="button"
-                    disabled={!usable || !active}
-                    title={t('commands.pick')}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => active && set(active.path, active.param, n)}
-                    className={cn(
-                      'min-h-9 rounded-md border px-2.5 font-mono text-sm',
-                      active && values[active.path]?.[active.param] === n
-                        ? 'border-accent text-text'
-                        : 'border-border',
-                    )}
-                  >
-                    <bdi>{n}</bdi>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-3 text-xs text-muted">
-            {t('commands.pickHint')}
-            {players.data?.updated_at &&
-              ` · ${t('overview.playersAt', { ago: ago(t, players.data.updated_at, now) })}`}
-          </p>
         </section>
         <section
           aria-label={t('commands.myHistory')}
@@ -355,7 +414,7 @@ export function CommandsTab() {
             <Link
               to="/servers/$serverId/history"
               params={{ serverId: id }}
-              className="text-sm text-accent underline"
+              className="tap text-sm text-accent underline"
             >
               {t('commands.showAll')}
             </Link>
