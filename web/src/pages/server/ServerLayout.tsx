@@ -120,9 +120,9 @@ function Head({ server, role }: { server: Server; role?: string }) {
               : t(`status.${status}`)}
           </span>
         </div>
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm max-md:gap-x-3">
           {profile && (
-            <span>
+            <span className="max-md:hidden">
               <span className="text-muted">{t('server.profile')}</span> {profile}
             </span>
           )}
@@ -145,7 +145,7 @@ function Head({ server, role }: { server: Server; role?: string }) {
             </Fact>
           )}
           {admin && server.agent_id && c && (
-            <span>
+            <span className="max-md:hidden">
               <span className="text-muted">{t('server.agent')}</span>{' '}
               {agentName && <bdi className="mr-1">{agentName}</bdi>}
               <span className={c.agent_connected ? 'text-ok' : 'text-danger'}>

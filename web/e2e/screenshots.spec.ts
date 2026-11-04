@@ -18,8 +18,9 @@ async function settled(page: Page) {
 }
 
 // shoot grows the window to the page unless the page holds a box sized by
-// the window (the console); then it takes the whole page as it is.
-async function shoot(page: Page, name: string, grow = true) {
+// the window (the console); then it takes the whole page as it is, or only
+// the window where the phone view keeps something at the lower edge.
+async function shoot(page: Page, name: string, grow = true, full = true) {
   mkdirSync(dir, { recursive: true });
   if (!grow) {
     for (const theme of ['dark', 'light']) {
@@ -28,7 +29,7 @@ async function shoot(page: Page, name: string, grow = true) {
         localStorage.setItem('rcd.theme', t);
       }, theme);
       await page.waitForTimeout(400);
-      await page.screenshot({ path: `${dir}/${name}-${theme}.png`, fullPage: true });
+      await page.screenshot({ path: `${dir}/${name}-${theme}.png`, fullPage: full });
     }
     return;
   }
@@ -103,7 +104,7 @@ for (const [width, name] of [
     await expect(page.getByRole('article', { name: 'list', exact: true }).last()).toBeVisible();
     await input.fill('whitelist');
     await page.waitForTimeout(500);
-    await shoot(page, name, false);
+    await shoot(page, name, false, width >= 500);
   });
 }
 
@@ -177,7 +178,7 @@ test('screenshot phone server actions', async ({ page, state }) => {
   await page.goto(`servers/${state.servers.survival}/overview`);
   await page.waitForLoadState('networkidle');
   await page.getByRole('button', { name: 'Server actions' }).click();
-  await shoot(page, 'phone-server-actions', false);
+  await shoot(page, 'phone-server-actions', false, false);
 });
 
 test('screenshot phone commands', async ({ page, state }) => {
@@ -186,7 +187,7 @@ test('screenshot phone commands', async ({ page, state }) => {
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto(`servers/${state.servers.survival}/commands`);
   await page.waitForLoadState('networkidle');
-  await shoot(page, 'phone-commands-moderator', false);
+  await shoot(page, 'phone-commands-moderator', false, false);
 });
 
 for (const [path, name] of [
@@ -194,7 +195,6 @@ for (const [path, name] of [
   ['admin/command-lists', 'phone-command-lists'],
   ['admin/servers', 'phone-servers-admin'],
   ['admin/agents', 'phone-agents'],
-  ['admin/settings', 'phone-settings'],
 ] as const) {
   test(`screenshot ${name}`, async ({ page, state }) => {
     await page.setViewportSize({ width: 390, height: 844 });
