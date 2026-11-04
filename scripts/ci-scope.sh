@@ -11,7 +11,7 @@
 # (first push of a branch, force push) all paths count as changed.
 # Needs EVENT, REF and BASE from the workflow.
 set -eu
-E2E='^(web/|api/|internal/|go\.(mod|sum)$|Makefile$|\.github/workflows/|scripts/ci-scope\.sh$)'
+E2E='^(web/|api/|internal/|cmd/|migrations/|profiles/|go\.(mod|sum)$|Makefile$|\.github/workflows/|scripts/ci-scope\.sh$)'
 MINECRAFT='^(internal/(rcon|connmgr)/|internal/app/minecraft_test\.go$|profiles/|scripts/minecraft|\.github/workflows/|scripts/ci-scope\.sh$)'
 
 case "$EVENT:$REF" in
