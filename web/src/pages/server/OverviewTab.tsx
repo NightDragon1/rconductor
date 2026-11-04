@@ -5,7 +5,7 @@ import { usePlayers } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { ago, dateTime, decimal, gib, useNow } from '@/lib/format';
 import { useTopic } from '@/lib/live-context';
-import { isAdmin } from '@/lib/serverpage';
+import { isAdmin, stripCodes } from '@/lib/serverpage';
 import { cardStatus } from '@/lib/status';
 import { useServer } from '@/api/live-servers';
 
@@ -78,7 +78,7 @@ export function OverviewTab() {
         )}
         {p?.available && p.players.length > 0 && (
           <ul className="flex flex-wrap gap-2">
-            {p.players.map((name) => (
+            {p.players.map(stripCodes).map((name) => (
               <li
                 key={name}
                 className="rounded-md border border-border px-2 py-1 font-mono text-sm"

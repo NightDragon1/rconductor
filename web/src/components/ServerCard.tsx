@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import type { Server } from '@/api/servers';
 import { ago, decimal, gib, span } from '@/lib/format';
+import { stripCodes } from '@/lib/serverpage';
 import { cardStatus, shownImage, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
 
@@ -104,7 +105,7 @@ export function ServerCard({
           </h3>
           {(image ?? profile) && (
             <p className="wrap-anywhere md:truncate font-mono text-sm text-muted">
-              {image ? <bdi>{image}</bdi> : t('card.profile', { name: profile })}
+              {image ? <bdi>{stripCodes(image)}</bdi> : t('card.profile', { name: profile })}
             </p>
           )}
         </div>
