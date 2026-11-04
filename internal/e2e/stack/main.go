@@ -134,6 +134,16 @@ func run(addr, host, dist, base, statePath, logPath string) error {
 		return err
 	}
 	defer game.Close()
+	hostile, err := rcontest.Start(rconPassword, rcontest.Minecraft, func(cmd string) string {
+		if cmd == "list" {
+			return hostileList
+		}
+		return hostileAnswer
+	})
+	if err != nil {
+		return err
+	}
+	defer hostile.Close()
 
 	var logs, console buffer
 	var panelLog io.Writer = &logs
@@ -183,7 +193,7 @@ func run(addr, host, dist, base, statePath, logPath string) error {
 	if err := admin.call(http.MethodPost, "/auth/login", map[string]string{"pseudonym": "admin", "password": adminPassword}, nil); err != nil {
 		return err
 	}
-	if err := seedHosts(ctx, admin, panelURL, origin(public), (<-agentReady).String(), root, game.Addr, st.profile, &st); err != nil {
+	if err := seedHosts(ctx, admin, panelURL, origin(public), (<-agentReady).String(), root, game.Addr, hostile.Addr, st.profile, &st); err != nil {
 		return fmt.Errorf("seed hosts: %w\n%s", err, logs.String())
 	}
 	if st.ExpiredInvite, err = expiredInvite(ctx, admin, filepath.Join(root, "data", "rconductor.db")); err != nil {
