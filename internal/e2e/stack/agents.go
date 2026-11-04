@@ -27,6 +27,19 @@ const (
 	imageCreativ = "itzg/minecraft-server:java21"
 )
 
+// Foreign data as a hostile game server or agent sends it (SEC-006):
+// markup, a known and an unknown color code, and an override of the
+// reading direction. It belongs to the server hostile and to a container
+// no server uses.
+const (
+	hostileContainer = "mc-hostile"
+	hostileMarkup    = `<img src=x onerror="window.__xss=1"><script>window.__xss=1</script>`
+	hostileAnswer    = hostileMarkup + "\n§ahello §zworld\nfile\u202Etxt.exe"
+	hostileList      = "There are 3 of a max of 20 players online: <script>window.__xss=1</script>, evil\u202Egnp.exe, §aSteve"
+)
+
+var hostileLines = []string{hostileMarkup, "§ahello §zworld", "file\u202Etxt.exe"}
+
 // fakeHost stands in for Docker: survival and arena run, creative restarts
 // three times within minutes (a restart loop), lobby is stopped.
 type fakeHost struct {
@@ -49,6 +62,8 @@ func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
 		creative(3*time.Minute, 1),
 		{ID: "c3", Name: "mc-lobby", Image: imageCreativ, State: "exited"},
 		{ID: "c4", Name: "mc-arena", Image: imageCreativ, State: "running", StartedAt: now.Add(-26 * time.Hour)},
+		{ID: "c5", Name: hostileContainer, Image: "§a<b>evil</b>\u202E:tag", State: "running", StartedAt: now.Add(-time.Hour)},
+		{ID: "c6", Name: "<script>window.__xss=1</script>\u202Exe", Image: imageCreativ, State: "exited"},
 	}}
 	if err := out.Send(ctx, agentproto.TypeSnapshot, "", snap); err != nil {
 		return err
@@ -98,7 +113,11 @@ func (h *fakeHost) Handle(ctx context.Context, e agentproto.Envelope, out agent.
 			break
 		}
 		if _, again := h.followed.LoadOrStore(f.Container, true); !again {
-			_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: f.Container, Lines: firstLines})
+			lines := firstLines
+			if f.Container == hostileContainer {
+				lines = hostileLines
+			}
+			_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: f.Container, Lines: lines})
 		}
 		tctx, stop := context.WithCancel(context.WithoutCancel(ctx))
 		if _, running := h.ticking.LoadOrStore(f.Container, stop); running {
@@ -222,7 +241,7 @@ func closedPort() (int, error) {
 // seedHosts adds the agents, three more servers on the containers of the
 // test host, two server groups and a locked user: everything the overview
 // shows (UI-002 to UI-004, UI-006).
-func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, gameAddr, profile string, st *State) error {
+func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, gameAddr, hostileAddr, profile string, st *State) error {
 	hostID, err := startAgent(ctx, admin, agentAddr, "host-1", root, &fakeHost{})
 	if err != nil {
 		return err
@@ -279,6 +298,17 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 		return err
 	}
 	ids["outpost"] = outpost.ID
+	// hostile answers with foreign data that tries to do harm (SEC-006).
+	hostileHost, hostilePort, _ := net.SplitHostPort(hostileAddr)
+	hp, _ := strconv.Atoi(hostilePort)
+	var hostile struct{ ID string }
+	if err := admin.call(http.MethodPost, "/servers", map[string]any{
+		"name": "hostile", "profile_id": profile, "host": hostileHost, "port": hp, "password": rconPassword,
+		"agent_id": hostID, "container_name": hostileContainer,
+	}, &hostile); err != nil {
+		return err
+	}
+	ids["hostile"] = hostile.ID
 	st.Servers = ids
 	for _, g := range []struct {
 		name    string

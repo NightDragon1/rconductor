@@ -12,7 +12,7 @@ test('every role lands on its overview (UI-002)', async ({ page, state }) => {
   const landing: Record<string, { health: boolean; cards: string[]; load: boolean }> = {
     admin: {
       health: true,
-      cards: ['survival', 'creative', 'lobby', 'arena', 'outpost'],
+      cards: ['survival', 'creative', 'lobby', 'arena', 'outpost', 'hostile'],
       load: true,
     },
     sadmin: { health: false, cards: ['survival'], load: true },
@@ -33,7 +33,7 @@ test('every role lands on its overview (UI-002)', async ({ page, state }) => {
 test('the health overview names every problem with a link (UI-003)', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   const tile = (name: string) => page.getByRole('region', { name, exact: true });
-  await expect(tile('Servers')).toContainText('2 / 5');
+  await expect(tile('Servers')).toContainText('3 / 6');
   await expect(tile('Servers')).toContainText('1 stopped');
   await expect(tile('Agents')).toContainText('1 / 2');
   await expect(tile('RCON errors')).toContainText('1');
