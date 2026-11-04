@@ -106,6 +106,28 @@ func TestLimitLines(t *testing.T) {
 	}
 }
 
+// TestCleanHelloVersion covers the version of a hostile agent (SEC-006):
+// markup stays text for the output to escape, direction overrides go, the
+// length is bounded.
+func TestCleanHelloVersion(t *testing.T) {
+	for name, tc := range map[string]struct{ in, want string }{
+		"markup":   {"<script>alert(1)</script>", "<script>alert(1)</script>"},
+		"override": {"1.0\u202E.0", "1.0.0"},
+		"too long": {strings.Repeat("9", 100), strings.Repeat("9", 64)},
+		"combined": {"\u202E<b>" + strings.Repeat("x", 100), "<b>" + strings.Repeat("x", 61)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := Hello{Name: "host", Version: tc.in, Backend: "docker"}
+			if err := h.Clean(); err != nil {
+				t.Fatal(err)
+			}
+			if h.Version != tc.want {
+				t.Errorf("version = %q, want %q", h.Version, tc.want)
+			}
+		})
+	}
+}
+
 func TestCleanHello(t *testing.T) {
 	h := Hello{Name: "host\u202e1", Version: "1.0.0", Backend: "docker", Capabilities: []string{CapMetrics}}
 	if err := h.Clean(); err != nil || h.Name != "host1" {
