@@ -18,15 +18,15 @@ async function run(page: Page, command: string) {
   await page.keyboard.press('Enter');
 }
 
-// lefts gives the left edge of every character of the text after the
-// control, in the order of the text.
-function lefts(box: Locator) {
-  return box.evaluate((el) => {
+// lefts gives the left edge of every character of a text node starting
+// with start, in the order of the text.
+function lefts(box: Locator, start = 'txt.exe') {
+  return box.evaluate((el, from) => {
     const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     const out: number[] = [];
     while (walk.nextNode()) {
       const node = walk.currentNode as Text;
-      if (!node.data.startsWith('txt.exe')) continue;
+      if (!node.data.startsWith(from)) continue;
       for (let i = 0; i < node.length; i++) {
         const r = document.createRange();
         r.setStart(node, i);
@@ -35,7 +35,7 @@ function lefts(box: Locator) {
       }
     }
     return out;
-  });
+  }, start);
 }
 
 // harmless checks a box of foreign text: all of it is text, the color codes
@@ -127,6 +127,46 @@ test('hostile player names and images are plain names (SEC-006)', async ({ page,
   await expect(card).not.toContainText('§');
   await expect(card.locator('b')).toHaveCount(0);
   expect(await page.evaluate(() => '__xss' in window)).toBe(false);
+});
+
+test('hostile names on the commands page read as plain names (SEC-006)', async ({
+  page,
+  state,
+}) => {
+  await login(page, 'hmod', secret(state, 'hmod'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await page.goto(`servers/${state.servers.hostile}`);
+  await expect(page).toHaveURL(/\/commands$/);
+  const players = page.getByRole('region', { name: 'Players online' });
+
+  // Text, no element, no color code, no override.
+  await expect(players).toContainText('<script>window.__xss=1</script>');
+  await expect(players.locator('script')).toHaveCount(0);
+  await expect(players).not.toContainText('§');
+  await expect(players).not.toContainText(override);
+  expect(await page.evaluate(() => '__xss' in window)).toBe(false);
+
+  // The reading direction: left to right, in the order of the text.
+  const evil = players.getByRole('button', { name: 'evilgnp.exe' });
+  await expect(evil).toBeVisible();
+  const x = await lefts(evil, 'evilgnp.exe');
+  expect(x.length).toBe(11);
+  expect(x).toEqual([...x].sort((a, b) => a - b));
+
+  // A picked name goes into the field without its color code.
+  const commands = page.getByRole('region', { name: 'Commands' });
+  const kick = commands.getByRole('form', { name: 'kick', exact: true });
+  await kick.getByLabel('player', { exact: true }).focus();
+  await players.getByRole('button', { name: 'Steve', exact: true }).click();
+  await expect(kick.getByLabel('player', { exact: true })).toHaveValue('Steve');
+
+  // The answer in the own history keeps to the same rules.
+  await commands
+    .getByRole('form', { name: 'list', exact: true })
+    .getByRole('button', { name: 'Run' })
+    .click();
+  const mine = page.getByRole('region', { name: 'My history' });
+  await expect(mine.locator('[data-code]')).toHaveAttribute('data-code', '⟨U+202E⟩');
 });
 
 test('a hostile container name is plain text in the picker (SEC-006)', async ({ page, state }) => {

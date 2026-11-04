@@ -206,6 +206,15 @@ for (const [path, name] of [
   });
 }
 
+test('screenshot foreign commands phone', async ({ page, state }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, 'hmod', secret(state, 'hmod'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await page.goto(`servers/${state.servers.hostile}/commands`);
+  await page.waitForLoadState('networkidle');
+  await shoot(page, 'foreign-commands-phone', false, false);
+});
+
 // Foreign data of the server hostile (SEC-006), wide and on a phone; only
 // these with -g foreign.
 for (const [size, width, height] of [
