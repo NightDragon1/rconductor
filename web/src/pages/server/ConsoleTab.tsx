@@ -260,11 +260,7 @@ export function ConsoleTab() {
         className="flex flex-col rounded-lg border border-border bg-surface"
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
-          {/* One row of chips on a phone (Design 6.5). */}
-          <div
-            data-scrolls
-            className="flex max-w-full items-center gap-2 overflow-x-auto md:flex-wrap"
-          >
+          <div className="flex max-w-full flex-wrap items-center gap-2">
             <span className="text-sm text-muted max-md:hidden">{t('console.tracks')}</span>
             {track('own', t('console.own'), markerClass.own)}
             {track('others', t('console.others'), markerClass.others)}

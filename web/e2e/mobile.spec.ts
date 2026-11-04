@@ -11,17 +11,22 @@ async function enter(page: Page, state: StackState, user: string) {
 }
 
 // measure looks at the whole page: sideways scrolling, controls below
-// 44 px, and text that is cut off. Rows of chips and tabs scroll on purpose
-// and say so with data-scrolls.
+// 44 px, controls outside the window and text that is cut off. Rows of
+// tabs and chips that scroll on purpose say so with data-scrolls.
 const measure = (page: Page) =>
   page.evaluate(() => {
     const small: string[] = [];
+    const outside: string[] = [];
     const controls = 'a,button,input,select,textarea,summary,[role=menuitem]';
     for (const e of Array.from(document.querySelectorAll(controls))) {
       const box = e.getBoundingClientRect();
       const hidden = box.width === 0 || box.height === 0;
       const off = e.matches(':disabled') || e.getAttribute('aria-disabled') === 'true';
       if (hidden || off || e.matches('input[type=hidden]')) continue;
+      if (!e.closest('[data-scrolls]') && (box.left < 0 || box.right > window.innerWidth)) {
+        const name = e.getAttribute('aria-label') ?? e.textContent ?? '';
+        outside.push(`${e.tagName} ${Math.round(box.left)}..${Math.round(box.right)} ${name}`);
+      }
       if (box.width < 44 || box.height < 44) {
         const name = e.getAttribute('aria-label') ?? e.textContent ?? '';
         small.push(
@@ -41,7 +46,7 @@ const measure = (page: Page) =>
       }
     }
     const d = document.documentElement;
-    return { scroll: d.scrollWidth, width: d.clientWidth, small, cut };
+    return { scroll: d.scrollWidth, width: d.clientWidth, small, outside, cut };
   });
 
 async function fits(page: Page) {
@@ -49,6 +54,7 @@ async function fits(page: Page) {
   const r = await measure(page);
   expect(r.scroll, 'sideways scrolling').toBeLessThanOrEqual(r.width);
   expect(r.small, 'tap targets below 44 px').toEqual([]);
+  expect(r.outside, 'controls outside the window').toEqual([]);
   expect(r.cut, 'text cut off').toEqual([]);
 }
 
@@ -67,6 +73,17 @@ test('the check finds text that is cut off', async ({ page }) => {
     }
   });
   expect((await measure(page)).cut).toHaveLength(2);
+});
+
+test('the check finds a control outside the window', async ({ page }) => {
+  await page.goto('login');
+  await page.evaluate(() => {
+    const button = document.createElement('button');
+    button.style.cssText = 'position:fixed;left:380px;width:60px;height:44px';
+    button.textContent = 'off';
+    document.body.append(button);
+  });
+  expect((await measure(page)).outside).toHaveLength(1);
 });
 
 test('login fits a phone (UI-012)', async ({ page }) => {
@@ -109,6 +126,41 @@ test('the head links to the own profile, signing out stays in the menu', async (
   await menu.getByRole('button', { name: 'Sign out' }).tap();
   await expect(page).toHaveURL(/login/);
 });
+
+// Toolbars break into further rows and keep every control in reach, down
+// to the narrowest phones.
+for (const width of [390, 320]) {
+  test(`toolbars of console, logs and history fit ${width} px (UI-012)`, async ({
+    page,
+    state,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await enter(page, state, 'admin');
+    const base = `servers/${state.servers.hostile}`;
+
+    await page.goto(`${base}/console`);
+    const input = page.getByRole('textbox', { name: 'Command' });
+    await input.fill(`say ${width}`);
+    await page.getByRole('button', { name: 'Send' }).tap();
+    const block = page.getByRole('article', { name: `say ${width}` });
+    await expect(block.getByRole('button', { name: 'Copy the block' })).toBeInViewport();
+    for (const name of ['Own commands', "Others' commands", 'Logs']) {
+      await expect(page.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
+    }
+    await fits(page);
+
+    await page.goto(`${base}/logs`);
+    for (const name of ['Follow', 'Wrap lines', 'Clear view', 'Copy the shown lines']) {
+      await expect(page.getByRole('button', { name })).toBeInViewport({ ratio: 1 });
+    }
+    await fits(page);
+
+    await page.goto(`${base}/history`);
+    await page.getByText('Answer', { exact: true }).first().tap();
+    await expect(page.getByRole('button', { name: 'Copy the answer' })).toBeVisible();
+    await fits(page);
+  });
+}
 
 test('the console works by touch and hides the timeline (Design 6.5)', async ({ page, state }) => {
   await enter(page, state, 'admin');
