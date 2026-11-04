@@ -5,6 +5,7 @@ import { useHistory, type HistoryEntry } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/CopyButton';
+import { ForeignText } from '@/components/ForeignText';
 import { dateTime } from '@/lib/format';
 import { isAdmin, stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
@@ -31,7 +32,7 @@ function Entry({ e }: { e: HistoryEntry }) {
         {e.pseudonym && <bdi className="font-semibold">{e.pseudonym}</bdi>}
         {e.role && <span className="text-muted">{t(`role.${e.role}`)}</span>}
         <code className="rounded bg-surface-raised px-1.5 py-0.5 font-mono">
-          <bdi>{e.command}</bdi>
+          <ForeignText text={e.command} />
         </code>
         <span className={cn('ml-auto', resultTone[e.result])}>
           {t(`history.result.${e.result}`)}
@@ -47,7 +48,7 @@ function Entry({ e }: { e: HistoryEntry }) {
             ref={pre}
             className="mt-1 overflow-x-auto rounded bg-surface-raised p-2 font-mono wrap-anywhere text-xs whitespace-pre-wrap"
           >
-            {answer}
+            <ForeignText text={answer} />
           </pre>
           <div className="mt-1 flex items-center gap-3">
             <CopyButton text={answer} target={pre} label={t('history.copy')} />

@@ -7,6 +7,7 @@ import { useServer } from '@/api/live-servers';
 import { useAllowedCommands, useFavorites, useServers } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { CopyButton } from '@/components/CopyButton';
+import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -87,7 +88,7 @@ function CommandView({
           </span>
         )}
         <code className="rounded bg-surface-raised px-1.5 py-0.5 font-mono">
-          <bdi>{b.command}</bdi>
+          <ForeignText text={b.command} />
         </code>
         <span className={cn('ml-auto', b.result === 'ok' ? 'text-ok' : 'text-danger')}>
           {t(`history.result.${b.result}`)}
@@ -104,7 +105,7 @@ function CommandView({
               b.result !== 'ok' && 'text-danger',
             )}
           >
-            {answer}
+            <ForeignText text={answer} />
           </pre>
           {b.truncated && <p className="mt-1 text-xs text-warn">{t('history.truncated')}</p>}
         </div>
@@ -122,7 +123,7 @@ function LogView({ b }: { b: Extract<Block, { kind: 'log' }> }) {
       className="border-l-2 border-border py-1 pl-3"
     >
       <pre className="overflow-x-auto font-mono text-xs wrap-anywhere whitespace-pre-wrap text-muted">
-        {b.lines.map((l) => stripCodes(l)).join('\n')}
+        <ForeignText text={b.lines.map((l) => stripCodes(l)).join('\n')} />
       </pre>
     </section>
   );

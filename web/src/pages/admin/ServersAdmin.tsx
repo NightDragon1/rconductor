@@ -21,6 +21,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
+import { stripCodes } from '@/lib/serverpage';
 import { cardStatus } from '@/lib/status';
 import { usePhone, useReveal } from '@/lib/phone';
 import { useShortcuts } from '@/lib/shortcuts';
@@ -300,7 +301,7 @@ function ServerPanel({
                 <option value="">{t('servers.choose')}</option>
                 {(containers.data?.items ?? []).map((c) => (
                   <option key={c.name} value={c.name}>
-                    {t('servers.containerOption', { name: c.name, state: c.state })}
+                    {t('servers.containerOption', { name: stripCodes(c.name), state: c.state })}
                   </option>
                 ))}
                 {d.container_name &&
