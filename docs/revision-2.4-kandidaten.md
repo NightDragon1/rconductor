@@ -204,3 +204,19 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Fundstelle:** Design 6.5 verlinkt die Mockups auf einem privaten claude.ai-Artefakt; im öffentlichen Repository ist der Link für andere tot.
 - **Entscheidung (M4):** Die Mockups liegen als Bilder in docs/mockups/ und reichen als Quelle. docs/03-design.md bleibt bis zur Revision unverändert.
 - **Vorschlag:** Link in Design 6.5 entfernen und auf docs/mockups/ verweisen.
+
+## 28. Bidi-Steuerzeichen im Freitext als sichtbarer Platzhalter
+
+- **Fundstelle:** SEC-006 (Cc und Cf nur aus Bezeichnern entfernt, im Freitext nur Steuerzeichen außer Zeilenumbruch und Tabulator), Abnahme SEC-006, T-008. Über Bidi-Zeichen im Freitext sagt das Konzept nichts; sie könnten eine Zeile in Konsole, Logs oder Verlauf verdreht erscheinen lassen.
+- **Entscheidung (M4, Schritt 10):**
+  - Die Oberfläche lässt Bidi-Steuerzeichen (U+061C, U+200E, U+200F, U+202A bis U+202E, U+2066 bis U+2069) im Freitext nicht wirken, sondern zeigt sie als Platzhalter wie ⟨U+202E⟩; jede Zeile steht zusätzlich in einem eigenen bdi-Element.
+  - Das gilt für Antworten, Log-Zeilen und die angezeigten Befehle in Konsole, Logs, Verlauf und auf der Befehlsseite.
+  - Kopieren und Markieren liefern den Originaltext mit dem Steuerzeichen; der Platzhalter ist erzeugter Inhalt. Farbcodes bleiben dabei entfernt (Kandidat 9).
+  - Das Backend behält die Zeichen im Freitext unverändert. Andere Cf-Zeichen wie der Zero Width Joiner bleiben unangetastet, Emoji und einige Schriften brauchen sie.
+- **Vorschlag:** SEC-006 und Abnahme SEC-006 um den Platzhalter im Freitext ergänzen, Design 6 um eine Zeile zur Darstellung.
+
+## 29. SEC-009 gilt für den Web-Port
+
+- **Fundstelle:** SEC-009 und Abnahme SEC-009 („Jede Antwort trägt die Header“); NFR-001 (Agent-Port 8443), Design 1.
+- **Entscheidung (M4, Schritt 10):** Die Header gelten für alle Antworten des Web-Ports. Der Agent-Port trägt sie nicht: Er liefert keine Inhalte für Browser, nur das Agent-Protokoll.
+- **Vorschlag:** SEC-009 und Abnahme SEC-009 auf „jede Antwort des Web-Ports“ fassen.
