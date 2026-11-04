@@ -198,3 +198,9 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Fundstelle:** UI-012 und Design 6.1, 6.6 („Verwaltung mobil nur lesend“), Abnahme UI-012 („Verwaltung ist nur lesbar“); AUTH-006.
 - **Entscheidung (M4, Schritt 9):** Die Verwaltung bleibt auf dem Handy lesend: Suche, Filter, Details und Kopieren sind erlaubt, alles Schreibende entfällt. Ausnahme für den Notfall unterwegs: Im Seitenpanel eines Benutzers bleiben „Sperren“, „Entsperren“ und „Sitzungen beenden“, jeweils mit Bestätigungsdialog statt Rückgängig. Die Grenze liegt bei 768 px (Tailwinds md). Sie betrifft nur die Darstellung; das Backend prüft jede Anfrage wie auf dem Desktop.
 - **Vorschlag:** UI-012, Design 6.1 und 6.6 sowie die Abnahme UI-012 um diese Ausnahme ergänzen.
+
+## 27. Link auf die Mockup-Fläche in Design 6.5 entfernen
+
+- **Fundstelle:** Design 6.5 verlinkt die Mockups auf einem privaten claude.ai-Artefakt; im öffentlichen Repository ist der Link für andere tot.
+- **Entscheidung (M4):** Die Mockups liegen als Bilder in docs/mockups/ und reichen als Quelle. docs/03-design.md bleibt bis zur Revision unverändert.
+- **Vorschlag:** Link in Design 6.5 entfernen und auf docs/mockups/ verweisen.
