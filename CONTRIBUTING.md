@@ -26,8 +26,9 @@ make check
 It runs the linters, formatting, the check of generated code and all tests,
 and must pass. Stage generated files with the change: they count as part of
 it. Further tests are `make test-integration` and `make test-e2e`; the CI
-runs them on every pull request. `make test-minecraft` needs you to accept
-the Minecraft EULA yourself (see the README).
+runs them on pull requests, E2E when the changed paths concern it.
+`make test-minecraft` runs nightly and before a release; locally it needs you
+to accept the Minecraft EULA yourself (see the README).
 
 `api/openapi.yaml` is the only source of the API: change it first, then
 generate the code.

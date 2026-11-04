@@ -20,7 +20,7 @@ jobs:
   publish:
     name: Publish ${{ matrix.target }}
     needs: ci
-    runs-on: ubuntu-26.04
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     permissions:
       contents: read
       packages: write
