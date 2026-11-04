@@ -128,8 +128,11 @@ jobs:
           path: internal/webui/dist
           retention-days: 1
 
+  # The three stage 2 names are required checks. A push to a branch must
+  # not report them, or it satisfies the ruleset before the pull request's
+  # run has finished.
   image:
-    name: Image (amd64)
+    name: ${{ needs.scope.outputs.stage2 == 'true' && 'Image (amd64)' || 'Image (amd64) not due' }}
     needs: scope
     if: needs.scope.outputs.stage2 == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
@@ -165,7 +168,7 @@ jobs:
           retention-days: 1
 
   integration:
-    name: Integration tests
+    name: ${{ needs.scope.outputs.stage2 == 'true' && 'Integration tests' || 'Integration tests not due' }}
     needs: [scope, image]
     if: needs.scope.outputs.stage2 == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
@@ -236,7 +239,7 @@ jobs:
 
   # One stable name for the ruleset: a skipped matrix job reports no check.
   e2e:
-    name: E2E (Playwright)
+    name: ${{ needs.scope.outputs.stage2 == 'true' && 'E2E (Playwright)' || 'E2E (Playwright) not due' }}
     needs: [scope, e2e-shard]
     if: ${{ !cancelled() }}
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
