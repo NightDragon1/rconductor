@@ -16,6 +16,9 @@ DELAY=${PULL_DELAY:-10}
 
 images=$(grep -rhoE --include='*_test.go' '"[^" ]+@sha256:[0-9a-f]{64}"' "$@" | tr -d '"' | sort -u)
 [ -n "$images" ] || { echo "no pinned images in: $*" >&2; exit 1; }
+# go list leaves Dir empty while the module is not in the cache, which is
+# the case after every change to go.sum.
+go mod download github.com/testcontainers/testcontainers-go
 module=$(go list -m -f '{{.Dir}}' github.com/testcontainers/testcontainers-go)
 ryuk=$(sed -n 's/^const ReaperDefaultImage = "\(.*\)"$/\1/p' "$module/internal/config/config.go")
 [ -n "$ryuk" ] || { echo "no Ryuk image in $module" >&2; exit 1; }
