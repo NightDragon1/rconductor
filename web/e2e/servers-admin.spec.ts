@@ -14,9 +14,7 @@ async function as(page: Page, state: StackState, user: string, path: string, tit
 test('a server with profile, host, port, password and an agent container (SRV-001)', async ({
   page,
   state,
-  csp,
 }) => {
-  void csp;
   await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
@@ -44,8 +42,7 @@ test('a server with profile, host, port, password and an agent container (SRV-00
   await expect(row).toHaveCount(0);
 });
 
-test('a server can be in several server groups (SRV-003)', async ({ page, state, csp }) => {
-  void csp;
+test('a server can be in several server groups (SRV-003)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
   await page.getByPlaceholder('Name of a new server group').fill('e2e-group');
   await page.getByRole('button', { name: 'Create group' }).click();
@@ -64,12 +61,7 @@ test('a server can be in several server groups (SRV-003)', async ({ page, state,
   await expect(survival).not.toContainText('e2e-group');
 });
 
-test('the server admin reads servers and groups only (Design 6.2)', async ({
-  page,
-  state,
-  csp,
-}) => {
-  void csp;
+test('the server admin reads servers and groups only (Design 6.2)', async ({ page, state }) => {
   await as(page, state, 'sadmin', 'admin/servers', 'Servers and groups');
   await expect(page.getByRole('button', { name: 'New server' })).toHaveCount(0);
   await page.getByRole('button', { name: 'survival', exact: true }).click();
@@ -82,9 +74,7 @@ test('the server admin reads servers and groups only (Design 6.2)', async ({
 test('pairing dialog with token and Compose; approval by fingerprint (AGT-005)', async ({
   page,
   state,
-  csp,
 }) => {
-  void csp;
   await as(page, state, 'admin', 'admin/agents', 'Agents');
   // Pairing by fingerprint is off by default.
   await expect(page.getByLabel('Pairing by fingerprint')).not.toBeChecked();
@@ -104,12 +94,7 @@ test('pairing dialog with token and Compose; approval by fingerprint (AGT-005)',
   await expect(waiting).not.toContainText('waiting for approval');
 });
 
-test('the RCON admin reaches every administration page (ROLE-002)', async ({
-  page,
-  state,
-  csp,
-}) => {
-  void csp;
+test('the RCON admin reaches every administration page (ROLE-002)', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   for (const [path, title] of [

@@ -14,9 +14,7 @@ async function as(page: Page, state: StackState, user: string, path: string, tit
 test('settings: a change waits for undo and saves with the ETag (Design 5.6)', async ({
   page,
   state,
-  csp,
 }) => {
-  void csp;
   await as(page, state, 'admin', 'admin/settings', 'Settings');
   const field = page.getByLabel('invite.lifetime');
   const before = await field.inputValue();
@@ -30,8 +28,7 @@ test('settings: a change waits for undo and saves with the ETag (Design 5.6)', a
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible(saved);
 });
 
-test('switching supporters off asks first', async ({ page, state, csp }) => {
-  void csp;
+test('switching supporters off asks first', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/settings', 'Settings');
   await page.getByLabel('supporters.enabled').uncheck();
   await page.getByRole('button', { name: 'Save 1 change' }).click();
@@ -42,8 +39,7 @@ test('switching supporters off asks first', async ({ page, state, csp }) => {
   await expect(page.getByLabel('supporters.enabled')).toBeChecked();
 });
 
-test('the RCON admin switches shortcuts on for everyone (UI-008)', async ({ page, state, csp }) => {
-  void csp;
+test('the RCON admin switches shortcuts on for everyone (UI-008)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/settings', 'Settings');
   await page.getByLabel('ui.shortcuts_enabled').check();
   await page.getByRole('button', { name: 'Save 1 change' }).click();
@@ -61,12 +57,7 @@ test('the RCON admin switches shortcuts on for everyone (UI-008)', async ({ page
   }
 });
 
-test('audit with filters; the server admin sees his scope (AUD-001)', async ({
-  page,
-  state,
-  csp,
-}) => {
-  void csp;
+test('audit with filters; the server admin sees his scope (AUD-001)', async ({ page, state }) => {
   await as(page, state, 'admin', 'audit', 'Audit');
   const entries = page.getByRole('list', { name: 'Audit entries' }).getByRole('listitem');
   await expect(entries.first()).toBeVisible();
@@ -86,9 +77,7 @@ test('audit with filters; the server admin sees his scope (AUD-001)', async ({
 test('own profile: real name, contacts, picture; a wrong password is refused (AUTH-009)', async ({
   page,
   state,
-  csp,
 }) => {
-  void csp;
   await login(page, 'mod2', secret(state, 'mod2'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.getByTitle('Your profile').click();

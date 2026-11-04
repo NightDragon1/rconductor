@@ -22,8 +22,7 @@ const allowed: Record<string, string[]> = {
 };
 
 for (const [user, ok] of Object.entries(allowed)) {
-  test(`direct URLs of ${user}`, async ({ page, state, csp }) => {
-    void csp;
+  test(`direct URLs of ${user}`, async ({ page, state }) => {
     await login(page, user, secret(state, user));
     await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
     for (const [url, title] of Object.entries(urls)) {

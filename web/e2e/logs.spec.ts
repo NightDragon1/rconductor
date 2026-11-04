@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, login, secret, test } from './fixtures';
 
-test('container logs live, earlier lines, filter (UI-009)', async ({ page, state, csp }) => {
-  void csp;
+test('container logs live, earlier lines, filter (UI-009)', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   const topic = `server.${state.servers.survival}.logs`;
@@ -41,8 +40,7 @@ test('container logs live, earlier lines, filter (UI-009)', async ({ page, state
     .toBe(true);
 });
 
-test('follow, wrap and clear', async ({ page, state, csp }) => {
-  void csp;
+test('follow, wrap and clear', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto(`servers/${state.servers.survival}/logs`);

@@ -69,8 +69,7 @@ test('the check finds text that is cut off', async ({ page }) => {
   expect((await measure(page)).cut).toHaveLength(2);
 });
 
-test('login fits a phone (UI-012)', async ({ page, csp }) => {
-  void csp;
+test('login fits a phone (UI-012)', async ({ page }) => {
   await page.goto('login');
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
   await fits(page);
@@ -82,8 +81,7 @@ for (const [user, tabs] of [
   ['mod', ['overview', 'commands', 'history']],
   ['sup', ['overview', 'commands', 'history']],
 ] as const) {
-  test(`pages of ${user} fit a phone (UI-012)`, async ({ page, state, csp }) => {
-    void csp;
+  test(`pages of ${user} fit a phone (UI-012)`, async ({ page, state }) => {
     await enter(page, state, user);
     await fits(page);
     for (const path of [
@@ -100,9 +98,7 @@ for (const [user, tabs] of [
 test('the head links to the own profile, signing out stays in the menu', async ({
   page,
   state,
-  csp,
 }) => {
-  void csp;
   await enter(page, state, 'mod');
   const banner = page.getByRole('banner');
   await expect(banner.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
@@ -114,12 +110,7 @@ test('the head links to the own profile, signing out stays in the menu', async (
   await expect(page).toHaveURL(/login/);
 });
 
-test('the console works by touch and hides the timeline (Design 6.5)', async ({
-  page,
-  state,
-  csp,
-}) => {
-  void csp;
+test('the console works by touch and hides the timeline (Design 6.5)', async ({ page, state }) => {
   await enter(page, state, 'admin');
   await page.goto(`servers/${state.servers.survival}/console`);
   await expect(page.getByRole('navigation', { name: 'Timeline' })).toBeHidden();
@@ -141,8 +132,7 @@ test('the console works by touch and hides the timeline (Design 6.5)', async ({
   await expect(input).toBeInViewport();
 });
 
-test('server actions sit in the menu and ask first (AGT-008)', async ({ page, state, csp }) => {
-  void csp;
+test('server actions sit in the menu and ask first (AGT-008)', async ({ page, state }) => {
   await enter(page, state, 'admin');
   await page.goto(`servers/${state.servers.survival}/overview`);
   await expect(page.getByRole('group', { name: 'Server actions' })).toHaveCount(0);
@@ -162,8 +152,7 @@ test('server actions sit in the menu and ask first (AGT-008)', async ({ page, st
   await expect(page.getByRole('button', { name: 'Server actions' })).toHaveCount(0);
 });
 
-test('commands: one card open, players in the sheet (Design 6.6)', async ({ page, state, csp }) => {
-  void csp;
+test('commands: one card open, players in the sheet (Design 6.6)', async ({ page, state }) => {
   await enter(page, state, 'mod');
   await page.goto(`servers/${state.servers.survival}/commands`);
   const commands = page.getByRole('region', { name: 'Commands' });
@@ -217,8 +206,7 @@ async function readsOnly(page: Page, extra: RegExp = /^$/) {
   await fits(page);
 }
 
-test('the administration reads on a phone (UI-012)', async ({ page, state, csp }) => {
-  void csp;
+test('the administration reads on a phone (UI-012)', async ({ page, state }) => {
   await enter(page, state, 'admin');
 
   await page.goto('admin/groups');
@@ -266,9 +254,7 @@ async function userId(request: APIRequestContext, base: string, name: string) {
 test('users: search and details read; lock and end sessions ask (candidate 26)', async ({
   page,
   state,
-  csp,
 }) => {
-  void csp;
   await enter(page, state, 'admin');
   await page.goto('admin/users');
   await expect(page.getByRole('heading', { name: 'Users', level: 1 })).toBeVisible();
@@ -315,8 +301,7 @@ test('users: search and details read; lock and end sessions ask (candidate 26)',
   }
 });
 
-test('a long server name fits a phone (SEC-006)', async ({ page, state, csp }) => {
-  void csp;
+test('a long server name fits a phone (SEC-006)', async ({ page, state }) => {
   await enter(page, state, 'admin');
   const url = `${state.base_url}api/v1/servers/${state.servers.arena}`;
   // A change names the whole server and the version just read.

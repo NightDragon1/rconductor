@@ -10,9 +10,7 @@ test('an invitation link keeps its token out of paths and logs (UI-008)', async 
   browser,
   state,
   stack,
-  csp,
 }) => {
-  void csp;
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   const created = await page.evaluate(async () => {
@@ -53,8 +51,7 @@ test('an invitation link keeps its token out of paths and logs (UI-008)', async 
   expect(readFileSync(`e2e/.panel-${stack}.log`, 'utf8')).not.toContain(created.token);
 });
 
-test('an expired invitation says so (UI-008)', async ({ page, state, csp }) => {
-  void csp;
+test('an expired invitation says so (UI-008)', async ({ page, state }) => {
   await page.goto(`invite#${state.expired_invite}`);
   await page.getByLabel('Pseudonym').fill('too-late');
   await page.getByLabel('Password', { exact: true }).fill('a fine invited password');

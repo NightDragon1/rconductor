@@ -14,8 +14,7 @@ async function open(page: Page, state: StackState, user: string) {
   await expect(page).toHaveURL(/\/commands$/);
 }
 
-test('the moderator sees his list as cards with fields (CMD-003)', async ({ page, state, csp }) => {
-  void csp;
+test('the moderator sees his list as cards with fields (CMD-003)', async ({ page, state }) => {
   await open(page, state, 'mod');
   await expect(cards(page)).toHaveCount(6);
   for (const path of ['list', 'kick', 'whitelist add', 'say', 'time set', 'weather']) {
@@ -36,9 +35,7 @@ test('the moderator sees his list as cards with fields (CMD-003)', async ({ page
 test('players come from the player list; the answer shows in the history (CMD-003)', async ({
   page,
   state,
-  csp,
 }) => {
-  void csp;
   await open(page, state, 'mod');
   const players = page.getByRole('region', { name: 'Players online' });
   // Names are foreign data and stay text (SEC-006).
@@ -72,9 +69,7 @@ test('players come from the player list; the answer shows in the history (CMD-00
 test('a player field takes only player names (revision 2.4 candidate 19)', async ({
   page,
   state,
-  csp,
 }) => {
-  void csp;
   await open(page, state, 'mod');
   const wl = card(page, 'whitelist add');
   const field = wl.getByLabel('player', { exact: true });
@@ -93,12 +88,7 @@ test('a player field takes only player names (revision 2.4 candidate 19)', async
   await expect(players.getByRole('button', { name: 'Steve' })).toBeEnabled();
 });
 
-test('the supporter sees only passable commands (CMD-003, ROLE-007)', async ({
-  page,
-  state,
-  csp,
-}) => {
-  void csp;
+test('the supporter sees only passable commands (CMD-003, ROLE-007)', async ({ page, state }) => {
   await open(page, state, 'sup');
   await expect(cards(page)).toHaveCount(4);
   for (const path of ['list', 'whitelist add', 'say', 'time set']) {
@@ -112,8 +102,7 @@ test('the supporter sees only passable commands (CMD-003, ROLE-007)', async ({
   );
 });
 
-test('the search narrows the cards by path or description', async ({ page, state, csp }) => {
-  void csp;
+test('the search narrows the cards by path or description', async ({ page, state }) => {
   await open(page, state, 'mod');
   const search = page.getByRole('searchbox', { name: 'Search commands' });
   await search.fill('WHITE');
