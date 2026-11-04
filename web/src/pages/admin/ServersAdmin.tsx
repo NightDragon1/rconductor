@@ -21,9 +21,11 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
+import { usePhone, useReveal } from '@/lib/phone';
 import { useShortcuts } from '@/lib/shortcuts';
 import { useUndo } from '@/lib/undo';
 import { cn } from '@/lib/utils';
+import { PhoneNote } from './PhoneNote';
 
 type GamePort = components['schemas']['GamePort'];
 type Message = { ok: boolean; text: string } | null;
@@ -79,17 +81,19 @@ const draftOf = (s?: Server): Draft => ({
 });
 
 // ServerPanel creates or changes a server (SRV-001, SRV-005): only the
-// RCON admin; a server admin sees it read-only. The password is only
+// RCON admin; a server admin and a phone see it read-only. The password is only
 // set, never shown. Agent and container come from the agent's list
 // (revision 2.4 candidate 22).
 function ServerPanel({
   server,
   canEdit,
+  canSeeAgents,
   onClose,
   onCreated,
 }: {
   server?: Server;
   canEdit: boolean;
+  canSeeAgents: boolean;
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
@@ -97,7 +101,8 @@ function ServerPanel({
   const qc = useQueryClient();
   const { schedule } = useUndo();
   const profiles = useProfiles();
-  const agents = useAgents(canEdit);
+  const agents = useAgents(canSeeAgents);
+  const panel = useReveal<HTMLElement>();
   const [d, setD] = useState<Draft>(() => draftOf(server));
   const [message, setMessage] = useState<Message>(null);
   const [conflict, setConflict] = useState(false);
@@ -107,7 +112,7 @@ function ServerPanel({
     queryKey: ['agent-containers', d.agent_id],
     queryFn: async () =>
       must(await api.GET('/agents/{id}/containers', { params: { path: { id: d.agent_id } } })),
-    enabled: canEdit && !!d.agent_id,
+    enabled: canSeeAgents && !!d.agent_id,
   });
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
   const body = () => ({
@@ -169,6 +174,7 @@ function ServerPanel({
   const off = !canEdit || conflict;
   return (
     <aside
+      ref={panel}
       aria-label={t('admin.panel', { name: server?.name ?? t('servers.new') })}
       className="flex w-full flex-col gap-3 rounded-lg border border-border bg-surface p-5 xl:w-[28rem]"
     >
@@ -272,7 +278,7 @@ function ServerPanel({
                     {a.name}
                   </option>
                 ))}
-              {!canEdit && d.agent_id && (
+              {!canSeeAgents && d.agent_id && (
                 <option value={d.agent_id}>{t('servers.agentSet')}</option>
               )}
             </select>
@@ -467,6 +473,7 @@ function GroupPanel({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { schedule } = useUndo();
+  const panel = useReveal<HTMLElement>();
   const [draft, setDraft] = useState(group);
   const [message, setMessage] = useState<Message>(null);
   const [conflict, setConflict] = useState(false);
@@ -509,6 +516,7 @@ function GroupPanel({
 
   return (
     <aside
+      ref={panel}
       aria-label={t('admin.panel', { name: draft.name })}
       className="flex w-full flex-col gap-3 rounded-lg border border-border bg-surface p-5 xl:w-[28rem]"
     >
@@ -617,12 +625,14 @@ function GroupPanel({
 
 // ServersAdminPage lists servers and server groups (SRV-001, SRV-003):
 // the RCON admin creates and changes them, a server admin reads those in
-// his scope (Design 6.2).
+// his scope (Design 6.2); a phone only reads (UI-012).
 export function ServersAdminPage() {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { data: session } = useSession();
-  const canEdit = session?.user.role === 'rcon_admin';
+  const phone = usePhone();
+  const canSeeAgents = session?.user.role === 'rcon_admin';
+  const canEdit = canSeeAgents && !phone;
   const servers = useServers();
   const groups = useServerGroups(true);
   const profiles = useProfiles();
@@ -674,6 +684,8 @@ export function ServersAdminPage() {
           )}
         </div>
 
+        <PhoneNote />
+
         <section
           aria-label={t('nav.servers')}
           className="overflow-x-auto rounded-lg border border-border bg-surface"
@@ -697,7 +709,7 @@ export function ServersAdminPage() {
                   <td className="p-3">
                     <button
                       type="button"
-                      className="font-mono hover:underline"
+                      className="tap font-mono hover:underline"
                       onClick={() => setOpen({ kind: 'server', id: s.id })}
                     >
                       <bdi>{s.name}</bdi>
@@ -763,7 +775,7 @@ export function ServersAdminPage() {
                     <td className="p-3">
                       <button
                         type="button"
-                        className="font-mono uppercase hover:underline"
+                        className="tap font-mono uppercase hover:underline"
                         onClick={() => setOpen({ kind: 'group', id: g.id })}
                       >
                         <bdi>{g.name}</bdi>
@@ -794,6 +806,7 @@ export function ServersAdminPage() {
           key={open.id}
           server={current}
           canEdit={canEdit}
+          canSeeAgents={canSeeAgents}
           onClose={() => setOpen(null)}
           onCreated={(id) => setOpen({ kind: 'server', id })}
         />

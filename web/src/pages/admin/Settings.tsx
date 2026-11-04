@@ -10,7 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
 import { formatDuration, isGoDuration, parseDuration } from '@/lib/duration';
+import { usePhone } from '@/lib/phone';
 import { useUndo } from '@/lib/undo';
+import { PhoneNote } from './PhoneNote';
 
 type Values = Record<string, unknown>;
 export const settingsKey = ['settings'] as const;
@@ -74,9 +76,10 @@ const sectionOf = (key: string) => sections.find(([, re]) => re.test(key))?.[0] 
 // SettingsPage changes the global settings (Design 5.6): only the RCON
 // admin. Changes wait for undo and go out with the settings' ETag
 // (revision 2.4 candidate 24); switching supporters off asks first, as
-// it ends the sessions of all supporters.
+// it ends the sessions of all supporters. A phone only reads (UI-012).
 export function SettingsPage() {
   const { t } = useTranslation();
+  const phone = usePhone();
   const qc = useQueryClient();
   const { schedule } = useUndo();
   const settings = useQuery({
@@ -104,6 +107,7 @@ export function SettingsPage() {
       ? formatDuration(a) === formatDuration(b)
       : JSON.stringify(a) === JSON.stringify(b);
   const changed = Object.keys(values).filter((k) => base && !same(values[k], base.values[k]));
+  const off = conflict || phone;
   const invalid = Object.entries(texts).some(([, x]) => parseDuration(x) === null);
 
   const send = () => {
@@ -159,6 +163,7 @@ export function SettingsPage() {
         <h1 className="text-2xl font-semibold">{t('nav.settings')}</h1>
         <p className="text-sm text-muted">{t('settings.explain')}</p>
       </div>
+      <PhoneNote />
       {settings.isPending && <p className="text-muted">{t('app.loading')}</p>}
       {groups.map((g) => (
         <section
@@ -195,7 +200,7 @@ export function SettingsPage() {
                         id={id}
                         type="checkbox"
                         className="size-5 shrink-0"
-                        disabled={conflict}
+                        disabled={off}
                         checked={values[k] === true}
                         onChange={(e) => set(k, e.target.checked)}
                       />
@@ -215,7 +220,7 @@ export function SettingsPage() {
                       id={id}
                       type={v === 'number' ? 'number' : 'text'}
                       inputMode={v === 'duration' ? 'text' : undefined}
-                      disabled={conflict}
+                      disabled={off}
                       aria-invalid={bad}
                       value={text}
                       onChange={(e) => {
@@ -245,7 +250,7 @@ export function SettingsPage() {
         </p>
       )}
       <div className="flex gap-2">
-        {!conflict && (
+        {!off && (
           <Button type="submit" disabled={changed.length === 0 || invalid}>
             {t('settings.save', { count: changed.length })}
           </Button>
@@ -264,7 +269,7 @@ export function SettingsPage() {
             {t('admin.reload')}
           </Button>
         )}
-        {changed.length > 0 && !conflict && (
+        {changed.length > 0 && !off && (
           <Button type="button" variant="ghost" onClick={() => reset()}>
             {t('settings.discard')}
           </Button>

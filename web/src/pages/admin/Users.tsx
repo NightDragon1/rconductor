@@ -24,11 +24,13 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ago, span, useNow } from '@/lib/format';
+import { usePhone } from '@/lib/phone';
 import { useShortcuts } from '@/lib/shortcuts';
 import { useUndo } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { BulkResults } from './BulkResults';
 import { InviteDialog } from './InviteDialog';
+import { PhoneNote } from './PhoneNote';
 import { UserPanel } from './UserPanel';
 
 type Status = 'all' | 'active' | 'locked' | 'invited';
@@ -42,9 +44,12 @@ const initials = (p: string) =>
 // UsersPage is the user administration (UI-007, UI-008, AUTH-009): the
 // managed users and open invitations with search, filters, multiple
 // selection with mass actions and a side panel. The backend limits all to
-// the caller's area (Design 3.6); the page only hides.
+// the caller's area (Design 3.6); the page only hides. A phone reads;
+// locking and ending sessions stay in the panel (UI-012, revision 2.4
+// candidate 26).
 export function UsersPage() {
   const { t } = useTranslation();
+  const phone = usePhone();
   const qc = useQueryClient();
   const now = useNow(30_000);
   const { schedule, undoLast } = useUndo();
@@ -80,7 +85,7 @@ export function UsersPage() {
 
   useShortcuts({
     '/': () => search.current?.focus(),
-    i: () => setInvite({ key: Date.now() }),
+    i: () => !phone && setInvite({ key: Date.now() }),
     Escape: () => setOpen(null),
     z: undoLast,
   });
@@ -214,18 +219,21 @@ export function UsersPage() {
               ].join(' · ')}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setInvite({ key: Date.now(), template: chosen[0] ?? list[0] })}
-            >
-              {t('admin.invite.fromTemplate')}
-            </Button>
-            <Button onClick={() => setInvite({ key: Date.now() })}>
-              {t('admin.invite.title')}
-            </Button>
-          </div>
+          {!phone && (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setInvite({ key: Date.now(), template: chosen[0] ?? list[0] })}
+              >
+                {t('admin.invite.fromTemplate')}
+              </Button>
+              <Button onClick={() => setInvite({ key: Date.now() })}>
+                {t('admin.invite.title')}
+              </Button>
+            </div>
+          )}
         </div>
+        <PhoneNote users />
 
         <div className="flex flex-wrap gap-2">
           <Input
@@ -270,7 +278,7 @@ export function UsersPage() {
           </select>
         </div>
 
-        {chosen.length > 0 && (
+        {chosen.length > 0 && !phone && (
           <div
             role="toolbar"
             aria-label={t('admin.bulk.label')}
@@ -345,16 +353,18 @@ export function UsersPage() {
           <table className="w-full text-sm">
             <thead className="text-left text-muted">
               <tr>
-                <th className="w-10 p-3">
-                  <input
-                    type="checkbox"
-                    aria-label={t('admin.selectAll')}
-                    checked={shown.length > 0 && shown.every((u) => selected.has(u.id))}
-                    onChange={(e) =>
-                      setSelected(e.target.checked ? new Set(shown.map((u) => u.id)) : new Set())
-                    }
-                  />
-                </th>
+                {!phone && (
+                  <th className="w-10 p-3">
+                    <input
+                      type="checkbox"
+                      aria-label={t('admin.selectAll')}
+                      checked={shown.length > 0 && shown.every((u) => selected.has(u.id))}
+                      onChange={(e) =>
+                        setSelected(e.target.checked ? new Set(shown.map((u) => u.id)) : new Set())
+                      }
+                    />
+                  </th>
+                )}
                 <th className="p-3 font-medium">{t('login.pseudonym')}</th>
                 <th className="p-3 font-medium">{t('admin.role')}</th>
                 <th className="p-3 font-medium">{t('admin.groupsScope')}</th>
@@ -372,18 +382,20 @@ export function UsersPage() {
                     (selected.has(u.id) || open === u.id) && 'bg-surface-raised',
                   )}
                 >
-                  <td className="p-3">
-                    <input
-                      type="checkbox"
-                      aria-label={t('admin.select', { name: u.pseudonym })}
-                      checked={selected.has(u.id)}
-                      onChange={() => toggle(u.id)}
-                    />
-                  </td>
+                  {!phone && (
+                    <td className="p-3">
+                      <input
+                        type="checkbox"
+                        aria-label={t('admin.select', { name: u.pseudonym })}
+                        checked={selected.has(u.id)}
+                        onChange={() => toggle(u.id)}
+                      />
+                    </td>
+                  )}
                   <td className="p-3">
                     <button
                       type="button"
-                      className="flex items-center gap-2 font-mono hover:underline"
+                      className="flex items-center gap-2 font-mono hover:underline max-md:min-h-11"
                       onClick={() => setOpen(u.id)}
                     >
                       <span
@@ -415,7 +427,7 @@ export function UsersPage() {
                 const expired = Date.parse(i.expires_at) <= now;
                 return (
                   <tr key={i.id} className="border-t border-border">
-                    <td className="p-3" />
+                    {!phone && <td className="p-3" />}
                     <td className="p-3 font-mono text-muted">{t('admin.invitation')}</td>
                     <td className="p-3">
                       <span className="rounded border border-border px-1.5 text-xs">
@@ -431,21 +443,25 @@ export function UsersPage() {
                       <span className={expired ? 'text-muted' : 'text-warn'}>
                         {t(expired ? 'admin.expired' : 'admin.status.invited')}
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="ml-2"
-                        onClick={async () => {
-                          await outcome(i.id, async () =>
-                            must(
-                              await api.DELETE('/invites/{id}', { params: { path: { id: i.id } } }),
-                            ),
-                          );
-                          void qc.invalidateQueries({ queryKey: invitesKey });
-                        }}
-                      >
-                        {t('admin.withdraw')}
-                      </Button>
+                      {!phone && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-2"
+                          onClick={async () => {
+                            await outcome(i.id, async () =>
+                              must(
+                                await api.DELETE('/invites/{id}', {
+                                  params: { path: { id: i.id } },
+                                }),
+                              ),
+                            );
+                            void qc.invalidateQueries({ queryKey: invitesKey });
+                          }}
+                        >
+                          {t('admin.withdraw')}
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -473,6 +489,7 @@ export function UsersPage() {
           groups={groups.data ?? []}
           servers={servers.data ?? []}
           serverGroups={serverGroups.data ?? []}
+          readOnly={phone}
           onTemplate={(u) => setInvite({ key: Date.now(), template: u })}
           onClose={() => setOpen(null)}
         />

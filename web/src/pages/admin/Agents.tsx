@@ -18,7 +18,9 @@ import {
 } from '@/components/ui/dialog';
 import { reasonText } from '@/lib/admin';
 import { ago, useNow } from '@/lib/format';
+import { usePhone } from '@/lib/phone';
 import { cn } from '@/lib/utils';
+import { PhoneNote } from './PhoneNote';
 
 type Token = components['schemas']['AgentToken'];
 const settingsKey = ['settings'] as const;
@@ -79,9 +81,11 @@ function PairDialog({ onClose }: { onClose: () => void }) {
 
 // AgentsPage lists the paired agents (AGT-005): pairing by token, approval
 // of a waiting pairing by fingerprint, revocation. Only the RCON admin
-// reaches it (Design 6.2); the backend decides.
+// reaches it (Design 6.2); the backend decides. A phone only reads
+// (UI-012).
 export function AgentsPage() {
   const { t } = useTranslation();
+  const phone = usePhone();
   const qc = useQueryClient();
   const now = useNow(10_000);
   const agents = useAgents(true);
@@ -132,8 +136,9 @@ export function AgentsPage() {
             })}
           </p>
         </div>
-        <Button onClick={() => setPairing(true)}>{t('agents.pair')}</Button>
+        {!phone && <Button onClick={() => setPairing(true)}>{t('agents.pair')}</Button>}
       </div>
+      <PhoneNote />
       <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface p-3 text-sm">
         <span>
           <span className="block font-medium">{t('agents.fingerprintPairing')}</span>
@@ -143,7 +148,7 @@ export function AgentsPage() {
           type="checkbox"
           className="size-5"
           checked={fingerprintOn}
-          disabled={!settings.data}
+          disabled={phone || !settings.data}
           onChange={() => void toggleFingerprint()}
         />
       </label>
@@ -164,7 +169,7 @@ export function AgentsPage() {
               <th className="p-3 font-medium">{t('agents.version')}</th>
               <th className="p-3 font-medium">{t('agents.fingerprint')}</th>
               <th className="p-3 font-medium">{t('agents.lastSeen')}</th>
-              <th className="p-3" />
+              {!phone && <th className="p-3" />}
             </tr>
           </thead>
           <tbody>
@@ -192,43 +197,48 @@ export function AgentsPage() {
                 <td className="p-3 font-mono">
                   <bdi>{a.version}</bdi>
                 </td>
-                <td className="max-w-56 truncate p-3 font-mono text-xs" title={a.fingerprint}>
+                <td
+                  className="max-w-56 p-3 font-mono text-xs break-all md:truncate"
+                  title={a.fingerprint}
+                >
                   {a.fingerprint}
                 </td>
                 <td className="p-3 text-muted">
                   {a.last_seen_at ? ago(t, a.last_seen_at, now) : ''}
                 </td>
-                <td className="p-3 text-right">
-                  {a.status === 'pending' && (
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        void act(
-                          a.id,
-                          async () =>
-                            must(
-                              await api.POST('/agents/{id}/approve', {
-                                params: { path: { id: a.id } },
-                              }),
-                            ),
-                          t('agents.approved', { name: a.name }),
-                        )
-                      }
-                    >
-                      {t('agents.approve')}
-                    </Button>
-                  )}
-                  {a.status !== 'revoked' && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="ml-2 text-danger"
-                      onClick={() => setRevoke(a)}
-                    >
-                      {t(a.status === 'pending' ? 'agents.reject' : 'agents.revoke')}
-                    </Button>
-                  )}
-                </td>
+                {!phone && (
+                  <td className="p-3 text-right">
+                    {a.status === 'pending' && (
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          void act(
+                            a.id,
+                            async () =>
+                              must(
+                                await api.POST('/agents/{id}/approve', {
+                                  params: { path: { id: a.id } },
+                                }),
+                              ),
+                            t('agents.approved', { name: a.name }),
+                          )
+                        }
+                      >
+                        {t('agents.approve')}
+                      </Button>
+                    )}
+                    {a.status !== 'revoked' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-2 text-danger"
+                        onClick={() => setRevoke(a)}
+                      >
+                        {t(a.status === 'pending' ? 'agents.reject' : 'agents.revoke')}
+                      </Button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
             {all.length === 0 && (

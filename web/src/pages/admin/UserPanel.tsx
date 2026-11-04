@@ -20,6 +20,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
 import { dateTime } from '@/lib/format';
+import { useReveal } from '@/lib/phone';
 import { useUndo } from '@/lib/undo';
 import { reasonText } from '@/lib/admin';
 
@@ -86,7 +87,9 @@ function Chips({
 
 // UserPanel shows a managed user beside the list (Design 6.1): role,
 // groups, scope, supporter release and grants, and the actions. Only what
-// the caller's role offers is shown; the backend decides (CLAUDE.md).
+// the caller's role offers is shown; the backend decides (CLAUDE.md). On
+// a phone it reads; locking and ending sessions stay, each behind a
+// dialog (revision 2.4 candidate 26).
 export function UserPanel({
   user,
   callerRole,
@@ -96,6 +99,7 @@ export function UserPanel({
   groups,
   servers,
   serverGroups,
+  readOnly = false,
   onTemplate,
   onClose,
 }: {
@@ -107,6 +111,7 @@ export function UserPanel({
   groups: UserGroup[];
   servers: Server[];
   serverGroups: ServerGroup[];
+  readOnly?: boolean;
   onTemplate: (u: User) => void;
   onClose: () => void;
 }) {
@@ -114,7 +119,10 @@ export function UserPanel({
   const qc = useQueryClient();
   const { schedule } = useUndo();
   const a = useAssignments(user.id);
-  const [confirm, setConfirm] = useState<'role' | 'reset' | 'remove' | null>(null);
+  const [confirm, setConfirm] = useState<'role' | 'reset' | 'remove' | 'lock' | 'sessions' | null>(
+    null,
+  );
+  const panel = useReveal<HTMLElement>();
   const [newRole, setNewRole] = useState<Role | ''>('');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [temp, setTemp] = useState('');
@@ -151,6 +159,13 @@ export function UserPanel({
     async (keepalive = false) =>
       must(await api.PATCH('/users/{id}', { params: { path: { id: user.id } }, body, keepalive }));
 
+  const endSessions = () =>
+    report(
+      async () =>
+        must(await api.DELETE('/users/{id}/sessions', { params: { path: { id: user.id } } })),
+      t('admin.sessionsEnded'),
+    );
+
   const cur = a.data;
   const groupName = (id: string) => groups.find((g) => g.id === id)?.name ?? id;
   const serverName = (id?: string) => servers.find((s) => s.id === id)?.name ?? id ?? '';
@@ -162,6 +177,7 @@ export function UserPanel({
 
   return (
     <aside
+      ref={panel}
       aria-label={t('admin.panel', { name: user.pseudonym })}
       className="flex w-full flex-col gap-4 rounded-lg border border-border bg-surface p-5 xl:w-96"
     >
@@ -189,7 +205,7 @@ export function UserPanel({
           id={roleId}
           className="h-11 rounded-md border border-border bg-surface px-3"
           value={user.role}
-          disabled={rolesBelow(callerRole).length < 2 || user.is_emergency}
+          disabled={readOnly || rolesBelow(callerRole).length < 2 || user.is_emergency}
           onChange={(e) => {
             setNewRole(e.target.value as Role);
             setConfirm('role');
@@ -230,25 +246,32 @@ export function UserPanel({
         <Chips
           label={t('admin.groups')}
           items={cur.groups.map((g) => ({ key: g, text: groupName(g) }))}
-          onRemove={(g) =>
-            later(
-              t('admin.undo.groupRemoved', { name: user.pseudonym }),
-              put({ groups: cur.groups.filter((x) => x !== g) }),
-              t('admin.saved'),
-            )
+          onRemove={
+            readOnly
+              ? undefined
+              : (g) =>
+                  later(
+                    t('admin.undo.groupRemoved', { name: user.pseudonym }),
+                    put({ groups: cur.groups.filter((x) => x !== g) }),
+                    t('admin.saved'),
+                  )
           }
-          add={{
-            label: t('admin.addGroup'),
-            options: groups
-              .filter((g) => !cur.groups.includes(g.id))
-              .map((g) => ({ value: g.id, text: g.name })),
-            onAdd: (g) =>
-              later(
-                t('admin.undo.groupAdded', { name: user.pseudonym }),
-                put({ groups: [...cur.groups, g] }),
-                t('admin.saved'),
-              ),
-          }}
+          add={
+            readOnly
+              ? undefined
+              : {
+                  label: t('admin.addGroup'),
+                  options: groups
+                    .filter((g) => !cur.groups.includes(g.id))
+                    .map((g) => ({ value: g.id, text: g.name })),
+                  onAdd: (g) =>
+                    later(
+                      t('admin.undo.groupAdded', { name: user.pseudonym }),
+                      put({ groups: [...cur.groups, g] }),
+                      t('admin.saved'),
+                    ),
+                }
+          }
         />
       )}
 
@@ -260,7 +283,7 @@ export function UserPanel({
             text: s.server_id ? serverName(s.server_id) : sgName(s.server_group_id),
           }))}
           onRemove={
-            callerRole === 'rcon_admin'
+            callerRole === 'rcon_admin' && !readOnly
               ? (k) =>
                   later(
                     t('admin.undo.scopeChanged', { name: user.pseudonym }),
@@ -274,7 +297,7 @@ export function UserPanel({
               : undefined
           }
           add={
-            callerRole === 'rcon_admin'
+            callerRole === 'rcon_admin' && !readOnly
               ? {
                   label: t('admin.addScope'),
                   options: [
@@ -306,6 +329,7 @@ export function UserPanel({
           <input
             type="checkbox"
             className="size-5"
+            disabled={readOnly}
             checked={user.supporters_allowed}
             onChange={(e) => {
               const v = e.target.checked;
@@ -344,19 +368,22 @@ export function UserPanel({
               ? `${serverName(g.server_id)} (${userName(g.moderator_id)})`
               : serverName(g.server_id),
           }))}
-          onRemove={(k) =>
-            later(
-              t('admin.undo.grantChanged', { name: user.pseudonym }),
-              put({
-                supporter_grants: cur.supporter_grants.filter(
-                  (g) => `${g.moderator_id}:${g.server_id}` !== k,
-                ),
-              }),
-              t('admin.saved'),
-            )
+          onRemove={
+            readOnly
+              ? undefined
+              : (k) =>
+                  later(
+                    t('admin.undo.grantChanged', { name: user.pseudonym }),
+                    put({
+                      supporter_grants: cur.supporter_grants.filter(
+                        (g) => `${g.moderator_id}:${g.server_id}` !== k,
+                      ),
+                    }),
+                    t('admin.saved'),
+                  )
           }
           add={
-            callerRole === 'moderator' && callerId
+            callerRole === 'moderator' && callerId && !readOnly
               ? {
                   label: t('admin.addServer'),
                   options: servers
@@ -400,54 +427,86 @@ export function UserPanel({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => onTemplate(user)}>
-          {t('admin.useTemplate')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            void report(
-              async () =>
-                must(
-                  await api.DELETE('/users/{id}/sessions', { params: { path: { id: user.id } } }),
-                ),
-              t('admin.sessionsEnded'),
-            )
-          }
-        >
-          {t('admin.endSessions')}
-        </Button>
-        {!user.is_emergency && (
-          <Button variant="outline" size="sm" onClick={() => setConfirm('reset')}>
-            {t('admin.resetPassword')}
+        {!readOnly && (
+          <Button variant="outline" size="sm" onClick={() => onTemplate(user)}>
+            {t('admin.useTemplate')}
           </Button>
         )}
         <Button
           variant="outline"
           size="sm"
-          className={user.disabled ? '' : 'border-danger text-danger'}
-          onClick={() =>
-            later(
-              t(user.disabled ? 'admin.undo.unlocked' : 'admin.undo.locked', {
-                name: user.pseudonym,
-              }),
-              patch({ disabled: !user.disabled }),
-              t('admin.saved'),
-            )
-          }
+          onClick={() => (readOnly ? setConfirm('sessions') : void endSessions())}
         >
-          {t(user.disabled ? 'admin.unlock' : 'admin.lock')}
+          {t('admin.endSessions')}
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="border-danger text-danger"
-          onClick={() => setConfirm('remove')}
-        >
-          {t('admin.remove')}
-        </Button>
+        {!readOnly && !user.is_emergency && (
+          <Button variant="outline" size="sm" onClick={() => setConfirm('reset')}>
+            {t('admin.resetPassword')}
+          </Button>
+        )}
+        {readOnly ? (
+          !user.disabled && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-danger text-danger"
+              onClick={() => setConfirm('lock')}
+            >
+              {t('admin.lock')}
+            </Button>
+          )
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className={user.disabled ? '' : 'border-danger text-danger'}
+            onClick={() =>
+              later(
+                t(user.disabled ? 'admin.undo.unlocked' : 'admin.undo.locked', {
+                  name: user.pseudonym,
+                }),
+                patch({ disabled: !user.disabled }),
+                t('admin.saved'),
+              )
+            }
+          >
+            {t(user.disabled ? 'admin.unlock' : 'admin.lock')}
+          </Button>
+        )}
+        {!readOnly && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-danger text-danger"
+            onClick={() => setConfirm('remove')}
+          >
+            {t('admin.remove')}
+          </Button>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={confirm === 'lock'}
+        title={t('admin.lockTitle', { name: user.pseudonym })}
+        text={t('admin.lockText')}
+        action={t('admin.lock')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          void report(patch({ disabled: true }), t('admin.saved'));
+        }}
+      />
+      <ConfirmDialog
+        open={confirm === 'sessions'}
+        title={t('admin.sessionsTitle', { name: user.pseudonym })}
+        text={t('admin.sessionsText')}
+        action={t('admin.endSessions')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          void endSessions();
+        }}
+      />
 
       <ConfirmDialog
         open={confirm === 'role'}
