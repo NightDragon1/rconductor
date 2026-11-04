@@ -12,8 +12,7 @@ async function as(page: Page, state: StackState, user: string, path: string, tit
   await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
 }
 
-test('a list keeps one command locked for supporters (ROLE-007)', async ({ page, state, csp }) => {
-  void csp;
+test('a list keeps one command locked for supporters (ROLE-007)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/command-lists', 'Command lists');
   await page.getByPlaceholder('Name of a new list').fill('event-cmds');
   await page.getByRole('button', { name: 'Create list' }).click();
@@ -57,9 +56,7 @@ test('a moderator group gives its members servers and commands (ROLE-004, ROLE-0
   page,
   browser,
   state,
-  csp,
 }) => {
-  void csp;
   await as(page, state, 'admin', 'admin/groups', 'Groups');
   await page.getByPlaceholder('Name of a new group').fill('event-mods');
   await page.getByRole('button', { name: 'Create group' }).click();
@@ -93,8 +90,7 @@ test('a moderator group gives its members servers and commands (ROLE-004, ROLE-0
   await again.close();
 });
 
-test('a server admin sees only his own groups and lists', async ({ page, state, csp }) => {
-  void csp;
+test('a server admin sees only his own groups and lists', async ({ page, state }) => {
   await as(page, state, 'sadmin', 'admin/groups', 'Groups');
   await expect(page.getByRole('row').filter({ hasText: 'moderators' })).toHaveCount(0);
   await page.goto('admin/command-lists');
@@ -106,9 +102,7 @@ test('a stale draft is not sent; reload shows the other change (revision 2.4 can
   page,
   browser,
   state,
-  csp,
 }) => {
-  void csp;
   await as(page, state, 'admin', 'admin/command-lists', 'Command lists');
   await page.getByPlaceholder('Name of a new list').fill('lock-test');
   await page.getByRole('button', { name: 'Create list' }).click();

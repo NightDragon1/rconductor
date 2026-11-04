@@ -4,8 +4,7 @@ import { expect, login, secret, test } from './fixtures';
 // Over http to a name that is not localhost, as to a LAN address (D-011),
 // the page is no secure context and has no clipboard API: copying selects
 // the text and asks for Ctrl+C (revision 2.4 candidate 17).
-test('copying without a secure context selects the text', async ({ page, state, csp }) => {
-  void csp;
+test('copying without a secure context selects the text', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   expect(await page.evaluate(() => window.isSecureContext)).toBe(false);

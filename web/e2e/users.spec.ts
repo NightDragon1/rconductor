@@ -15,8 +15,7 @@ async function openUsers(page: Page, state: StackState, user = 'admin') {
 // Changes wait five seconds for Undo (UI-008, F8).
 const afterUndo = { timeout: 9000 };
 
-test('search and filters (UI-007)', async ({ page, state, csp }) => {
-  void csp;
+test('search and filters (UI-007)', async ({ page, state }) => {
   await openUsers(page, state);
   const search = page.getByRole('searchbox', { name: 'Search users' });
   await search.fill('mod');
@@ -42,8 +41,7 @@ test('search and filters (UI-007)', async ({ page, state, csp }) => {
   await expect(row(page, 'mod')).toHaveCount(0);
 });
 
-test('a mass action reports each user, also a refusal (UI-007)', async ({ page, state, csp }) => {
-  void csp;
+test('a mass action reports each user, also a refusal (UI-007)', async ({ page, state }) => {
   await openUsers(page, state);
   await page.getByRole('checkbox', { name: 'Select sadmin', exact: true }).check();
   await page.getByRole('checkbox', { name: 'Select mod', exact: true }).check();
@@ -76,12 +74,7 @@ test('a mass action reports each user, also a refusal (UI-007)', async ({ page, 
   for (const name of ['mod2', 'sup']) await expect(row(page, name)).toContainText('active');
 });
 
-test('undo restores a change; shortcuts are off by default (UI-008)', async ({
-  page,
-  state,
-  csp,
-}) => {
-  void csp;
+test('undo restores a change; shortcuts are off by default (UI-008)', async ({ page, state }) => {
   await openUsers(page, state);
   await row(page, 'mod2').getByRole('button', { name: 'mod2' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of mod2' });
@@ -104,9 +97,7 @@ test('a user from a template gets its assignments; a role change warns (UI-008)'
   page,
   browser,
   state,
-  csp,
 }) => {
-  void csp;
   await openUsers(page, state);
   await row(page, 'mod').getByRole('button', { name: 'mod' }).click();
   await page
@@ -148,9 +139,7 @@ test('profile data only for those who manage the user (AUTH-009)', async ({
   page,
   browser,
   state,
-  csp,
 }) => {
-  void csp;
   const sup = await browser.newContext();
   const supPage = await sup.newPage();
   await login(supPage, 'sup', secret(state, 'sup'));
@@ -180,9 +169,7 @@ test('locking ends the session at once, socket included (AUTH-006)', async ({
   page,
   browser,
   state,
-  csp,
 }) => {
-  void csp;
   const sup = await browser.newContext();
   const supPage = await sup.newPage();
   let closed = false;

@@ -8,8 +8,7 @@ import { expect, login, secret, test } from './fixtures';
 // host-2 and a locked user (internal/e2e/stack).
 const card = (page: Page, name: string) => page.getByRole('article', { name, exact: true });
 
-test('every role lands on its overview (UI-002)', async ({ page, state, csp }) => {
-  void csp;
+test('every role lands on its overview (UI-002)', async ({ page, state }) => {
   const landing: Record<string, { health: boolean; cards: string[]; load: boolean }> = {
     admin: {
       health: true,
@@ -31,12 +30,7 @@ test('every role lands on its overview (UI-002)', async ({ page, state, csp }) =
   }
 });
 
-test('the health overview names every problem with a link (UI-003)', async ({
-  page,
-  state,
-  csp,
-}) => {
-  void csp;
+test('the health overview names every problem with a link (UI-003)', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   const tile = (name: string) => page.getByRole('region', { name, exact: true });
   await expect(tile('Servers')).toContainText('2 / 5');
@@ -66,8 +60,7 @@ test('the health overview names every problem with a link (UI-003)', async ({
   await expect(page).toHaveURL(new RegExp(`servers/${state.servers.arena}(/console)?$`));
 });
 
-test('cards show only fields with a source (UI-004)', async ({ page, state, csp }) => {
-  void csp;
+test('cards show only fields with a source (UI-004)', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   const survival = card(page, 'survival');
   // A bare sha256 image shows the profile instead.
@@ -93,8 +86,7 @@ test('cards show only fields with a source (UI-004)', async ({ page, state, csp 
   await expect(page.getByRole('region', { name: 'events' }).getByRole('article')).toHaveCount(1);
 });
 
-test('moderator cards have no agent data (UI-006)', async ({ page, state, csp }) => {
-  void csp;
+test('moderator cards have no agent data (UI-006)', async ({ page, state }) => {
   for (const user of ['mod', 'sup']) {
     await page.context().clearCookies();
     await login(page, user, secret(state, user));
@@ -109,8 +101,7 @@ test('moderator cards have no agent data (UI-006)', async ({ page, state, csp })
   }
 });
 
-test('the search narrows the cards', async ({ page, state, csp }) => {
-  void csp;
+test('the search narrows the cards', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await page.getByRole('searchbox', { name: 'Search servers by name' }).fill('ARE');
   await expect(page.getByRole('article')).toHaveCount(1);

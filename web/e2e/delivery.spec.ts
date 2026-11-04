@@ -4,8 +4,7 @@ import { expect, login, secret, test } from './fixtures';
 // Issue #88 (NFR-003): reloading a deep link loads every asset, also below
 // the base path; SEC-009: the headers are on every answer and the page runs
 // without a policy violation.
-test('a deep link loads after a reload', async ({ page, state, csp }) => {
-  void csp;
+test('a deep link loads after a reload', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   const failed: string[] = [];
   page.on('response', (r) => {

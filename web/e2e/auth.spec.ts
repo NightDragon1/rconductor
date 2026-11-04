@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, login, secret, test } from './fixtures';
 
-test('the RCON admin signs in and out', async ({ page, state, csp }) => {
-  void csp;
+test('the RCON admin signs in and out', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   await expect(page.getByTitle('Your profile')).toContainText('admin');
@@ -13,15 +12,13 @@ test('the RCON admin signs in and out', async ({ page, state, csp }) => {
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });
 
-test('a wrong password is refused', async ({ page, csp }) => {
-  void csp;
+test('a wrong password is refused', async ({ page }) => {
   await login(page, 'admin', 'not the password');
   await expect(page.getByRole('alert')).toHaveText('Pseudonym or password is wrong.');
 });
 
 // AUTH-010: a temporary password allows only the change of the password.
-test('a temporary password forces a new one', async ({ page, state, csp }) => {
-  void csp;
+test('a temporary password forces a new one', async ({ page, state }) => {
   await login(page, state.reset_user, state.reset_password);
   await expect(page.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
   await page.goto('./');

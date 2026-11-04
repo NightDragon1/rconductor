@@ -13,8 +13,7 @@ async function open(page: Page, state: StackState, user: string, server: string,
   await page.goto(`servers/${state.servers[server]}${tab ? `/${tab}` : ''}`);
 }
 
-test('tabs and start tab per role (UI-011, Design 6.3)', async ({ page, state, csp }) => {
-  void csp;
+test('tabs and start tab per role (UI-011, Design 6.3)', async ({ page, state }) => {
   const want: [string, string, string[], string][] = [
     ['admin', 'survival', ['Overview', 'Console', 'Logs', 'History'], 'console'],
     ['admin', 'outpost', ['Overview', 'Console', 'History'], 'console'],
@@ -30,8 +29,7 @@ test('tabs and start tab per role (UI-011, Design 6.3)', async ({ page, state, c
   }
 });
 
-test('a tab or server outside the role does not exist', async ({ page, state, csp }) => {
-  void csp;
+test('a tab or server outside the role does not exist', async ({ page, state }) => {
   const denied: [string, string, string][] = [
     ['mod', 'survival', 'console'],
     ['mod', 'survival', 'logs'],
@@ -66,8 +64,7 @@ test('a tab or server outside the role does not exist', async ({ page, state, cs
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
 });
 
-test('actions only for admins in scope (AGT-008)', async ({ page, state, csp }) => {
-  void csp;
+test('actions only for admins in scope (AGT-008)', async ({ page, state }) => {
   for (const user of ['mod', 'sup']) {
     await open(page, state, user, 'survival', 'overview');
     await expect(page.getByRole('heading', { name: 'survival', level: 1 })).toBeVisible();
@@ -89,8 +86,7 @@ test('actions only for admins in scope (AGT-008)', async ({ page, state, csp }) 
   await expect(page.getByRole('status')).toHaveText('Restart sent.');
 });
 
-test('without agent only the restart over RCON (AGT-009, W6)', async ({ page, state, csp }) => {
-  void csp;
+test('without agent only the restart over RCON (AGT-009, W6)', async ({ page, state }) => {
   await open(page, state, 'admin', 'outpost', 'overview');
   await expect(actions(page).getByRole('button')).toHaveText(['Restart over RCON']);
   await actions(page).getByRole('button', { name: 'Restart over RCON' }).click();
@@ -101,8 +97,7 @@ test('without agent only the restart over RCON (AGT-009, W6)', async ({ page, st
   await expect(page.getByRole('status')).toHaveText('Stop command sent.');
 });
 
-test('overview tab with players and load', async ({ page, state, csp }) => {
-  void csp;
+test('overview tab with players and load', async ({ page, state }) => {
   await open(page, state, 'admin', 'survival', 'overview');
   const players = page.getByRole('region', { name: 'Players online' });
   // Player names are foreign data and stay text (SEC-006).
@@ -116,8 +111,7 @@ test('overview tab with players and load', async ({ page, state, csp }) => {
   await expect(page.getByRole('main')).not.toContainText('CPU');
 });
 
-test('history: all for admins, own for the moderator', async ({ page, state, csp }) => {
-  void csp;
+test('history: all for admins, own for the moderator', async ({ page, state }) => {
   await open(page, state, 'admin', 'survival', 'history');
   const history = page.getByRole('region', { name: 'History' });
   await expect(history).toContainText('say hi from mod');
@@ -133,8 +127,7 @@ test('history: all for admins, own for the moderator', async ({ page, state, csp
   await expect(own).toContainText('You see your own commands only.');
 });
 
-test('server list with search (F13)', async ({ page, state, csp }) => {
-  void csp;
+test('server list with search (F13)', async ({ page, state }) => {
   await login(page, 'mod', secret(state, 'mod'));
   await page.getByRole('link', { name: 'Servers', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Servers', level: 1 })).toBeVisible();
