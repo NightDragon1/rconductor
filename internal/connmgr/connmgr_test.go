@@ -126,6 +126,16 @@ func (f *fixture) waitStatus(t *testing.T, want Status) time.Duration {
 	}
 }
 
+// waitLog waits for a log line; the status changes just before it is written.
+func (f *fixture) waitLog(t *testing.T, want string) {
+	t.Helper()
+	for start := time.Now(); !strings.Contains(f.logs.String(), want); time.Sleep(10 * time.Millisecond) {
+		if time.Since(start) > 10*time.Second {
+			t.Fatalf("%s missing within 10 s:\n%s", want, f.logs.String())
+		}
+	}
+}
+
 // TestOneConnectionManyUsers covers PROT-002: three users send 20
 // commands each at the same time; there is exactly one connection and
 // every answer reaches its sender.
@@ -271,9 +281,7 @@ func TestHalfOpenConnection(t *testing.T) {
 	if d := f.waitStatus(t, Offline); d > 2*time.Second {
 		t.Errorf("offline after %v", d)
 	}
-	if !strings.Contains(f.logs.String(), `"event":"rcon.disconnected","reason":"no_answer"`) {
-		t.Errorf("rcon.disconnected with no_answer missing:\n%s", f.logs.String())
-	}
+	f.waitLog(t, `"event":"rcon.disconnected","reason":"no_answer"`)
 	f.srv.Thaw()
 	f.waitStatus(t, Connected)
 	if got, err := f.m.Execute(context.Background(), "s1", "after"); err != nil || got != "after" {
