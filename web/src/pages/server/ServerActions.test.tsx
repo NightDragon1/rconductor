@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { fireEvent, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Server } from '@/api/servers';
 import { renderPage, setLanguage, unmarked } from '@/test/render';
 import { ServerActions } from './ServerActions';
@@ -46,6 +46,37 @@ describe('server actions', () => {
     expect(screen.getByRole('dialog').textContent).toContain(
       'on-failure does not apply to a clean shutdown',
     );
+  });
+
+  describe('on a phone (Design 6.6)', () => {
+    afterEach(() => vi.unstubAllGlobals());
+    const phone = () =>
+      vi.stubGlobal('matchMedia', () => ({
+        matches: true,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }));
+
+    it('sit in a menu that asks before stopping', async () => {
+      setLanguage('en');
+      phone();
+      await renderPage(() => <ServerActions server={server} role="server_admin" />);
+      expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Server actions' }), { key: 'Enter' });
+      const items = await screen.findAllByRole('menuitem');
+      expect(items.map((i) => i.textContent)).toEqual(['Start', 'Restart', 'Stop']);
+      expect(items[0]?.hasAttribute('data-disabled')).toBe(true);
+      const stop = items[2];
+      if (stop) fireEvent.click(stop);
+      expect((await screen.findByRole('dialog')).textContent).toContain('Stop');
+    });
+
+    it('are absent for moderators (AGT-008)', async () => {
+      setLanguage('en');
+      phone();
+      await renderPage(() => <ServerActions server={server} role="moderator" />);
+      expect(screen.queryAllByRole('button')).toHaveLength(0);
+    });
   });
 
   it('are absent for moderators (AGT-008)', async () => {

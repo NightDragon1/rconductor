@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Link, Outlet } from '@tanstack/react-router';
-import { Star } from 'lucide-react';
+import { ChevronLeft, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   useAgents,
@@ -14,6 +14,7 @@ import {
 import { useSession } from '@/api/session';
 import { useServer } from '@/api/live-servers';
 import { decimal, gib, span, useNow } from '@/lib/format';
+import { usePhone } from '@/lib/phone';
 import { isAdmin, tabsFor } from '@/lib/serverpage';
 import { cardStatus, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
@@ -61,7 +62,7 @@ function FavoriteStar({ id }: { id: string }) {
       aria-label={label}
       title={label}
       disabled={!favorites.data || set.isPending}
-      className="flex size-9 items-center justify-center rounded-md text-muted hover:text-text"
+      className="flex size-9 items-center justify-center rounded-md text-muted hover:text-text max-md:size-11"
       onClick={() => {
         const ids = favorites.data ?? [];
         set.mutate(on ? ids.filter((x) => x !== id) : [...ids, id]);
@@ -75,6 +76,7 @@ function FavoriteStar({ id }: { id: string }) {
 function Head({ server, role }: { server: Server; role?: string }) {
   const { t, i18n } = useTranslation();
   const now = useNow();
+  const phone = usePhone();
   const admin = isAdmin(role);
   const profiles = useProfiles();
   const agents = useAgents(role === 'rcon_admin' && !!server.agent_id);
@@ -91,13 +93,23 @@ function Head({ server, role }: { server: Server; role?: string }) {
     <section
       aria-label={server.name}
       className={cn(
-        'flex flex-wrap items-start justify-between gap-4 rounded-lg border border-l-4 border-border bg-surface p-5',
+        'flex flex-wrap items-start justify-between gap-4 rounded-lg border border-l-4 border-border bg-surface p-5 max-md:gap-2 max-md:p-3',
         edge[tone],
       )}
     >
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="truncate font-mono text-2xl font-semibold">
+      {phone && (
+        <Link
+          to="/servers"
+          aria-label={t('nav.servers')}
+          title={t('nav.servers')}
+          className="flex size-11 shrink-0 items-center justify-center rounded-md border border-border"
+        >
+          <ChevronLeft aria-hidden className="size-5" />
+        </Link>
+      )}
+      <div className="flex min-w-0 flex-col gap-2 max-md:flex-1">
+        <div className="flex flex-wrap items-center gap-3 max-md:gap-x-2 max-md:gap-y-0">
+          <h1 className="max-w-full truncate font-mono text-2xl font-semibold max-md:text-lg">
             <bdi>{server.name}</bdi>
           </h1>
           {admin && <FavoriteStar id={server.id} />}
@@ -167,7 +179,7 @@ export function ServerLayout() {
   const tabs = tabsFor(role, !!server.agent_id);
   return (
     <div className="flex flex-col gap-5">
-      <nav aria-label={t('server.breadcrumb')} className="text-sm text-muted">
+      <nav aria-label={t('server.breadcrumb')} className="text-sm text-muted max-md:hidden">
         <Link to="/servers" className="underline">
           {t('nav.servers')}
         </Link>
