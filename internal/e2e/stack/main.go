@@ -66,6 +66,7 @@ type State struct {
 	// ExpiredInvite is the token of an invitation past its time (UI-008).
 	ExpiredInvite string `json:"expired_invite"`
 	profile       string
+	moderators    string // the moderator group
 }
 
 type buffer struct {
@@ -431,6 +432,7 @@ func seedModeration(admin *client, panel, o string, st *State) error {
 		return err
 	}
 	st.Users["mod"], st.Users["mod2"], st.Users["sup"] = userPassword, userPassword, userPassword
+	st.moderators = group.ID
 	return nil
 }
 

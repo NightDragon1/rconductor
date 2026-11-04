@@ -309,6 +309,17 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 		return err
 	}
 	ids["hostile"] = hostile.ID
+	// hmod moderates only hostile, for the commands page (SEC-006).
+	hmodID, err := invite(admin, panel, o, "moderator", "hmod")
+	if err != nil {
+		return err
+	}
+	if err := admin.call(http.MethodPut, "/users/"+hmodID+"/assignments", map[string]any{
+		"groups": []string{st.moderators}, "grants": []map[string]string{{"group_id": st.moderators, "server_id": hostile.ID}},
+	}, nil); err != nil {
+		return err
+	}
+	st.Users["hmod"] = userPassword
 	st.Servers = ids
 	for _, g := range []struct {
 		name    string
