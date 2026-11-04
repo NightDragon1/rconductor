@@ -82,7 +82,7 @@ export function HealthOverview({
     list.length ? list.map((s) => s.name).join(', ') : t('health.none');
 
   const openServer = (s: Server) => (
-    <Link to="/servers/$serverId" params={{ serverId: s.id }} className="text-accent underline">
+    <Link to="/servers/$serverId" params={{ serverId: s.id }} className="tap text-accent underline">
       {t('health.openServer')}
     </Link>
   );
@@ -114,7 +114,7 @@ export function HealthOverview({
       text: t('health.agentGone'),
       time: a.last_seen_at ? t('health.since', { time: clock(lng, a.last_seen_at) }) : undefined,
       link: (
-        <Link to={agentsPage} hash={a.id} className="text-accent underline">
+        <Link to={agentsPage} hash={a.id} className="tap text-accent underline">
           {t('health.openAgents')}
         </Link>
       ),
@@ -125,7 +125,7 @@ export function HealthOverview({
       name: u.pseudonym,
       text: t('health.userLocked'),
       link: (
-        <Link to={usersPage} hash={u.id} className="text-accent underline">
+        <Link to={usersPage} hash={u.id} className="tap text-accent underline">
           {t('health.openUser')}
         </Link>
       ),

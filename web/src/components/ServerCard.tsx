@@ -96,7 +96,7 @@ export function ServerCard({
             <Link
               to="/servers/$serverId"
               params={{ serverId: server.id }}
-              className="hover:underline"
+              className="tap max-w-full hover:underline"
               aria-label={t('card.open', { name: server.name })}
             >
               <bdi>{server.name}</bdi>

@@ -48,6 +48,17 @@
   color-scheme: light;
 }
 
+/* A tap target of 44 px on a phone (UI-012): links and small buttons in
+   running text grow around their text. */
+@utility tap {
+  @media (width < 48rem) {
+    display: inline-flex;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    align-items: center;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
