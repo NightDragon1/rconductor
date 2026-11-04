@@ -9,7 +9,7 @@ SQLC_VERSION := 1.31.1
 SQLC ?= sqlc
 export CGO_ENABLED := 0
 
-.PHONY: all build web panel agent images test test-integration test-minecraft test-e2e lint vuln generate check
+.PHONY: all build web panel agent images test test-integration integration-tests test-minecraft test-e2e lint vuln generate check
 
 all: lint test web build
 
@@ -36,7 +36,10 @@ images:
 	docker buildx build --load --target panel --build-arg VERSION=$(VERSION) -t $(PANEL_IMAGE) .
 	docker buildx build --load --target agent --build-arg VERSION=$(VERSION) -t $(AGENT_IMAGE) .
 
-test-integration: images
+test-integration: images integration-tests
+
+# The tests alone, for images that are already there (CI loads them).
+integration-tests:
 	RCD_PANEL_IMAGE=$(PANEL_IMAGE) go test -tags integration -count=1 ./...
 
 # Walking skeleton against a real Minecraft server (pinned version, JAR
