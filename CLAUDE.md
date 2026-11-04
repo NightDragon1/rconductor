@@ -73,6 +73,23 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   aktivieren mit git config core.hooksPath .githooks.
 - Nach jedem Meilenstein: kurze Zusammenfassung, welche Anforderungs-IDs
   erledigt sind und welche Ereigniscodes neu sind.
+- Tests lokal gezielt:
+  - Während eines Teilschritts nur betroffene Tests: go test der geänderten
+    Pakete, vitest related, playwright --grep auf die betroffenen Specs.
+  - Vor jedem Commit: make check (Lint, Unit, Vitest).
+  - Volle E2E-Suite und Integrationstests lokal nur am Ende eines Schritts
+    oder wenn Backend und Oberfläche gemeinsam geändert wurden.
+  - Minecraft-Test lokal nie; das macht die CI.
+- Die CI ist die vollständige Prüfinstanz. Nicht auf CI-Läufe warten, außer vor
+  Merge, Abnahme oder Release. Ergebnisse beim nächsten Bericht nachreichen.
+- Fehler zuerst reproduzieren, dann gezielt beheben; keine Komplettläufe als
+  Fehlersuche.
+
+## Kontext und Berichte
+- Kontext sparsam: docs/handover.md und das betroffene Kapitel lesen, nicht alle
+  docs/ bei jedem Schritt.
+- Berichte wie bisher in Umfang und Struktur; Testzahlen dürfen als Summe je
+  Testart stehen.
 
 ## Sprache
 - Code, Kommentare, Commit-Nachrichten und Oberflächentexte: Englisch.
