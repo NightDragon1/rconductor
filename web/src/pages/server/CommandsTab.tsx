@@ -209,7 +209,7 @@ export function CommandCard({
       {!folded && (
         <>
           <p
-            className="truncate rounded bg-surface-raised px-2 py-1 font-mono text-sm"
+            className="wrap-anywhere md:truncate rounded bg-surface-raised px-2 py-1 font-mono text-sm"
             aria-live="polite"
           >
             {t('commands.preview', { command })}
@@ -243,7 +243,7 @@ function HistoryItem({ b }: { b: CmdBlock }) {
         <time dateTime={b.ts} className="font-mono text-xs text-muted">
           {clock(i18n.language, b.ts)}
         </time>
-        <code className="min-w-0 flex-1 truncate font-mono">
+        <code className="min-w-0 flex-1 wrap-anywhere md:truncate font-mono">
           <bdi>{b.command}</bdi>
         </code>
         <span className={b.result === 'ok' ? 'text-ok' : 'text-danger'}>
@@ -380,7 +380,7 @@ export function CommandsTab() {
               {players.data?.available && names.length === 0 && (
                 <p className="text-sm text-muted">{t('overview.noPlayers')}</p>
               )}
-              <ul className="flex gap-2 max-md:overflow-x-auto md:flex-wrap">
+              <ul data-scrolls className="flex gap-2 max-md:overflow-x-auto md:flex-wrap">
                 {names.map((n) => {
                   // Only a name the backend takes as player can be picked.
                   const usable = isPlayer(n);

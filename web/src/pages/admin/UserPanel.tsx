@@ -183,7 +183,7 @@ export function UserPanel({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate font-mono text-lg font-semibold">
+          <h2 className="wrap-anywhere md:truncate font-mono text-lg font-semibold">
             <bdi>{user.pseudonym}</bdi>
           </h2>
           <p className="text-xs text-muted">

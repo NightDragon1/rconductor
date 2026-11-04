@@ -21,10 +21,12 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
+import { cardStatus } from '@/lib/status';
 import { usePhone, useReveal } from '@/lib/phone';
 import { useShortcuts } from '@/lib/shortcuts';
 import { useUndo } from '@/lib/undo';
 import { cn } from '@/lib/utils';
+import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
 
 type GamePort = components['schemas']['GamePort'];
@@ -179,7 +181,7 @@ function ServerPanel({
       className="flex w-full flex-col gap-3 rounded-lg border border-border bg-surface p-5 xl:w-[28rem]"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 className="truncate text-lg font-semibold">
+        <h2 className="wrap-anywhere md:truncate text-lg font-semibold">
           <bdi>{server?.name ?? t('servers.new')}</bdi>
         </h2>
         <Button variant="ghost" size="sm" aria-label={t('admin.closePanel')} onClick={onClose}>
@@ -521,7 +523,7 @@ function GroupPanel({
       className="flex w-full flex-col gap-3 rounded-lg border border-border bg-surface p-5 xl:w-[28rem]"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 className="truncate font-mono text-lg font-semibold uppercase">
+        <h2 className="wrap-anywhere md:truncate font-mono text-lg font-semibold uppercase">
           <bdi>{draft.name}</bdi>
         </h2>
         <Button variant="ghost" size="sm" aria-label={t('admin.closePanel')} onClick={onClose}>
@@ -686,55 +688,76 @@ export function ServersAdminPage() {
 
         <PhoneNote />
 
-        <section
-          aria-label={t('nav.servers')}
-          className="overflow-x-auto rounded-lg border border-border bg-surface"
-        >
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted">
-              <tr>
-                <th className="p-3 font-medium">{t('servers.name')}</th>
-                <th className="p-3 font-medium">{t('servers.profile')}</th>
-                <th className="p-3 font-medium">{t('servers.address')}</th>
-                <th className="p-3 font-medium">{t('servers.container')}</th>
-                <th className="p-3 font-medium">{t('servers.groups')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {all.map((s) => (
-                <tr
-                  key={s.id}
-                  className={cn('border-t border-border', open?.id === s.id && 'bg-surface-raised')}
-                >
-                  <td className="p-3">
-                    <button
-                      type="button"
-                      className="tap font-mono hover:underline"
-                      onClick={() => setOpen({ kind: 'server', id: s.id })}
-                    >
-                      <bdi>{s.name}</bdi>
-                    </button>
-                    {s.credentials && s.credentials !== 'ok' && (
-                      <span className="ml-2 text-xs text-warn">
-                        {t(`servers.credentialsShort.${s.credentials}`)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-3">{profileName(s.profile_id)}</td>
-                  <td className="p-3 font-mono">
-                    <bdi>{s.host ? `${s.host}:${s.port ?? ''}` : ''}</bdi>
-                  </td>
-                  <td className="p-3 font-mono">
-                    <bdi>{s.container_name ?? ''}</bdi>
-                  </td>
-                  <td className="p-3">
-                    <bdi>{groupNames(s)}</bdi>
-                  </td>
+        {phone ? (
+          <Cards label={t('nav.servers')}>
+            {all.map((s) => (
+              <Card
+                key={s.id}
+                mono
+                title={<bdi>{s.name}</bdi>}
+                selected={open?.id === s.id}
+                onOpen={() => setOpen({ kind: 'server', id: s.id })}
+                facts={[
+                  { label: t('admin.statusLabel'), value: t(`status.${cardStatus(s)}`) },
+                  { label: t('servers.profile'), value: profileName(s.profile_id) },
+                ]}
+              />
+            ))}
+          </Cards>
+        ) : (
+          <section
+            aria-label={t('nav.servers')}
+            className="overflow-x-auto rounded-lg border border-border bg-surface"
+          >
+            <table className="w-full text-sm">
+              <thead className="text-left text-muted">
+                <tr>
+                  <th className="p-3 font-medium">{t('servers.name')}</th>
+                  <th className="p-3 font-medium">{t('servers.profile')}</th>
+                  <th className="p-3 font-medium">{t('servers.address')}</th>
+                  <th className="p-3 font-medium">{t('servers.container')}</th>
+                  <th className="p-3 font-medium">{t('servers.groups')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+              </thead>
+              <tbody>
+                {all.map((s) => (
+                  <tr
+                    key={s.id}
+                    className={cn(
+                      'border-t border-border',
+                      open?.id === s.id && 'bg-surface-raised',
+                    )}
+                  >
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        className="font-mono hover:underline"
+                        onClick={() => setOpen({ kind: 'server', id: s.id })}
+                      >
+                        <bdi>{s.name}</bdi>
+                      </button>
+                      {s.credentials && s.credentials !== 'ok' && (
+                        <span className="ml-2 text-xs text-warn">
+                          {t(`servers.credentialsShort.${s.credentials}`)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3">{profileName(s.profile_id)}</td>
+                    <td className="p-3 font-mono">
+                      <bdi>{s.host ? `${s.host}:${s.port ?? ''}` : ''}</bdi>
+                    </td>
+                    <td className="p-3 font-mono">
+                      <bdi>{s.container_name ?? ''}</bdi>
+                    </td>
+                    <td className="p-3">
+                      <bdi>{groupNames(s)}</bdi>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
 
         <section aria-label={t('servers.serverGroups')} className="flex flex-col gap-3">
           <div className="flex flex-wrap items-end justify-between gap-3">
@@ -761,44 +784,74 @@ export function ServersAdminPage() {
               {error}
             </p>
           )}
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-            <table className="w-full text-sm">
-              <tbody>
-                {(groups.data ?? []).map((g) => (
-                  <tr
-                    key={g.id}
-                    className={cn(
-                      'border-t border-border first:border-t-0',
-                      open?.id === g.id && 'bg-surface-raised',
-                    )}
-                  >
-                    <td className="p-3">
-                      <button
-                        type="button"
-                        className="tap font-mono uppercase hover:underline"
-                        onClick={() => setOpen({ kind: 'group', id: g.id })}
-                      >
-                        <bdi>{g.name}</bdi>
-                      </button>
-                    </td>
-                    <td className="p-3">
-                      <bdi>
-                        {g.server_ids
-                          .map((id) => all.find((s) => s.id === id)?.name ?? '')
-                          .filter(Boolean)
-                          .join(', ')}
-                      </bdi>
-                    </td>
-                  </tr>
-                ))}
-                {(groups.data ?? []).length === 0 && (
-                  <tr>
-                    <td className="p-6 text-center text-muted">{t('servers.noGroups')}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          {phone ? (
+            <Cards
+              label={t('servers.serverGroups')}
+              empty={(groups.data ?? []).length === 0 ? t('servers.noGroups') : undefined}
+            >
+              {(groups.data ?? []).map((g) => (
+                <Card
+                  key={g.id}
+                  mono
+                  title={<bdi className="uppercase">{g.name}</bdi>}
+                  selected={open?.id === g.id}
+                  onOpen={() => setOpen({ kind: 'group', id: g.id })}
+                  facts={[
+                    {
+                      label: t('nav.servers'),
+                      value: (
+                        <bdi>
+                          {g.server_ids
+                            .map((id) => all.find((s) => s.id === id)?.name ?? '')
+                            .filter(Boolean)
+                            .join(', ')}
+                        </bdi>
+                      ),
+                    },
+                  ]}
+                />
+              ))}
+            </Cards>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+              <table className="w-full text-sm">
+                <tbody>
+                  {(groups.data ?? []).map((g) => (
+                    <tr
+                      key={g.id}
+                      className={cn(
+                        'border-t border-border first:border-t-0',
+                        open?.id === g.id && 'bg-surface-raised',
+                      )}
+                    >
+                      <td className="p-3">
+                        <button
+                          type="button"
+                          className="font-mono uppercase hover:underline"
+                          onClick={() => setOpen({ kind: 'group', id: g.id })}
+                        >
+                          <bdi>{g.name}</bdi>
+                        </button>
+                      </td>
+                      <td className="p-3">
+                        <bdi>
+                          {g.server_ids
+                            .map((id) => all.find((s) => s.id === id)?.name ?? '')
+                            .filter(Boolean)
+                            .join(', ')}
+                        </bdi>
+                      </td>
+                    </tr>
+                  ))}
+                  {(groups.data ?? []).length === 0 && (
+                    <tr>
+                      <td className="p-6 text-center text-muted">{t('servers.noGroups')}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </div>
       {open?.kind === 'server' && (open.id === 'new' || current) && (

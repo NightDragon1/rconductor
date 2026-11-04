@@ -109,7 +109,7 @@ function Head({ server, role }: { server: Server; role?: string }) {
       )}
       <div className="flex min-w-0 flex-col gap-2 max-md:flex-1">
         <div className="flex flex-wrap items-center gap-3 max-md:gap-x-2 max-md:gap-y-0">
-          <h1 className="max-w-full truncate font-mono text-2xl font-semibold max-md:text-lg">
+          <h1 className="max-w-full wrap-anywhere md:truncate font-mono text-2xl font-semibold max-md:text-lg">
             <bdi>{server.name}</bdi>
           </h1>
           {admin && <FavoriteStar id={server.id} />}
@@ -195,6 +195,7 @@ export function ServerLayout() {
       <Head server={server} role={role} />
       <nav
         aria-label={t('server.tabs')}
+        data-scrolls
         className="flex gap-1 overflow-x-auto border-b border-border"
       >
         {tabs.map((tab) => (

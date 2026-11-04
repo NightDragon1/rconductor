@@ -29,6 +29,7 @@ import { useShortcuts } from '@/lib/shortcuts';
 import { useUndo } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { BulkResults } from './BulkResults';
+import { Card, Cards } from './Cards';
 import { InviteDialog } from './InviteDialog';
 import { PhoneNote } from './PhoneNote';
 import { UserPanel } from './UserPanel';
@@ -349,11 +350,56 @@ export function UsersPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted">
-              <tr>
-                {!phone && (
+        {phone ? (
+          <Cards
+            label={t('nav.users')}
+            empty={
+              shown.length === 0 && openInvites.length === 0
+                ? t(users.isPending ? 'app.loading' : 'admin.noMatch')
+                : undefined
+            }
+          >
+            {shown.map((u) => (
+              <Card
+                key={u.id}
+                mono
+                title={<bdi>{u.pseudonym}</bdi>}
+                selected={open === u.id}
+                onOpen={() => setOpen(u.id)}
+                facts={[
+                  { label: t('admin.role'), value: t(`role.${u.role}`) },
+                  {
+                    label: t('admin.statusLabel'),
+                    value: t(u.disabled ? 'admin.status.locked' : 'admin.status.active'),
+                    className: u.disabled ? 'text-danger' : 'text-ok',
+                  },
+                ]}
+              />
+            ))}
+            {openInvites.map((i) => {
+              const expired = Date.parse(i.expires_at) <= now;
+              return (
+                <Card
+                  key={i.id}
+                  mono
+                  title={t('admin.invitation')}
+                  facts={[
+                    { label: t('admin.role'), value: t(`role.${i.role}`) },
+                    {
+                      label: t('admin.statusLabel'),
+                      value: t(expired ? 'admin.expired' : 'admin.status.invited'),
+                      className: expired ? 'text-muted' : 'text-warn',
+                    },
+                  ]}
+                />
+              );
+            })}
+          </Cards>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <table className="w-full text-sm">
+              <thead className="text-left text-muted">
+                <tr>
                   <th className="w-10 p-3">
                     <input
                       type="checkbox"
@@ -364,25 +410,23 @@ export function UsersPage() {
                       }
                     />
                   </th>
-                )}
-                <th className="p-3 font-medium">{t('login.pseudonym')}</th>
-                <th className="p-3 font-medium">{t('admin.role')}</th>
-                <th className="p-3 font-medium">{t('admin.groupsScope')}</th>
-                <th className="p-3 font-medium">{t('admin.lastActive')}</th>
-                <th className="p-3 font-medium">{t('admin.statusLabel')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((u) => (
-                <tr
-                  key={u.id}
-                  aria-selected={open === u.id}
-                  className={cn(
-                    'border-t border-border',
-                    (selected.has(u.id) || open === u.id) && 'bg-surface-raised',
-                  )}
-                >
-                  {!phone && (
+                  <th className="p-3 font-medium">{t('login.pseudonym')}</th>
+                  <th className="p-3 font-medium">{t('admin.role')}</th>
+                  <th className="p-3 font-medium">{t('admin.groupsScope')}</th>
+                  <th className="p-3 font-medium">{t('admin.lastActive')}</th>
+                  <th className="p-3 font-medium">{t('admin.statusLabel')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((u) => (
+                  <tr
+                    key={u.id}
+                    aria-selected={open === u.id}
+                    className={cn(
+                      'border-t border-border',
+                      (selected.has(u.id) || open === u.id) && 'bg-surface-raised',
+                    )}
+                  >
                     <td className="p-3">
                       <input
                         type="checkbox"
@@ -391,59 +435,57 @@ export function UsersPage() {
                         onChange={() => toggle(u.id)}
                       />
                     </td>
-                  )}
-                  <td className="p-3">
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 font-mono hover:underline max-md:min-h-11"
-                      onClick={() => setOpen(u.id)}
-                    >
-                      <span
-                        className="flex size-7 items-center justify-center rounded-full bg-surface-raised text-xs"
-                        aria-hidden
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 font-mono hover:underline"
+                        onClick={() => setOpen(u.id)}
                       >
-                        {initials(u.pseudonym)}
-                      </span>
-                      <bdi>{u.pseudonym}</bdi>
-                    </button>
-                  </td>
-                  <td className="p-3">
-                    <span className="rounded border border-border px-1.5 text-xs">
-                      {t(`role.${u.role}`)}
-                    </span>
-                  </td>
-                  <td className="max-w-64 truncate p-3">
-                    <bdi>{scopeText(u)}</bdi>
-                  </td>
-                  <td className="p-3 text-muted">
-                    {u.last_login_at ? ago(t, u.last_login_at, now) : t('admin.never')}
-                  </td>
-                  <td className={cn('p-3', u.disabled ? 'text-danger' : 'text-ok')}>
-                    {t(u.disabled ? 'admin.status.locked' : 'admin.status.active')}
-                  </td>
-                </tr>
-              ))}
-              {openInvites.map((i) => {
-                const expired = Date.parse(i.expires_at) <= now;
-                return (
-                  <tr key={i.id} className="border-t border-border">
-                    {!phone && <td className="p-3" />}
-                    <td className="p-3 font-mono text-muted">{t('admin.invitation')}</td>
+                        <span
+                          className="flex size-7 items-center justify-center rounded-full bg-surface-raised text-xs"
+                          aria-hidden
+                        >
+                          {initials(u.pseudonym)}
+                        </span>
+                        <bdi>{u.pseudonym}</bdi>
+                      </button>
+                    </td>
                     <td className="p-3">
                       <span className="rounded border border-border px-1.5 text-xs">
-                        {t(`role.${i.role}`)}
+                        {t(`role.${u.role}`)}
                       </span>
                     </td>
-                    <td className="p-3" />
+                    <td className="max-w-64 wrap-anywhere md:truncate p-3">
+                      <bdi>{scopeText(u)}</bdi>
+                    </td>
                     <td className="p-3 text-muted">
-                      {!expired &&
-                        t('admin.expiresIn', { span: span(t, Date.parse(i.expires_at) - now) })}
+                      {u.last_login_at ? ago(t, u.last_login_at, now) : t('admin.never')}
                     </td>
-                    <td className="p-3">
-                      <span className={expired ? 'text-muted' : 'text-warn'}>
-                        {t(expired ? 'admin.expired' : 'admin.status.invited')}
-                      </span>
-                      {!phone && (
+                    <td className={cn('p-3', u.disabled ? 'text-danger' : 'text-ok')}>
+                      {t(u.disabled ? 'admin.status.locked' : 'admin.status.active')}
+                    </td>
+                  </tr>
+                ))}
+                {openInvites.map((i) => {
+                  const expired = Date.parse(i.expires_at) <= now;
+                  return (
+                    <tr key={i.id} className="border-t border-border">
+                      <td className="p-3" />
+                      <td className="p-3 font-mono text-muted">{t('admin.invitation')}</td>
+                      <td className="p-3">
+                        <span className="rounded border border-border px-1.5 text-xs">
+                          {t(`role.${i.role}`)}
+                        </span>
+                      </td>
+                      <td className="p-3" />
+                      <td className="p-3 text-muted">
+                        {!expired &&
+                          t('admin.expiresIn', { span: span(t, Date.parse(i.expires_at) - now) })}
+                      </td>
+                      <td className="p-3">
+                        <span className={expired ? 'text-muted' : 'text-warn'}>
+                          {t(expired ? 'admin.expired' : 'admin.status.invited')}
+                        </span>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -461,21 +503,21 @@ export function UsersPage() {
                         >
                           {t('admin.withdraw')}
                         </Button>
-                      )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {shown.length === 0 && openInvites.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-6 text-center text-muted">
+                      {t(users.isPending ? 'app.loading' : 'admin.noMatch')}
                     </td>
                   </tr>
-                );
-              })}
-              {shown.length === 0 && openInvites.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="p-6 text-center text-muted">
-                    {t(users.isPending ? 'app.loading' : 'admin.noMatch')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {panelUser && (

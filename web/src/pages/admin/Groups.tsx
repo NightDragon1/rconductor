@@ -21,6 +21,7 @@ import { useShortcuts } from '@/lib/shortcuts';
 import { useUndo } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { reasonText } from '@/lib/admin';
+import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
 
 type Kind = UserGroup['kind'];
@@ -174,7 +175,7 @@ function GroupPanel({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="truncate text-lg font-semibold">
+          <h2 className="wrap-anywhere md:truncate text-lg font-semibold">
             <bdi>{draft.name}</bdi>
           </h2>
           <p className="text-xs text-muted">{t(`groups.kind.${draft.kind}`)}</p>
@@ -422,48 +423,74 @@ export function GroupsPage() {
             {error}
           </p>
         )}
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted">
-              <tr>
-                <th className="p-3 font-medium">{t('groups.name')}</th>
-                <th className="p-3 font-medium">{t('groups.kindLabel')}</th>
-                <th className="p-3 font-medium">{t('groups.list')}</th>
-                <th className="p-3 font-medium">{t('groups.members')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((g) => (
-                <tr
-                  key={g.id}
-                  className={cn('border-t border-border', open === g.id && 'bg-surface-raised')}
-                >
-                  <td className="p-3">
-                    <button
-                      type="button"
-                      className="tap hover:underline"
-                      onClick={() => setOpen(g.id)}
-                    >
-                      <bdi>{g.name}</bdi>
-                    </button>
-                  </td>
-                  <td className="p-3">{t(`groups.kind.${g.kind}`)}</td>
-                  <td className="p-3">
-                    <bdi>{listName(g.command_list_id)}</bdi>
-                  </td>
-                  <td className="p-3">{t('groups.memberCount', { count: g.members.length })}</td>
-                </tr>
-              ))}
-              {shown.length === 0 && (
+        {phone ? (
+          <Cards
+            label={t('nav.groups')}
+            empty={
+              shown.length === 0 ? t(groups.isPending ? 'app.loading' : 'groups.none') : undefined
+            }
+          >
+            {shown.map((g) => (
+              <Card
+                key={g.id}
+                title={<bdi>{g.name}</bdi>}
+                selected={open === g.id}
+                onOpen={() => setOpen(g.id)}
+                facts={[
+                  { label: t('groups.kindLabel'), value: t(`groups.kind.${g.kind}`) },
+                  { label: t('groups.list'), value: <bdi>{listName(g.command_list_id)}</bdi> },
+                  {
+                    label: t('groups.members'),
+                    value: t('groups.memberCount', { count: g.members.length }),
+                  },
+                ]}
+              />
+            ))}
+          </Cards>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+            <table className="w-full text-sm">
+              <thead className="text-left text-muted">
                 <tr>
-                  <td colSpan={4} className="p-6 text-center text-muted">
-                    {t(groups.isPending ? 'app.loading' : 'groups.none')}
-                  </td>
+                  <th className="p-3 font-medium">{t('groups.name')}</th>
+                  <th className="p-3 font-medium">{t('groups.kindLabel')}</th>
+                  <th className="p-3 font-medium">{t('groups.list')}</th>
+                  <th className="p-3 font-medium">{t('groups.members')}</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {shown.map((g) => (
+                  <tr
+                    key={g.id}
+                    className={cn('border-t border-border', open === g.id && 'bg-surface-raised')}
+                  >
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        className="hover:underline"
+                        onClick={() => setOpen(g.id)}
+                      >
+                        <bdi>{g.name}</bdi>
+                      </button>
+                    </td>
+                    <td className="p-3">{t(`groups.kind.${g.kind}`)}</td>
+                    <td className="p-3">
+                      <bdi>{listName(g.command_list_id)}</bdi>
+                    </td>
+                    <td className="p-3">{t('groups.memberCount', { count: g.members.length })}</td>
+                  </tr>
+                ))}
+                {shown.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="p-6 text-center text-muted">
+                      {t(groups.isPending ? 'app.loading' : 'groups.none')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
       {current && (
         <GroupPanel

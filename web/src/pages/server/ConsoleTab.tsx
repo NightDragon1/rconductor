@@ -260,7 +260,10 @@ export function ConsoleTab() {
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
           {/* One row of chips on a phone (Design 6.5). */}
-          <div className="flex max-w-full items-center gap-2 overflow-x-auto md:flex-wrap">
+          <div
+            data-scrolls
+            className="flex max-w-full items-center gap-2 overflow-x-auto md:flex-wrap"
+          >
             <span className="text-sm text-muted max-md:hidden">{t('console.tracks')}</span>
             {track('own', t('console.own'), markerClass.own)}
             {track('others', t('console.others'), markerClass.others)}
@@ -364,6 +367,7 @@ export function ConsoleTab() {
           {suggestions.length > 0 && (
             <ul
               aria-label={t('console.suggestions')}
+              data-scrolls
               className="absolute bottom-full left-3 mb-1 w-72 max-w-[calc(100%-1.5rem)] rounded-md border border-border bg-surface-raised py-1 max-md:static max-md:mb-2 max-md:flex max-md:w-full max-md:max-w-full max-md:gap-2 max-md:overflow-x-auto max-md:border-0 max-md:bg-transparent max-md:py-0"
             >
               {suggestions.map((s, i) => (

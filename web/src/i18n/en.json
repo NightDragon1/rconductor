@@ -431,6 +431,8 @@
     "name": "Name",
     "entries": "Commands",
     "passable": "Passable",
+    "yes": "yes",
+    "no": "no",
     "passableCount": "{{count}}",
     "passableFor": "{{path}} passable to supporters",
     "path": "Command path",
