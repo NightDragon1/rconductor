@@ -162,7 +162,14 @@ func TestAgentThroughTheStack(t *testing.T) {
 		Connected bool
 		Items     []struct{ Name, Image, State string }
 	}
-	admin.must(http.MethodGet, "/agents/"+agentID+"/containers", nil, &containers, http.StatusOK)
+	// The session comes first; the containers follow with the first snapshot.
+	for {
+		admin.must(http.MethodGet, "/agents/"+agentID+"/containers", nil, &containers, http.StatusOK)
+		if containers.Connected || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if !containers.Connected || len(containers.Items) != 1 || containers.Items[0].Name != "mc" || containers.Items[0].State != "running" {
 		t.Errorf("containers = %+v", containers)
 	}
