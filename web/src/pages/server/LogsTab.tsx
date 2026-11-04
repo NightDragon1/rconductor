@@ -79,7 +79,8 @@ export function LogsView({ server }: { server: Server }) {
       aria-label={t('server.tab.logs')}
       className="flex flex-col rounded-lg border border-border bg-surface"
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
+      {/* Two buttons a row on a phone, the filter below them. */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border p-3 max-md:grid max-md:grid-cols-2">
         <Button
           variant="outline"
           size="sm"
@@ -101,7 +102,7 @@ export function LogsView({ server }: { server: Server }) {
         <CopyButton text={text} target={pre} label={t('logs.copy')} />
         <Input
           type="search"
-          className="ml-auto w-full sm:w-56"
+          className="ml-auto w-full max-md:col-span-2 md:w-56"
           placeholder={t('console.filter')}
           aria-label={t('logs.filterLabel')}
           value={filter}

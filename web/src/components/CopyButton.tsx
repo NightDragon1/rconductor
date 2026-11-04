@@ -18,17 +18,18 @@ export function CopyButton({
   const { t } = useTranslation();
   const [state, setState] = useState<'idle' | 'copied' | 'selected'>('idle');
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex items-center">
       <Button
         variant="ghost"
         size="sm"
+        className="max-md:flex-1"
         aria-label={label}
         title={label}
         onClick={() => void copyText(text, target.current).then(setState)}
       >
         {state === 'copied' ? t('copy.copied') : t('copy.copy')}
       </Button>
-      <span role="status" className="text-xs text-muted">
+      <span role="status" className="ml-2 text-xs text-muted empty:ml-0">
         {state === 'selected' ? t('copy.pressCtrlC') : ''}
       </span>
     </span>
