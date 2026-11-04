@@ -121,7 +121,10 @@ for (const [user, width, name] of [
     await page.goto('admin/users');
     await expect(page.getByRole('heading', { name: 'Users', level: 1 })).toBeVisible();
     await page.waitForLoadState('networkidle');
-    if (user === 'admin') {
+    if (width < 500) {
+      // No selection on a phone: it reads (UI-012).
+      await page.getByRole('button', { name: 'mod', exact: true }).click();
+    } else if (user === 'admin') {
       await page.getByRole('checkbox', { name: 'Select mod', exact: true }).check();
       await page.getByRole('checkbox', { name: 'Select mod2', exact: true }).check();
       await page.getByRole('button', { name: 'mod', exact: true }).click();
@@ -164,3 +167,41 @@ test('screenshot phone-settings-admin', async ({ page, state }) => {
   await page.waitForLoadState('networkidle');
   await shoot(page, 'phone-settings-admin');
 });
+
+// The phone view (step 9): head with actions, commands with the sheet, and
+// the administration reading.
+test('screenshot phone server actions', async ({ page, state }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, 'admin', secret(state, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await page.goto(`servers/${state.servers.survival}/overview`);
+  await page.waitForLoadState('networkidle');
+  await page.getByRole('button', { name: 'Server actions' }).click();
+  await shoot(page, 'phone-server-actions', false);
+});
+
+test('screenshot phone commands', async ({ page, state }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, 'mod', secret(state, 'mod'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await page.goto(`servers/${state.servers.survival}/commands`);
+  await page.waitForLoadState('networkidle');
+  await shoot(page, 'phone-commands-moderator', false);
+});
+
+for (const [path, name] of [
+  ['admin/groups', 'phone-groups'],
+  ['admin/command-lists', 'phone-command-lists'],
+  ['admin/servers', 'phone-servers-admin'],
+  ['admin/agents', 'phone-agents'],
+  ['admin/settings', 'phone-settings'],
+] as const) {
+  test(`screenshot ${name}`, async ({ page, state }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await login(page, 'admin', secret(state, 'admin'));
+    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    await page.goto(path);
+    await page.waitForLoadState('networkidle');
+    await shoot(page, name);
+  });
+}

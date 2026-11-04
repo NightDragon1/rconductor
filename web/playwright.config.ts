@@ -11,8 +11,9 @@ const stacks = [
   { name: 'insecure', port: 4382, base: '/', host: 'rcon.lan' },
 ];
 const insecureOnly = /clipboard\.spec\.ts/;
+const phoneOnly = /mobile\.spec\.ts/;
 
-export default defineConfig({
+export default defineConfig<{ stack: string }>({
   testDir: 'e2e',
   fullyParallel: false,
   workers: 1,
@@ -29,21 +30,33 @@ export default defineConfig({
     timeout: 180_000,
     stdout: 'pipe',
   })),
-  projects: stacks.map((s) =>
-    s.host
-      ? {
-          name: s.name,
-          testMatch: insecureOnly,
-          use: {
-            ...devices['Desktop Chrome'],
-            stack: s.name,
-            launchOptions: { args: [`--host-resolver-rules=MAP ${s.host} 127.0.0.1`] },
+  projects: [
+    ...stacks.map((s) =>
+      s.host
+        ? {
+            name: s.name,
+            testMatch: insecureOnly,
+            use: {
+              ...devices['Desktop Chrome'],
+              stack: s.name,
+              launchOptions: { args: [`--host-resolver-rules=MAP ${s.host} 127.0.0.1`] },
+            },
+          }
+        : {
+            name: s.name,
+            testIgnore: [insecureOnly, phoneOnly],
+            use: { ...devices['Desktop Chrome'], stack: s.name },
           },
-        }
-      : {
-          name: s.name,
-          testIgnore: insecureOnly,
-          use: { ...devices['Desktop Chrome'], stack: s.name },
-        },
-  ),
+    ),
+    // The phone view at the width of the acceptance (UI-012), with touch.
+    {
+      name: 'mobile',
+      testMatch: phoneOnly,
+      use: {
+        ...devices['Pixel 7'],
+        viewport: { width: 390, height: 844 },
+        stack: 'root',
+      },
+    },
+  ],
 });
