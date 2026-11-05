@@ -8,10 +8,6 @@ Das System besteht aus einem zentralen Panel, das als einziger Baustein Zustand 
 
 Das Panel spricht die Spieleserver direkt per RCON an; Container steuert ausschließlich der Agent auf dem jeweiligen Host.
 
-&#91;embedded content: Bausteine und Verbindungen · Panel, Agent, Spieleserver\]
-
-Gestrichelt: optionale Bausteine außerhalb des Projekts oder ab R2.
-
 ## 2. Bausteine
 
 | Baustein | Aufgabe | Zustand | Anzahl |

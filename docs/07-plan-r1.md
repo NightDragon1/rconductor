@@ -4,9 +4,7 @@ Dokumentversion 2.5, freigegeben; Änderungen gegenüber 2.4 siehe Gesamtkonzept
 
 ## 1. Ablauf
 
-&#91;embedded content: Meilensteine R1 · Reihenfolge und Abhängigkeiten\]
-
-M2 ist hervorgehoben, weil der Durchstich dort entsteht. M4 baut zuerst gegen Attrappen und schließt Live-Daten an, sobald M2 und M3 liefern.
+Der Durchstich entsteht in M2. M4 baut zuerst gegen Attrappen und schließt Live-Daten an, sobald M2 und M3 liefern.
 
 ## 2. Meilensteine
 

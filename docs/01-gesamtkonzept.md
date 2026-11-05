@@ -569,3 +569,4 @@ Vorbereitung des Release 1.0: Die Kandidaten-Dateien und die Mockups liegen nich
 | 8 | Trigger der optimistischen Sperre nachgetragen (aus Kandidat 24 von M4) | Design 4.1 |
 | 9 | group\_add in den Compose-Beispielen | Design 5.4, 5.5 |
 | 10 | Satz zu den Mockup-Bildern entfernt, die Beschreibung der Ansichten bleibt; Dateiverweise in den Kapiteln 10 bis 13 durch die Kandidaten des Meilensteins ersetzt | Design 6.5; Kapitel 10 bis 13 |
+| 11 | Platzhalter eingebetteter Grafiken entfernt; Abschnitt Mockups heißt Ansichten | Architektur 1, Design 6.4, 6.5, 6.6, Plan R1 |
