@@ -201,7 +201,7 @@ export function UsersPage() {
       else n.add(id);
       return n;
     });
-  const select = 'h-9 max-md:h-11 rounded-md border border-border bg-surface px-2 text-sm';
+  const select = 'h-9 max-md:h-11 rounded-md border border-control bg-surface px-2 text-sm';
   const locked = list.filter((u) => u.disabled).length;
   const pendingInvites = (invites.data ?? []).filter(
     (i) => !i.used_at && Date.parse(i.expires_at) > now,

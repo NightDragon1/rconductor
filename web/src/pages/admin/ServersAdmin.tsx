@@ -33,7 +33,7 @@ import { PhoneNote } from './PhoneNote';
 type GamePort = components['schemas']['GamePort'];
 type Message = { ok: boolean; text: string } | null;
 
-const field = 'h-11 rounded-md border border-border bg-surface px-3 disabled:opacity-70';
+const field = 'h-11 rounded-md border border-control bg-surface px-3 disabled:opacity-70';
 
 function Row({ label, children }: { label: string; children: (id: string) => ReactNode }) {
   const id = useId();
@@ -561,7 +561,7 @@ function GroupPanel({
           </label>
           <select
             id={pickId}
-            className="h-9 rounded-md border border-border bg-surface px-2 text-sm"
+            className="h-9 rounded-md border border-control bg-surface px-2 text-sm"
             value=""
             onChange={(e) =>
               e.target.value &&

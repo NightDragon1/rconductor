@@ -68,7 +68,7 @@ function Chips({
           </label>
           <select
             id={id}
-            className="h-9 rounded-md border border-border bg-surface px-2 text-sm"
+            className="h-9 rounded-md border border-control bg-surface px-2 text-sm"
             value=""
             onChange={(e) => e.target.value && add.onAdd(e.target.value)}
           >
@@ -203,7 +203,7 @@ export function UserPanel({
         </label>
         <select
           id={roleId}
-          className="h-11 rounded-md border border-border bg-surface px-3"
+          className="h-11 rounded-md border border-control bg-surface px-3"
           value={user.role}
           disabled={readOnly || rolesBelow(callerRole).length < 2 || user.is_emergency}
           onChange={(e) => {
