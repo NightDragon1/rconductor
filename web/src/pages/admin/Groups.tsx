@@ -44,7 +44,7 @@ function Picker({
       </label>
       <select
         id={id}
-        className="h-9 rounded-md border border-border bg-surface px-2 text-sm"
+        className="h-9 rounded-md border border-control bg-surface px-2 text-sm"
         value=""
         onChange={(e) => e.target.value && onPick(e.target.value)}
       >
@@ -192,7 +192,7 @@ function GroupPanel({
           </label>
           <select
             id={listId}
-            className="h-11 rounded-md border border-border bg-surface px-3 disabled:opacity-70"
+            className="h-11 rounded-md border border-control bg-surface px-3 disabled:opacity-70"
             disabled={readOnly}
             value={draft.command_list_id ?? ''}
             onChange={(e) =>
@@ -402,7 +402,7 @@ export function GroupsPage() {
               </label>
               <select
                 id={kindId}
-                className="h-11 rounded-md border border-border bg-surface px-3"
+                className="h-11 rounded-md border border-control bg-surface px-3"
                 value={kind}
                 onChange={(e) => setKind(e.target.value as Kind)}
               >

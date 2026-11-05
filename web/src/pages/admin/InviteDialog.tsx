@@ -80,7 +80,7 @@ export function InviteDialog({
             </label>
             <select
               id={roleId}
-              className="h-11 rounded-md border border-border bg-surface px-3"
+              className="h-11 rounded-md border border-control bg-surface px-3"
               value={role}
               onChange={(e) => {
                 setRole(e.target.value as Role);
@@ -98,7 +98,7 @@ export function InviteDialog({
             </label>
             <select
               id={fromId}
-              className="h-11 rounded-md border border-border bg-surface px-3"
+              className="h-11 rounded-md border border-control bg-surface px-3"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
             >

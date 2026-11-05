@@ -57,7 +57,7 @@ export function AuditPage() {
         ? session.user.pseudonym
         : (users.data?.find((u) => u.id === id)?.pseudonym ?? '');
   const serverName = (id?: string) => servers.data?.find((s) => s.id === id)?.name ?? '';
-  const select = 'h-9 max-md:h-11 rounded-md border border-border bg-surface px-2 text-sm';
+  const select = 'h-9 max-md:h-11 rounded-md border border-control bg-surface px-2 text-sm';
 
   return (
     <div className="flex flex-col gap-4">
