@@ -168,6 +168,11 @@ func (a *Agent) Run(ctx context.Context) error {
 				slog.String(logging.KeyReason, agentproto.RejectRevoked), slog.String("hint", err.Error()))
 			<-ctx.Done()
 			return nil
+		case errors.Is(err, ErrNoPanel):
+			// Design 5.5: the operator adds the token and restarts the agent.
+			a.log.Warn("waiting for a pairing token, then restart the agent", slog.String("hint", err.Error()))
+			<-ctx.Done()
+			return nil
 		case err != nil:
 			return err
 		}

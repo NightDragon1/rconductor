@@ -5,7 +5,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -320,28 +319,42 @@ func TestUnsupportedOrder(t *testing.T) {
 	logtest.Wait(t, r.logs, `"event":"agent.unsupported"`)
 }
 
+// TestNoPanel covers Design 5.5: without a token the agent waits with a
+// hint in the log; the operator adds the token and restarts it.
 func TestNoPanel(t *testing.T) {
-	r, err := New(agentCfg(t, t.TempDir()), logging.New(&lockedBuf{}, "agent", config.Log{}).Root(), &fakeBackend{})
+	logs := &lockedBuf{}
+	r, err := New(agentCfg(t, t.TempDir()), logging.New(logs, "agent", config.Log{Format: "json"}).Root(), &fakeBackend{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Run(context.Background()); !errors.Is(err, ErrNoPanel) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx) }()
+	logtest.Wait(t, logs, "waiting for a pairing token", "RCD_PAIRING_TOKEN")
+	select {
+	case err := <-done:
+		t.Fatalf("the agent stopped instead of waiting: %v", err)
+	default:
+	}
+	cancel()
+	if err := <-done; err != nil {
 		t.Errorf("run = %v", err)
 	}
 }
 
-// TestAgentWithoutPanel: without token and panel address the agent stops
-// with a clear error after creating its key pair (Design 5.3).
+// TestAgentWithoutPanel: without token and panel address the agent creates
+// its key pair, says what is missing and waits (Design 5.5).
 func TestAgentWithoutPanel(t *testing.T) {
 	var out lockedBuf
 	cfg := config.Agent{SecretsDir: t.TempDir(), DockerHost: "unix:///nonexistent.sock", LabelKey: "rcon.manage", LabelValue: "true",
 		Log: config.Log{Format: "json"}}
-	err := Main(context.Background(), cfg, &out)
-	if err == nil || !strings.Contains(err.Error(), "RCD_PAIRING_TOKEN") {
-		t.Fatalf("run = %v", err)
-	}
-	for _, want := range []string{`"comp":"agent"`, `"event":"key.created"`, `"event":"app.ready"`, "agent stopped with error"} {
-		logtest.Wait(t, &out, want)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Main(ctx, cfg, &out) }()
+	logtest.Wait(t, &out, `"comp":"agent"`, `"event":"key.created"`, `"event":"app.ready"`, "RCD_PAIRING_TOKEN")
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("run = %v", err)
 	}
 }
 
