@@ -9,12 +9,14 @@ func TestMajor(t *testing.T) {
 	t.Cleanup(func() { Version = orig })
 
 	cases := map[string]int{
-		"1.2.3":      1,
-		"v2.0.0":     2,
-		"0.0.0-dev":  0,
-		"10.1.0-rc1": 10,
-		"dev":        -1,
-		"":           -1,
+		"1.0":       1,
+		"v2.1":      2,
+		"1.0-rc1":   1,
+		"10.1-rc1":  10,
+		"0.0.0-dev": 0,
+		"1.2.3":     1,
+		"dev":       -1,
+		"":          -1,
 	}
 	for in, want := range cases {
 		Version = in
