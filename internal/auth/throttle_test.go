@@ -9,6 +9,8 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -186,5 +188,74 @@ func TestEvictionRules(t *testing.T) {
 	}
 	if d, _ := full.check("newcomer", ip(30), now.Add(7*time.Second), time.Hour); d != 4*time.Second {
 		t.Errorf("delay with a table full of locks = %v, want 4s", d)
+	}
+}
+
+// TestParallelBurstStaysUnderTheLimit covers T-002: attempts in parallel
+// count before their result, so a burst gets no more guesses than the limit.
+func TestParallelBurstStaysUnderTheLimit(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx := context.Background()
+	attacker := clientAt("192.0.2.77")
+	var wg sync.WaitGroup
+	var guessed atomic.Int32
+	for range 40 {
+		wg.Go(func() {
+			if _, _, err := f.svc.Login(ctx, "Mod", "wrong password!!", attacker); errors.Is(err, ErrInvalidCredentials) {
+				guessed.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	if n := guessed.Load(); n > 5 {
+		t.Errorf("%d guesses got through, the limit is 5", n)
+	}
+}
+
+// TestIPv6NetworkIsOneClient covers T-002: rotating the address inside a /64
+// does not start a new count.
+func TestIPv6NetworkIsOneClient(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx := context.Background()
+	for i := range 5 {
+		_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", clientAt(fmt.Sprintf("2001:db8:1:2::%x", i+1)))
+	}
+	var locked *LockedError
+	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt("2001:db8:1:2::ffff")); !errors.As(err, &locked) {
+		t.Errorf("another address of the network = %v", err)
+	}
+	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt("2001:db8:1:3::1")); errors.As(err, &locked) {
+		t.Errorf("another network is locked too: %v", err)
+	}
+}
+
+// TestLockoutAuditsOnce covers T-016: a locked client repeats its attempts at
+// HTTP speed without a session; that adds one audit row, not one per attempt.
+func TestLockoutAuditsOnce(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx := context.Background()
+	attacker := clientAt("192.0.2.78")
+	for range 5 {
+		_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", attacker)
+	}
+	before := f.count(t, `SELECT count(*) FROM audit_log`)
+	for range 50 {
+		_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", attacker)
+	}
+	if n := f.count(t, `SELECT count(*) FROM audit_log`) - before; n != 1 {
+		t.Errorf("%d audit rows for 50 refused attempts, want 1", n)
+	}
+}
+
+// TestOverlongPasswordIsWrong covers T-025: a huge password fails like any
+// other wrong one.
+func TestOverlongPasswordIsWrong(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	if _, _, err := f.svc.Login(context.Background(), "Mod", strings.Repeat(testPassword, 1000), clientAt("192.0.2.79")); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("err = %v", err)
 	}
 }

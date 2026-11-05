@@ -45,11 +45,26 @@ type counter struct {
 	failures    int
 	last        time.Time
 	lockedUntil time.Time
+	// reported is set once the first refused attempt of a lockout is in
+	// the audit log; the following ones add no row (T-016).
+	reported bool
 }
 
 type pairKey struct {
 	account string
 	ip      netip.Addr
+}
+
+// clientKey is the address the lockout counts: an IPv6 client usually owns a
+// whole /64, so rotating inside it must not start a new count.
+func clientKey(ip netip.Addr) netip.Addr {
+	ip = ip.Unmap()
+	if ip.Is6() {
+		if p, err := ip.Prefix(64); err == nil {
+			return p.Addr()
+		}
+	}
+	return ip
 }
 
 // throttle counts consecutive login failures in memory: per account for
@@ -63,10 +78,14 @@ type throttle struct {
 	capacity int
 	accounts map[string]*counter
 	pairs    map[pairKey]*counter
+	// running counts attempts of a pair whose result is still open, so a
+	// parallel burst cannot get past the limit before the first failure
+	// is counted.
+	running map[pairKey]int
 }
 
 func newThrottle() *throttle {
-	return &throttle{capacity: maxTracked, accounts: map[string]*counter{}, pairs: map[pairKey]*counter{}}
+	return &throttle{capacity: maxTracked, accounts: map[string]*counter{}, pairs: map[pairKey]*counter{}, running: map[pairKey]int{}}
 }
 
 func (t *throttle) size() int { return len(t.accounts) + len(t.pairs) }
@@ -78,7 +97,7 @@ func accountKey(pseudonym string) string { return strings.ToLower(pseudonym) }
 func (t *throttle) check(account string, ip netip.Addr, now time.Time, window time.Duration) (delay, locked time.Duration) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if c := t.pairs[pairKey{account, ip}]; c != nil && now.Before(c.lockedUntil) {
+	if c := t.pairs[pairKey{account, clientKey(ip)}]; c != nil && now.Before(c.lockedUntil) {
 		return 0, c.lockedUntil.Sub(now)
 	}
 	if c := t.accounts[account]; c != nil && now.Sub(c.last) < window {
@@ -90,6 +109,50 @@ func (t *throttle) check(account string, ip netip.Addr, now time.Time, window ti
 		return delayFor(maxDelayFailures), 0
 	}
 	return 0, 0
+}
+
+// reserve counts an attempt as running. It refuses when the failures so far
+// and the running attempts already reach the limit.
+func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, maxFailures int) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key := pairKey{account, clientKey(ip)}
+	failures := 0
+	if c := t.pairs[key]; c != nil {
+		// A lockout that began since the check counts too.
+		if now.Before(c.lockedUntil) {
+			return false
+		}
+		failures = c.failures
+	}
+	if failures+t.running[key] >= maxFailures {
+		return false
+	}
+	t.running[key]++
+	return true
+}
+
+// release ends a reserved attempt.
+func (t *throttle) release(account string, ip netip.Addr) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key := pairKey{account, clientKey(ip)}
+	if t.running[key]--; t.running[key] <= 0 {
+		delete(t.running, key)
+	}
+}
+
+// firstRefused reports whether this is the first refused attempt of the
+// current lockout of the pair.
+func (t *throttle) firstRefused(account string, ip netip.Addr) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	c := t.pairs[pairKey{account, clientKey(ip)}]
+	if c == nil || c.reported {
+		return false
+	}
+	c.reported = true
+	return true
 }
 
 // fail records a failure and reports whether it starts a lockout.
@@ -107,7 +170,7 @@ func (t *throttle) fail(account string, ip netip.Addr, now time.Time, maxFailure
 	if _, ok := t.accounts[account]; ok || t.makeRoom(now, lockout) {
 		t.accounts[account] = bump(t.accounts[account])
 	}
-	key := pairKey{account, ip}
+	key := pairKey{account, clientKey(ip)}
 	if _, ok := t.pairs[key]; !ok && !t.makeRoom(now, lockout) {
 		return false
 	}
@@ -116,6 +179,7 @@ func (t *throttle) fail(account string, ip netip.Addr, now time.Time, maxFailure
 	if p.failures >= maxFailures && !now.Before(p.lockedUntil) {
 		p.lockedUntil = now.Add(lockout)
 		p.failures = 0
+		p.reported = false
 		return true
 	}
 	return false

@@ -211,8 +211,21 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 		return "", Principal{}, fmt.Errorf("look up user: %w", err)
 	}
 	if locked > 0 {
-		s.loginDenied(ctx, c, u.ID, u.Pseudonym, "rate_limited", "locked")
+		// Without a session anyone can repeat this at HTTP speed: one
+		// audit row per lockout, not per attempt (T-016).
+		if s.throttle.firstRefused(key, c.IP) {
+			s.loginDenied(ctx, c, u.ID, u.Pseudonym, "rate_limited", "locked")
+		}
 		return "", Principal{}, &LockedError{RetryAfter: locked}
+	}
+	// Attempts in parallel count before their result is known (T-002).
+	if !s.throttle.reserve(key, c.IP, s.now(), maxFailures) {
+		return "", Principal{}, &LockedError{RetryAfter: time.Second}
+	}
+	defer s.throttle.release(key, c.IP)
+	// A longer password cannot be right; it costs no more work than any other.
+	if len(pw) > 4*password.MaxLength {
+		pw = ""
 	}
 	if delay > 0 {
 		if err := s.sleep(ctx, delay); err != nil {

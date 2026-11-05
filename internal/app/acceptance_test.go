@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -561,5 +562,39 @@ func TestProfileFileInARunningPanel(t *testing.T) {
 	logtest.Wait(t, r.logs, `"event":"profile.rejected"`)
 	if got := nameOf(); got != "Second name" {
 		t.Errorf("after a broken change the name is %q", got)
+	}
+}
+
+// TestBigBodies covers T-025: without a session nobody fills the memory with
+// a body; the largest legal body, a profile picture, still passes the limit.
+func TestBigBodies(t *testing.T) {
+	f := newRightsFixture(t)
+	post := func(body io.Reader, length int64) int {
+		t.Helper()
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, f.base+"/api/v1/auth/login", body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.ContentLength = length
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", f.base)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		return resp.StatusCode
+	}
+	huge := append(append([]byte(`{"pseudonym":"admin","password":"`), bytes.Repeat([]byte("x"), 3<<20)...), []byte(`"}`)...)
+	if status := post(bytes.NewReader(huge), int64(len(huge))); status != http.StatusRequestEntityTooLarge {
+		t.Errorf("declared length = %d", status)
+	}
+	// Without a declared length the reader stops at the limit.
+	if status := post(io.MultiReader(bytes.NewReader(huge)), -1); status != http.StatusBadRequest && status != http.StatusRequestEntityTooLarge {
+		t.Errorf("unknown length = %d", status)
+	}
+	picture := bytes.Repeat([]byte("x"), 1<<20)
+	if status, _ := f.raw(rA, http.MethodPut, "/me/avatar", picture); status == http.StatusRequestEntityTooLarge {
+		t.Errorf("a body of 1 MiB is refused as too large")
 	}
 }
