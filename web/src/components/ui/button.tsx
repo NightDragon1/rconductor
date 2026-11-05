@@ -12,9 +12,9 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default: 'bg-accent text-accent-text hover:opacity-90',
-        outline: 'border border-border bg-surface text-text hover:bg-surface-raised',
+        outline: 'border border-control bg-surface text-text hover:bg-surface-raised',
         ghost: 'text-text hover:bg-surface-raised',
-        danger: 'bg-danger text-white hover:opacity-90',
+        danger: 'bg-danger text-danger-text hover:opacity-90',
       },
       size: {
         default: 'h-11',
