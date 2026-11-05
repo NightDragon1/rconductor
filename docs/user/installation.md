@@ -19,11 +19,11 @@ The files use `ghcr.io/nightdragon1/...:1`. The same tags are on Docker Hub as
 `nightdragon1/rconductor-panel` and `nightdragon1/rconductor-agent`. Panel and
 agent must have the same major version, the first number of the version; the
 tag `1` gives you that. Versions have two parts: `1.0`, `1.1`. The first number
-rises when something is incompatible.
+rises when something is incompatible. See [Updating](#updating).
 
 Values come from the environment or an `.env` file next to the Compose file:
-`DOCKER_GID` (group of the Docker socket), `RCD_PAIRING_TOKEN`, and for ports
-`RCD_WEB_PORT` and `RCD_AGENT_PORT`.
+`DOCKER_GID` (group of the Docker socket), `RCD_PAIRING_TOKEN`, `RCD_VERSION`
+(image tag, default `1`), and for ports `RCD_WEB_PORT` and `RCD_AGENT_PORT`.
 
 To check the signature of an image:
 
@@ -50,6 +50,39 @@ variable afterwards, otherwise every start resets the password again.
 Run the panel only in your LAN or behind a VPN. The web port speaks plain
 HTTP; TLS is the job of a reverse proxy.
 
+
+## Updating
+
+**Update panel and agents together.** They must have the same major version, the
+first number of the version. If they differ, the panel refuses the agent with the
+reason `version`; the hint is in the panel log and the agent log. The agent keeps
+trying and connects once the versions match. RCON and the rest of the panel keep
+working in the meantime, only the agent functions are gone. So a panel `1.0` with an
+agent `0.9` does not work, and neither does the other way round.
+
+Your data stays in the volumes. On the first start after an update the panel
+migrates the database by itself and writes a backup first, as
+`/backups/rconductor-<UTC time>-pre-migrate-v<N>.db`. Agents keep their pairing, you
+need no new token.
+
+With the tag `1`, an update within release 1 is:
+
+```sh
+docker compose -f all-in-one.yaml pull
+docker compose -f all-in-one.yaml up -d
+```
+
+To move from a test version such as `0.9` to `1.0`, remove the line `RCD_VERSION=0.9`
+from `.env` (or set `RCD_VERSION=1`) and run the same two commands. With separate
+hosts, do it on the panel host and on every game host.
+
+Going back to an older version is not supported once the database has been migrated.
+To go back, stop the panel, restore the backup as described under
+[Volumes and files](#volumes-and-files) and start the old version.
+
+To install a certain version instead of the newest, for example a test version, put
+it into `.env` before the first start: `RCD_VERSION=0.9`. Test versions have only
+their exact tag and are marked as pre-releases.
 
 ## Reverse proxy
 

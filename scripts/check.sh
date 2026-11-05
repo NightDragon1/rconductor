@@ -26,6 +26,9 @@ go tool -modfile=tools/go.mod golangci-lint run ./...
 step SPDX headers
 scripts/check-spdx.sh
 
+step release scripts
+scripts/release-test.sh
+
 step generated code
 go generate ./...
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff
