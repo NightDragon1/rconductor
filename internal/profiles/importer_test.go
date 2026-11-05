@@ -16,6 +16,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
@@ -98,7 +99,7 @@ func TestSync(t *testing.T) {
 	if err := f.im.Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if c := strings.Count(f.logs.String(), `"event":"profile.imported"`); c != 1 {
+	if c := logtest.WaitCount(t, f.logs, `"event":"profile.imported"`, 1); c != 1 {
 		t.Errorf("profile.imported %d times, want 1", c)
 	}
 }
@@ -115,9 +116,7 @@ func TestOverrideAndFallback(t *testing.T) {
 	if name != "Our Minecraft" || overridden != 1 || n != 1 {
 		t.Errorf("override: %q overridden=%d commands=%d", name, overridden, n)
 	}
-	if !strings.Contains(f.logs.String(), `"event":"profile.overridden"`) {
-		t.Error("profile.overridden missing")
-	}
+	logtest.Wait(t, f.logs, `"event":"profile.overridden"`)
 	// Removing the custom file brings the shipped profile back.
 	_ = os.Remove(filepath.Join(f.dir, "mc.yaml"))
 	_ = f.im.Sync(ctx)
@@ -143,9 +142,7 @@ func TestBrokenChangeKeepsLastState(t *testing.T) {
 	if !lastErr.Valid || !strings.Contains(lastErr.String, "protocol.type") {
 		t.Errorf("error not kept: %v", lastErr)
 	}
-	if !strings.Contains(f.logs.String(), `"event":"profile.rejected"`) {
-		t.Error("profile.rejected missing")
-	}
+	logtest.Wait(t, f.logs, `"event":"profile.rejected"`)
 	f.write(t, "ark.yaml", custom("ark", "ARK fixed"))
 	_ = f.im.Sync(ctx)
 	if name, _, _, lastErr, _ := f.profile(t, "ark"); name != "ARK fixed" || lastErr.Valid {

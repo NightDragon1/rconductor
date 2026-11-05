@@ -20,6 +20,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 )
 
 // fakeDocker answers like the daemon for a fixed set of containers and
@@ -210,9 +211,7 @@ func TestOrdersCheckedAgain(t *testing.T) {
 			t.Errorf("%s: %+v", name, r)
 		}
 	}
-	if !strings.Contains(logs.String(), `"event":"agent.forbidden"`) {
-		t.Error("agent.forbidden missing")
-	}
+	logtest.Wait(t, logs, `"event":"agent.forbidden"`)
 	for _, bad := range []agentproto.ContainerAction{{Container: "mc|db", Action: "restart"}, {Container: "", Action: "stop"}, {Container: "mc", Action: "remove"}} {
 		if r, _ := order(t, d, agentproto.TypeContainerAction, bad); r.Code != agentproto.CodeInvalid {
 			t.Errorf("%+v: %+v", bad, r)
@@ -240,7 +239,7 @@ func TestOrdersCheckedAgain(t *testing.T) {
 	if strings.Join(fd.actions, ",") != "restart id-mc,stop id-mc,start id-mc" {
 		t.Errorf("actions = %v", fd.actions)
 	}
-	if strings.Count(logs.String(), `"event":"docker.action"`) != 3 {
+	if logtest.WaitCount(t, logs, `"event":"docker.action"`, 3) != 3 {
 		t.Errorf("docker.action events:\n%s", logs.String())
 	}
 }
@@ -292,7 +291,7 @@ func TestFollowLogs(t *testing.T) {
 	stop, _ := agentproto.New(agentproto.TypeLogsStop, "", agentproto.LogsFollow{Container: "mc"})
 	d.Handle(ctx, stop, rec)
 	for _, ev := range []string{"logs.follow.start", "logs.follow.stop"} {
-		waitFor(t, ev, func() bool { return strings.Contains(logs.String(), `"event":"`+ev+`"`) })
+		logtest.Wait(t, logs, `"event":"`+ev+`"`)
 	}
 }
 

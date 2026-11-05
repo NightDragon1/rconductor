@@ -14,6 +14,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
@@ -93,11 +94,9 @@ func TestLoginAndAuthenticate(t *testing.T) {
 	if f.count(t, `SELECT count(*) FROM audit_log WHERE action = 'login' AND result = 'ok' AND actor_id = ?`, id) != 1 {
 		t.Error("login not audited")
 	}
+	logtest.Wait(t, f.logs, `"event":"auth.login.ok"`, `"session":"`+p.SessionRef()+`"`)
 	if strings.Contains(f.logs.String(), token) || strings.Contains(f.logs.String(), testPassword) {
 		t.Error("token or password in the log")
-	}
-	if !strings.Contains(f.logs.String(), `"event":"auth.login.ok"`) || !strings.Contains(f.logs.String(), `"session":"`+p.SessionRef()+`"`) {
-		t.Errorf("login log line missing:\n%s", f.logs.String())
 	}
 
 	got, err := f.svc.Authenticate(ctx, token)
@@ -114,9 +113,7 @@ func TestLoginAndAuthenticate(t *testing.T) {
 	if _, err := f.svc.Authenticate(ctx, token); !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("after logout: %v", err)
 	}
-	if !strings.Contains(f.logs.String(), `"event":"auth.logout"`) {
-		t.Error("logout not logged")
-	}
+	logtest.Wait(t, f.logs, `"event":"auth.logout"`)
 }
 
 func TestLoginFailuresLookAlike(t *testing.T) {
@@ -139,7 +136,7 @@ func TestLoginFailuresLookAlike(t *testing.T) {
 	if n := f.count(t, `SELECT count(*) FROM audit_log WHERE action = 'login' AND result = 'denied'`); n != 4 {
 		t.Errorf("denied logins audited = %d, want 4", n)
 	}
-	if n := strings.Count(f.logs.String(), `"event":"auth.login.failed"`); n != 4 {
+	if n := logtest.WaitCount(t, f.logs, `"event":"auth.login.failed"`, 4); n != 4 {
 		t.Errorf("auth.login.failed = %d, want 4", n)
 	}
 	// The pseudonym of an unknown user is never recorded.

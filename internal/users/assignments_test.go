@@ -6,9 +6,9 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strings"
 	"testing"
 
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/perm"
 )
 
@@ -26,8 +26,8 @@ func withMore(t *testing.T) *fixture {
 	return f
 }
 
-func (f *fixture) deniedCount() (logged, audited int) {
-	return strings.Count(f.logs.String(), `"event":"perm.denied"`),
+func (f *fixture) deniedCount(t *testing.T, want int) (logged, audited int) {
+	return logtest.WaitCount(t, f.logs, `"event":"perm.denied"`, want),
 		f.count(`SELECT count(*) FROM audit_log WHERE action = 'assignments.update' AND result = 'denied'`)
 }
 
@@ -100,7 +100,7 @@ func TestModeratorAssignmentWithinScope(t *testing.T) {
 	if f.count(`SELECT count(*) FROM grants`) != before {
 		t.Error("a refused assignment changed grants")
 	}
-	if logged, audited := f.deniedCount(); logged != 4 || audited != 4 {
+	if logged, audited := f.deniedCount(t, 4); logged != 4 || audited != 4 {
 		t.Errorf("refusals logged %d, audited %d; want 4 each", logged, audited)
 	}
 

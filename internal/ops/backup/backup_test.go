@@ -18,6 +18,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/migrations"
 )
@@ -77,9 +78,7 @@ func TestBackupRestoresIntoEmptyInstallation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(logs.String(), `"event":"backup.done"`) || !strings.Contains(logs.String(), filepath.Base(path)) {
-		t.Errorf("backup.done with file name missing:\n%s", logs.String())
-	}
+	logtest.Wait(t, &logs, `"event":"backup.done"`, filepath.Base(path))
 
 	// Restore: copy the backup as the database of an empty installation.
 	restored := filepath.Join(root, "restored")
@@ -200,6 +199,7 @@ func TestBackupBeforeMigration(t *testing.T) {
 	if want := fmt.Sprintf("-v%d.db", first.To); len(all) != 1 || all[0].Kind != KindPreMigrate || !strings.HasSuffix(all[0].Name, want) {
 		t.Fatalf("backups = %+v, want one pre-migrate backup ending in %s", all, want)
 	}
+	logtest.Wait(t, &logs, `"event":"backup.done"`, `"event":"db.migrate.start"`)
 	out := logs.String()
 	if i, j := strings.LastIndex(out, `"event":"backup.done"`), strings.LastIndex(out, `"event":"db.migrate.start"`); i < 0 || j < 0 || i > j {
 		t.Errorf("backup.done must come before db.migrate.start:\n%s", out)
@@ -259,13 +259,7 @@ func TestScheduleRunsWhenOverdue(t *testing.T) {
 	done := make(chan struct{})
 	go func() { Schedule(ctx, s, b); close(done) }()
 
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(logs.String(), `"event":"backup.done"`) {
-		if time.Now().After(deadline) {
-			t.Fatal("overdue backup not written")
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	logtest.Wait(t, &logs, `"event":"backup.done"`)
 	cancel()
 	<-done
 }

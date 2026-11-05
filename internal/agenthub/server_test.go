@@ -23,6 +23,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 )
 
@@ -152,17 +153,6 @@ func hello(t *testing.T, c *websocket.Conn, h agentproto.Hello) agentproto.Envel
 	return e
 }
 
-func (f *fixture) waitLog(t *testing.T, want string) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(f.logs.String(), want) {
-		if time.Now().After(deadline) {
-			t.Fatalf("log without %s:\n%s", want, f.logs.String())
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 // TestPinnedKeys covers AGT-012 on the agent port: TLS 1.3 only; an agent
 // that pinned another panel key refuses the handshake and both sides
 // know why; a known agent is welcomed, an unknown one rejected.
@@ -180,13 +170,13 @@ func TestPinnedKeys(t *testing.T) {
 	if e.Type != agentproto.TypeWelcome || w.AgentID != "agent-1" || e.Ref == "" {
 		t.Errorf("answer = %+v", e)
 	}
-	f.waitLog(t, `"event":"agent.connected"`)
+	logtest.Wait(t, f.logs, `"event":"agent.connected"`)
 
 	other := agentKey(t) // another panel's fingerprint
 	if _, err := f.dial(t, agent, other.Fingerprint()); err == nil || !errors.Is(err, agentproto.ErrPinMismatch) && !strings.Contains(err.Error(), "pinned") {
 		t.Errorf("agent accepted a panel with another key: %v", err)
 	}
-	f.waitLog(t, `"reason":"pin_mismatch"`)
+	logtest.Wait(t, f.logs, `"reason":"pin_mismatch"`)
 
 	stranger := agentKey(t)
 	c, err = f.dial(t, stranger, f.panel.Fingerprint())
@@ -204,9 +194,7 @@ func TestPinnedKeys(t *testing.T) {
 	if e := hello(t, c, agentproto.Hello{AgentID: "agent-1"}); e.Type != agentproto.TypeReject {
 		t.Errorf("stolen agent ID: %+v", e)
 	}
-	if n := strings.Count(f.logs.String(), `"reason":"pin_mismatch"`); n < 2 {
-		t.Errorf("pin_mismatch logged %d times, want both cases", n)
-	}
+	logtest.WaitCount(t, f.logs, `"reason":"pin_mismatch"`, 2)
 
 	cfg, _ := agentproto.ClientConfig(agent, f.panel.Fingerprint())
 	cfg.MaxVersion = tls.VersionTLS12
@@ -232,7 +220,7 @@ func TestVersionRule(t *testing.T) {
 	if e.Type != agentproto.TypeReject || r.Reason != agentproto.RejectVersion || !strings.Contains(r.Message, "99.0.0") {
 		t.Errorf("answer = %+v %+v", e, r)
 	}
-	f.waitLog(t, `"event":"agent.rejected","reason":"version"`)
+	logtest.Wait(t, f.logs, `"event":"agent.rejected","reason":"version"`)
 }
 
 // TestOversizedMessage covers SEC-007: a message over 1 MiB ends the
@@ -255,8 +243,8 @@ func TestOversizedMessage(t *testing.T) {
 	if _, _, err := c.Read(ctx); err == nil {
 		t.Error("session still open after an oversized message")
 	}
-	f.waitLog(t, `"event":"agent.limit","agent_id":"agent-1","reason":"message_size"`)
-	f.waitLog(t, `"reason":"too_large"`)
+	logtest.Wait(t, f.logs, `"event":"agent.limit","agent_id":"agent-1","reason":"message_size"`)
+	logtest.Wait(t, f.logs, `"reason":"too_large"`)
 	if f.hub.Connected("agent-1") {
 		t.Error("agent still connected")
 	}
@@ -288,8 +276,8 @@ func TestConnectionThrottle(t *testing.T) {
 	if refused != 3 {
 		t.Errorf("refused %d of 6 attempts, want 3", refused)
 	}
-	f.waitLog(t, `"event":"agent.limit","reason":"connection_rate"`)
-	if n := strings.Count(f.logs.String(), `"connection_rate"`); n != 1 {
+	logtest.Wait(t, f.logs, `"event":"agent.limit","reason":"connection_rate"`)
+	if n := logtest.WaitCount(t, f.logs, `"connection_rate"`, 1); n != 1 {
 		t.Errorf("connection_rate logged %d times, want once", n)
 	}
 }
@@ -312,7 +300,7 @@ func TestProtocolBreak(t *testing.T) {
 	if _, _, err := c.Read(ctx); err == nil {
 		t.Error("session still open")
 	}
-	f.waitLog(t, `"reason":"protocol"`)
+	logtest.Wait(t, f.logs, `"reason":"protocol"`)
 }
 
 // TestMessagesAndDisconnect: messages of an admitted agent reach the
@@ -341,7 +329,7 @@ func TestMessagesAndDisconnect(t *testing.T) {
 	if err := c.Write(ctx, websocket.MessageText, data); err != nil {
 		t.Fatal(err)
 	}
-	f.waitLog(t, `"event":"agent.connected"`)
+	logtest.Wait(t, f.logs, `"event":"agent.connected"`)
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		mu.Lock()
@@ -387,7 +375,7 @@ func TestBeforeWelcome(t *testing.T) {
 	if _, _, err := c.Read(ctx); err == nil {
 		t.Error("oversized hello accepted")
 	}
-	f.waitLog(t, `"event":"agent.limit","reason":"message_size"`)
+	logtest.Wait(t, f.logs, `"event":"agent.limit","reason":"message_size"`)
 
 	c, err = f.dial(t, agent, f.panel.Fingerprint())
 	if err != nil {
@@ -400,7 +388,7 @@ func TestBeforeWelcome(t *testing.T) {
 	if d := time.Since(start); d > 2*time.Second {
 		t.Errorf("closed after %v, want about 300 ms", d)
 	}
-	f.waitLog(t, `"event":"agent.disconnected","reason":"timeout"`)
+	logtest.Wait(t, f.logs, `"event":"agent.disconnected","reason":"timeout"`)
 
 	// A normal hello still fits, and after welcome the 1 MiB limit holds.
 	c, err = f.dial(t, agent, f.panel.Fingerprint())

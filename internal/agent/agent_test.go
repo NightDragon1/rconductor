@@ -19,6 +19,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -188,7 +189,7 @@ func TestPairAndReconnect(t *testing.T) {
 	waitFor(t, "pairing", func() bool { return r.a.State().AgentID != "" })
 	id := r.a.State().AgentID
 	waitFor(t, "session", func() bool { return p.hub.Connected(id) })
-	waitFor(t, "agent.handshake", func() bool { return strings.Contains(r.logs.String(), `"event":"agent.handshake"`) })
+	logtest.Wait(t, r.logs, `"event":"agent.handshake"`)
 	st, _ := loadState(dir)
 	if st.AgentID != id || st.PanelFingerprint != p.hub.Fingerprint() || st.TokenHash == "" {
 		t.Errorf("state = %+v", st)
@@ -226,12 +227,12 @@ func TestRevokedAgentStays(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "revocation", func() bool { st, _ := loadState(dir); return st.Revoked })
-	waitFor(t, "idle", func() bool { return strings.Contains(r.logs.String(), "not reconnecting") })
+	logtest.Wait(t, r.logs, "not reconnecting")
 	r.stop()
 	before := strings.Count(p.logs.String(), `"msg":"agent rejected"`)
 	r = start(t, cfg)
 	time.Sleep(200 * time.Millisecond)
-	if n := strings.Count(p.logs.String(), `"msg":"agent rejected"`); n != before {
+	if n := logtest.WaitCount(t, p.logs, `"msg":"agent rejected"`, before); n != before {
 		t.Errorf("revoked agent tried again (%d rejections)", n-before)
 	}
 	// A new token pairs it again.
@@ -257,10 +258,8 @@ func TestPinnedPanel(t *testing.T) {
 	r.stop()
 	cfg.PanelAddr = other.addr // the address now leads to another panel
 	r = start(t, cfg)
-	waitFor(t, "refusal", func() bool {
-		return strings.Contains(r.logs.String(), `"event":"agent.rejected","reason":"pin_mismatch"`)
-	})
-	waitFor(t, "refusal on the panel", func() bool { return strings.Contains(other.logs.String(), `"reason":"pin_mismatch"`) })
+	logtest.Wait(t, r.logs, `"event":"agent.rejected","reason":"pin_mismatch"`)
+	logtest.Wait(t, other.logs, `"reason":"pin_mismatch"`)
 }
 
 // TestWayB covers pairing by fingerprint from the agent side: the agent
@@ -277,11 +276,8 @@ func TestWayB(t *testing.T) {
 	cfg := agentCfg(t, dir)
 	cfg.PanelAddr = p.addr
 	r := start(t, cfg)
-	waitFor(t, "pending", func() bool { return strings.Contains(r.logs.String(), "pairing waits for approval") })
-	if !strings.Contains(r.logs.String(), `"panel_fingerprint":"`+p.hub.Fingerprint()+`"`) ||
-		!strings.Contains(r.logs.String(), `"fingerprint":"`+r.a.Fingerprint()+`"`) {
-		t.Errorf("fingerprints not logged:\n%s", r.logs.String())
-	}
+	logtest.Wait(t, r.logs, "pairing waits for approval")
+	logtest.Wait(t, r.logs, `"panel_fingerprint":"`+p.hub.Fingerprint()+`"`, `"fingerprint":"`+r.a.Fingerprint()+`"`)
 	if st, _ := loadState(dir); st.PanelFingerprint != p.hub.Fingerprint() {
 		t.Errorf("panel key not pinned at the first contact: %+v", st)
 	}
@@ -321,9 +317,7 @@ func TestUnsupportedOrder(t *testing.T) {
 	if len(r.backend.orders) != 1 || r.backend.orders[0] != agentproto.TypeLogsTail {
 		t.Errorf("backend got %v", r.backend.orders)
 	}
-	if !strings.Contains(r.logs.String(), `"event":"agent.unsupported"`) {
-		t.Error("agent.unsupported missing")
-	}
+	logtest.Wait(t, r.logs, `"event":"agent.unsupported"`)
 }
 
 func TestNoPanel(t *testing.T) {
@@ -347,9 +341,7 @@ func TestAgentWithoutPanel(t *testing.T) {
 		t.Fatalf("run = %v", err)
 	}
 	for _, want := range []string{`"comp":"agent"`, `"event":"key.created"`, `"event":"app.ready"`, "agent stopped with error"} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("%s missing:\n%s", want, out.String())
-		}
+		logtest.Wait(t, &out, want)
 	}
 }
 
@@ -366,8 +358,6 @@ func TestVersionHint(t *testing.T) {
 		t.Errorf("reason = %s", reason)
 	}
 	for _, want := range []string{`"event":"agent.rejected"`, `"reason":"version"`, "differ in the major version", `"version":"`} {
-		if !strings.Contains(logs.String(), want) {
-			t.Errorf("%s missing:\n%s", want, logs.String())
-		}
+		logtest.Wait(t, logs, want)
 	}
 }

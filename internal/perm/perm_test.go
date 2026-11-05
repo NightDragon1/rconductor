@@ -6,11 +6,11 @@ import (
 	"bytes"
 	"context"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
@@ -277,7 +277,7 @@ func TestCacheAndInvalidate(t *testing.T) {
 	w := newWorld(t)
 	w.rights("m")
 	w.rights("m")
-	if n := strings.Count(w.log.String(), `"event":"perm.recomputed"`); n != 1 {
+	if n := logtest.WaitCount(t, w.log, `"event":"perm.recomputed"`, 1); n != 1 {
 		t.Errorf("perm.recomputed = %d after two lookups, want 1", n)
 	}
 	// A change without Invalidate is not seen (cached) ...

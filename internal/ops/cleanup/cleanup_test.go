@@ -5,12 +5,12 @@ package cleanup
 import (
 	"bytes"
 	"context"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 	"github.com/NightDragon1/rconductor/internal/users"
@@ -67,9 +67,7 @@ func TestRun(t *testing.T) {
 	if res.Audit != 1 || count(`SELECT count(*) FROM audit_log WHERE id = 'recent'`) != 1 {
 		t.Errorf("audit purge = %+v", res)
 	}
-	if !strings.Contains(logs.String(), `"event":"audit.purge"`) || !strings.Contains(logs.String(), `"removed":1`) {
-		t.Errorf("audit.purge log:\n%s", logs.String())
-	}
+	logtest.Wait(t, &logs, `"event":"audit.purge"`, `"removed":1`)
 	if res.Sessions != 2 || count(`SELECT count(*) FROM sessions`) != 1 {
 		t.Errorf("sessions purge = %+v", res)
 	}

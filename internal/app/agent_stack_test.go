@@ -18,6 +18,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 )
 
@@ -231,13 +232,7 @@ func TestAgentThroughTheStack(t *testing.T) {
 	}
 	for _, ev := range []string{"logs.follow.start", "logs.follow.stop"} {
 		// The panel logs each when the agent's result arrives.
-		deadline := time.Now().Add(5 * time.Second)
-		for len(s.eventsOf(ev)) == 0 {
-			if time.Now().After(deadline) {
-				t.Fatalf("%s missing in the panel log", ev)
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
+		logtest.Wait(t, s.logs, `"event":"`+ev+`"`)
 	}
 
 	// Earlier lines come over logs.tail as foreign data, never into the
@@ -257,9 +252,7 @@ func TestAgentThroughTheStack(t *testing.T) {
 	if code := admin.call(http.MethodGet, "/servers/"+s.server+"/logs?lines=7", nil, nil); code != http.StatusTooManyRequests {
 		t.Errorf("tail over the agent's rate = %d", code)
 	}
-	if len(s.eventsOf("logs.tail")) == 0 {
-		t.Error("logs.tail missing in the panel log")
-	}
+	logtest.Wait(t, s.logs, `"event":"logs.tail"`)
 	ws2 := s.console("admin")
 	subscribe(t, ws2, "server."+s.server+".logs")
 	data = next(t, ws2, func(typ, topic string, _ json.RawMessage) bool {
@@ -302,9 +295,7 @@ func TestAgentThroughTheStack(t *testing.T) {
 	if !strings.Contains(string(data), `"state":"unknown"`) {
 		t.Errorf("metrics after the agent left = %s", data)
 	}
-	if len(s.eventsOf("agent.disconnected")) == 0 || len(s.eventsOf("cache.stale")) == 0 {
-		t.Error("agent.disconnected or cache.stale missing")
-	}
+	logtest.Wait(t, s.logs, `"event":"agent.disconnected"`, `"event":"cache.stale"`)
 	var problem struct{ Reason string }
 	if code := admin.call(http.MethodPost, "/servers/"+s.server+"/actions", map[string]string{"action": "start"}, &problem); code != http.StatusServiceUnavailable {
 		t.Errorf("action without agent = %d", code)

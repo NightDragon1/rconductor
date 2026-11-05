@@ -36,6 +36,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
@@ -303,9 +304,7 @@ func TestAgentWithDocker(t *testing.T) {
 	agentID := p.connectedAgent()
 	exerciseAgent(t, p, agentID, labeled, plain, ctr)
 	for _, ev := range []string{"docker.action", "agent.forbidden", "agent.unsupported"} {
-		if !strings.Contains(logs.String(), `"event":"`+ev+`"`) {
-			t.Errorf("%s missing in the agent log", ev)
-		}
+		logtest.Wait(t, logs, `"event":"`+ev+`"`)
 	}
 }
 
@@ -438,9 +437,7 @@ func TestRestartWithoutAgent(t *testing.T) {
 		return err == nil && info.RestartCount >= 1 && info.State.Running
 	})
 	waitUntil(t, 60*time.Second, "RCON back", func() bool { return connected() && uptime() != first && uptime() != "" })
-	if !strings.Contains(logs.String(), `"event":"rcon.reconnect"`) {
-		t.Error("rcon.reconnect missing")
-	}
+	logtest.Wait(t, logs, `"event":"rcon.reconnect"`)
 }
 
 // TestAgentImage covers AGT-011 and AGT-001 for the image: non-root, no
