@@ -60,12 +60,12 @@ func TestSameMajor(t *testing.T) {
 		a, b string
 		want bool
 	}{
-		{"1.2.3", "1.0.0", true},
-		{"v1.4.0", "1.0.0-rc1", true},
+		{"1.2", "1.0", true},
+		{"v1.4", "1.0-rc1", true},
 		{"0.0.0-dev", "0.3.1", true},
-		{"1.0.0", "2.0.0", false},
+		{"1.0", "2.0", false},
 		{"dev", "dev", false},
-		{"", "1.0.0", false},
+		{"", "1.0", false},
 	} {
 		if got := SameMajor(tc.a, tc.b); got != tc.want {
 			t.Errorf("SameMajor(%q, %q) = %v", tc.a, tc.b, got)

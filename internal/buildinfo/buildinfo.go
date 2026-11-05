@@ -9,15 +9,16 @@ import (
 )
 
 // Version is the release version, set via
-// -ldflags "-X github.com/NightDragon1/rconductor/internal/buildinfo.Version=1.2.3".
+// -ldflags "-X github.com/NightDragon1/rconductor/internal/buildinfo.Version=1.0".
+// Versions have two parts, the first is the major version (D-047).
 var Version = "0.0.0-dev"
 
 // Major returns the major version number; panel and agent must match on it (D-023).
-// It returns -1 if Version is not a semantic version.
+// It returns -1 if Version does not start with a number.
 func Major() int { return MajorOf(Version) }
 
-// MajorOf returns the major version number of v, or -1 if v is not a
-// semantic version.
+// MajorOf returns the major version number of v, or -1 if v does not start
+// with a number.
 func MajorOf(v string) int {
 	v = strings.TrimPrefix(v, "v")
 	head, _, _ := strings.Cut(v, ".")
