@@ -53,3 +53,30 @@ test('every answer carries the security headers', async ({ page, request, state 
     expect(r.headers()['content-security-policy'], url).toContain("frame-ancestors 'none'");
   }
 });
+
+// NFR-003: X-Forwarded-For counts only from a proxy in RCD_TRUSTED_PROXIES.
+// The stack's proxy adds its client to the header; only the stack basepath
+// trusts it. The address shows in the audit entry of the login.
+test('X-Forwarded-For counts only from a trusted proxy', async ({ playwright, state, stack }) => {
+  const client = await playwright.request.newContext({
+    baseURL: state.base_url,
+    extraHTTPHeaders: {
+      Origin: new URL(state.base_url).origin,
+      'X-Forwarded-For': '203.0.113.9',
+    },
+  });
+  const signIn = await client.post('api/v1/auth/login', {
+    data: { pseudonym: 'admin', password: secret(state, 'admin') },
+  });
+  expect(signIn.status()).toBe(200);
+  const audit = await client.get('api/v1/audit?kind=auth');
+  const { items } = (await audit.json()) as {
+    items: { action: string; payload?: string | { ip?: string } }[];
+  };
+  const entry = items.find((e) => e.action === 'login');
+  const payload =
+    typeof entry?.payload === 'string' ? entry.payload : JSON.stringify(entry?.payload);
+  expect(payload).toContain(stack === 'basepath' ? '203.0.113.9' : '127.0.0.1');
+  expect(payload).not.toContain(stack === 'basepath' ? '127.0.0.1' : '203.0.113.9');
+  await client.dispose();
+});

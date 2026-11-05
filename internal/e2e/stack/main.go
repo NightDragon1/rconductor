@@ -92,14 +92,15 @@ func main() {
 	base := flag.String("base", "/", "base path (RCD_BASE_PATH)")
 	statePath := flag.String("state", "", "file for the state JSON")
 	logPath := flag.String("log", "", "file that gets the panel's log lines too")
+	trusted := flag.String("trusted", "", "RCD_TRUSTED_PROXIES of the panel, as behind a configured proxy")
 	host := flag.String("host", "", "host name the browser uses instead of the address, e.g. rcon.lan for a page outside a secure context")
 	flag.Parse()
-	if err := run(*addr, *host, *dist, *base, *statePath, *logPath); err != nil {
+	if err := run(*addr, *host, *dist, *base, *trusted, *statePath, *logPath); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(addr, host, dist, base, statePath, logPath string) error {
+func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	root, err := os.MkdirTemp("", "rcd-e2e-")
@@ -118,7 +119,7 @@ func run(addr, host, dist, base, statePath, logPath string) error {
 		v, ok := map[string]string{
 			"RCD_HTTP_ADDR": "127.0.0.1:0", "RCD_AGENT_ADDR": "127.0.0.1:0", "RCD_PUBLIC_URL": public, "RCD_BASE_PATH": base,
 			"RCD_DATA_DIR": filepath.Join(root, "data"), "RCD_SECRETS_DIR": filepath.Join(root, "secrets"),
-			"RCD_BACKUP_DIR": filepath.Join(root, "backups"), "RCD_LOG_FORMAT": "json",
+			"RCD_BACKUP_DIR": filepath.Join(root, "backups"), "RCD_LOG_FORMAT": "json", "RCD_TRUSTED_PROXIES": trusted,
 		}[k]
 		return v, ok
 	}, os.ReadFile)
