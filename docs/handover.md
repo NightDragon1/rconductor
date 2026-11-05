@@ -1,65 +1,96 @@
 # Übergabe
 
-Stand: 05.11.2026, Meilenstein M4, Schritt 10 (Abbruch auf Wunsch, Stand gesichert)
+Stand: 05.11.2026, Meilenstein M4, Schritt 11 (Abbruch auf Wunsch, Stand gesichert)
 
 ## Repository
 
-- Arbeitsbranch: `m4/step10`, PR #117 offen. Letzter Arbeitsstand 4f671c4, darauf nur dieser Übergabe-Commit.
-- main: 28cc8ea, sauber, CI grün. Schritt 10 ist noch nicht auf main.
-- Der Branch ist fertig, `make check` war bei 4f671c4 grün. Nach main geht er nur über #117: Das Ruleset verlangt die Pflicht-Checks, und deren Lauf ist nicht fertig.
-- Dieser Übergabe-Commit lief mit `--no-verify`, weil keine Tests mehr starten sollten. Er ändert nur diese Datei.
+- Branch: main. Letzter Arbeitsstand 6192463 (#121 gemergt), darauf nur dieser Übergabe-Commit.
+- Keine offenen PRs, keine Arbeitsbranches.
+- Dieser Übergabe-Commit lief mit `--no-verify`, weil keine Tests mehr starten sollten, und direkt auf main über den Owner-Bypass. Er ändert nur diese Datei.
 
 ## Erledigt seit der letzten Übergabe
 
-- Schritt 9: Kartenlisten und E2E-Prüfung auf main, #103 gemergt, Screenshots m4-9 freigegeben.
-- Öffentliches Repo: Prüfung ohne Befund, Secret Scanning, Push Protection, Private Vulnerability Reporting, Ruleset, SECURITY.md, CONTRIBUTING.md, Aufbewahrung 7 Tage.
-- CI in drei Stufen (#107), E2E-Filter auf `internal/` und `api/` (#111). Nur Läufe mit Stufe 2 melden die Pflicht-Checks, ein Branch-Push erfüllte sie vorher ohne Test.
-- Alle 12 Dependabot-Alerts behoben (#112, #115), keiner dismissed. #108 bis #110 geschlossen.
-- moby/go-archive und moby/sys/user liegen weder im Agent- noch im Panel-Binary, nur in Tests über testcontainers.
-- Sporadische Tests behoben: `TestAgentThroughTheStack`, `TestHalfOpenConnection` (#116). `pull-test-images.sh` scheitert nicht mehr an `go.sum`-Änderungen.
+- Schritt 10 auf main (#117), Screenshots m4-10 freigegeben.
+- Renovate-Regel in CLAUDE.md: Patch, Minor und Digest nach grüner CI selbst mergen, Major vorher melden. #113, #114, #118, #119 gemergt.
+- `TestPairAndReconnect` behoben (#120).
+- Schritt 11 auf main (#121), PR-Lauf 41986893780 grün:
+  - `internal/logtest` mit `Wait`, `WaitLine`, `WaitCount` (Timeout 10 s) ersetzt einmalige Lesestellen und eigene Warteschleifen in `internal/`. Abwesenheitsprüfungen lesen direkt, nach dem Warten. `internal/logging` bleibt ausgenommen, dort wird der Schreiber selbst getestet.
+  - UI-001: `web/e2e/contrast.spec.ts`, axe auf allen Seiten je Rolle sowie Dialog und Menüs, hell und dunkel.
+  - Nicht-Text-Kontrast 3:1: `web/src/lib/contrast.test.ts` prüft die Farbwerte aus `index.css` je Theme; ein zu schwacher Wert lässt den Test nachweislich scheitern.
+  - Behoben: gestoppte Karten (`opacity-70`, 3,5 bis 4,0:1, jetzt 85), roter Button im dunklen Design (2,76:1, neuer Token `--danger-text`), Rahmen von Eingabefeldern und Outline-Buttons (1,2 bis 1,4:1, neuer Token `--control-border`).
+  - NFR-007: Build `--mode language`, Stack `language`, `web/e2e/language.spec.ts` über alle Seiten, Dialoge, Menüs und Fehlermeldung, mit Gegenbeweis. Kein fester Oberflächentext gefunden.
+  - Screenshots `docs/screenshots/m4-11/` (6 Bilder). Neue Abhängigkeiten und Ereigniscodes: keine.
 
-## Unterbrochene Aufgabe: Schritt 10 (SEC-006, SEC-009)
+## Kleinste Kontrastwerte (Nicht-Text)
 
-Fertig in #117, lokal grün (161 E2E bestanden, 0 fehlgeschlagen):
+| Teil | Dunkel | Hell |
+| --- | --- | --- |
+| Symbole | 6,03 | 4,40 |
+| Rahmen von Controls | 3,45 | 3,30 |
+| Fokusring | 9,04 | 6,23 |
+| Statuspunkte | 6,03 | 4,40 |
+| Gruppenrahmen | 6,13 | 4,38 |
 
-- `ForeignText`: Bidi-Zeichen als `⟨U+202E⟩`, je Zeile `<bdi>`, Kopieren liefert das Original, ohne Farbcodes (so bestätigt). Kandidaten 28 und 29.
-- Feindlicher Server, Container und Moderator `hmod` im Stack; `foreign.spec.ts` inklusive Befehlsseite.
-- Unit-Test für die feindliche Agent-Version.
-- CSP-Prüfung in jedem E2E-Test, Header-Test für alle Antwortarten des Web-Ports.
-- Werkzeugleisten brechen auf dem Handy um; `mobile`-Prüfung auf Controls außerhalb des Fensters, auch bei 320 px.
-- E2E-Filter um `cmd/`, `migrations/`, `profiles/` erweitert.
-- Screenshots m4-10 für das Handy neu aufgenommen (18 Bilder gesamt).
+Kartenrahmen (`--border`, 1,2 bis 1,4:1) sind ausgenommen, siehe Offene Fragen.
+
+## Abgleich der E2E-Kriterien (docs/05-abnahme-r1.md)
+
+Testkörper gegen den Wortlaut gelesen.
+
+| Kriterium | Ergebnis | Spec |
+| --- | --- | --- |
+| NFR-003 | Abnahme in M5 (Plan Kapitel 3); Projekt `basepath` läuft | delivery |
+| NFR-007 | erfüllt, neu | language |
+| SEC-002 | Abnahme in M5 | – |
+| SEC-006 | erfüllt | foreign, server, commands |
+| SEC-009 | erfüllt | delivery, fixtures |
+| AUTH-006 | Abmelden neu, Sperren vorhanden; Rechteänderung siehe Offene Fragen | auth, users |
+| AUTH-009 | Pflichtfeld und Eindeutigkeit neu | invite, users, settings-audit-profile |
+| ROLE-002 | Einstellungen ergänzt | servers-admin |
+| SRV-001, SRV-003 | erfüllt | servers-admin |
+| CMD-001, CMD-012 bis CMD-015 | erfüllt | console |
+| CMD-003 | erfüllt | commands |
+| AGT-005 | erfüllt, „nur RCON-Admin“ über guards | servers-admin, guards |
+| UI-001 | erfüllt, Review-Anteil steht aus | contrast, navigation |
+| UI-002, UI-004, UI-006 | erfüllt | overview |
+| UI-003 | aktive Benutzer ergänzt | overview |
+| UI-007, UI-008 | erfüllt | users, invite, groups, settings-audit-profile |
+| UI-011 | erfüllt | navigation, server |
+| UI-012 | erfüllt | mobile |
+
+Nicht einzeln gelesen, nur Titel und ID: SRV-001 ab Anlegen, CMD-003, UI-007, UI-008, UI-011, UI-012.
+
+## Unterbrochene Aufgabe: Schritt 11 (UI-001, NFR-007)
+
+Fertig: alles aus dem Plan, auf main, CI grün.
 
 Fehlt:
 
-- Grüne CI für #117, danach Merge.
-- Kurzmeldung zu den neuen Handy-Screenshots (hier nachgeholt).
-- Plan für Schritt 11 zeigen, noch nicht vorgelegt.
+- Volle E2E-Suite und Integrationstests lokal: Lauf abgebrochen, kein Ergebnis. Die CI hat beides für denselben Stand grün geprüft.
+- Die oben genannten Kriterien einzeln gegen ihre Testkörper lesen.
+- Review-Anteil UI-001: „keine verschiebbaren Widgets“ belegt nur die Codesuche (kein dnd, kein draggable in `web/src`).
+- Screenshot-OK zu m4-11.
 
 Nächster Handgriff:
 
-1. `gh pr checks 117`: Bei Grün `gh pr merge 117 --rebase --delete-branch`, die Pflicht-Checks müssen aus dem PR-Lauf stammen. Bei Rot zuerst reproduzieren.
-2. Danach Plan für Schritt 11 zeigen, nicht umsetzen.
-
-Vorarbeit zu Schritt 11 (E2E-Suite, ursprünglich mit Kontrastprüfung durch axe): Der CI-Job und der Test-Stack stehen.
-
-- UI-001: Kontrastprüfung fehlt. `@axe-core/playwright` ist installiert, aber unbenutzt.
-- NFR-007: Der Test mit einer Testsprache fehlt.
-- Alle anderen E2E-Kriterien von M4 werden in den Specs mit ID genannt. Das ist nur per Suche geprüft, nicht je Kriterium gegen `docs/05-abnahme-r1.md`.
-- In M4 sind noch 25 Issues offen; das Schließen gehört zum Abschluss.
+1. Die Antworten auf die offenen Fragen einarbeiten.
+2. Restliche Kriterien lesen, Tabelle ergänzen.
+3. Plan für Schritt 12 (Abschluss, 25 offene M4-Issues) zeigen, nicht umsetzen.
 
 ## Offene CI-Läufe
 
-- #117, Commit 4f671c4: PR-Lauf 41937362993 lief noch (16 grün, 1 offen: E2E shard 2), Push-Lauf grün.
-- Der Push dieses Übergabe-Commits startet die CI für #117 neu; ein älterer Lauf kann dadurch abgebrochen sein. Es zählt der neueste Stand.
+- main 6192463: Der Push-Lauf läuft nach dem Merge von #121, Ergebnis offen. Der PR-Lauf desselben Stands war grün.
+- Dieser Übergabe-Commit startet einen weiteren Lauf; es zählt der neueste Stand.
 - Nächtlicher Lauf (Stufe 3): bisher nicht beobachtet, nur als manueller Lauf geprüft.
 
-## Entschieden
+## Offene Fragen
 
-- `GO-2026-5932` in `golang.org/x/crypto` 0.58.0: auf das reguläre Release warten.
-- Renovate: Patch und Minor nach grüner CI selbst mergen, Major vorher melden (CLAUDE.md). #113 und #114 gemergt.
+- Screenshots m4-11: OK?
+- Kartenrahmen: WCAG 1.4.11 verlangt 3:1 nur für Rahmen, die ein Control erkennbar machen. Vorschlag: Karten und Tabellen bleiben bei `--border`.
+- AUTH-006: Rechteänderung ist nur im Go-Test belegt (`internal/users`, gefälschter Session-Widerruf), nicht als Integrationstest oder E2E. Der Plan nennt für E2E nur das Abmelden. Reicht das, oder ergänzen?
+- WCAG 1.4.11 steht nicht in `docs/`. Als Kandidat für die Revision 2.4 aufnehmen?
 
-## Offen
+## Weiter offen
 
+- `GO-2026-5932` in `golang.org/x/crypto`: Wir warten auf das reguläre Release.
 - Kandidaten 14 bis 29 warten auf die Revision 2.4; Issue #101 (/backups) folgt nach M5.
-- Screenshot-OK zu m4-10 steht aus.
