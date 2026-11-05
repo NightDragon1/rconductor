@@ -13,7 +13,7 @@ COPY web/ ./
 COPY internal/webui/dist/.gitkeep /src/internal/webui/dist/.gitkeep
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:d9fa6e7ba43678ee1e5d1617007db9a134612032a74e2d86b44a9f582f1564cc AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
