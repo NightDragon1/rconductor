@@ -64,6 +64,8 @@ func TestSameMajor(t *testing.T) {
 		{"v1.4", "1.0-rc1", true},
 		{"0.0.0-dev", "0.3.1", true},
 		{"1.0", "2.0", false},
+		{"0.9", "0.8", true},
+		{"0.9", "1.0", false},
 		{"dev", "dev", false},
 		{"", "1.0", false},
 	} {

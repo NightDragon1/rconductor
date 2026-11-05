@@ -1,0 +1,44 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Checks the release scripts (D-047, PRJ-003): which tag gives which image
+# tags, and that a test version never gets a major or latest tag.
+set -eu
+cd "$(dirname "$0")/.."
+GHCR=ghcr.io/x HUB=docker.io/x
+export GHCR HUB
+fails=0
+expect() { # what, want, got
+  [ "$2" = "$3" ] || { echo "$1: want [$2], got [$3]" >&2; fails=$((fails + 1)); }
+}
+field() { scripts/release-version.sh "$1" | sed -n "s/^$2=//p"; }
+
+expect "v1.0 tags" "1.0 1" "$(field v1.0 tags)"
+expect "v1.12 tags" "1.12 1" "$(field v1.12 tags)"
+expect "v2.0 tags" "2.0 2" "$(field v2.0 tags)"
+expect "v1.0 prerelease" false "$(field v1.0 prerelease)"
+expect "v0.9 tags" 0.9 "$(field v0.9 tags)"
+expect "v0.9 prerelease" true "$(field v0.9 prerelease)"
+expect "v0.10 tags" 0.10 "$(field v0.10 tags)"
+
+for tag in v1.0.0 1.0 v1 v1.0-rc1 latest v0; do
+  if scripts/release-version.sh "$tag" >/dev/null 2>&1; then
+    echo "$tag: must be refused" >&2
+    fails=$((fails + 1))
+  fi
+done
+
+images=$(scripts/release-images.sh panel "$(field v0.9 tags)" | grep -v EOF)
+expect "v0.9 images" "ghcr.io/x/rconductor-panel:0.9 docker.io/x/rconductor-panel:0.9" "$(echo $images)"
+images=$(scripts/release-images.sh agent "$(field v1.0 tags)" | grep -v EOF | wc -l)
+expect "v1.0 image count" 4 "$(echo $images)"
+
+expect "notes of a test version" "Testversion vor 1.0" "$(scripts/release-notes.sh 0.9 true | head -n 1)"
+expect "notes of 1.0" "First release." "$(scripts/release-notes.sh 1.0 false | sed -n 2p)"
+if scripts/release-notes.sh 7.0 false >/dev/null 2>&1; then
+  echo "a version without a changelog entry must be refused" >&2
+  fails=$((fails + 1))
+fi
+
+[ "$fails" -eq 0 ] || exit 1
+echo "release scripts ok"

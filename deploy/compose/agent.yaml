@@ -5,7 +5,7 @@
 # DOCKER_GID is the group of the socket: stat -c %g /var/run/docker.sock
 services:
   agent:
-    image: ghcr.io/nightdragon1/rconductor-agent:1
+    image: ghcr.io/nightdragon1/rconductor-agent:${RCD_VERSION:-1}
     restart: unless-stopped
     read_only: true
     group_add: ["${DOCKER_GID:-999}"]
