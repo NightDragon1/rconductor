@@ -42,6 +42,25 @@ test('a server with profile, host, port, password and an agent container (SRV-00
   await expect(row).toHaveCount(0);
 });
 
+test('a server needs no agent (SRV-001)', async ({ page, state }) => {
+  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  await page.getByRole('button', { name: 'New server' }).click();
+  const panel = page.getByRole('complementary', { name: 'Details of New server' });
+  await panel.getByLabel('Name').fill('e2e-plain');
+  await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Host').fill('mc.example');
+  await panel.getByLabel('RCON port').fill('25575');
+  await panel.getByLabel('RCON password').fill('a secret rcon password');
+  await panel.getByRole('button', { name: 'Create server' }).click();
+  const row = page.getByRole('row').filter({ hasText: 'e2e-plain' });
+  await expect(row).toContainText('mc.example:25575');
+
+  const opened = page.getByRole('complementary', { name: 'Details of e2e-plain' });
+  await opened.getByRole('button', { name: 'Delete server …' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
+  await expect(row).toHaveCount(0);
+});
+
 test('a server can be in several server groups (SRV-003)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
   await page.getByPlaceholder('Name of a new server group').fill('e2e-group');
