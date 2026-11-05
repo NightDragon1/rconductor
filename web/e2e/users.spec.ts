@@ -165,6 +165,49 @@ test('profile data only for those who manage the user (AUTH-009)', async ({
   await expect(row(page, 'sup')).toHaveCount(0);
 });
 
+test('a role change ends the session at once, socket included (AUTH-006)', async ({
+  page,
+  browser,
+  state,
+}) => {
+  await openUsers(page, state);
+  const url = await page.evaluate(async () => {
+    const r = await fetch('api/v1/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'moderator' }),
+    });
+    return ((await r.json()) as { url: string }).url;
+  });
+  const name = `role-${Date.now() % 100000}`;
+  const password = 'a fine invited password';
+  const second = await browser.newContext();
+  const modPage = await second.newPage();
+  await modPage.goto(url);
+  await modPage.getByLabel('Pseudonym').fill(name);
+  await modPage.getByLabel('Password', { exact: true }).fill(password);
+  await modPage.getByLabel('Repeat the new password').fill(password);
+  await modPage.getByRole('button', { name: 'Create my account' }).click();
+  await expect(modPage.getByRole('status')).toContainText('Your account is ready');
+
+  let closed = false;
+  modPage.on('websocket', (ws) => ws.on('close', () => (closed = true)));
+  await login(modPage, name, password);
+  await expect(modPage.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+
+  await page.reload();
+  await row(page, name).getByRole('button', { name }).click();
+  const panel = page.getByRole('complementary', { name: `Details of ${name}` });
+  await panel.getByLabel('Role').selectOption('supporter');
+  await page.getByRole('dialog').getByRole('button', { name: 'Change role' }).click();
+  await expect(row(page, name)).toContainText('Supporter', afterUndo);
+
+  await expect.poll(() => closed, { timeout: 5000 }).toBe(true);
+  await modPage.reload();
+  await expect(modPage.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+  await second.close();
+});
+
 test('locking ends the session at once, socket included (AUTH-006)', async ({
   page,
   browser,
