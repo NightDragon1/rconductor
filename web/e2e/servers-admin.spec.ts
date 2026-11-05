@@ -42,6 +42,29 @@ test('a server with profile, host, port, password and an agent container (SRV-00
   await expect(row).toHaveCount(0);
 });
 
+test('servers, server groups and agents can be searched (UI-007)', async ({ page, state }) => {
+  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  const server = (name: string) => page.getByRole('button', { name, exact: true });
+  const search = page.getByRole('searchbox', { name: 'Search servers and server groups' });
+  await search.fill('SURV');
+  await expect(server('survival')).toBeVisible();
+  await expect(server('arena')).toHaveCount(0);
+  await expect(server('minecraft')).toHaveCount(0);
+  await search.fill('minecraft');
+  await expect(server('minecraft')).toBeVisible();
+  await expect(server('survival')).toHaveCount(0);
+  await search.fill('');
+  await expect(server('arena')).toBeVisible();
+
+  await page.goto('admin/agents');
+  const agents = page.getByRole('searchbox', { name: 'Search agents' });
+  await agents.fill('host-1');
+  await expect(page.getByRole('row').filter({ hasText: 'host-1' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'host-2' })).toHaveCount(0);
+  await agents.fill('');
+  await expect(page.getByRole('row').filter({ hasText: 'host-2' })).toBeVisible();
+});
+
 test('a server needs no agent (SRV-001)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
   await page.getByRole('button', { name: 'New server' }).click();

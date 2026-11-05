@@ -9,6 +9,7 @@ import type { components } from '@/api/schema';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogClose,
@@ -90,6 +91,7 @@ export function AgentsPage() {
   const qc = useQueryClient();
   const now = useNow(10_000);
   const agents = useAgents(true);
+  const [q, setQ] = useState('');
   const [pairing, setPairing] = useState(false);
   const [revoke, setRevoke] = useState<Agent | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -125,6 +127,8 @@ export function AgentsPage() {
     );
 
   const all = agents.data ?? [];
+  const needle = q.trim().toLowerCase();
+  const shown = all.filter((a) => !needle || a.name.toLowerCase().includes(needle));
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -140,6 +144,14 @@ export function AgentsPage() {
         {!phone && <Button onClick={() => setPairing(true)}>{t('agents.pair')}</Button>}
       </div>
       <PhoneNote />
+      <Input
+        type="search"
+        className="w-full sm:w-72"
+        placeholder={t('agents.search')}
+        aria-label={t('agents.searchLabel')}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
       <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface p-3 text-sm">
         <span>
           <span className="block font-medium">{t('agents.fingerprintPairing')}</span>
@@ -166,7 +178,7 @@ export function AgentsPage() {
           label={t('nav.agents')}
           empty={all.length === 0 ? t(agents.isPending ? 'app.loading' : 'agents.none') : undefined}
         >
-          {all.map((a) => (
+          {shown.map((a) => (
             <Card
               key={a.id}
               mono
@@ -206,7 +218,7 @@ export function AgentsPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map((a) => (
+              {shown.map((a) => (
                 <tr key={a.id} id={a.id} className="border-t border-border">
                   <td className="p-3 font-mono">
                     <bdi>{a.name}</bdi>

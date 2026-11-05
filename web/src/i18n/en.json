@@ -528,7 +528,9 @@
     "undo": {
       "changed": "Server {{name}} changed",
       "groupChanged": "Server group {{name}} changed"
-    }
+    },
+    "search": "Name or host …",
+    "searchLabel": "Search servers and server groups"
   },
   "agents": {
     "summary": "{{count}} paired · {{connected}} connected",
@@ -559,7 +561,9 @@
     "revoke": "Revoke …",
     "revokeTitle": "Revoke {{name}}?",
     "revokeText": "The agent loses its connection at once; servers on it lose agent and container. This cannot be undone.",
-    "revoked": "{{name}} revoked."
+    "revoked": "{{name}} revoked.",
+    "search": "Agent name …",
+    "searchLabel": "Search agents"
   },
   "settings": {
     "explain": "Global settings of the panel (Design 5.6). Changes wait a few seconds for Undo.",

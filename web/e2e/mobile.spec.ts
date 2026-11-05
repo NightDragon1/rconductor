@@ -287,6 +287,9 @@ test('the administration reads on a phone (UI-012)', async ({ page, state }) => 
 
   await page.goto('admin/agents');
   await expect(page.getByRole('button', { name: 'Pair an agent' })).toHaveCount(0);
+  await page.getByRole('searchbox', { name: 'Search agents' }).fill('host-1');
+  await expect(page.getByRole('list', { name: 'Agents' }).getByRole('listitem')).toHaveCount(1);
+  await page.getByRole('searchbox', { name: 'Search agents' }).fill('');
   await readsOnly(page);
   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
 
