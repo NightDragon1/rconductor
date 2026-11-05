@@ -220,3 +220,9 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Fundstelle:** SEC-009 und Abnahme SEC-009 („Jede Antwort trägt die Header“); NFR-001 (Agent-Port 8443), Design 1.
 - **Entscheidung (M4, Schritt 10):** Die Header gelten für alle Antworten des Web-Ports. Der Agent-Port trägt sie nicht: Er liefert keine Inhalte für Browser, nur das Agent-Protokoll.
 - **Vorschlag:** SEC-009 und Abnahme SEC-009 auf „jede Antwort des Web-Ports“ fassen.
+
+## 30. Nicht-Text-Kontrast 3:1 (WCAG 1.4.11)
+
+- **Fundstelle:** UI-001 und Abnahme UI-001 (Kontrast mindestens 4,5:1 für Text); Design 6 nennt für Symbole, Rahmen und Fokus keinen Wert.
+- **Entscheidung (M4, Schritt 11):** Symbole, Rahmen von Controls, Fokusring und Statuspunkte erreichen auf jeder Fläche in beiden Designs mindestens 3:1. Rahmen von Karten und Tabellen sind ausgenommen, sie gliedern nur; eine Karte ist an Titel und Status erkennbar, ihr Fokusring erreicht 3:1. Geprüft in `web/src/lib/contrast.test.ts` und `web/e2e/contrast.spec.ts`.
+- **Vorschlag:** UI-001 und Abnahme UI-001 um den Nicht-Text-Kontrast ergänzen, Design 6 um die Ausnahme für gliedernde Rahmen.
