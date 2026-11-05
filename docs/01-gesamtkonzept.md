@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.4, Stand 05.11.2026, Status freigegeben; Änderungen gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.5, Stand 05.11.2026, Status freigegeben; Änderungen gegenüber 2.4 in Kapitel 14, gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -433,10 +433,11 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 2.2 | 02.11.2026 | Freigabe durch Rob: Erkenntnisse aus M2 eingearbeitet (Kapitel 11); Revision 2 für SEC-006, SEC-008 und SRV-001; Design 3.8 (RCON-Verbindung) neu; Einstellungen profiles.poll\_interval, ws.max\_sockets\_per\_session, ws.max\_subscriptions\_per\_socket; Grund-Code timeout. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.3 | 03.11.2026 | Freigabe durch Rob: Erkenntnisse aus M3 eingearbeitet (Kapitel 12); Design 1.6 mit den Grenzen von SEC-007, Containername statt Container-ID, Fremdschlüssel servers.agent\_id, Einstellung agents.fingerprint\_pairing, Ereigniscode agent.disconnected, Grund-Codes agent\_unavailable und action\_failed, Grenzen bis zum welcome. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.4 | 05.11.2026 | Freigabe durch Rob: Erkenntnisse aus M4 eingearbeitet (Kapitel 13); Revision 3 für SEC-006, Revision 2 für SEC-009, SEC-013, PRJ-002, CMD-001, CMD-004, UI-001, UI-004, UI-006, UI-007 und UI-012; DOC-001 bis DOC-005, PRJ-003, PRJ-004 und D-047 neu; neue Ressourcen in Design 2.2, Katalogprüfung in Design 3.3, optimistische Sperre, Ereigniscode logs.tail |
+| 2.5 | 05.11.2026 | Freigabe durch Rob: Begründungen aus den Kandidaten eingearbeitet, Trigger der optimistischen Sperre und group\_add nachgetragen, Verweise auf Mockups und Kandidaten-Dateien entfernt (Kapitel 14). Keine Anforderung ändert sich |
 
 ## 10. Änderungen in Version 2.1
 
-Eingearbeitet aus den Kandidaten nach M0 und M1 (bisher docs/revision-2.1-kandidaten.md). Nummern wie dort.
+Eingearbeitet aus den Kandidaten von M0 und M1.
 
 | Nr. | Änderung | Fundstelle in 2.1 |
 | --- | --- | --- |
@@ -473,7 +474,7 @@ Eingearbeitet aus den Kandidaten nach M0 und M1 (bisher docs/revision-2.1-kandid
 
 ## 11. Änderungen in Version 2.2
 
-Eingearbeitet aus den Kandidaten nach M2 (docs/revision-2.2-kandidaten.md, Nr. 1 bis 10, Nummern wie dort); Nr. 11 ergibt sich aus dem Abschluss von M2, Nr. 12 aus dem Review.
+Eingearbeitet aus den Kandidaten von M2, Nr. 1 bis 10; Nr. 11 ergibt sich aus dem Abschluss von M2, Nr. 12 aus dem Review.
 
 | Nr. | Änderung | Fundstelle in 2.2 |
 | --- | --- | --- |
@@ -492,7 +493,7 @@ Eingearbeitet aus den Kandidaten nach M2 (docs/revision-2.2-kandidaten.md, Nr. 1
 
 ## 12. Änderungen in Version 2.3
 
-Eingearbeitet aus den Kandidaten von M3 (docs/revision-2.3-kandidaten.md, Nr. 1 bis 12, Nummern wie dort); Nr. 13 aus dem Review.
+Eingearbeitet aus den Kandidaten von M3, Nr. 1 bis 12; Nr. 13 aus dem Review.
 
 | Nr. | Änderung | Fundstelle in 2.3 |
 | --- | --- | --- |
@@ -512,7 +513,7 @@ Eingearbeitet aus den Kandidaten von M3 (docs/revision-2.3-kandidaten.md, Nr. 1 
 
 ## 13. Änderungen in Version 2.4
 
-Eingearbeitet aus den Kandidaten von M4 (docs/revision-2.4-kandidaten.md, Nr. 1 bis 31, Nummern wie dort); Nr. 32 bis 36 aus der Freigabe durch Rob.
+Eingearbeitet aus den Kandidaten von M4, Nr. 1 bis 31; Nr. 32 bis 36 aus der Freigabe durch Rob.
 
 | Nr. | Änderung | Fundstelle in 2.4 |
 | --- | --- | --- |
@@ -541,7 +542,7 @@ Eingearbeitet aus den Kandidaten von M4 (docs/revision-2.4-kandidaten.md, Nr. 1 
 | 23 | Einladungstoken nur im Fragment | Design 2.2, D-046 |
 | 24 | Optimistische Sperre mit version und If-Match | Design 2.1, 3.5, 4.2 |
 | 26 | Sperren, Entsperren und Sitzungen beenden auf dem Handy | UI-012, Design 6.1, 6.6, Abnahme UI-012 |
-| 27 | Mockups aus docs/mockups/ statt privatem Link | Design 6.5 |
+| 27 | Privater Link auf die Mockups entfernt | Design 6.5 |
 | 28 | Bidi-Steuerzeichen im Freitext als sichtbarer Platzhalter | SEC-006, Abnahme SEC-006, Design 6.1 |
 | 29 | SEC-009 gilt für den Web-Port | SEC-009, Sicherheit, Abnahme SEC-009 |
 | 30 | Nicht-Text-Kontrast 3:1 (WCAG 1.4.11) | UI-001, Abnahme UI-001, Design 6.1 |
@@ -551,3 +552,20 @@ Eingearbeitet aus den Kandidaten von M4 (docs/revision-2.4-kandidaten.md, Nr. 1 
 | 34 | GitHub-Release je Version | PRJ-003, Abnahme PRJ-003, Plan R1 |
 | 35 | Images zusätzlich auf Docker Hub | PRJ-004, SEC-013, D-040, Sicherheit, Technologie 4, Abnahme PRJ-004 und SEC-013, Plan R1 |
 | 36 | Zweistellige Versionen; die Versionsprüfung von AGT-013 folgt in M5 | D-047, Design 1.4, Technologie 4, Plan R1 |
+
+## 14. Änderungen in Version 2.5
+
+Vorbereitung des Release 1.0: Die Kandidaten-Dateien und die Mockups liegen nicht mehr im Repository. Begründungen, die nur dort standen, sind übernommen.
+
+| Nr. | Änderung | Fundstelle in 2.5 |
+| --- | --- | --- |
+| 1 | Begründung: Escaping verhindert keine Täuschung durch Bidi-Zeichen; andere Cf-Zeichen wie der Zero Width Joiner bleiben im Freitext | Design 6.1 |
+| 2 | Begründung: Rollenwechsel entfernt Zuweisungen, Reste würden nach einem Rückwechsel wieder wirken | Design 3.6 |
+| 3 | Begründung: Label-Prüfung bei jeder Auflösung des Containernamens | Design 4.2 |
+| 4 | Begründung: Reservierte Pfade verhindern einen falschen Healthcheck | Design 2.1 |
+| 5 | Begründung: WebP entfällt beim Profilbild | Design 4.2 |
+| 6 | Begründung: Filter und Mehrfachauswahl nur bei Benutzern, die übrigen Listen sind kurz | Design 6.1 |
+| 7 | Beispiele und Abgrenzung der Parameterprüfung zu CMD-004 und CMD-009 | Design 3.3, 7.3 |
+| 8 | Trigger der optimistischen Sperre nachgetragen (aus Kandidat 24 von M4) | Design 4.1 |
+| 9 | group\_add in den Compose-Beispielen | Design 5.4, 5.5 |
+| 10 | Satz zu den Mockup-Bildern entfernt, die Beschreibung der Ansichten bleibt; Dateiverweise in den Kapiteln 10 bis 13 durch die Kandidaten des Meilensteins ersetzt | Design 6.5; Kapitel 10 bis 13 |

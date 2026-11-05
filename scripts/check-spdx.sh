@@ -18,7 +18,9 @@ missing=$(git ls-files |
       *) lines=$(head -n 5 "$f") ;;
     esac
     # Copied third-party code keeps its MIT license; only the files listed
-    # in THIRD_PARTY_NOTICES.md may (PRJ-002).
+    # in THIRD_PARTY_NOTICES.md may (PRJ-002). shadcn/ui is a template to
+    # copy, not a dependency, so MIT is allowed for these files alone; any
+    # other file with MIT fails here.
     case "$f" in
       web/src/components/ui/* | web/src/lib/utils.ts)
         echo "$lines" | grep -q 'SPDX-License-Identifier: MIT' && echo "$lines" | grep -q 'THIRD_PARTY_NOTICES' || echo "$f"

@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.4, freigegeben; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.5, freigegeben; Änderungen gegenüber 2.4 siehe Gesamtkonzept, Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -110,7 +110,7 @@ Das Panel markiert den Agent als widerrufen, löst seine Server von ihm (agent\_
 | Rechte | Bei jeder Anfrage neu geprüft, nie aus der Session übernommen. Sperre, Löschen und jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants oder Supporter-Freigabe eines Benutzers beenden seine Sessions sofort (AUTH-006, D-044). Änderungen am Inhalt einer Befehlsliste und an den Servern einer Servergruppe (auch ihr Löschen) wirken ab der nächsten Anfrage, ohne Abmeldung, weil sich keine Zuweisung eines Benutzers ändert; offene WebSocket-Abos werden dabei sofort neu geprüft (2.3) |
 | CSRF | SameSite=Lax (D-043) plus Prüfung des Origin-Headers bei allen schreibenden Anfragen und beim WebSocket-Aufbau |
 | Proxy | X-Forwarded-For und X-Forwarded-Proto werden nur von konfigurierten vertrauenswürdigen Proxys übernommen; Client ist die rechteste Adresse in X-Forwarded-For, die kein vertrauenswürdiger Proxy ist |
-| Reservierte Pfade | /api (jede Version), /healthz und /metrics werden nie von der Oberfläche beantwortet; /healthz und /metrics werden mit NFR-006 (R2) befüllt |
+| Reservierte Pfade | /api (jede Version), /healthz und /metrics werden nie von der Oberfläche beantwortet; /healthz und /metrics werden mit NFR-006 (R2) befüllt. Ohne die Reservierung beantwortete die Auslieferung sie mit index.html, und ein Healthcheck meldete fälschlich „gesund“ |
 | HAProxy | Normales HTTP/1.1, kein HTTP/2 nötig; für den WebSocket genügt ein ausreichendes timeout tunnel |
 | Fehler | Einheitlich als Problem Details nach RFC 9457 |
 | Gleichzeitige Änderungen | Benutzergruppen, Befehlslisten, Server und Servergruppen tragen ein Feld version, /settings eine gemeinsame Version als ETag. Schreiben nennt die gelesene Version in If-Match (Pflicht, sonst 428); die Prüfung ist atomar in der Datenbank in derselben Transaktion wie das Schreiben, bei Abweichung 409 und nichts wird geschrieben. Rolle und Scope werden vor der Version geprüft (3.1). Die Oberfläche zeigt „Changed by someone else – reload“ und sendet den Entwurf nicht |
@@ -193,7 +193,7 @@ Verkleinert sich ein Scope oben, verkleinert er sich sofort für alle darunter. 
 5. RCON-Admin und Server-Admin: weiter mit Schritt 8.
 6. Wrapper: Ist der Befehlsname im Spielprofil als Wrapper markiert, wird er für Moderator und Supporter immer abgelehnt, unabhängig von der Liste.
 7. Liste: Token-Pfad-Abgleich gegen die für diesen Server geltende Liste (3.2). Ein Eintrag erlaubt nur ganze Tokens und alles danach; Vergleich mit Groß-/Kleinschreibung laut Spielprofil, Standard ohne.
-   7b. Katalogparameter (Moderator, Supporter): Befehle mit Katalogeintrag werden gegen die Parameter des Spielprofils geprüft (7.3); maßgeblich ist der längste Katalogpfad, mit dem der Befehl beginnt. Weitere Tokens nach den Parametern sind nur erlaubt, wenn der letzte Parameter vom Typ text ist. Bei Abweichung 422 invalid mit dem Parameternamen im Detail oder „unexpected argument“, Audit-Eintrag cmd.denied. Befehle ohne Katalogeintrag und die freie Eingabe von RCON-Admin und Server-Admin bleiben unverändert. Einschränkungen je Listeneintrag folgen mit CMD-009 (R2).
+   7b. Katalogparameter (Moderator, Supporter): Befehle mit Katalogeintrag werden gegen die Parameter des Spielprofils geprüft (7.3); maßgeblich ist der längste Katalogpfad, mit dem der Befehl beginnt. Weitere Tokens nach den Parametern sind nur erlaubt, wenn der letzte Parameter vom Typ text ist, so scheitern time set day extra und whitelist add x y. Bei Abweichung 422 invalid mit dem Parameternamen im Detail oder „unexpected argument“, Audit-Eintrag cmd.denied. CMD-004 regelt den Pfad, nicht die Form der Argumente. Befehle ohne Katalogeintrag und die freie Eingabe von RCON-Admin und Server-Admin bleiben unverändert. Einschränkungen je Listeneintrag, die ein Server-Admin festlegt, folgen mit CMD-009 (R2); die Prüfung in R1 kennt nur die festen Parameter aus dem Spielprofil und gilt für alle Listen gleich.
 8. Ratenlimit (3.4).
 9. Markierung mit Request-ID, Session, Benutzer und Rolle.
 10. Audit-Eintrag cmd.sent vor dem Senden (ID = Request-ID); eine Ablehnung ist ein einzelner Eintrag cmd.denied mit Grund.
@@ -243,7 +243,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 - Beim Markieren weitergebbarer Befehle bleibt mindestens ein Befehl der Liste gesperrt; das Panel lehnt das Speichern sonst ab.
 - Wer wen verwaltet: der RCON-Admin alle niedrigeren Rollen; ein Server-Admin die Moderatoren, die er eingeladen hat oder die Mitglied einer seiner Moderatorgruppen sind, deren Supporter und die von ihm eingeladenen Supporter; ein Moderator nur seine Supporter (eingeladen oder zugewiesen), solange die Supporter-Freigabe global und für ihn gilt; ein Supporter niemanden.
 - Zuweisungen: Ein Ersetzen ändert nur die Einträge, über die der Aufrufer verfügt (eigene Gruppen, eigene Moderatoren); Einträge anderer bleiben. Eine Servergruppe darf nur zugewiesen werden, wenn alle ihre Server im Scope liegen.
-- Ein Rollenwechsel entfernt Scopes, Gruppenmitgliedschaften und Grants der alten Rolle.
+- Ein Rollenwechsel entfernt Scopes, Gruppenmitgliedschaften und Grants der alten Rolle; stehen gelassene Reste würden nach einem Rückwechsel unbemerkt wieder wirken.
 - Wiederherstellung des Notfall-Admins (AUTH-011): Mit RCD\_EMERGENCY\_ADMIN\_RESET=true erzeugt das Panel beim Start ein neues Initialpasswort, ausgegeben wie in AUTH-007, setzt must\_change\_password, beendet alle Sessions des Notfall-Admins, schreibt einen Audit-Eintrag ohne Passwort und auth.emergency\_admin.reset. Gesperrt (disabled) bleibt er nicht; die Variable wirkt bei jedem Start, solange sie gesetzt ist, deshalb warnt das Panel dabei.
 - Ein Passwort-Reset setzt ein zufälliges temporäres Passwort, setzt must\_change\_password und beendet alle Sessions des Benutzers (wie D-044); nur wer den Benutzer verwaltet, darf ihn auslösen (AUTH-010). Das temporäre Passwort steht genau einmal in der API-Antwort an den Verwaltenden, nie in Log oder Audit; der Audit-Eintrag nennt nur Verwaltenden, Benutzer und Ergebnis. Der Notfall-Admin wird nicht zurückgesetzt.
 - Echtname, Profilbild und Kontaktangaben sehen der Benutzer selbst, der RCON-Admin und wer ihn verwaltet; alle anderen nur das Pseudonym (AUTH-009).
@@ -283,6 +283,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | Tokens | Session-IDs, Einladungs- und Kopplungs-Tokens nur als SHA-256-Hash |
 | Audit | Eigene Tabelle in derselben Datenbank. Der Befehlsverlauf der Konsole ist eine Sicht auf das Audit-Log, keine eigene Tabelle |
 | Schema | Beide Datenbanken nutzen dasselbe Schema über eingebettete Migrationen (D-018) |
+| Versionen | Jede Änderung eines versionierten Objekts (2.1) erhöht seine Version, auch über andere Wege wie Mitglieder, Einträge und Servergruppen-Mitglieder; dafür sorgen Trigger in der Datenbank. Für Postgres (R2) gelten dieselben Trigger in der Postgres-Migration |
 
 ### 4.2 Tabellen
 
@@ -294,7 +295,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | user\_groups | name, kind (allgemein oder Moderatorgruppe), owner\_id, command\_list\_id (nur Moderatorgruppe), version, deleted\_at | R1 |
 | user\_favorites | user\_id, server\_id | R1 |
 | user\_group\_members | user\_group\_id, user\_id | R1 |
-| servers | name, profile\_id, protocol, host, port, secret (verschlüsselt), agent\_id (Fremdschlüssel auf agents, ON DELETE SET NULL), container\_name, version, deleted\_at. Gespeichert wird der Containername, weil Docker beim Neuanlegen eine neue ID vergibt; agent\_id und container\_name sind nur gemeinsam gesetzt | R1 |
+| servers | name, profile\_id, protocol, host, port, secret (verschlüsselt), agent\_id (Fremdschlüssel auf agents, ON DELETE SET NULL), container\_name, version, deleted\_at. Gespeichert wird der Containername, weil Docker beim Neuanlegen eine neue ID vergibt; die Label-Prüfung bei jeder Auflösung verhindert, dass ein gleichnamiger Container ohne Freigabe übernommen wird; agent\_id und container\_name sind nur gemeinsam gesetzt | R1 |
 | server\_groups | name, version, deleted\_at | R1 |
 | server\_group\_members | server\_group\_id, server\_id | R1 |
 | admin\_scopes | user\_id (Server-Admin), genau eines von server\_group\_id oder server\_id, assigned\_by | R1 |
@@ -317,7 +318,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 
 - Scope eines Server-Admins: alle Server aus admin\_scopes, Servergruppen aufgelöst über server\_group\_members.
 - Scope und Liste eines Moderators: grants seiner Moderatorgruppen, an die ganze Gruppe oder an ihn als Mitglied. Die Liste kommt aus user\_groups.command\_list\_id der Gruppe, über die der Grant läuft; der Eigentümer der Gruppe ist der zuständige Server-Admin. Ein direkter Grant nennt deshalb immer die Moderatorgruppe, und der Moderator muss ihr Mitglied sein.
-- Profilbild: PNG oder JPEG, höchstens 1 MiB und 4096 × 4096 Pixel, am Inhalt geprüft, neu kodiert ohne Metadaten, verkleinert auf höchstens 512 × 512, ausgeliefert mit nosniff und einer Content-Security-Policy, die nichts erlaubt (D-045).
+- Profilbild: PNG oder JPEG (WebP nicht, die Standardbibliothek dekodiert es nicht), höchstens 1 MiB und 4096 × 4096 Pixel, am Inhalt geprüft, neu kodiert ohne Metadaten, verkleinert auf höchstens 512 × 512, ausgeliefert mit nosniff und einer Content-Security-Policy, die nichts erlaubt (D-045).
 - Supporter: supporter\_grants je Server; erlaubt sind die Einträge mit passable der Liste, die für seinen Moderator auf diesem Server gilt.
 - Supporter-Freigabe: global in settings, je Moderator in users.supporters\_allowed.
 
@@ -400,6 +401,7 @@ services:
     image: ghcr.io/<owner>/rconductor-agent:1
     restart: unless-stopped
     read_only: true
+    group_add: ["<GID des Docker-Sockets>"]
     environment:
       RCD_PAIRING_TOKEN: "<Token aus dem Panel>"
     volumes:
@@ -431,6 +433,7 @@ services:
     image: ghcr.io/<owner>/rconductor-agent:1
     restart: unless-stopped
     read_only: true
+    group_add: ["<GID des Docker-Sockets>"]
     environment:
       RCD_PAIRING_TOKEN: "<Token aus dem Panel>"
     volumes:
@@ -474,11 +477,11 @@ Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in d
 | --- | --- |
 | Navigation | Seitenleiste links, einklappbar; Einträge je Rolle ausgeblendet, nicht ausgegraut |
 | Serverseite | Kopf mit Status und Aktionen, darunter Reiter; Reiter ohne Recht werden ausgeblendet |
-| Verwaltung | Listen mit Suche; die Benutzerliste zusätzlich mit Filtern, Mehrfachauswahl und Massenaktionen (UI-007); Details im Seitenpanel von rechts, die Liste bleibt sichtbar |
+| Verwaltung | Listen mit Suche; die Benutzerliste zusätzlich mit Filtern, Mehrfachauswahl und Massenaktionen (UI-007), die übrigen Listen sind kurz; Details im Seitenpanel von rechts, die Liste bleibt sichtbar |
 | Mobil | Karten, Befehlsseite und Konsole voll bedienbar, Mitteilungen ab R2; Verwaltung nur lesend: Suche, Filter, Details und Kopieren sind erlaubt, Schreibendes entfällt. Ausnahme für den Notfall: Sperren, Entsperren und Sitzungen beenden im Seitenpanel eines Benutzers, jeweils mit Bestätigungsdialog. Grenze 768 px, sie betrifft nur die Darstellung; das Backend prüft jede Anfrage wie auf dem Desktop. Seitenleiste wird zum Menü, die Zeitleiste der Konsole wird ausgeblendet |
 | Darstellung | Dunkles Design als Standard, helles Design wählbar; Stilrichtung laut Mockups (6.5, D-037) |
 | Kontrast | Text mindestens 4,5:1; Symbole, Rahmen von Controls, Fokusring und Statuspunkte mindestens 3:1 auf jeder Fläche in beiden Designs (WCAG 1.4.11). Rahmen von Karten und Tabellen sind ausgenommen, sie gliedern nur; eine Karte ist an Titel und Status erkennbar, ihr Fokusring erreicht 3:1 |
-| Fremdtext | Bidi-Steuerzeichen (U+061C, U+200E, U+200F, U+202A bis U+202E, U+2066 bis U+2069) wirken im Freitext nicht: Antworten, Log-Zeilen und angezeigte Befehle zeigen sie als Platzhalter wie ⟨U+202E⟩, jede Zeile steht in einem eigenen bdi-Element. Kopieren liefert den Originaltext ohne Farbcodes; das Backend behält die Zeichen im Freitext (SEC-006) |
+| Fremdtext | Bidi-Steuerzeichen (U+061C, U+200E, U+200F, U+202A bis U+202E, U+2066 bis U+2069) wirken im Freitext nicht: Antworten, Log-Zeilen und angezeigte Befehle zeigen sie als Platzhalter wie ⟨U+202E⟩, jede Zeile steht in einem eigenen bdi-Element. Kopieren liefert den Originaltext ohne Farbcodes; das Backend behält die Zeichen im Freitext (SEC-006). Escaping verhindert Code, aber keine Täuschung: Bidi-Zeichen können einen Namen oder eine Zeile als etwas anderes erscheinen lassen (wie bei Trojan Source). Andere Cf-Zeichen wie der Zero Width Joiner bleiben im Freitext, Emoji und einige Schriften brauchen sie |
 | Restart-Schleife | Mindestens 3 Starts binnen 10 min |
 | Live-Daten | Veraltete Werte werden markiert statt ausgeblendet (Haupttab 4.6) |
 | Bestätigung | Löschen und Widerruf bestätigt ein Dialog, ebenso ein Rollenwechsel (Hinweis „Zuweisungen werden entfernt, Sessions enden“) und das globale Abschalten der Supporter. Nicht destruktive Änderungen sendet die Oberfläche erst nach 5 s, bis dahin lassen sie sich rückgängig machen; beim Verlassen der Seite (pagehide) werden offene Änderungen sofort gesendet |
@@ -523,8 +526,6 @@ Aktionen im Kopf (Start, Stop, Restart) erscheinen nur für RCON-Admin und Serve
 Moderator und Supporter sehen statt der Konsole den Reiter Befehle; Seitenleiste und Kopf bleiben gleich.
 
 ### 6.5 Mockups
-
-Die Mockups liegen als Bilder in docs/mockups/. Alle Werte darin sind Beispieldaten.
 
 | Artboard | Rolle | Zeigt |
 | --- | --- | --- |
@@ -584,7 +585,7 @@ Jeder Eintrag hat path (Token-Pfad wie in den Befehlslisten), description und op
 | choice | Umschalter mit festen Werten | nur die genannten Werte, Groß-/Kleinschreibung laut Profil |
 | number | Zahlenfeld mit optionalem min und max | ganze Zahl im Bereich |
 
-Die Prüfung gilt in R1 für Moderator und Supporter (3.3, Schritt 7b), Pflichtparameter müssen vorhanden sein; die Befehlsseite prüft nach denselben Regeln. Einschränkungen je Listeneintrag folgen mit CMD-009 (R2).
+Die Prüfung gilt in R1 für Moderator und Supporter (3.3, Schritt 7b), Pflichtparameter müssen vorhanden sein; die Befehlsseite prüft nach denselben Regeln. Einschränkungen je Listeneintrag, die ein Server-Admin festlegt, folgen mit CMD-009 (R2); die Prüfung in R1 kennt nur die festen Parameter aus dem Spielprofil und gilt für alle Listen gleich.
 
 Befehle einer Befehlsliste ohne Katalogeintrag erscheinen auf der Befehlsseite mit einem freien Feld für die restlichen Argumente. Eigene Befehlsdefinitionen (CMD-018) sollen später dieselben Parametertypen verwenden.
 
