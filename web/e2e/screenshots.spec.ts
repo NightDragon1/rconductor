@@ -239,3 +239,22 @@ for (const [size, width, height] of [
     });
   }
 }
+
+// The colors of step 11 (UI-001): stopped cards, frames of controls and the
+// danger button.
+test('screenshot contrast', async ({ page, state }) => {
+  await login(page, 'admin', secret(state, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await settled(page);
+  await shoot(page, 'contrast-overview');
+  await page.goto('audit');
+  await expect(page.getByRole('heading', { name: 'Audit', level: 1 })).toBeVisible();
+  await shoot(page, 'contrast-controls');
+  await page.goto(`servers/${state.server_id}`);
+  await page
+    .getByRole('group', { name: 'Server actions' })
+    .getByRole('button', { name: 'Stop' })
+    .click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await shoot(page, 'contrast-danger-dialog', false);
+});
