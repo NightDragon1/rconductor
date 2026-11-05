@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# A tag v1.0 or v1.0-rc1 publishes signed multi-arch images to ghcr.io and
-# Docker Hub (D-040, D-047, PRJ-004) and then the GitHub release with notes
-# from CHANGELOG.md and the SBOMs (PRJ-003). Publishing waits for the
+# A tag v1.0 publishes signed multi-arch images to ghcr.io and Docker Hub
+# (D-040, D-047, PRJ-004) and then the GitHub release with notes from
+# CHANGELOG.md and the SBOMs (PRJ-003). A tag v0.9 is a test version: only the
+# image tag 0.9, a pre-release and a fixed text. Publishing waits for the
 # reviewer of the environment release, which also holds the Docker Hub login.
 # Signatures are keyless (cosign with GitHub OIDC) and land in the public
 # Rekor log for good.

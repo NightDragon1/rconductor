@@ -9,6 +9,17 @@ for example a Docker secret; setting both is an error.
 Booleans accept `true` and `false` (also `1` and `0`). Addresses are
 `[host]:port`.
 
+## Compose files
+
+These only fill in the Compose files in `deploy/compose/`; the programs do not read them.
+
+| Variable | Type | Default | Allowed | Purpose |
+| --- | --- | --- | --- | --- |
+| `RCD_VERSION` | text | `1` | an image tag such as `1`, `1.0` or `0.9` | version of panel and agent images |
+| `RCD_WEB_PORT` | number | `8080` | a free port | published web port |
+| `RCD_AGENT_PORT` | number | `8443` | a free port | published agent port (panel.yaml) |
+| `DOCKER_GID` | number | `999` | group of `/var/run/docker.sock` | lets the agent reach the socket |
+
 ## Panel variables
 
 | Variable | Type | Default | Allowed | Purpose |

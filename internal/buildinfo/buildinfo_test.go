@@ -10,6 +10,7 @@ func TestMajor(t *testing.T) {
 
 	cases := map[string]int{
 		"1.0":       1,
+		"0.9":       0,
 		"v2.1":      2,
 		"1.0-rc1":   1,
 		"10.1-rc1":  10,

@@ -4,7 +4,7 @@
 # is the address agents reach the panel under; it goes into pairing tokens.
 services:
   panel:
-    image: ghcr.io/nightdragon1/rconductor-panel:1
+    image: ghcr.io/nightdragon1/rconductor-panel:${RCD_VERSION:-1}
     restart: unless-stopped
     read_only: true
     ports:
