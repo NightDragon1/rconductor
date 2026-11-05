@@ -243,8 +243,13 @@ func TestAgentThroughTheStack(t *testing.T) {
 	}
 	before := stops()
 	first, second := s.console("admin"), s.console("admin")
-	subscribe(t, first, "server."+s.server+".logs")
-	subscribe(t, second, "server."+s.server+".logs")
+	for _, viewer := range []*websocket.Conn{first, second} {
+		subscribe(t, viewer, "server."+s.server+".logs")
+		// Only the confirmation says that the viewer counts.
+		next(t, viewer, func(typ, topic string, _ json.RawMessage) bool {
+			return typ == "subscribed" && topic == "server."+s.server+".logs"
+		})
+	}
 	_ = first.CloseNow()
 	time.Sleep(300 * time.Millisecond)
 	if n := stops(); n != before {
