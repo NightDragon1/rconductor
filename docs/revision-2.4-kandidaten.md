@@ -1,6 +1,6 @@
 # Kandidaten für Revision 2.4
 
-Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach der Freigabe von Dokumentversion 2.3 aufgefallen sind. Keiner der Punkte ändert das freigegebene Konzept 2.3; über die Übernahme entscheidet Rob. Nr. 2 bis 13 sind von Rob für M4 entschieden (Freigabe des M4-Plans, 03.11.2026).
+Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach der Freigabe von Dokumentversion 2.3 aufgefallen sind. Alle Punkte sind in die freigegebene Version 2.4 eingearbeitet (Gesamtkonzept, Kapitel 13). Nr. 2 bis 13 sind von Rob für M4 entschieden (Freigabe des M4-Plans, 03.11.2026).
 
 | Nr. | Thema | Betroffen |
 | --- | --- | --- |
@@ -226,3 +226,9 @@ Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach 
 - **Fundstelle:** UI-001 und Abnahme UI-001 (Kontrast mindestens 4,5:1 für Text); Design 6 nennt für Symbole, Rahmen und Fokus keinen Wert.
 - **Entscheidung (M4, Schritt 11):** Symbole, Rahmen von Controls, Fokusring und Statuspunkte erreichen auf jeder Fläche in beiden Designs mindestens 3:1. Rahmen von Karten und Tabellen sind ausgenommen, sie gliedern nur; eine Karte ist an Titel und Status erkennbar, ihr Fokusring erreicht 3:1. Geprüft in `web/src/lib/contrast.test.ts` und `web/e2e/contrast.spec.ts`.
 - **Vorschlag:** UI-001 und Abnahme UI-001 um den Nicht-Text-Kontrast ergänzen, Design 6 um die Ausnahme für gliedernde Rahmen.
+
+## 31. Suche in allen Verwaltungslisten, Filter und Mehrfachauswahl nur bei Benutzern
+
+- **Fundstelle:** UI-007 („Durchsuchbare, filterbare Listen, Mehrfachauswahl mit Massenaktionen“), Abnahme UI-007 („Listen sind durchsuchbar und filterbar“), Design 6.1 (Tabelle mit Inline-Bearbeitung und Mehrfachauswahl).
+- **Entscheidung (Rob, M4, Schritt 12):** Alle Verwaltungslisten sind durchsuchbar, auch Server, Servergruppen und Agents. Filter und Mehrfachauswahl mit Massenaktionen gelten nur für die Benutzerliste; die übrigen Listen sind kurz.
+- **Vorschlag:** UI-007, Abnahme UI-007 und Design 6.1 entsprechend fassen.

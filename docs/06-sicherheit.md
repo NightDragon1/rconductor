@@ -1,6 +1,6 @@
 # Bedrohungsmodell
 
-Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. STRIDE über die Bausteine und Verbindungen aus dem Tab Architektur. Größtes Einzelrisiko ist der Agent: Wer den Docker-Socket kontrolliert, hat praktisch Root auf dem Spiele-Host. Die meisten Bedrohungen sind durch bestehende Anforderungen abgedeckt; sechs neue Maßnahmen (SEC-006 bis SEC-011) schließen die Lücken; mit Version 2.1 kommt SEC-013 (Lieferkette) hinzu.
+Dokumentversion 2.4, freigegeben; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. STRIDE über die Bausteine und Verbindungen aus dem Tab Architektur. Größtes Einzelrisiko ist der Agent: Wer den Docker-Socket kontrolliert, hat praktisch Root auf dem Spiele-Host. Die meisten Bedrohungen sind durch bestehende Anforderungen abgedeckt; sechs neue Maßnahmen (SEC-006 bis SEC-011) schließen die Lücken; mit Version 2.1 kommt SEC-013 (Lieferkette) hinzu.
 
 ## 1. Schutzgüter
 
@@ -31,9 +31,9 @@ Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept
 | T-003 | Spoofing | Fremder Agent gibt sich als gekoppelter Agent aus | Gegenseitig gepinnte Ed25519-Schlüssel, Widerruf (AGT-012) | abgedeckt |
 | T-004 | Spoofing | Angreifer fängt den ersten Kontakt bei Weg B ab (Trust on First Use) | Weg B standardmäßig aus, Fingerprint-Abgleich (D-024) | Restrisiko bei aktivem Weg B |
 | T-005 | Tampering | Befehlsinjektion über Zeilenumbrüche oder Steuerzeichen | Bereinigung vor dem Senden (CMD-006) | abgedeckt |
-| T-006 | Tampering | Umgehung der Befehlsliste über Wrapper oder Präfix-Tricks | Token-Pfad-Abgleich, Wrapper immer gesperrt (CMD-004, D-026) | abgedeckt |
+| T-006 | Tampering | Umgehung der Befehlsliste über Wrapper oder Präfix-Tricks | Token-Pfad-Abgleich, Wrapper immer gesperrt (CMD-004, D-026); für Moderator und Supporter zusätzlich die Prüfung der Katalogparameter mit Sperre von Selektoren wie @a (Design 3.3, Schritt 7b) | abgedeckt |
 | T-007 | Tampering | Cross-Site Request Forgery | SameSite=Lax, Origin-Prüfung bei allen schreibenden Anfragen und beim WebSocket (Design 2.1) | abgedeckt |
-| T-008 | Tampering | Schadcode über Spielernamen, Chat, RCON-Antworten oder Agent-Daten in der Oberfläche (gespeichertes XSS) | Alle Fremddaten escaped darstellen, Farbcodes nur in erlaubte Stile übersetzen (SEC-006); Content-Security-Policy (SEC-009) | neu |
+| T-008 | Tampering | Schadcode über Spielernamen, Chat, RCON-Antworten oder Agent-Daten in der Oberfläche (gespeichertes XSS) | Alle Fremddaten escaped darstellen, Farbcodes in R1 entfernen, Bidi-Zeichen im Freitext als Platzhalter (SEC-006); Content-Security-Policy (SEC-009) | neu |
 | T-009 | Tampering | Verändern des Audit-Logs durch jemanden mit Datenbankzugriff | Nur durch Zugriff auf Host oder Volume möglich; manipulationssichere Verkettung im Backlog (SEC-011) | Restrisiko |
 | T-010 | Repudiation | Benutzer bestreitet einen Befehl | Audit mit Request-ID, Session, Rolle, auch für Ablehnungen (AUD-001, CMD-007) | abgedeckt |
 | T-011 | Information Disclosure | Auslesen von RCON-Passwörtern aus Datenbank oder Backup | AES-256-GCM, Master-Key getrennt, nicht im Backup (SRV-002, SEC-005) | abgedeckt |
@@ -57,13 +57,13 @@ Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept
 
 | ID | Maßnahme | Prio | Target |
 | --- | --- | --- | --- |
-| SEC-006 | Alle Daten von Spieleservern und Agents (Antworten, Spielernamen, Logs, Versionen, Container-Namen) gelten als Fremddaten: escaped dargestellt, Größe begrenzt, Farbcodes nur in eine feste Liste erlaubter Stile übersetzt; Steuer- und Formatzeichen (Cc, Cf) aus Bezeichnern entfernt, damit Bidi-Zeichen einen Namen nicht als anderen erscheinen lassen | Muss | R1 |
+| SEC-006 | Alle Daten von Spieleservern und Agents (Antworten, Spielernamen, Logs, Versionen, Container-Namen) gelten als Fremddaten: escaped dargestellt, Größe begrenzt, Farbcodes in R1 entfernt (feste Liste erlaubter Stile mit CMD-017, R2), Bidi-Steuerzeichen im Freitext als Platzhalter gezeigt; Steuer- und Formatzeichen (Cc, Cf) aus Bezeichnern entfernt, damit Bidi-Zeichen einen Namen nicht als anderen erscheinen lassen | Muss | R1 |
 | SEC-007 | Agent-Port: Höchstgröße je Nachricht, Begrenzung der Logzeilen je Nachricht, Rate für Verbindungsaufbau je Quelladresse, Obergrenze für wartende Kopplungen | Muss | R1 |
 | SEC-008 | Höchstzahl an WebSocket-Verbindungen je Session und an Abos je Verbindung | Soll | R1 |
-| SEC-009 | Sicherheitsheader: Content-Security-Policy ohne Inline-Skripte, X-Content-Type-Options, Referrer-Policy, frame-ancestors none | Muss | R1 |
+| SEC-009 | Sicherheitsheader auf jeder Antwort des Web-Ports: Content-Security-Policy ohne Inline-Skripte, X-Content-Type-Options, Referrer-Policy, frame-ancestors none; der Agent-Port liefert keine Inhalte für Browser | Muss | R1 |
 | SEC-010 | Doku empfiehlt einen Socket-Proxy vor dem Docker-Socket, der nur die vom Agent benötigten Endpunkte durchlässt; der Agent funktioniert damit unverändert | Kann | R1 |
 | SEC-011 | Manipulationssichere Verkettung der Audit-Einträge (Hash-Kette) mit Prüffunktion | Kann | Backlog |
-| SEC-013 | Lieferkette: Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne Automerge; Release-Tags erst nach Veröffentlichung des Repositories | Muss | R1 |
+| SEC-013 | Lieferkette: Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne Automerge; Release-Tags erst nach Veröffentlichung des Repositories; Signatur und SBOM gelten für ghcr.io und Docker Hub (PRJ-004) | Muss | R1 |
 
 ## 5. Restrisiken
 
