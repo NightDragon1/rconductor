@@ -1,7 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests", "docker:pinDigests"],
-  "enabled": false,
   "automerge": false,
   "dependencyDashboard": true,
   "labels": ["dependencies"],

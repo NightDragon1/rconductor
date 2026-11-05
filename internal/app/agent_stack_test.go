@@ -230,6 +230,38 @@ func TestAgentThroughTheStack(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	// UI-009: leaving the page closes the socket; with a second viewer the
+	// logs go on, after the last one they end.
+	stops := func() int {
+		n := 0
+		for _, order := range backend.got() {
+			if order == agentproto.TypeLogsStop {
+				n++
+			}
+		}
+		return n
+	}
+	before := stops()
+	first, second := s.console("admin"), s.console("admin")
+	for _, viewer := range []*websocket.Conn{first, second} {
+		subscribe(t, viewer, "server."+s.server+".logs")
+		// Only the confirmation says that the viewer counts.
+		next(t, viewer, func(typ, topic string, _ json.RawMessage) bool {
+			return typ == "subscribed" && topic == "server."+s.server+".logs"
+		})
+	}
+	_ = first.CloseNow()
+	time.Sleep(300 * time.Millisecond)
+	if n := stops(); n != before {
+		t.Errorf("logs stopped while a viewer is left: %d, then %d", before, n)
+	}
+	_ = second.CloseNow()
+	for stops() == before {
+		if time.Now().After(deadline.Add(5 * time.Second)) {
+			t.Fatalf("no logs.stop after the last socket closed: %v", backend.got())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	for _, ev := range []string{"logs.follow.start", "logs.follow.stop"} {
 		// The panel logs each when the agent's result arrives.
 		logtest.Wait(t, s.logs, `"event":"`+ev+`"`)

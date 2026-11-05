@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -80,6 +81,9 @@ func TestGroupRules(t *testing.T) {
 	out := []Target{{ServerID: "s2"}}
 	if _, err := f.svc.UpdateGroup(ctx, sa, "mg0", GroupUpdate{Grants: &out}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("grant outside the scope: %v", err)
+	}
+	if !strings.Contains(f.logs.String(), `"event":"perm.denied"`) {
+		t.Error("the refused grant is not logged")
 	}
 	foreign := []string{f.ids["m2"]}
 	if _, err := f.svc.UpdateGroup(ctx, sa, "mg0", GroupUpdate{Members: &foreign}); !errors.Is(err, ErrNotFound) {

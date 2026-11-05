@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.5, freigegeben; Änderungen gegenüber 2.4 siehe Gesamtkonzept, Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept, Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -525,7 +525,7 @@ Moderator und Supporter sehen statt der Konsole den Reiter Befehle; Seitenleiste
 
 ### 6.5 Ansichten
 
-| Artboard | Rolle | Zeigt |
+| Ansicht | Rolle | Zeigt |
 | --- | --- | --- |
 | Übersicht | RCON-Admin | Gesundheitsleiste, Hinweise, Server-Karten nach Servergruppen mit allen Statusvarianten und veralteten Werten |
 | Serverseite · Konsole | RCON-Admin, Server-Admin | Kopf mit Aktionen, Reiter, Spur-Schalter, Zeitleiste, Blöcke, Eingabe mit Autovervollständigung |
@@ -534,7 +534,7 @@ Moderator und Supporter sehen statt der Konsole den Reiter Befehle; Seitenleiste
 | Handy · Befehle | Moderator, Supporter | Befehle als Karten untereinander, eine ausgeklappt mit Feldern, Spieler online als Bottom-Sheet, Ziele mindestens 44 px |
 | Handy · Konsole | RCON-Admin, Server-Admin | Aktionen im Menü oben rechts, Spur-Chips, Blöcke ohne Zeitleiste, Vorschläge als Chips über der Eingabe |
 
-Stil: dunkles Design mit Statusrand an den Karten, Monospace für Server- und Befehlsnamen, farbige Rahmen je Servergruppe. Port-Chips auf den Karten sind R2 (UI-005) und nur zur Gesamtwirkung gezeigt. Die Handy-Ansicht steht in 6.6 und als zwei Artboards auf der Mockup-Fläche, das helle Design fehlt noch.
+Stil: dunkles Design mit Statusrand an den Karten, Monospace für Server- und Befehlsnamen, farbige Rahmen je Servergruppe. Port-Chips auf den Karten folgen in R2 (UI-005). Die Handy-Ansicht steht in 6.6.
 
 ### 6.6 Handy-Ansicht
 

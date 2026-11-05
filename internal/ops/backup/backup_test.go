@@ -206,6 +206,23 @@ func TestBackupBeforeMigration(t *testing.T) {
 	}
 }
 
+// TestFailedBackup covers the error path of NFR-008: a backup that cannot be
+// written logs backup.failed and returns the error.
+func TestFailedBackup(t *testing.T) {
+	root := t.TempDir()
+	s := migratedStore(t, root)
+	blocked := filepath.Join(root, "file")
+	if err := os.WriteFile(blocked, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var logs syncBuffer
+	b := New(s.DB, filepath.Join(blocked, "backups"), newLogger(&logs))
+	if _, err := b.Run(context.Background(), KindAuto, 0, Policy{KeepAuto: 7, KeepPreMigration: 3}); err == nil {
+		t.Error("a backup into a file succeeded")
+	}
+	logtest.Wait(t, &logs, `"event":"backup.failed"`)
+}
+
 func TestLoadPolicy(t *testing.T) {
 	ctx := context.Background()
 	s := migratedStore(t, t.TempDir())

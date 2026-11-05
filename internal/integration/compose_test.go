@@ -10,11 +10,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/NightDragon1/rconductor/internal/logtest"
 )
 
 // composeDir holds the delivered Compose files, used here unchanged.
@@ -94,6 +97,23 @@ func (p *project) published(service, port string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// noPorts covers AGT-011 for the delivered files: the service publishes no
+// port at all.
+func (p *project) noPorts(service string) {
+	p.t.Helper()
+	id, err := p.command("ps", "--quiet", service).Output()
+	if err != nil {
+		p.t.Fatal(err)
+	}
+	out, err := exec.Command("docker", "port", strings.TrimSpace(string(id))).Output()
+	if err != nil {
+		p.t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "" {
+		p.t.Errorf("%s publishes %s", service, got)
+	}
+}
+
 func (p *project) signIn(webPort int) *apiUser {
 	p.t.Helper()
 	base := "http://localhost:" + strconv.Itoa(webPort)
@@ -160,6 +180,7 @@ func TestComposeAllInOne(t *testing.T) {
 	p.env = append(p.env, "RCD_PAIRING_TOKEN="+pairingToken(admin))
 	p.up("agent")
 	waitConnected(t, admin)
+	p.noPorts("agent")
 }
 
 // TestComposeSeparate covers NFR-014 for Design 5.4: panel and agent start
@@ -181,4 +202,62 @@ func TestComposeSeparate(t *testing.T) {
 	agent := newProject(t, "agent.yaml", socketGroup(t), "RCD_PAIRING_TOKEN="+pairingToken(admin))
 	agent.up()
 	waitConnected(t, admin)
+	agent.noPorts("agent")
+}
+
+// TestOtherMajorVersion covers AGT-013 with a real agent of another major
+// version against the real panel: refused with reason version, the hint is
+// in the log of both, and the agent stays unpaired.
+func TestOtherMajorVersion(t *testing.T) {
+	ctx := context.Background()
+	ctr := startPanel(ctx, t, newVolumes(t))
+	base, err := ctr.PortEndpoint(ctx, "8080/tcp", "http")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentPort, err := ctr.PortEndpoint(ctx, "8443/tcp", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`password: (\S+)`).FindStringSubmatch(logs(ctx, t, ctr))
+	if m == nil {
+		t.Fatal("no initial password in the log")
+	}
+	admin := signIn(t, base, "admin", m[1])
+	admin.call(http.MethodPost, "/me/password", nil, map[string]string{
+		"current_password": m[1], "new_password": "the admin password of this test",
+	}, nil, http.StatusNoContent)
+
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "agent")
+	build := exec.CommandContext(ctx, "go", "build", "-o", bin,
+		"-ldflags", "-X github.com/NightDragon1/rconductor/internal/buildinfo.Version=9.0", "../../cmd/agent")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v: %s", err, out)
+	}
+	var out syncBuf
+	run, stop := context.WithCancel(ctx)
+	cmd := exec.CommandContext(run, bin)
+	cmd.Env = []string{
+		"RCD_PAIRING_TOKEN=" + pairingToken(admin), "RCD_PANEL_ADDR=" + agentPort, "RCD_SECRETS_DIR=" + dir,
+		"RCD_DOCKER_HOST=unix://" + filepath.Join(dir, "no.sock"), "RCD_LOG_FORMAT=json",
+	}
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stop(); _ = cmd.Wait() })
+
+	logtest.Wait(t, &out, `"event":"agent.rejected"`, `"reason":"version"`)
+	waitUntil(t, 10*time.Second, "the refusal in the panel log", func() bool {
+		l := logs(ctx, t, ctr)
+		return strings.Contains(l, "event=agent.rejected") && strings.Contains(l, "reason=version")
+	})
+	var list struct {
+		Items []struct{ Connected bool }
+	}
+	admin.call(http.MethodGet, "/agents", nil, nil, &list, http.StatusOK)
+	if len(list.Items) != 0 {
+		t.Errorf("agents after the refusal = %+v", list.Items)
+	}
 }

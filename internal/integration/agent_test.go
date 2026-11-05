@@ -271,6 +271,21 @@ func exerciseAgent(t *testing.T, p *panelSide, agentID, labeled, plain string, l
 		l, _ := p.data.Logs(agentID, labeled)
 		return slices.Contains(l, "tick")
 	})
+	// UI-009, SEC-010: live logs run until logs.stop, also through the proxy.
+	if r := p.request(agentID, agentproto.TypeLogsFollow, agentproto.LogsFollow{Container: labeled}); r.Code != agentproto.CodeOK {
+		t.Errorf("logs.follow: %+v", r)
+	}
+	_, seq := p.data.Logs(agentID, labeled)
+	waitUntil(t, 10*time.Second, "live log lines", func() bool { _, s := p.data.Logs(agentID, labeled); return s > seq })
+	if r := p.request(agentID, agentproto.TypeLogsStop, agentproto.LogsFollow{Container: labeled}); r.Code != agentproto.CodeOK {
+		t.Errorf("logs.stop: %+v", r)
+	}
+	time.Sleep(500 * time.Millisecond) // lines already on their way
+	_, seq = p.data.Logs(agentID, labeled)
+	time.Sleep(3 * time.Second)
+	if _, s := p.data.Logs(agentID, labeled); s != seq {
+		t.Errorf("log lines keep coming after logs.stop: %d, then %d", seq, s)
+	}
 
 	before := startedAt(t, labeledCtr)
 	if r := p.request(agentID, agentproto.TypeContainerAction, agentproto.ContainerAction{Container: labeled, Action: "restart"}); r.Code != agentproto.CodeOK {
@@ -289,7 +304,7 @@ func exerciseAgent(t *testing.T, p *panelSide, agentID, labeled, plain string, l
 	waitUntil(t, 10*time.Second, "status running", func() bool { c, _ := p.data.Container(agentID, labeled); return c.State == "running" })
 	waitUntil(t, 30*time.Second, "metrics", func() bool {
 		m, ok := p.data.Metric(agentID, labeled)
-		return ok && !m.Stale && m.MemBytes > 0
+		return ok && !m.Stale && m.MemBytes > 0 && m.CPUPercent > 0
 	})
 }
 

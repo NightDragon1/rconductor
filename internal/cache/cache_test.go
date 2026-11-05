@@ -126,6 +126,32 @@ func TestStaleKeptAndMarked(t *testing.T) {
 // TestRefreshOnlyWhileWatched covers Overview 4.6: the list is fetched at
 // once for the first viewer and refreshed regularly only while someone
 // views the server.
+// TestAgeLimitsOfTheConcept pins the limits of Gesamtkonzept 4.6 for NFR-005;
+// the other tests compute with these constants.
+func TestAgeLimitsOfTheConcept(t *testing.T) {
+	if PlayersRefresh != 60*time.Second || PlayersStale != 120*time.Second || MetricsStale != 30*time.Second {
+		t.Errorf("refresh %v, players %v, metrics %v", PlayersRefresh, PlayersStale, MetricsStale)
+	}
+}
+
+// TestPlayersStaleWhenRefreshFails covers NFR-005: past the limit and without
+// a new answer the last list stays, marked as out of date.
+func TestPlayersStaleWhenRefreshFails(t *testing.T) {
+	c, ex, _ := newCache(t)
+	ctx := context.Background()
+	now := time.Now()
+	c.now = func() time.Time { return now }
+	if _, err := c.Players(ctx, "s1"); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(PlayersStale + time.Second)
+	ex.fail.Store(true)
+	p, err := c.Players(ctx, "s1")
+	if err != nil || !p.Stale || !slices.Equal(p.Names, []string{"Steve", "Alex"}) {
+		t.Errorf("players = %+v %v", p, err)
+	}
+}
+
 func TestRefreshOnlyWhileWatched(t *testing.T) {
 	c, ex, _ := newCache(t)
 	ctx, cancel := context.WithCancel(context.Background())
