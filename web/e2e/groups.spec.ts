@@ -12,6 +12,24 @@ async function as(page: Page, state: StackState, user: string, path: string, tit
   await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
 }
 
+test('groups and command lists can be searched (UI-007)', async ({ page, state }) => {
+  await as(page, state, 'admin', 'admin/groups', 'Groups');
+  await page.getByRole('searchbox', { name: 'Search groups' }).fill('moder');
+  await expect(page.getByRole('button', { name: 'moderators', exact: true })).toBeVisible();
+  await page.getByRole('searchbox', { name: 'Search groups' }).fill('no such group');
+  await expect(page.getByRole('button', { name: 'moderators', exact: true })).toHaveCount(0);
+
+  await page.goto('admin/command-lists');
+  const search = page.getByRole('searchbox', { name: 'Search command lists' });
+  await search.fill('moder');
+  await expect(page.getByRole('button', { name: 'moderation', exact: true })).toBeVisible();
+  // A list is also found by a command in it.
+  await search.fill('whitelist');
+  await expect(page.getByRole('button', { name: 'moderation', exact: true })).toBeVisible();
+  await search.fill('no such list');
+  await expect(page.getByRole('button', { name: 'moderation', exact: true })).toHaveCount(0);
+});
+
 test('a list keeps one command locked for supporters (ROLE-007)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/command-lists', 'Command lists');
   await page.getByPlaceholder('Name of a new list').fill('event-cmds');
