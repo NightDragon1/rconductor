@@ -8,10 +8,10 @@ import { defineConfig, devices } from '@playwright/test';
 // last one serves a build with a test language, every text marked (NFR-007).
 const language = 'web/.dist-language';
 const stacks = [
-  { name: 'root', port: 4380, base: '/', host: '', dist: '' },
-  { name: 'basepath', port: 4381, base: '/rcon', host: '', dist: '' },
-  { name: 'insecure', port: 4382, base: '/', host: 'rcon.lan', dist: '' },
-  { name: 'language', port: 4383, base: '/', host: '', dist: language },
+  { name: 'root', port: 4380, base: '/', host: '', dist: '', trusted: '' },
+  { name: 'basepath', port: 4381, base: '/rcon', host: '', dist: '', trusted: '127.0.0.1/32' },
+  { name: 'insecure', port: 4382, base: '/', host: 'rcon.lan', dist: '', trusted: '' },
+  { name: 'language', port: 4383, base: '/', host: '', dist: language, trusted: '' },
 ];
 const insecureOnly = /clipboard\.spec\.ts/;
 const phoneOnly = /mobile\.spec\.ts/;
@@ -27,7 +27,7 @@ export default defineConfig<{ stack: string }>({
   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   webServer: stacks.map((s) => ({
     // From the repository root: web/ has its own go.mod as a barrier.
-    command: `${s.dist ? `(cd web && npx vite build --mode language --outDir ${s.dist.replace('web/', '')}) && ` : ''}go run ./internal/e2e/stack -addr 127.0.0.1:${s.port} -base ${s.base}${s.host ? ` -host ${s.host}` : ''} -dist ${s.dist || 'internal/webui/dist'} -state web/e2e/.state-${s.name}.json -log web/e2e/.panel-${s.name}.log`,
+    command: `${s.dist ? `(cd web && npx vite build --mode language --outDir ${s.dist.replace('web/', '')}) && ` : ''}go run ./internal/e2e/stack -addr 127.0.0.1:${s.port} -base ${s.base}${s.host ? ` -host ${s.host}` : ''}${s.trusted ? ` -trusted ${s.trusted}` : ''} -dist ${s.dist || 'internal/webui/dist'} -state web/e2e/.state-${s.name}.json -log web/e2e/.panel-${s.name}.log`,
     cwd: '..',
     url: `http://127.0.0.1:${s.port}${s.base === '/' ? '' : s.base}/`,
     reuseExistingServer: false,
