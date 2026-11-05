@@ -642,9 +642,18 @@ export function ServersAdminPage() {
   const [open, setOpen] = useState<{ kind: 'server' | 'group'; id: string } | null>(null);
   const [groupName, setGroupName] = useState('');
   const [error, setError] = useState('');
+  const [q, setQ] = useState('');
   const groupNameId = useId();
   useShortcuts({ Escape: () => setOpen(null) });
   const all = servers.data ?? [];
+  const needle = q.trim().toLowerCase();
+  const shown = all.filter(
+    (s) =>
+      !needle || s.name.toLowerCase().includes(needle) || s.host?.toLowerCase().includes(needle),
+  );
+  const shownGroups = (groups.data ?? []).filter(
+    (g) => !needle || g.name.toLowerCase().includes(needle),
+  );
   const profileName = (id?: string) => profiles.data?.find((p) => p.id === id)?.name ?? '';
   const groupNames = (s: Server) =>
     (groups.data ?? [])
@@ -689,9 +698,18 @@ export function ServersAdminPage() {
 
         <PhoneNote />
 
+        <Input
+          type="search"
+          className="w-full sm:w-72"
+          placeholder={t('servers.search')}
+          aria-label={t('servers.searchLabel')}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+
         {phone ? (
           <Cards label={t('nav.servers')}>
-            {all.map((s) => (
+            {shown.map((s) => (
               <Card
                 key={s.id}
                 mono
@@ -721,7 +739,7 @@ export function ServersAdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {all.map((s) => (
+                {shown.map((s) => (
                   <tr
                     key={s.id}
                     className={cn(
@@ -790,7 +808,7 @@ export function ServersAdminPage() {
               label={t('servers.serverGroups')}
               empty={(groups.data ?? []).length === 0 ? t('servers.noGroups') : undefined}
             >
-              {(groups.data ?? []).map((g) => (
+              {shownGroups.map((g) => (
                 <Card
                   key={g.id}
                   mono
@@ -817,7 +835,7 @@ export function ServersAdminPage() {
             <div className="overflow-x-auto rounded-lg border border-border bg-surface">
               <table className="w-full text-sm">
                 <tbody>
-                  {(groups.data ?? []).map((g) => (
+                  {shownGroups.map((g) => (
                     <tr
                       key={g.id}
                       className={cn(
