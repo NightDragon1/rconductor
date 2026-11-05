@@ -29,6 +29,9 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - docs/ nicht verändern. Vorschläge für Änderungen nur als Hinweis an mich.
 - Kleine Schritte: lieber mehrere kleine Commits als ein großer.
 - Renovate-PRs: Patch, Minor und Digest nach grüner CI selbst mergen, Major vorher melden.
+- Bei Eingriffen in die Git-Historie Renovate pausieren (renovate.json "enabled": false),
+  danach wieder aktivieren.
+- Releases: Regeln in CONTRIBUTING.md, Abschnitt Release.
 
 ## Technik (Details in docs/04-technologie.md)
 - Panel und Agent: Go, aktuelle stabile Version, CGO aus, statische Binaries,
@@ -92,6 +95,22 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   committen. Screenshots unter docs/screenshots/ bleiben ebenfalls lokal.
 - Berichte wie bisher in Umfang und Struktur; Testzahlen dürfen als Summe je
   Testart stehen.
+
+## START/STOPP
+STOPP: Laufende Arbeit sofort beenden, nichts Neues anfangen.
+1. git status prüfen. Fertig und make check grün: auf main committen und pushen.
+   Sonst: Branch wip/<datum>, --no-verify, Nachricht "wip: <was lief>", pushen.
+2. Nicht auf CI warten, keine Tests mehr starten.
+3. docs/handover.md lokal überschreiben (nicht committen): Branch/Commit, erledigt,
+   unterbrochene Aufgabe, offene CI-Läufe, offene Fragen.
+4. Kurze Meldung. Danach nichts.
+
+START: docs/handover.md und Git-Stand lesen. Offene CI-Läufe prüfen. wip/-Branch
+vorhanden: fertigstellen, make check, Squash-Merge, Branch löschen. Dann nächster
+Handgriff aus der Übergabe. Offene Fragen oder ausstehendes Screenshot-OK: erst
+melden und warten.
+
+Das bloße Wort "STOPP" bzw. "START" von mir löst den Ablauf aus.
 
 ## Sprache
 - Code, Kommentare, Commit-Nachrichten und Oberflächentexte: Englisch.

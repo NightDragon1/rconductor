@@ -48,6 +48,15 @@ is done when its acceptance criterion in `docs/05-abnahme-r1.md` passes in a
 test. Please do not change the concept in `docs/`; propose changes in an
 issue.
 
+## Release
+
+- A release starts only with a tag `v*`, such as `v1.0`, and needs the approval in
+  the environment `release`.
+- The Docker Hub secrets live only in that environment.
+- The release notes come from `CHANGELOG.md`, which lists real releases only.
+- Test versions `0.x` follow D-047: only the image tag `0.x`, no major or `latest`
+  tag, a GitHub pre-release and no entry in the changelog.
+
 ## License headers
 
 Every source file starts with an SPDX line in its first lines, in the comment

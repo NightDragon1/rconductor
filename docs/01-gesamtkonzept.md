@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.5, Stand 05.11.2026, Status freigegeben; Änderungen gegenüber 2.4 in Kapitel 14, gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.6, Stand 06.11.2026, Status freigegeben; Änderungen gegenüber 2.5 in Kapitel 15, gegenüber 2.4 in Kapitel 14, gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -392,7 +392,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | D-034 | Kopplung auch in der All-in-One-Variante per Token | ein einheitlicher Ablauf für beide Varianten | automatische Kopplung über ein gemeinsames Volume, Freigabe per Klick |
 | D-035 | Seitenleiste links, Serverseite mit Reitern, Verwaltung als Tabelle mit Seitenpanel | vertraut aus Portainer, Rollen blenden nur Reiter und Einträge aus, Liste bleibt beim Bearbeiten sichtbar | obere Leiste, Serverliste links, eine Seite ohne Reiter, Detailseiten, Dialoge |
 | D-036 | Mobil voll für Moderation, Verwaltung nur lesend | Moderation passiert unterwegs, Verwaltung am Schreibtisch; spart Aufwand bei komplexen Formularen | alles mobil, nur Desktop |
-| D-037 | Stilrichtung laut Mockups; dunkles Design als Standard, helles wählbar | Mockups abgenommen; Statusfarben und Monospace-Namen lesen sich auf dunklem Grund am besten | Standard nach Systemeinstellung |
+| D-037 | Stilrichtung laut den Ansichten in Design 6.5; dunkles Design als Standard, helles wählbar | Mockups abgenommen; Statusfarben und Monospace-Namen lesen sich auf dunklem Grund am besten | Standard nach Systemeinstellung |
 | D-038 | Datenbankzugriff mit sqlc; SQLite über modernc.org/sqlite, Postgres über pgx | typsicher und SQL-nah; reines Go ohne CGO erlaubt statische Binaries | Bun, ent, mattn/go-sqlite3 (CGO) |
 | D-039 | OpenAPI 3.1 als einzige Quelle für Server-Stubs (oapi-codegen) und Client-Typen (openapi-typescript) | API, Backend und Oberfläche laufen nicht auseinander; Doku der externen API ab R2 fällt mit ab | Typen von Hand pflegen |
 | D-040 | Images für amd64 und arm64, signiert und mit SBOM auf ghcr.io und Docker Hub (PRJ-004) | x86-Server und Raspberry Pi; nachprüfbare Lieferkette | zusätzlich armv7, nur amd64 |
@@ -402,7 +402,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | D-044 | Jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants, Supporter-Freigabe oder Sperre beendet die Sessions des Benutzers; Listeninhalte wirken ohne Abmeldung | keine offene Oberfläche mit veraltetem Stand; Listenpflege meldet niemanden ab | nur Deaktivierung beendet Sessions |
 | D-045 | Profilbild als BLOB in der Datenbank, neu kodiert und verkleinert | ein Backup enthält alle veränderlichen Daten; Metadaten wie EXIF entfallen | Datei unter /data |
 | D-046 | Benutzer entstehen nur per Einladung, dazu der Notfall-Admin; das Token steht nur im URL-Fragment | niemand vergibt Passwörter für andere; ein Weg statt zwei; das Token erscheint in keinem Proxy- oder Panel-Log | POST /users mit Passwortvergabe |
-| D-047 | Versionen sind zweistellig (1.0, 1.1); Inkompatibles erhöht die erste Stelle (D-023), alles andere die zweite; Release-Tags wie v1.0, Image-Tags 1 und 1.0 | die erste Stelle trägt allein die Regel für Panel und Agent, eine dritte Stelle sagt nichts Zusätzliches | dreistellige Versionen (1.0.0) |
+| D-047 | Versionen sind zweistellig (1.0, 1.1); Inkompatibles erhöht die erste Stelle (D-023), alles andere die zweite; Release-Tags wie v1.0, Image-Tags 1 und 1.0. Testversionen 0.x haben nur das Image-Tag 0.x, kein Haupt- oder latest-Tag, sind GitHub-Pre-Releases und stehen nicht im CHANGELOG | die erste Stelle trägt allein die Regel für Panel und Agent, eine dritte Stelle sagt nichts Zusätzliches | dreistellige Versionen (1.0.0) |
 
 ## 7. Releaseplan
 
@@ -434,6 +434,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 2.3 | 03.11.2026 | Freigabe durch Rob: Erkenntnisse aus M3 eingearbeitet (Kapitel 12); Design 1.6 mit den Grenzen von SEC-007, Containername statt Container-ID, Fremdschlüssel servers.agent\_id, Einstellung agents.fingerprint\_pairing, Ereigniscode agent.disconnected, Grund-Codes agent\_unavailable und action\_failed, Grenzen bis zum welcome. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.4 | 05.11.2026 | Freigabe durch Rob: Erkenntnisse aus M4 eingearbeitet (Kapitel 13); Revision 3 für SEC-006, Revision 2 für SEC-009, SEC-013, PRJ-002, CMD-001, CMD-004, UI-001, UI-004, UI-006, UI-007 und UI-012; DOC-001 bis DOC-005, PRJ-003, PRJ-004 und D-047 neu; neue Ressourcen in Design 2.2, Katalogprüfung in Design 3.3, optimistische Sperre, Ereigniscode logs.tail |
 | 2.5 | 05.11.2026 | Freigabe durch Rob: Begründungen aus den Kandidaten eingearbeitet, Trigger der optimistischen Sperre und group\_add nachgetragen, Verweise auf Mockups und Kandidaten-Dateien entfernt (Kapitel 14). Keine Anforderung ändert sich |
+| 2.6 | 06.11.2026 | Freigabe durch Rob: D-037 und Design 6.5 ohne Verweis auf Mockups, D-047 um Testversionen 0.x ergänzt (Kapitel 15). Keine Anforderung ändert sich |
 
 ## 10. Änderungen in Version 2.1
 
@@ -570,3 +571,11 @@ Vorbereitung des Release 1.0: Die Kandidaten-Dateien und die Mockups liegen nich
 | 9 | group\_add in den Compose-Beispielen | Design 5.4, 5.5 |
 | 10 | Satz zu den Mockup-Bildern entfernt, die Beschreibung der Ansichten bleibt; Dateiverweise in den Kapiteln 10 bis 13 durch die Kandidaten des Meilensteins ersetzt | Design 6.5; Kapitel 10 bis 13 |
 | 11 | Platzhalter eingebetteter Grafiken entfernt; Abschnitt Mockups heißt Ansichten | Architektur 1, Design 6.4, 6.5, 6.6, Plan R1 |
+
+## 15. Änderungen in Version 2.6
+
+| Nr. | Änderung | Fundstelle in 2.6 |
+| --- | --- | --- |
+| 1 | Stilrichtung verweist auf die Ansichten | D-037 |
+| 2 | Spaltenkopf Ansicht, Absatz Stil ohne Verweis auf die Mockup-Fläche | Design 6.5 |
+| 3 | Testversionen 0.x: nur Image-Tag 0.x, kein Haupt- oder latest-Tag, GitHub-Pre-Release, kein CHANGELOG-Eintrag | D-047 |
