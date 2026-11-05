@@ -7,7 +7,7 @@ agent per game host; the panel never touches the Docker socket.
 > Status: under development (release 1 in progress). Users and rights,
 > game servers with RCON, the console over the API and the host agent work;
 > the web UI follows. Compose files and the full operations guide come with
-> release 1.0.0.
+> release 1.0.
 
 ## Running the panel
 
@@ -190,6 +190,11 @@ volumes:
 
 The agent then needs neither the socket nor `group_add`. Do not publish the
 proxy's port; only the agent may reach it.
+
+## Operations notes
+
+- **Copying over plain http:** browsers offer the clipboard only in a secure context. Over `http://lan-ip` the copy buttons select the text and ask for Ctrl+C; HTTPS through the reverse proxy gives direct copying.
+- **Other RCON clients on Minecraft:** Minecraft collects the RCON output of all connections in one place. If two connections send at the same time, one gets the output of both or an empty answer ([#104](https://github.com/NightDragon1/rconductor/issues/104)). The panel uses one connection with commands in turn, but is affected as soon as a second client sends in parallel. Switch off old RCON containers such as itzg/rcon after moving to RCONductor, and expect single wrong or empty answers while backup containers such as itzg/mc-backup run (save-off, save-all), as with bots and rcon-cli scripts.
 
 ## Development
 

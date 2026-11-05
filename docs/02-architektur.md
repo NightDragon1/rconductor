@@ -1,6 +1,6 @@
 # Architektur
 
-Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Die Technikentscheidungen D-001 und D-002 sind im Tab Technologie gegen diese Architektur geprüft: Go bestätigt, React statt SvelteKit.
+Dokumentversion 2.4, freigegeben; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Die Technikentscheidungen D-001 und D-002 sind im Tab Technologie gegen diese Architektur geprüft: Go bestätigt, React statt SvelteKit.
 
 Das System besteht aus einem zentralen Panel, das als einziger Baustein Zustand hält, schlanken Agents je Spiele-Host und den Spieleservern, die nur über ihr Protokoll angesprochen werden.
 
