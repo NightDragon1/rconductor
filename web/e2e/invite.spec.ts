@@ -51,6 +51,47 @@ test('an invitation link keeps its token out of paths and logs (UI-008)', async 
   expect(readFileSync(`e2e/.panel-${stack}.log`, 'utf8')).not.toContain(created.token);
 });
 
+test('the pseudonym is required and unique (AUTH-009)', async ({ page, browser, state }) => {
+  await login(page, 'admin', secret(state, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  const url = await page.evaluate(async () => {
+    const r = await fetch('api/v1/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'supporter' }),
+    });
+    return ((await r.json()) as { url: string }).url;
+  });
+  const guest = await browser.newContext();
+  const invitee = await guest.newPage();
+  await invitee.goto(url);
+  await invitee.getByLabel('Password', { exact: true }).fill('a fine invited password');
+  await invitee.getByLabel('Repeat the new password').fill('a fine invited password');
+  const create = invitee.getByRole('button', { name: 'Create my account' });
+
+  // Without a pseudonym the form does not leave the browser.
+  let posts = 0;
+  invitee.on('request', (r) => {
+    if (r.method() === 'POST') posts++;
+  });
+  await create.click();
+  expect(
+    await invitee.getByLabel('Pseudonym').evaluate((e: HTMLInputElement) => e.validity.valid),
+  ).toBe(false);
+  expect(posts).toBe(0);
+
+  await invitee.getByLabel('Pseudonym').fill('admin');
+  await create.click();
+  await expect(invitee.getByRole('alert')).toHaveText(
+    'The pseudonym is taken or not allowed. Choose another one.',
+  );
+
+  await invitee.getByLabel('Pseudonym').fill(`unique-${Date.now() % 100000}`);
+  await create.click();
+  await expect(invitee.getByRole('status')).toContainText('Your account is ready');
+  await guest.close();
+});
+
 test('an expired invitation says so (UI-008)', async ({ page, state }) => {
   await page.goto(`invite#${state.expired_invite}`);
   await page.getByLabel('Pseudonym').fill('too-late');

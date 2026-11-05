@@ -103,6 +103,7 @@ test('the RCON admin reaches every administration page (ROLE-002)', async ({ pag
     ['admin/command-lists', 'Command lists'],
     ['admin/servers', 'Servers and groups'],
     ['admin/agents', 'Agents'],
+    ['admin/settings', 'Settings'],
     ['audit', 'Audit'],
   ]) {
     await page.goto(path);

@@ -39,7 +39,8 @@ test('the health overview names every problem with a link (UI-003)', async ({ pa
   await expect(tile('RCON errors')).toContainText('1');
   await expect(tile('RCON errors')).toContainText('arena');
   await expect(tile('Restart loops')).toContainText('creative');
-  await expect(tile('Users')).toContainText('1 locked');
+  // Active users first, the locked ones below.
+  await expect(tile('Users')).toHaveText(/^Users\s*[1-9]\d*\s*active · 1 locked$/);
 
   const notices = page.getByRole('region', { name: 'Notices' }).getByRole('listitem');
   const row = (name: string) => notices.filter({ hasText: name });
