@@ -1,6 +1,6 @@
 # Technologie
 
-Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
+Dokumentversion 2.4, Entwurf zur Freigabe; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
 
 ## 1. Grundsätze
 
@@ -44,7 +44,7 @@ Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept
 | Routing | TanStack Router | typsichere Routen und Suchparameter (Filter, Spuren) | R1 |
 | Serverdaten | TanStack Query; WebSocket-Ereignisse aktualisieren den Query-Cache | ein Datenweg für REST und Live-Daten | R1 |
 | API-Typen | openapi-typescript aus derselben OpenAPI-Datei | gleiche Typen wie im Backend | R1 |
-| Komponenten | shadcn/ui (Radix-Primitives, Quellcode im Repository) mit Tailwind CSS | barrierearme Grundbausteine, eigenes Aussehen, helles und dunkles Design über Tokens | R1 |
+| Komponenten | shadcn/ui (Radix-Primitives, Quellcode im Repository, jede kopierte Datei mit MIT-Hinweis und SPDX-Kennung, siehe THIRD\_PARTY\_NOTICES) mit Tailwind CSS | barrierearme Grundbausteine, eigenes Aussehen, helles und dunkles Design über Tokens | R1 |
 | Konsole | eigene Komponente mit TanStack Virtual | lange Verläufe ohne Ruckeln | R1 |
 | Formulare | react-hook-form mit zod | Prüfung im Browser, endgültige Prüfung bleibt im Backend | R1 |
 | Sprachen | i18next mit react-i18next | Englisch ab R1, Deutsch ab R2 (NFR-007) | R1 |

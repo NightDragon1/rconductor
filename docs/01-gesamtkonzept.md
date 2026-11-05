@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.3, Stand 03.11.2026, Status freigegeben; Änderungen gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.4, Stand 05.11.2026, Status Entwurf zur Freigabe; Änderungen gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -73,16 +73,16 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | SEC-003 | Regex-Sicherheit | Muster mit RE2-Semantik (lineare Laufzeit), Zeilenlimit und Timeout | Agent | Muss | R1 | 1 |
 | SEC-004 | Login-Schutz | Verzögerung und zeitweise Sperre nach wiederholten Fehlanmeldungen | Backend | Muss | R1 | 1 |
 | SEC-005 | Key-Trennung | Master-Key liegt nur in /secrets, nie in der Datenbank oder im Datenbank-Backup; optional per Docker-Secret übergebbar; ab R2 kann der RCON-Admin einen mit Passphrase geschützten Recovery-Export herunterladen | Backend, UI | Muss | R1 | 1 |
-| SEC-006 | Fremddaten | Daten von Spieleservern und Agents (Antworten, Spielernamen, Logs, Versionen, Container-Namen) werden escaped dargestellt und in der Größe begrenzt; Farbcodes nur in eine feste Liste erlaubter Stile. Steuer- und Formatzeichen (Unicode Cc und Cf, u. a. Bidi-Steuerzeichen) werden aus Bezeichnern wie Spielernamen und Container-Namen entfernt, Steuerzeichen außer Zeilenumbruch und Tabulator auch aus Freitext | Backend, UI | Muss | R1 | 2 |
+| SEC-006 | Fremddaten | Daten von Spieleservern und Agents (Antworten, Spielernamen, Logs, Versionen, Container-Namen) werden escaped dargestellt und in der Größe begrenzt; Farbcodes werden in R1 vor der Anzeige entfernt, die feste Liste erlaubter Stile kommt mit CMD-017 (R2). Bidi-Steuerzeichen im Freitext wirken nicht, die Oberfläche zeigt sie als Platzhalter. Steuer- und Formatzeichen (Unicode Cc und Cf, u. a. Bidi-Steuerzeichen) werden aus Bezeichnern wie Spielernamen und Container-Namen entfernt, Steuerzeichen außer Zeilenumbruch und Tabulator auch aus Freitext | Backend, UI | Muss | R1 | 3 |
 | SEC-007 | Grenzen Agent-Port | Höchstgröße je Nachricht, begrenzte Logzeilen je Nachricht, Rate für Verbindungsaufbau je Quelladresse, Obergrenze für wartende Kopplungen | Backend, Agent | Muss | R1 | 1 |
 | SEC-008 | WebSocket-Grenzen | Höchstzahl an WebSocket-Verbindungen je Session und an Abos je Verbindung, als Einstellungen des RCON-Admins (Design 2.3, 5.6) | Backend | Soll | R1 | 2 |
-| SEC-009 | Sicherheitsheader | Content-Security-Policy ohne Inline-Skripte, X-Content-Type-Options, Referrer-Policy, frame-ancestors none | Backend | Muss | R1 | 1 |
+| SEC-009 | Sicherheitsheader | Content-Security-Policy ohne Inline-Skripte, X-Content-Type-Options, Referrer-Policy, frame-ancestors none, auf jeder Antwort des Web-Ports | Backend | Muss | R1 | 2 |
 | SEC-010 | Socket-Proxy | Doku empfiehlt einen Socket-Proxy vor dem Docker-Socket, der nur die vom Agent benötigten Endpunkte durchlässt; der Agent funktioniert damit unverändert | Agent, Doku | Kann | R1 | 1 |
 | SEC-011 | Audit-Hash-Kette | Manipulationssichere Verkettung der Audit-Einträge mit Prüffunktion | Backend, DB | Kann | Backlog | 1 |
 | SEC-012 | Keine Geheimnisse in Logs | Passwörter, RCON-Zugangsdaten, Tokens, Schlüssel und Session-IDs erscheinen auf keinem Log-Level; Sessions nur als kurzer Hash; einzige Ausnahme ist die einmalige Ausgabe des Initialpassworts (AUTH-007) | Backend, Agent | Muss | R1 | 1 |
 | SEC-013 | Lieferkette | Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne Automerge; Release-Tags erst nach Veröffentlichung des Repositories | alle | Muss | R1 | 1 |
 | PRJ-001 | Open Source | Veröffentlichung auf GitHub unter GNU AGPL-3.0; Spielprofile sind Teil des Repositories | alle | Muss | R1 | 1 |
-| PRJ-002 | Eigenständigkeit | Eigene Implementierung; Ideen anderer Tools nur sinngemäß, kein fremder Code, kein fremdes Design | alle | Muss | R1 | 1 |
+| PRJ-002 | Eigenständigkeit | Eigene Implementierung; Ideen anderer Tools nur sinngemäß, kein fremder Code, kein fremdes Design; ausgenommen kopierte Komponenten mit kompatibler Lizenz, die gekennzeichnet sind | alle | Muss | R1 | 2 |
 
 ### 2.2 Benutzerverwaltung
 
@@ -149,7 +149,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 
 | ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
 | --- | --- | --- | --- | --- | --- | --- |
-| CMD-001 | Admin-Konsole | Live-Konsole für Admins mit Favoriten und Serverwechsel ohne Seitenwechsel; Darstellung und Eingabe gemäß CMD-012 bis CMD-017 | UI | Muss | R1 | 1 |
+| CMD-001 | Admin-Konsole | Live-Konsole für Admins mit Favoriten und Serverwechsel ohne Seitenwechsel; Darstellung und Eingabe gemäß CMD-012 bis CMD-015, ab R2 auch CMD-016 und CMD-017 | UI | Muss | R1 | 2 |
 | CMD-002 | Freie Eingabe | Freie Befehlseingabe nur für RCON- und Server-Admins | Backend | Muss | R1 | 1 |
 | CMD-003 | Befehlsseite Moderator | Befehle der Befehlsliste als Buttons mit Parameterfeldern; Spielernamen aus aktueller Spielerliste wählbar; Verlauf mit Serverantworten | UI | Muss | R1 | 1 |
 | CMD-004 | Token-Matching | Befehl ist ein Pfad aus ganzen Tokens; alles danach geht unverändert durch („whitelist add tralala“) | Backend | Muss | R1 | 1 |
@@ -193,21 +193,21 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | --- | --- | --- | --- | --- | --- | --- |
 | UI-002 | Landingpage je Rolle | Landingpage je Rolle mit den für die Rolle relevanten Informationen | UI | Muss | R1 | 1 |
 | UI-003 | Gesundheitsübersicht | Für RCON-Admins: Restart-Schleifen, Agent-Erreichbarkeit, RCON-Fehler, aktive und gesperrte Benutzer | UI, Backend | Muss | R1 | 1 |
-| UI-004 | Server-Karten | Statusrand und -punkt, Name, Image (bei sha256 Spielprofil), CPU und RAM, letzter Restart, Spielversion, Spieler online; Felder ohne Quelle ausgeblendet | UI | Muss | R1 | 1 |
+| UI-004 | Server-Karten | Statusrand und -punkt, Name, Image (bei sha256 Spielprofil), CPU und RAM, letzter Restart, Spielversion (ab R2, AGT-006), Spieler online; Felder ohne Quelle ausgeblendet | UI | Muss | R1 | 2 |
 | UI-005 | Ports und Volumes | Server-Admin sieht Spielports, optional Steam-Connect-Link; RCON-Admin alle relevanten Ports; Volumes mit Name und Größe | UI | Soll | R2 | 1 |
-| UI-006 | Karten Moderator | Nur eigene Server; Status per RCON-Erreichbarkeit, Version, Spieler; keine Agent-Daten | UI | Muss | R1 | 1 |
+| UI-006 | Karten Moderator | Nur eigene Server; Status per RCON-Erreichbarkeit, Version (ab R2, AGT-006), Spieler; keine Agent-Daten | UI | Muss | R1 | 2 |
 | UI-010 | Topologie | Live-Graph Host → Agent → Spieleserver, gruppiert nach Servergruppen | UI | Kann | R2 | 1 |
 
 ### 2.10 Oberfläche und Bedienung
 
 | ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
 | --- | --- | --- | --- | --- | --- | --- |
-| UI-001 | Stil | Aufgeräumt wie Portainer, Diagramme wie Grafana, keine verschiebbaren Widgets, helles und dunkles Design | UI | Muss | R1 | 1 |
-| UI-007 | Verwaltungslisten | Durchsuchbare, filterbare Listen, Mehrfachauswahl mit Massenaktionen, Details im Seitenpanel | UI | Muss | R1 | 1 |
+| UI-001 | Stil | Aufgeräumt wie Portainer, Diagramme wie Grafana, keine verschiebbaren Widgets, helles und dunkles Design; Kontrast 4,5:1 für Text, 3:1 für Symbole, Rahmen von Controls, Fokusring und Statuspunkte (WCAG 1.4.11) | UI | Muss | R1 | 2 |
+| UI-007 | Verwaltungslisten | Durchsuchbare Listen, Details im Seitenpanel; die Benutzerliste zusätzlich filterbar und mit Mehrfachauswahl und Massenaktionen | UI | Muss | R1 | 2 |
 | UI-008 | Schnelleingabe | Rechte und Zuweisungen eines bestehenden Benutzers als Vorlage übernehmen; Mehrfachauswahl mit Massenaktionen; neue Benutzer per Einladungslink mit Ablaufzeit statt Passwortvergabe; Inline-Bearbeitung in Listen; Rückgängig für einige Sekunden statt Bestätigungsdialog, Bestätigung nur bei destruktiven Aktionen; Tastaturkürzel für häufige Aktionen, standardmäßig deaktiviert, vom RCON-Admin global aktivierbar | UI | Soll | R1 | 1 |
 | UI-009 | Logansicht | Live-Logs für berechtigte Rollen, übertragen nur bei aktiver Ansicht; optional letzte Logzeilen auf der Karte | UI, Agent | Soll | R1 | 1 |
 | UI-011 | Navigation und Serverseite | Einklappbare Seitenleiste mit Einträgen je Rolle; Serverseite mit Kopf (Status, Aktionen) und Reitern Übersicht, Konsole oder Befehle, Logs, Verlauf; Einträge und Reiter ohne Recht werden ausgeblendet | UI | Muss | R1 | 1 |
-| UI-012 | Mobile Nutzung | Karten, Befehlsseite, Konsole und Mitteilungen auf dem Smartphone voll bedienbar; Verwaltung mobil nur lesend | UI | Soll | R1 | 1 |
+| UI-012 | Mobile Nutzung | Karten, Befehlsseite und Konsole auf dem Smartphone voll bedienbar, Mitteilungen ab R2; Verwaltung mobil nur lesend, ausgenommen Sperren, Entsperren und Sitzungen beenden mit Bestätigungsdialog | UI | Soll | R1 | 2 |
 
 ### 2.11 Audit und Statistik
 
@@ -389,7 +389,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | D-043 | Session-Cookie immer HttpOnly und SameSite=Lax; Secure und Präfix \_\_Host- nur über HTTPS | Anmeldung auch ohne TLS-Proxy im LAN (D-011); Lax lässt Links von außen angemeldet ankommen, CSRF bleibt durch die Origin-Prüfung abgedeckt | Secure und SameSite=Strict immer |
 | D-044 | Jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants, Supporter-Freigabe oder Sperre beendet die Sessions des Benutzers; Listeninhalte wirken ohne Abmeldung | keine offene Oberfläche mit veraltetem Stand; Listenpflege meldet niemanden ab | nur Deaktivierung beendet Sessions |
 | D-045 | Profilbild als BLOB in der Datenbank, neu kodiert und verkleinert | ein Backup enthält alle veränderlichen Daten; Metadaten wie EXIF entfallen | Datei unter /data |
-| D-046 | Benutzer entstehen nur per Einladung, dazu der Notfall-Admin | niemand vergibt Passwörter für andere; ein Weg statt zwei | POST /users mit Passwortvergabe |
+| D-046 | Benutzer entstehen nur per Einladung, dazu der Notfall-Admin; das Token steht nur im URL-Fragment | niemand vergibt Passwörter für andere; ein Weg statt zwei; das Token erscheint in keinem Proxy- oder Panel-Log | POST /users mit Passwortvergabe |
 
 ## 7. Releaseplan
 
@@ -419,6 +419,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 2.1 | 01.11.2026 | Freigabe durch Rob: Erkenntnisse aus M0 und M1 eingearbeitet (Kapitel 10); Revision 2 für NFR-010; AUTH-010, AUTH-011, SEC-013 und D-043 bis D-046 neu. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.2 | 02.11.2026 | Freigabe durch Rob: Erkenntnisse aus M2 eingearbeitet (Kapitel 11); Revision 2 für SEC-006, SEC-008 und SRV-001; Design 3.8 (RCON-Verbindung) neu; Einstellungen profiles.poll\_interval, ws.max\_sockets\_per\_session, ws.max\_subscriptions\_per\_socket; Grund-Code timeout. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.3 | 03.11.2026 | Freigabe durch Rob: Erkenntnisse aus M3 eingearbeitet (Kapitel 12); Design 1.6 mit den Grenzen von SEC-007, Containername statt Container-ID, Fremdschlüssel servers.agent\_id, Einstellung agents.fingerprint\_pairing, Ereigniscode agent.disconnected, Grund-Codes agent\_unavailable und action\_failed, Grenzen bis zum welcome. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
+| 2.4 | 05.11.2026 | Entwurf zur Freigabe durch Rob: Erkenntnisse aus M4 eingearbeitet (Kapitel 13); Revision 3 für SEC-006, Revision 2 für SEC-009, PRJ-002, CMD-001, UI-001, UI-004, UI-006, UI-007 und UI-012; neue Ressourcen in Design 2.2, Katalogprüfung in Design 3.3, optimistische Sperre, Ereigniscode logs.tail |
 
 ## 10. Änderungen in Version 2.1
 
@@ -496,3 +497,39 @@ Eingearbeitet aus den Kandidaten von M3 (docs/revision-2.3-kandidaten.md, Nr. 1 
 | 12 | WebSocket-Themen metrics und logs: Rechte, Startwert, Logs nur bei Abo | Design 2.3 |
 | 13 | TLS-Handshake lässt unbekannte Agent-Schlüssel zu, Entscheidung im hello, pin\_mismatch nur bei bekannter Agent-ID; bis zum welcome höchstens 16 KiB je Nachricht und hello binnen 10 s | Design 1.3, 1.6 |
 
+## 13. Änderungen in Version 2.4
+
+Eingearbeitet aus den Kandidaten von M4 (docs/revision-2.4-kandidaten.md, Nr. 1 bis 31, Nummern wie dort).
+
+| Nr. | Änderung | Fundstelle in 2.4 |
+| --- | --- | --- |
+| 1 | /backups und die Backup-Seite folgen nach M5, nicht in 1.0.0 | Design 2.2, 6.2; Plan R1, Kapitel 4 |
+| 2 | started\_at und restart\_count in snapshot und container.event; Regel für Restart-Schleifen | Design 1.5, 6.1 |
+| 3 | servers.overview mit Laufzeitdaten aller Server im Scope | Design 2.3 |
+| 4 | runtime im Server-Objekt | Design 2.2 |
+| 5 | GET /servers/{id}/commands | Design 2.2 |
+| 6 | Favoriten je Benutzer, PUT /me/favorites, Tabelle user\_favorites | Design 2.2, 4.2 |
+| 7 | Einstellung ui.shortcuts\_enabled, lesbar über /auth/session | Design 2.2, 5.6 |
+| 8 | Rückgängig im Browser mit 5 s Verzögerung | Design 6.1 |
+| 9 | Farbcodes in R1 entfernt, Stilliste mit CMD-017 | SEC-006, T-008, Sicherheit, Abnahme SEC-006 |
+| 10, 25 | Mitteilungen in UI-012 erst mit R2 | UI-012, Design 6.1 |
+| 11 | Spielversion auf Karten erst mit R2 | UI-004, UI-006 |
+| 12 | CMD-001 in R1 mit CMD-012 bis CMD-015 | CMD-001 |
+| 13 | shadcn/ui als gekennzeichneter Fremdcode | PRJ-002, Technologie 3 |
+| 14 | Ablehnung nach Rolle vor dem Objekt | Design 3.1, 3.5 |
+| 15 | supporters\_enabled und supporters\_allowed in Session.ui | Design 2.2 |
+| 16 | Neustart ohne Agent in der Oberfläche | Design 6.3 |
+| 17 | Kopieren ohne sicheren Kontext | Design 6.1, README |
+| 18 | Betriebshinweis zu parallelen RCON-Clients | README |
+| 19 | Prüfung der Katalogparameter im Backend, syntax.player\_pattern | Design 3.3, 3.5, 7.2, 7.3; Abnahme CMD-004 |
+| 20 | GET /servers/{id}/logs, Ereigniscode logs.tail | Design 2.2, 8.3 |
+| 21 | DELETE /users/{id}/sessions | Design 2.2 |
+| 22 | GET /agents/{id}/containers | Design 2.2 |
+| 23 | Einladungstoken nur im Fragment | Design 2.2, D-046 |
+| 24 | Optimistische Sperre mit version und If-Match | Design 2.1, 3.5, 4.2 |
+| 26 | Sperren, Entsperren und Sitzungen beenden auf dem Handy | UI-012, Design 6.1, 6.6, Abnahme UI-012 |
+| 27 | Mockups aus docs/mockups/ statt privatem Link | Design 6.5 |
+| 28 | Bidi-Steuerzeichen im Freitext als sichtbarer Platzhalter | SEC-006, Abnahme SEC-006, Design 6.1 |
+| 29 | SEC-009 gilt für den Web-Port | SEC-009, Sicherheit, Abnahme SEC-009 |
+| 30 | Nicht-Text-Kontrast 3:1 (WCAG 1.4.11) | UI-001, Abnahme UI-001, Design 6.1 |
+| 31 | Suche in allen Verwaltungslisten; Filter und Mehrfachauswahl nur in der Benutzerliste | UI-007, Abnahme UI-007, Design 6.1 |

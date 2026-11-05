@@ -1,6 +1,6 @@
 # Abnahmekriterien R1
 
-Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
+Dokumentversion 2.4, Entwurf zur Freigabe; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
 
 | Prüfart | Bedeutung |
 | --- | --- |
@@ -31,10 +31,10 @@ Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept
 | SEC-005 | Der Master-Key liegt nur in /secrets; weder Datenbank noch Backup enthalten ihn; RCD\_MASTER\_KEY\_FILE wird gelesen | Integration |
 | PRJ-001 | Repository ist öffentlich unter AGPL-3.0, LICENSE liegt bei, Spielprofile liegen unter profiles/ | Review |
 | PRJ-002 | Kein übernommener Fremdcode außer deklarierten Abhängigkeiten mit kompatibler Lizenz | Review |
-| SEC-006 | Ein Spielername mit \<script> und eine RCON-Antwort mit HTML erscheinen als Text, nichts wird ausgeführt; ein unbekannter Farbcode erzeugt keinen Stil; ein Spielername mit U+202E erscheint ohne Umkehrung | E2E, Unit |
+| SEC-006 | Ein Spielername mit \<script> und eine RCON-Antwort mit HTML erscheinen als Text, nichts wird ausgeführt; Farbcodes werden entfernt und erzeugen keinen Stil; ein Spielername mit U+202E erscheint ohne Umkehrung; im Freitext erscheint U+202E als Platzhalter, Kopieren liefert das Original | E2E, Unit |
 | SEC-007 | Eine Nachricht über der Höchstgröße trennt die Agent-Verbindung; schnelle Verbindungsversuche einer Adresse werden gedrosselt; wartende Kopplungen bleiben unter der Obergrenze | Integration |
 | SEC-008 | Ein WebSocket über der Abo-Grenze erhält error limit statt eines weiteren Abos; ein Socket über der Grenze je Session schließt den ältesten Socket mit error replaced; beide Grenzen ändert nur der RCON-Admin | Integration |
-| SEC-009 | Jede Antwort trägt die Header laut SEC-009; die Oberfläche läuft ohne CSP-Verletzung in der Browser-Konsole | E2E |
+| SEC-009 | Jede Antwort des Web-Ports trägt die Header laut SEC-009; die Oberfläche läuft ohne CSP-Verletzung in der Browser-Konsole | E2E |
 | SEC-010 | Die Doku enthält ein lauffähiges Beispiel mit Socket-Proxy; alle Agent-Funktionen aus AGT-003 funktionieren damit | Integration, Review |
 | NFR-016 | Jeder Ereigniscode aus Design 8.3 tritt im Testlauf mindestens einmal auf, als gültige JSON-Zeile mit allen Pflichtfeldern aus 8.2 | Integration |
 | SEC-013 | Release-Images für amd64 und arm64 tragen eine cosign-Signatur und eine SBOM-Attestierung, die cosign verify bestätigt; govulncheck ist Pflicht-Check; alle Actions sind auf Commit-SHA gepinnt | Review |
@@ -96,7 +96,7 @@ Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept
 | CMD-001 | Ein Admin wechselt zwischen zwei Favoriten-Servern, ohne dass die Seite neu lädt; der Verlauf beider bleibt erhalten | E2E |
 | CMD-002 | Freie Eingabe gibt es nur für RCON- und Server-Admin; ein Moderator, der dieselbe API nutzt, wird nach Befehlsliste geprüft | Integration |
 | CMD-003 | Ein Moderator sieht nur Befehle seiner Liste als Karten mit Feldern aus dem Profil; Spielernamen lassen sich aus der Spielerliste wählen; die Antwort erscheint im Verlauf | E2E |
-| CMD-004 | Mit Eintrag whitelist add sind whitelist add x und whitelist add x y erlaubt, whitelist remove x und op nicht; ein Eintrag op erlaubt opfoo nicht | Unit |
+| CMD-004 | Pfadabgleich: Mit Eintrag whitelist add sind whitelist add x und whitelist add x y erlaubt, whitelist remove x und op nicht; ein Eintrag op erlaubt opfoo nicht; die Parameterprüfung (Design 3.3, Schritt 7b) ist davon getrennt und lehnt mit Katalogeintrag whitelist add x y für Moderator und Supporter ab | Unit |
 | CMD-005 | execute … run say hi wird für Moderator und Supporter mit wrapper\_blocked abgelehnt, auch wenn execute in der Liste steht | Unit |
 | CMD-006 | Zeilenumbrüche und Steuerzeichen erreichen den Spieleserver nie; say a\\nop x führt nur einen Befehl aus | Unit, Integration |
 | CMD-007 | Jeder Audit-Eintrag eines Befehls trägt Request-ID, Session, Benutzer und Rolle; die Antwort trägt dieselbe Request-ID | Integration |
@@ -125,16 +125,16 @@ Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept
 
 | ID | Abnahmekriterium | Prüfart |
 | --- | --- | --- |
-| UI-001 | Alle Seiten sind im dunklen und hellen Design lesbar (Kontrast mindestens 4,5:1 für Text); keine verschiebbaren Widgets | E2E, Review |
+| UI-001 | Alle Seiten sind im dunklen und hellen Design lesbar (Kontrast mindestens 4,5:1 für Text; 3:1 für Symbole, Rahmen von Controls, Fokusring und Statuspunkte); keine verschiebbaren Widgets | E2E, Review |
 | UI-002 | Jede Rolle landet nach der Anmeldung auf ihrer Landingpage laut Haupttab 5 | E2E |
 | UI-003 | Die Gesundheitsübersicht zeigt Restart-Schleifen, getrennte Agents, RCON-Fehler sowie aktive und gesperrte Benutzer, jeweils mit Sprung zum Objekt | E2E |
 | UI-004 | Karten zeigen nur Felder mit Quelle; bei sha256-Image steht das Spielprofil statt des Images | E2E |
 | UI-006 | Moderator-Karten zeigen keine Agent-Daten; der Status kommt aus der RCON-Erreichbarkeit | E2E |
-| UI-007 | Listen sind durchsuchbar und filterbar; eine Massenaktion auf 2 Benutzer wirkt auf beide | E2E |
+| UI-007 | Alle Verwaltungslisten sind durchsuchbar; die Benutzerliste ist filterbar, eine Massenaktion auf 2 Benutzer wirkt auf beide | E2E |
 | UI-008 | Ein Benutzer lässt sich aus einer Vorlage anlegen; ein Einladungslink läuft nach der eingestellten Frist ab; Rückgängig stellt eine Änderung wieder her; Tastaturkürzel sind standardmäßig aus | E2E |
 | UI-009 | Logs werden nur bei offener Ansicht übertragen; nach Verlassen der Seite endet logs.follow | Integration |
 | UI-011 | Navigation und Reiter zeigen je Rolle nur erlaubte Einträge laut Design 6.2 und 6.3 | E2E |
-| UI-012 | Bei 390 px Breite sind Befehlsseite, Karten und Konsole ohne horizontales Scrollen bedienbar; Tippflächen sind mindestens 44 px; Verwaltung ist nur lesbar | E2E |
+| UI-012 | Bei 390 px Breite sind Befehlsseite, Karten und Konsole ohne horizontales Scrollen bedienbar; Tippflächen sind mindestens 44 px; Verwaltung ist nur lesbar, ausgenommen Sperren, Entsperren und Sitzungen beenden mit Bestätigungsdialog | E2E |
 | AUD-001 | Befehle, Ablehnungen, Agent-Aktionen, Verwaltungsänderungen und Anmeldungen erzeugen je einen Eintrag mit Ergebnis | Integration |
 | AUD-003 | Einträge älter als die Frist (Standard 90 Tage) sind nach dem nächsten Aufräumlauf entfernt; nur der RCON-Admin kann die Frist ändern | Integration |
 | AUD-004 | Ein Server-Admin sieht nur Einträge seines Scopes; der Versuch, die Frist zu ändern, wird abgelehnt | Integration |

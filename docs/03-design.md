@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.4, Entwurf zur Freigabe; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -59,8 +59,8 @@ Umschlag: `{"type": "…", "id": "…", "ref": "…", "ts": "…", "payload": {}
 | --- | --- | --- |
 | hello | Agent → Panel | Agent-ID, Version, Backend, Fähigkeiten |
 | welcome / reject | Panel → Agent | Annahme oder Ablehnung mit Grund |
-| snapshot | Agent → Panel | Alle freigegebenen Container mit Status, Ports, Volumes |
-| container.event | Agent → Panel | Statusänderung eines Containers |
+| snapshot | Agent → Panel | Alle freigegebenen Container mit Status, Ports, Volumes, started\_at und restart\_count; die beiden Felder sind additiv (neue Fähigkeit), ein Agent ohne sie bleibt gültig, die Karten blenden die Werte dann aus |
+| container.event | Agent → Panel | Statusänderung eines Containers, mit started\_at und restart\_count wie bei snapshot |
 | metrics | Agent → Panel | CPU, RAM, Netz, Disk-I/O aller Container, alle 10 s |
 | container.action | Panel → Agent | start, stop oder restart eines Containers |
 | logs.tail | Panel → Agent | Letzte n Logzeilen eines Containers |
@@ -113,6 +113,7 @@ Das Panel markiert den Agent als widerrufen, löst seine Server von ihm (agent\_
 | Reservierte Pfade | /api (jede Version), /healthz und /metrics werden nie von der Oberfläche beantwortet; /healthz und /metrics werden mit NFR-006 (R2) befüllt |
 | HAProxy | Normales HTTP/1.1, kein HTTP/2 nötig; für den WebSocket genügt ein ausreichendes timeout tunnel |
 | Fehler | Einheitlich als Problem Details nach RFC 9457 |
+| Gleichzeitige Änderungen | Benutzergruppen, Befehlslisten, Server und Servergruppen tragen ein Feld version, /settings eine gemeinsame Version als ETag. Schreiben nennt die gelesene Version in If-Match (Pflicht, sonst 428); die Prüfung ist atomar in der Datenbank in derselben Transaktion wie das Schreiben, bei Abweichung 409 und nichts wird geschrieben. Rolle und Scope werden vor der Version geprüft (3.1). Die Oberfläche zeigt „Changed by someone else – reload“ und sendet den Entwurf nicht |
 | Listen | Cursorbasierte Paginierung für Audit und Verlauf |
 | Externe API | R1 nur für die eigene Oberfläche. Ab R2 dokumentiert mit OpenAPI 3.1 und API-Tokens je Benutzer (Bearer), gleicher Rechteumfang wie der Benutzer, eigene Ablaufzeit, widerrufbar |
 
@@ -120,30 +121,34 @@ Das Panel markiert den Agent als widerrufen, löst seine Server von ihm (agent\_
 
 | Pfad | Methoden | Zweck | Rollen |
 | --- | --- | --- | --- |
-| /auth/login, /auth/logout, /auth/session | POST, POST, GET | Anmeldung, Abmeldung, aktuelle Session | alle |
+| /auth/login, /auth/logout, /auth/session | POST, POST, GET | Anmeldung, Abmeldung, aktuelle Session; Session.ui enthält shortcuts\_enabled, supporters\_enabled und supporters\_allowed für Navigation und Router-Guards, über Rechte entscheidet weiter nur das Backend | alle |
 | /me | GET, PATCH | Eigenes Profil | alle |
 | /me/password | POST | Eigenes Passwort ändern; alle anderen Sessions enden; löscht must\_change\_password | alle |
 | /users/{id}/password-reset | POST | Temporäres Passwort für einen verwalteten Benutzer setzen, nur in dieser Antwort enthalten; setzt must\_change\_password und beendet alle seine Sessions (AUTH-010) | wie /users |
 | /me/avatar | PUT, DELETE | Eigenes Profilbild | alle |
+| /me/favorites | PUT | Eigene Favoriten (Server), gelten auf allen Geräten | alle |
 | /users, /users/{id} | GET, PATCH, DELETE | Benutzerverwaltung im eigenen Scope (3.6); Benutzer entstehen nur per Einladung (D-046) | RCON-Admin, Server-Admin, Moderator (nur Supporter) |
 | /users/{id}/assignments | GET, PUT | Rollen, Gruppen und Server eines Benutzers; Vorlage für Schnelleingabe; PUT ersetzt nur Einträge, über die der Aufrufer verfügt (3.6) | wie /users |
 | /users/{id}/avatar | GET | Profilbild (4.2) | der Benutzer, RCON-Admin, wer ihn verwaltet |
+| /users/{id}/sessions | DELETE | Alle Sessions eines verwalteten Benutzers beenden, seine WebSockets schließen sofort; Audit user.sessions.end, Ereigniscode auth.session.revoked | wie /users |
 | /invites, /invites/{id} | GET, POST, DELETE | Einladungslinks mit Ablaufzeit; ein Moderator lädt Supporter nur bei Supporter-Freigabe ein | wie /users |
-| /invites/redeem | POST | Einladung einlösen mit eigenem Pseudonym und Passwort | ohne Session |
+| /invites/redeem | POST | Einladung einlösen mit eigenem Pseudonym und Passwort. Der Link trägt das Token nur im URL-Fragment (/invite#<token>); die Seite liest es einmal, entfernt es aus der Adresszeile und sendet es nur im Body | ohne Session |
 | /user-groups, /user-groups/{id} | GET, POST, PATCH, DELETE | Benutzer- und Moderatorgruppen mit Mitgliedern und Grants an die ganze Gruppe | RCON-Admin, Server-Admin |
 | /command-lists, /command-lists/{id} | GET, POST, PATCH, DELETE | Befehlslisten und weitergebbare Befehle | RCON-Admin, Server-Admin |
 | /server-groups | GET, POST, PATCH, DELETE | Servergruppen | RCON-Admin; Server-Admin lesend im Scope |
-| /servers, /servers/{id} | GET, POST, PATCH, DELETE | Spieleserver und RCON-Zugangsdaten | RCON-Admin; übrige lesend im Scope |
-| /servers/{id}/commands | POST | Befehl senden; Antwort synchron mit Timeout, zusätzlich als Ereignis an alle Abonnenten | alle im Scope, gefiltert |
+| /servers, /servers/{id} | GET, POST, PATCH, DELETE | Spieleserver und RCON-Zugangsdaten; GET liefert runtime (Containerzustand, Startzeit, Restarts, letzte Messwerte mit Zeit und veraltet, Spielerzahl) als Startwert für Karten und Kopf, Agent-Teile nur für Admins | RCON-Admin; übrige lesend im Scope |
+| /servers/{id}/commands | GET, POST | GET: Pfade, die der Aufrufer senden darf, mit den Katalogparametern des Profils und player\_pattern; für Admins der Katalog des Profils (CMD-015). POST: Befehl senden; Antwort synchron mit Timeout, zusätzlich als Ereignis an alle Abonnenten | alle im Scope, gefiltert |
 | /servers/{id}/history | GET | Befehlsverlauf | im Scope, laut Verlaufssichtbarkeit |
+| /servers/{id}/logs | GET | Letzte Logzeilen über logs.tail, lines Standard 200, höchstens 500; Fremddaten (SEC-006), nur an den Aufrufer, nie in den Live-Ringpuffer. Ohne Agent 503 agent\_unavailable; das Ratenlimit des Agents kommt als 429 rate\_limited an | RCON-Admin; Server-Admin im Scope |
 | /servers/{id}/actions | POST | start, stop, restart über den Agent; ohne Agent nur restart über den stop-Befehl des Profils (AGT-009); jede Aktion im Audit | RCON-Admin, Server-Admin |
 | /profiles | GET | Spielprofile und Befehlskatalog | alle |
 | /agents, /agents/{id} | GET, DELETE | Gekoppelte Agents, Widerruf | RCON-Admin |
+| /agents/{id}/containers | GET | Container eines Agents aus dem Cache des Panels mit Name, Image und Zustand, nur mit dem Label des Agents (AGT-002), als Fremddaten, dazu connected; ist der Agent getrennt, die zuletzt bekannte Liste mit Zustand unknown | RCON-Admin |
 | /agents/tokens | POST | Kopplungs-Token erzeugen, mit fertigem Compose-Ausschnitt | RCON-Admin |
 | /agents/{id}/approve | POST | Wartende Kopplung über Fingerprint freigeben (Weg B) | RCON-Admin |
 | /audit | GET | Audit-Log | RCON-Admin; Server-Admin im Scope |
 | /settings | GET, PATCH | Globale Einstellungen | RCON-Admin |
-| /backups | GET, POST | Sicherungen anzeigen und auslösen | RCON-Admin |
+| /backups | GET, POST | Sicherungen anzeigen und auslösen; folgt nach M5, nicht in 1.0.0 | RCON-Admin |
 | /ws | GET (Upgrade) | WebSocket für Live-Daten | alle |
 
 Felder eines Servers je Rolle: RCON-Admin und Server-Admin sehen Protokoll, Host, Port, Zustand der Zugangsdaten (ok, missing, reenter), Agent, Container und Spielports; Moderatoren und Supporter nur Name, Profil und die Servergruppen in ihrem Scope. Das RCON-Passwort gibt die API nie zurück. Agent und Container sind erst mit den Agents (M3) setzbar.
@@ -153,6 +158,7 @@ Felder eines Servers je Rolle: RCON-Admin und Server-Admin sehen Protokoll, Host
 - Aufbau über /api/v1/ws mit dem Session-Cookie; Origin wird geprüft.
 - Nachrichten vom Browser: subscribe und unsubscribe mit einem Thema, höchstens 4 KiB je Nachricht. Nachrichten vom Panel: subscribed mit Thema als Bestätigung eines Abos, event mit Thema und Daten, error mit Thema und Grund.
 - Themen: servers.overview, server.{id}.status, server.{id}.metrics, server.{id}.console, server.{id}.logs; notifications ab R2. server.{id}.metrics und server.{id}.logs sind Agent-Funktionen: nur RCON-Admin und Server-Admin im Scope, sonst error forbidden. Ein neues Abo erhält zuerst den aktuellen Stand (letzter Messwert mit Zeit und Kennzeichen veraltet bzw. die letzten 50 Logzeilen); Logs werden nur übertragen, solange jemand sie abonniert (UI-009). Bei Agent-Trennung kommen die Messwerte sofort als veraltet mit Status unknown.
+- servers.overview liefert für alle Server im Scope Status, Containerzustand, CPU und RAM mit Kennzeichen veraltet sowie die Spielerzahl; Agent-Daten nur für RCON-Admin und Server-Admin (UI-006). Solange die Übersicht abonniert ist, gelten ihre Server als angesehen (Spielerliste alle 60 s, Gesamtkonzept 4.6).
 - Rechte werden beim Abonnieren geprüft und bei jeder Änderung von Rechten, Servergruppen, Scopes oder Grants sofort neu bewertet; entzogene Abos beendet das Panel mit error revoked, auch wenn die Session bleibt. Endet die Session, schließt das Panel ihre Sockets.
 - Grenzen (SEC-008): höchstens ws.max\_sockets\_per\_session WebSockets je Session (Standard 20) und ws.max\_subscriptions\_per\_socket Abos je WebSocket (Standard 16), beide in 5.6. Ein weiteres Abo erhält error limit (ws.subscribe.denied). Öffnet eine Session einen Socket über der Grenze, schließt das Panel ihren ältesten Socket mit error replaced; der neue bleibt. Ein Browser, der 64 Nachrichten nicht abholt, wird getrennt.
 - Lebenszeichen per Ping alle 30 s; ohne Pong binnen 30 s gilt die Verbindung als getrennt, bei jedem Ping wird die Session geprüft. Nach einer Wiederverbindung holt die Oberfläche den aktuellen Stand per REST und abonniert neu.
@@ -165,6 +171,7 @@ Felder eines Servers je Rolle: RCON-Admin und Server-Admin sehen Protokoll, Host
 - Ein einziges Modul entscheidet (Rechteprüfung). REST, WebSocket-Abos und Agent-Aufträge nutzen dieselbe Prüfung.
 - Rechte werden aus der Datenbank berechnet und im Speicher zwischengespeichert; jede Änderung an Benutzern, Gruppen, Zuweisungen oder Listen verwirft den Zwischenstand sofort.
 - Server außerhalb des Scopes werden wie nicht vorhanden behandelt (404), damit ihre Existenz nicht sichtbar wird.
+- Die Rollenprüfung kommt immer vor dem Objekt-Lookup: Darf eine Rolle die Ressourcenart nicht nutzen, antwortet das Panel mit 403 forbidden; darf sie sie nutzen und liegt das Objekt außerhalb ihres Scopes, mit 404 not\_found. Für eine abgelehnte Rolle sind die Antworten bei existierender und nicht existierender ID gleich.
 
 ### 3.2 Scope je Rolle
 
@@ -185,7 +192,8 @@ Verkleinert sich ein Scope oben, verkleinert er sich sofort für alle darunter. 
 4. Zerlegung in Tokens nach den Regeln des Spielprofils.
 5. RCON-Admin und Server-Admin: weiter mit Schritt 8.
 6. Wrapper: Ist der Befehlsname im Spielprofil als Wrapper markiert, wird er für Moderator und Supporter immer abgelehnt, unabhängig von der Liste.
-7. Liste: Token-Pfad-Abgleich gegen die für diesen Server geltende Liste (3.2). Ein Eintrag erlaubt nur ganze Tokens und alles danach; Vergleich mit Groß-/Kleinschreibung laut Spielprofil, Standard ohne. Argument-Einschränkung folgt in R2.
+7. Liste: Token-Pfad-Abgleich gegen die für diesen Server geltende Liste (3.2). Ein Eintrag erlaubt nur ganze Tokens und alles danach; Vergleich mit Groß-/Kleinschreibung laut Spielprofil, Standard ohne.
+   7b. Katalogparameter (Moderator, Supporter): Befehle mit Katalogeintrag werden gegen die Parameter des Spielprofils geprüft (7.3); maßgeblich ist der längste Katalogpfad, mit dem der Befehl beginnt. Weitere Tokens nach den Parametern sind nur erlaubt, wenn der letzte Parameter vom Typ text ist. Bei Abweichung 422 invalid mit dem Parameternamen im Detail oder „unexpected argument“, Audit-Eintrag cmd.denied. Befehle ohne Katalogeintrag und die freie Eingabe von RCON-Admin und Server-Admin bleiben unverändert. Einschränkungen je Listeneintrag folgen mit CMD-009 (R2).
 8. Ratenlimit (3.4).
 9. Markierung mit Request-ID, Session, Benutzer und Rolle.
 10. Audit-Eintrag cmd.sent vor dem Senden (ID = Request-ID); eine Ablehnung ist ein einzelner Eintrag cmd.denied mit Grund.
@@ -215,13 +223,15 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | 404 | not\_found | Server nicht vorhanden oder nicht im Scope |
 | 403 | not\_in\_list | Befehl nicht in der geltenden Liste |
 | 403 | wrapper\_blocked | Wrapper-Befehl für diese Rolle gesperrt |
-| 422 | invalid | Leerer oder zu langer Befehl nach der Bereinigung |
+| 422 | invalid | Leerer oder zu langer Befehl nach der Bereinigung, oder Katalogparameter verletzt (3.3, Schritt 7b) |
 | 429 | rate\_limited | Ratenlimit erreicht |
 | 503 | server\_unavailable | Keine RCON-Verbindung zum Spieleserver |
 | 504 | timeout | Der Spieleserver hat nicht binnen 10 s geantwortet, oder der Agent nicht rechtzeitig |
 | 503 | agent\_unavailable | Server ohne verbundenen Agent; start und stop ohne Agent |
 | 502 | action\_failed | Agent oder Docker hat die Aktion abgelehnt, z. B. Container ohne Label |
-| 403 | forbidden | Verwaltungsaktion nicht erlaubt, z. B. Rolle auf eigene Stufe heben (3.6) |
+| 403 | forbidden | Rolle darf die Ressourcenart nicht nutzen (3.1) oder Verwaltungsaktion nicht erlaubt, z. B. Rolle auf eigene Stufe heben (3.6) |
+| 409 | conflict | Objekt wurde seit dem Lesen geändert (2.1) |
+| 428 | precondition\_required | If-Match fehlt beim Schreiben eines versionierten Objekts (2.1) |
 | 403 | password\_change\_required | Passwortwechsel erzwungen; erlaubt sind nur /me/password, /auth/logout und /auth/session (AUTH-010) |
 | 503 | busy | Panel ausgelastet, z. B. alle Plätze der Passwortberechnung belegt oder die Warteschlange eines Spieleservers voll (3.8); mit Retry-After |
 
@@ -281,14 +291,15 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | users | pseudonym (eindeutig), real\_name, avatar (BLOB) mit avatar\_type, contacts, must\_change\_password, role, auth\_source, password\_hash, totp\_secret (verschlüsselt, R2), is\_emergency, supporters\_allowed, created\_by, last\_login\_at, disabled\_at, deleted\_at | R1 |
 | sessions | id\_hash, user\_id, created\_at, last\_seen\_at, expires\_at, ip, user\_agent | R1 |
 | invites | token\_hash, created\_by, role, template\_user\_id, expires\_at, used\_at | R1 |
-| user\_groups | name, kind (allgemein oder Moderatorgruppe), owner\_id, command\_list\_id (nur Moderatorgruppe), deleted\_at | R1 |
+| user\_groups | name, kind (allgemein oder Moderatorgruppe), owner\_id, command\_list\_id (nur Moderatorgruppe), version, deleted\_at | R1 |
+| user\_favorites | user\_id, server\_id | R1 |
 | user\_group\_members | user\_group\_id, user\_id | R1 |
-| servers | name, profile\_id, protocol, host, port, secret (verschlüsselt), agent\_id (Fremdschlüssel auf agents, ON DELETE SET NULL), container\_name, deleted\_at. Gespeichert wird der Containername, weil Docker beim Neuanlegen eine neue ID vergibt; agent\_id und container\_name sind nur gemeinsam gesetzt | R1 |
-| server\_groups | name, deleted\_at | R1 |
+| servers | name, profile\_id, protocol, host, port, secret (verschlüsselt), agent\_id (Fremdschlüssel auf agents, ON DELETE SET NULL), container\_name, version, deleted\_at. Gespeichert wird der Containername, weil Docker beim Neuanlegen eine neue ID vergibt; agent\_id und container\_name sind nur gemeinsam gesetzt | R1 |
+| server\_groups | name, version, deleted\_at | R1 |
 | server\_group\_members | server\_group\_id, server\_id | R1 |
 | admin\_scopes | user\_id (Server-Admin), genau eines von server\_group\_id oder server\_id, assigned\_by | R1 |
 | grants | user\_group\_id (Moderatorgruppe, Pflicht), user\_id optional (leer: alle Mitglieder, gesetzt: nur dieses Mitglied), genau eines von server\_id oder server\_group\_id, granted\_by | R1 |
-| command\_lists | name, owner\_id, deleted\_at | R1 |
+| command\_lists | name, owner\_id, version, deleted\_at | R1 |
 | command\_list\_entries | command\_list\_id, path (Token-Pfad), passable | R1 |
 | supporter\_grants | supporter\_id, moderator\_id, server\_id, granted\_by | R1 |
 | agents | name, public\_key, fingerprint, status (wartend, aktiv, widerrufen), version, capabilities, last\_seen\_at, paired\_by, revoked\_at | R1 |
@@ -297,6 +308,7 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | catalog\_commands | profile\_id, path, description, category (R2) | R1 |
 | audit\_log | ts, kind (command, agent, admin, auth), actor\_id, actor\_role, session\_id, server\_id, target\_type, target\_id, action, payload, result (ok, denied, error, timeout), reason\_code | R1 |
 | settings | key, value, scope\_type (global, server, server\_group), scope\_id | R1 |
+| settings\_version | Gemeinsame Version der globalen Einstellungen (2.1) | R1 |
 | command\_templates | server\_id, name, template | R2 |
 | api\_tokens | user\_id, token\_hash, name, expires\_at, revoked\_at | R2 |
 | messages, message\_recipients, message\_comments, message\_votes, polls, poll\_options, poll\_votes | Mitteilungen mit Rückmeldung, Votes und Umfragen | R2 |
@@ -444,6 +456,7 @@ Globale Einstellungen in settings; nur der RCON-Admin liest und ändert sie übe
 | login.max\_failures, login.lockout\_duration | 5, 15 min | Login-Schutz (SEC-004, 3.7) |
 | invite.lifetime | 72 h | Gültigkeit von Einladungen (UI-008) |
 | supporters.enabled | aus | Globale Supporter-Freigabe (ROLE-006); Abschalten beendet die Sessions aller Supporter |
+| ui.shortcuts\_enabled | aus | Tastaturkürzel (6.1); für alle Benutzer lesbar über /auth/session (Feld ui) |
 | audit.retention\_days | 90 | Aufbewahrung des Audit-Logs (AUD-003) |
 | ratelimit.<rolle>.per\_minute, ratelimit.<rolle>.burst | laut 3.4 (z. B. ratelimit.moderator: 20 und 5) | Ratenlimit je Rolle (CMD-019); <rolle> ist rcon\_admin, server\_admin, moderator oder supporter |
 | profiles.poll\_interval | 30 s (1 s bis 1 h) | Abgleich der Profildateien zusätzlich zu Dateiereignissen (CAT-003, 7.1) |
@@ -461,11 +474,15 @@ Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in d
 | --- | --- |
 | Navigation | Seitenleiste links, einklappbar; Einträge je Rolle ausgeblendet, nicht ausgegraut |
 | Serverseite | Kopf mit Status und Aktionen, darunter Reiter; Reiter ohne Recht werden ausgeblendet |
-| Verwaltung | Tabelle mit Inline-Bearbeitung und Mehrfachauswahl; Details im Seitenpanel von rechts, die Liste bleibt sichtbar |
-| Mobil | Karten, Befehlsseite, Konsole und Mitteilungen voll bedienbar; Verwaltung nur lesend; Seitenleiste wird zum Menü, die Zeitleiste der Konsole wird ausgeblendet |
+| Verwaltung | Listen mit Suche; die Benutzerliste zusätzlich mit Filtern, Mehrfachauswahl und Massenaktionen (UI-007); Details im Seitenpanel von rechts, die Liste bleibt sichtbar |
+| Mobil | Karten, Befehlsseite und Konsole voll bedienbar, Mitteilungen ab R2; Verwaltung nur lesend: Suche, Filter, Details und Kopieren sind erlaubt, Schreibendes entfällt. Ausnahme für den Notfall: Sperren, Entsperren und Sitzungen beenden im Seitenpanel eines Benutzers, jeweils mit Bestätigungsdialog. Grenze 768 px, sie betrifft nur die Darstellung; das Backend prüft jede Anfrage wie auf dem Desktop. Seitenleiste wird zum Menü, die Zeitleiste der Konsole wird ausgeblendet |
 | Darstellung | Dunkles Design als Standard, helles Design wählbar; Stilrichtung laut Mockups (6.5, D-037) |
+| Kontrast | Text mindestens 4,5:1; Symbole, Rahmen von Controls, Fokusring und Statuspunkte mindestens 3:1 auf jeder Fläche in beiden Designs (WCAG 1.4.11). Rahmen von Karten und Tabellen sind ausgenommen, sie gliedern nur; eine Karte ist an Titel und Status erkennbar, ihr Fokusring erreicht 3:1 |
+| Fremdtext | Bidi-Steuerzeichen (U+061C, U+200E, U+200F, U+202A bis U+202E, U+2066 bis U+2069) wirken im Freitext nicht: Antworten, Log-Zeilen und angezeigte Befehle zeigen sie als Platzhalter wie ⟨U+202E⟩, jede Zeile steht in einem eigenen bdi-Element. Kopieren liefert den Originaltext ohne Farbcodes; das Backend behält die Zeichen im Freitext (SEC-006) |
+| Restart-Schleife | Mindestens 3 Starts binnen 10 min |
 | Live-Daten | Veraltete Werte werden markiert statt ausgeblendet (Haupttab 4.6) |
-| Bestätigung | Nur bei destruktiven Aktionen; sonst Rückgängig |
+| Bestätigung | Löschen und Widerruf bestätigt ein Dialog. Nicht destruktive Änderungen sendet die Oberfläche erst nach 5 s, bis dahin lassen sie sich rückgängig machen; beim Verlassen der Seite (pagehide) werden offene Änderungen sofort gesendet |
+| Kopieren | Ohne Clipboard-API, also ohne sicheren Kontext wie über http://lan-ip, markiert der Knopf den Text und zeigt den Hinweis „Press Ctrl+C“ |
 | Tastaturkürzel | Standardmäßig aus, nur global durch den RCON-Admin aktivierbar |
 | Auslieferung | Pfade ohne Dateiendung erhalten index.html (no-cache) samt base href aus RCD\_BASE\_PATH, ohne Inline-Skript; Pfade mit Dateiendung sind Assets und antworten bei Fehlen mit 404; versteckte Dateien werden nicht ausgeliefert; nur GET und HEAD; ohne gebaute Oberfläche 503 |
 
@@ -482,7 +499,8 @@ Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in d
 | Verwaltung: Befehlslisten | ja | eigene | – | – | R1 |
 | Verwaltung: Server, Servergruppen | ja | lesend im Scope | – | – | R1 |
 | Verwaltung: Agents | ja | – | – | – | R1 |
-| Verwaltung: Einstellungen, Backups | ja | – | – | – | R1 |
+| Verwaltung: Einstellungen | ja | – | – | – | R1 |
+| Verwaltung: Backups | ja | – | – | – | nach M5 |
 | Audit | ja | Scope | – | – | R1 |
 | Eigenes Profil | ja | ja | ja | ja | R1 |
 
@@ -496,7 +514,7 @@ Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in d
 | Logs | ja | ja | – | – | Container-Logs über den Agent |
 | Verlauf | ja | ja | eigene oder alle | eigene oder alle | Befehlsverlauf laut Verlaufssichtbarkeit (R2), in R1 nur eigene Befehle für Moderator und Supporter |
 
-Aktionen im Kopf (Start, Stop, Restart) erscheinen nur für RCON-Admin und Server-Admin und nur, wenn der Server einem Agent zugeordnet ist.
+Aktionen im Kopf (Start, Stop, Restart) erscheinen nur für RCON-Admin und Server-Admin und nur, wenn der Server einem Agent zugeordnet ist. Ohne Agent zeigt der Kopf für diese Rollen im Scope nur „Neustart über RCON (stop-Befehl)“. Der Bestätigungsdialog sagt: Der Server wird über den stop-Befehl beendet und startet nur neu, wenn ein Neustart-Mechanismus greift (z. B. Docker restart: always oder unless-stopped; on-failure greift bei sauberem Beenden nicht). Start und Stopp gibt es nur mit Agent.
 
 ### 6.4 Aufbau der Serverseite
 
@@ -506,7 +524,7 @@ Moderator und Supporter sehen statt der Konsole den Reiter Befehle; Seitenleiste
 
 ### 6.5 Mockups
 
-Die Mockups liegen auf einer eigenen Design-Fläche: [RCONductor Mockups](https://claude.ai/artifact/1JQ4kLn82gyk2qba9zUqAF). Alle Werte darin sind Beispieldaten.
+Die Mockups liegen als Bilder in docs/mockups/. Alle Werte darin sind Beispieldaten.
 
 | Artboard | Rolle | Zeigt |
 | --- | --- | --- |
@@ -523,7 +541,7 @@ Stil: dunkles Design mit Statusrand an den Karten, Monospace für Server- und Be
 
 &#91;embedded content: Handy-Ansicht · Befehlsseite Moderator und Konsole Admin\]
 
-Die Seitenleiste wird zum Menü, Start, Stopp und Neustart wandern ins Menü im Kopf. Die Befehlskarten stehen untereinander, die Spieler online liegen als Bottom-Sheet am unteren Rand. Die Verwaltung bleibt mobil nur lesend (UI-012).
+Die Seitenleiste wird zum Menü, Start, Stopp und Neustart wandern ins Menü im Kopf. Die Befehlskarten stehen untereinander, die Spieler online liegen als Bottom-Sheet am unteren Rand. Die Verwaltung bleibt mobil nur lesend, ausgenommen Sperren, Entsperren und Sitzungen beenden mit Bestätigungsdialog (UI-012, 6.1).
 
 ## 7. Spielprofile
 
@@ -548,6 +566,7 @@ Die Seitenleiste wird zum Menü, Start, Stopp und Neustart wandern ins Menü im 
 | syntax.strip\_prefix | nein | Präfix, das vor dem Abgleich entfernt wird, Standard / | R1 |
 | syntax.max\_length | nein | Höchstlänge eines Befehls nach der Bereinigung | R1 |
 | syntax.wrappers | nein | Befehle, die für Moderator und Supporter immer gesperrt sind (D-026) | R1 |
+| syntax.player\_pattern | nein | RE2-Muster für einen ganzen Spielernamen (7.3), z. B. Minecraft Java ^[A-Za-z0-9\_]{1,16}$ | R1 |
 | players.command, players.pattern, players.separator | nein | Befehl und RE2-Muster für die Spielerliste | R1 |
 | stop.command | nein | Befehl für den Neustart ohne Agent (AGT-009) | R1 |
 | catalog | nein | Liste der Katalogbefehle (7.3) | R1 |
@@ -560,10 +579,12 @@ Jeder Eintrag hat path (Token-Pfad wie in den Befehlslisten), description und op
 
 | Parametertyp | Feld auf der Befehlsseite | Prüfung im Backend |
 | --- | --- | --- |
-| player | Auswahl aus der Spielerliste, freie Eingabe möglich | keine Leerzeichen |
+| player | Auswahl aus der Spielerliste, freie Eingabe möglich | ein Spielername passend zu syntax.player\_pattern; ohne Muster mindestens kein führendes @ (Selektoren wie @a), keine Anführungszeichen und Steuerzeichen |
 | text | Textfeld, nur als letzter Parameter | Rest der Zeile |
-| choice | Umschalter mit festen Werten | nur die genannten Werte |
+| choice | Umschalter mit festen Werten | nur die genannten Werte, Groß-/Kleinschreibung laut Profil |
 | number | Zahlenfeld mit optionalem min und max | ganze Zahl im Bereich |
+
+Die Prüfung gilt in R1 für Moderator und Supporter (3.3, Schritt 7b), Pflichtparameter müssen vorhanden sein; die Befehlsseite prüft nach denselben Regeln. Einschränkungen je Listeneintrag folgen mit CMD-009 (R2).
 
 Befehle einer Befehlsliste ohne Katalogeintrag erscheinen auf der Befehlsseite mit einem freien Feld für die restlichen Argumente. Eigene Befehlsdefinitionen (CMD-018) sollen später dieselben Parametertypen verwenden.
 
@@ -656,7 +677,7 @@ Die Zahlenwerte im Beispiel (z. B. max\_length) werden beim ersten Profil gegen 
 | RCON | rcon.connected, rcon.auth\_failed, rcon.disconnected, rcon.reconnect |
 | Profile | profile.imported, profile.rejected (reason), profile.overridden |
 | Agent im Panel | agent.connected, agent.rejected (reason: version, revoked, unknown, pending, invalid, pin\_mismatch), agent.paired, agent.revoked, agent.limit (reason: connection\_rate, message\_size, pending\_pairings), agent.disconnected (reason: closed, timeout, revoked, too\_large, protocol) |
-| Agent selbst | agent.handshake, agent.forbidden (Container ohne Label oder Operation nicht erlaubt), agent.unsupported, docker.action, logs.follow.start, logs.follow.stop |
+| Agent selbst | agent.handshake, agent.forbidden (Container ohne Label oder Operation nicht erlaubt), agent.unsupported, docker.action, logs.follow.start, logs.follow.stop, logs.tail |
 | Live-Daten | ws.subscribe, ws.subscribe.denied, cache.stale |
 
 ### 8.4 Ablauf einer Abnahme über MCP

@@ -1,6 +1,6 @@
 # Arbeitspakete R1
 
-Dokumentversion 2.3, freigegeben; Änderungen gegenüber 2.2 siehe Gesamtkonzept, Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
+Dokumentversion 2.4, Entwurf zur Freigabe; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
 
 ## 1. Ablauf
 
@@ -45,4 +45,5 @@ Einige Anforderungen werden in einem Meilenstein umgesetzt, ihr Abnahmekriterium
 - Die OpenAPI-Datei wird vor der Umsetzung eines Endpunkts erweitert; Backend und Oberfläche bauen gegen denselben Stand.
 - M4 beginnt mit Attrappen der API (aus der OpenAPI-Datei) und schaltet auf echte Daten um, sobald M2 bzw. M3 sie liefern.
 - Nach M5 wird das Bedrohungsmodell gegen den tatsächlichen Stand geprüft.
+- /backups (API und Seite) folgt nach M5, nicht in 1.0.0 (Issue #101); NFR-008 ist davon nicht betroffen.
 - Jedes neue prüfrelevante Verhalten bekommt im selben Issue seinen Ereigniscode (Design 8.3); ohne Code gilt das Abnahmekriterium aus Abschnitt 9 des Tabs Abnahme R1 als nicht erfüllt.
