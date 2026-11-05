@@ -15,6 +15,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
@@ -108,9 +109,7 @@ func TestStaleKeptAndMarked(t *testing.T) {
 	if err != nil || !p.Stale || len(p.Names) != 2 || p.UpdatedAt.IsZero() {
 		t.Errorf("after loss: %+v %v", p, err)
 	}
-	if !strings.Contains(logs.String(), `"event":"cache.stale"`) {
-		t.Error("cache.stale missing")
-	}
+	logtest.Wait(t, logs, `"event":"cache.stale"`)
 	ex.fail.Store(false)
 	if p, _ := c.Players(ctx, "s1"); p.Stale {
 		t.Error("still stale after a successful fetch")

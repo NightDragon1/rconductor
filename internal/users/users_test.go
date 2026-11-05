@@ -7,11 +7,11 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
@@ -152,7 +152,7 @@ func TestRightsFlowDownwards(t *testing.T) {
 		t.Errorf("server admin deletes a server admin: %v", err)
 	}
 	n := len(attempts) + 1
-	if got := strings.Count(f.logs.String(), `"event":"perm.denied"`); got != n {
+	if got := logtest.WaitCount(t, f.logs, `"event":"perm.denied"`, n); got != n {
 		t.Errorf("perm.denied = %d, want %d", got, n)
 	}
 	if got := f.count(`SELECT count(*) FROM audit_log WHERE kind = 'admin' AND result = 'denied'`); got != n {

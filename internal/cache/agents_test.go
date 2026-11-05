@@ -4,13 +4,13 @@ package cache
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 )
 
 func newAgentData(t *testing.T) (*AgentData, *lockedLog, *time.Time) {
@@ -56,9 +56,7 @@ func TestAgentDataAge(t *testing.T) {
 	if c, _ := d.Container("a1", "mc"); c.State != StateUnknown {
 		t.Errorf("state = %s, want unknown", c.State)
 	}
-	if !strings.Contains(logs.String(), `"event":"cache.stale"`) || !strings.Contains(logs.String(), `"reason":"agent_disconnected"`) {
-		t.Error("cache.stale missing")
-	}
+	logtest.Wait(t, logs, `"event":"cache.stale"`, `"reason":"agent_disconnected"`)
 	if len(changes) < 4 {
 		t.Errorf("changes = %v", changes)
 	}

@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"testing/fstest"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 )
 
 // syncBuffer is a log sink that is safe for concurrent writers.
@@ -88,9 +88,7 @@ func TestFreshStart(t *testing.T) {
 		t.Error("BeforeMigrate ran for an empty first installation")
 	}
 	for _, code := range []logging.Code{logging.DBMigrateStart, logging.DBMigrateDone} {
-		if !strings.Contains(logs.String(), `"event":"`+string(code)+`"`) {
-			t.Errorf("missing event %s in logs:\n%s", code, logs.String())
-		}
+		logtest.Wait(t, &logs, `"event":"`+string(code)+`"`)
 	}
 	if _, err := s.DB.ExecContext(context.Background(), `SELECT id, key, value, scope_type, scope_id, updated_at FROM settings`); err != nil {
 		t.Errorf("settings table not usable: %v", err)
@@ -163,13 +161,7 @@ func TestParallelStartWaits(t *testing.T) {
 		done <- res
 	}()
 
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(logs.String(), string(logging.DBMigrateLockWt)) {
-		if time.Now().After(deadline) {
-			t.Fatal("second start did not report db.migrate.lock_wait")
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
+	logtest.Wait(t, &logs, string(logging.DBMigrateLockWt))
 	select {
 	case err := <-errs:
 		t.Fatalf("second start finished while the lock was held: %v", err)

@@ -18,6 +18,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 )
 
 type wsMsg struct {
@@ -138,13 +139,7 @@ func read(ctx context.Context, c *websocket.Conn) (wsMsg, error) {
 // subscribed waits until the hub has the subscription.
 func (w *wsFixture) subscribed(t *testing.T, topic string, n int) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for strings.Count(w.logs.String(), `"topic":"`+topic+`"`) < n {
-		if time.Now().After(deadline) {
-			t.Fatalf("subscription to %s not registered", topic)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	logtest.WaitCount(t, w.logs, `"topic":"`+topic+`"`, n)
 }
 
 func TestWebSocketEvents(t *testing.T) {
@@ -157,9 +152,7 @@ func TestWebSocketEvents(t *testing.T) {
 	topic := "server." + w.server + ".console"
 	send(t, c, "subscribe", topic)
 	w.subscribed(t, topic, 1)
-	if !strings.Contains(w.logs.String(), `"event":"ws.subscribe"`) {
-		t.Error("ws.subscribe missing")
-	}
+	logtest.Wait(t, w.logs, `"event":"ws.subscribe"`)
 	w.hub.PublishConsole(w.server, commands.Entry{RequestID: "r1", UserID: w.userID, Command: "list", Response: "<b>x</b>", Result: "ok"})
 	m, err := next(t, c, 5*time.Second)
 	if err != nil || m.Type != "event" || m.Topic != topic || !strings.Contains(string(m.Data), `"command":"list"`) {
@@ -200,9 +193,7 @@ func TestWebSocketScopeAndOrigin(t *testing.T) {
 	if m, err := next(t, c, 5*time.Second); err != nil || m.Type != "error" || m.Reason != "not_found" {
 		t.Errorf("out of scope: %+v %v", m, err)
 	}
-	if !strings.Contains(w.logs.String(), `"event":"ws.subscribe.denied"`) {
-		t.Error("ws.subscribe.denied missing")
-	}
+	logtest.Wait(t, w.logs, `"event":"ws.subscribe.denied"`)
 }
 
 // TestModeratorSeesOwnCommandsOnly: in R1 moderators get only their own
@@ -330,9 +321,7 @@ func TestSubscriptionLimitPerSocket(t *testing.T) {
 	if m, err := next(t, c, 5*time.Second); err != nil || m.Type != "error" || m.Reason != "limit" || m.Topic != console {
 		t.Errorf("third subscription on one socket: %+v %v", m, err)
 	}
-	if !strings.Contains(w.logs.String(), `"reason":"limit"`) {
-		t.Error("ws.subscribe.denied with limit missing")
-	}
+	logtest.Wait(t, w.logs, `"reason":"limit"`)
 	c2, _, err := w.dial(t, admin, w.origin())
 	if err != nil {
 		t.Fatal(err)

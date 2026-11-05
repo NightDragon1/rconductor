@@ -21,6 +21,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store"
 )
 
@@ -168,9 +169,7 @@ func TestPanelFailsOnBadKeyFile(t *testing.T) {
 	if err == nil {
 		t.Fatal("panel started without its configured master key")
 	}
-	if !strings.Contains(out.String(), "panel stopped with error") {
-		t.Errorf("error not logged:\n%s", out.String())
-	}
+	logtest.Wait(t, &out, "panel stopped with error")
 }
 
 // TestInitialPasswordLifecycle covers AUTH-003 and AUTH-007 end to end: the
@@ -253,9 +252,7 @@ func TestInitialPasswordLifecycle(t *testing.T) {
 		t.Error("a password appears in the event log")
 	}
 	for _, ev := range []string{"auth.login.ok", "auth.login.failed"} {
-		if !strings.Contains(out.String(), `"event":"`+ev+`"`) {
-			t.Errorf("%s missing", ev)
-		}
+		logtest.Wait(t, &out, `"event":"`+ev+`"`)
 	}
 }
 

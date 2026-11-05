@@ -21,6 +21,8 @@ import (
 	"github.com/moby/moby/api/types/container"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/NightDragon1/rconductor/internal/logtest"
 )
 
 // The Java runtime the pinned server JAR asks for (scripts/minecraft-server.sh).
@@ -209,7 +211,7 @@ func TestMinecraft(t *testing.T) {
 	if len(wrong) > 0 {
 		t.Errorf("answers at the wrong sender or missing: %v", wrong)
 	}
-	if n := len(s.eventsOf("rcon.connected")); n != 1 {
+	if n := logtest.WaitCount(t, s.logs, `"event":"rcon.connected"`, 1); n != 1 {
 		t.Errorf("rcon.connected %d times, want 1", n)
 	}
 }

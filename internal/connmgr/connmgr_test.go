@@ -7,13 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/rcon"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 	"github.com/NightDragon1/rconductor/internal/rcon/source"
@@ -126,16 +126,6 @@ func (f *fixture) waitStatus(t *testing.T, want Status) time.Duration {
 	}
 }
 
-// waitLog waits for a log line; the status changes just before it is written.
-func (f *fixture) waitLog(t *testing.T, want string) {
-	t.Helper()
-	for start := time.Now(); !strings.Contains(f.logs.String(), want); time.Sleep(10 * time.Millisecond) {
-		if time.Since(start) > 10*time.Second {
-			t.Fatalf("%s missing within 10 s:\n%s", want, f.logs.String())
-		}
-	}
-}
-
 // TestOneConnectionManyUsers covers PROT-002: three users send 20
 // commands each at the same time; there is exactly one connection and
 // every answer reaches its sender.
@@ -171,7 +161,7 @@ func TestOneConnectionManyUsers(t *testing.T) {
 	if n := f.srv.Commands(); n != 60 {
 		t.Errorf("commands at the server = %d, want 60", n)
 	}
-	if c := strings.Count(f.logs.String(), `"event":"rcon.connected"`); c != 1 {
+	if c := logtest.WaitCount(t, f.logs, `"event":"rcon.connected"`, 1); c != 1 {
 		t.Errorf("rcon.connected %d times", c)
 	}
 }
@@ -198,13 +188,8 @@ func TestReconnectAfterRestart(t *testing.T) {
 	if got, err := f.m.Execute(context.Background(), "s1", "list"); err != nil || got != "list" {
 		t.Errorf("after reconnect: %q %v", got, err)
 	}
-	logs := f.logs.String()
-	for _, ev := range []string{"rcon.disconnected", "rcon.reconnect"} {
-		if !strings.Contains(logs, `"event":"`+ev+`"`) {
-			t.Errorf("%s missing", ev)
-		}
-	}
-	if c := strings.Count(logs, `"event":"rcon.connected"`); c != 2 {
+	logtest.Wait(t, f.logs, `"event":"rcon.disconnected"`, `"event":"rcon.reconnect"`)
+	if c := logtest.WaitCount(t, f.logs, `"event":"rcon.connected"`, 2); c != 2 {
 		t.Errorf("rcon.connected %d times, want 2", c)
 	}
 }
@@ -214,9 +199,7 @@ func TestReconnectAfterRestart(t *testing.T) {
 func TestStatusChanges(t *testing.T) {
 	f := newFixture(t, "wrong", nil)
 	f.waitStatus(t, AuthFailed)
-	if !strings.Contains(f.logs.String(), `"event":"rcon.auth_failed"`) {
-		t.Error("rcon.auth_failed missing")
-	}
+	logtest.Wait(t, f.logs, `"event":"rcon.auth_failed"`)
 	if _, err := f.m.Execute(context.Background(), "s1", "list"); !errors.Is(err, ErrUnavailable) {
 		t.Errorf("command without connection: %v", err)
 	}
@@ -281,7 +264,7 @@ func TestHalfOpenConnection(t *testing.T) {
 	if d := f.waitStatus(t, Offline); d > 2*time.Second {
 		t.Errorf("offline after %v", d)
 	}
-	f.waitLog(t, `"event":"rcon.disconnected","reason":"no_answer"`)
+	logtest.Wait(t, f.logs, `"event":"rcon.disconnected","reason":"no_answer"`)
 	f.srv.Thaw()
 	f.waitStatus(t, Connected)
 	if got, err := f.m.Execute(context.Background(), "s1", "after"); err != nil || got != "after" {

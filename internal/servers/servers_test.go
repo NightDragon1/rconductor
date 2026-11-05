@@ -11,13 +11,13 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/rcon"
@@ -173,9 +173,7 @@ func TestScope(t *testing.T) {
 	if _, err := f.svc.Get(ctx, f.as("sa"), c.ID); !errors.Is(err, users.ErrNotFound) {
 		t.Errorf("server outside the scope: %v", err)
 	}
-	if !strings.Contains(f.logs.String(), `"event":"perm.denied"`) {
-		t.Error("perm.denied missing")
-	}
+	logtest.Wait(t, f.logs, `"event":"perm.denied"`)
 	gs, _ := f.svc.Groups(ctx, f.as("sa"))
 	if len(gs) != 1 || gs[0].Name != "mc" {
 		t.Errorf("server admin sees groups %+v", gs)
@@ -225,9 +223,7 @@ func TestOtherMasterKey(t *testing.T) {
 	if err := other.CheckCredentials(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(f.logs.String(), "enter them again") {
-		t.Error("no hint at start")
-	}
+	logtest.Wait(t, f.logs, "enter them again")
 	got, _ := other.Get(ctx, f.as("admin"), s.ID)
 	if got.Credentials != CredentialsReenter {
 		t.Errorf("credentials state = %s", got.Credentials)

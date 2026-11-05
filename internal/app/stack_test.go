@@ -19,6 +19,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 )
 
@@ -300,9 +301,11 @@ func TestThroughTheStack(t *testing.T) {
 	if n := game.Connections(); n != 1 {
 		t.Errorf("RCON connections = %d, want 1", n)
 	}
-	if n := len(s.eventsOf("rcon.connected")); n != 1 {
+	if n := logtest.WaitCount(t, s.logs, `"event":"rcon.connected"`, 1); n != 1 {
 		t.Errorf("rcon.connected %d times, want 1", n)
 	}
+	logtest.WaitCount(t, s.logs, `"event":"cmd.sent"`, 62)
+	logtest.WaitCount(t, s.logs, `"event":"cmd.response"`, 62)
 	responses := map[any]bool{}
 	for _, e := range s.eventsOf("cmd.response") {
 		responses[e["request_id"]] = true
@@ -319,8 +322,9 @@ func TestThroughTheStack(t *testing.T) {
 
 	// A game restart: the panel reconnects by itself.
 	game.DropConnections()
+	logtest.Wait(t, s.logs, `"event":"rcon.reconnect"`)
 	deadline := time.Now().Add(15 * time.Second)
-	for len(s.eventsOf("rcon.reconnect")) == 0 || game.Connections() < 2 {
+	for game.Connections() < 2 {
 		if time.Now().After(deadline) {
 			t.Fatalf("no reconnect after the restart, %d connections", game.Connections())
 		}

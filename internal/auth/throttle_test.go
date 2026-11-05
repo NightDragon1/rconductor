@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
@@ -58,7 +59,7 @@ func TestLockoutPerAccountAndClient(t *testing.T) {
 			t.Fatalf("attempt %d: %v", i+1, err)
 		}
 	}
-	if n := strings.Count(f.logs.String(), `"event":"auth.lockout"`); n != 1 {
+	if n := logtest.WaitCount(t, f.logs, `"event":"auth.lockout"`, 1); n != 1 {
 		t.Errorf("auth.lockout = %d, want 1", n)
 	}
 	if f.count(t, `SELECT count(*) FROM audit_log WHERE action = 'lockout' AND target_id = ? AND reason_code = 'rate_limited'`, id) != 1 {
