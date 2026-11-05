@@ -28,7 +28,7 @@ Fertig in #117, lokal grün (161 E2E bestanden, 0 fehlgeschlagen):
 - CSP-Prüfung in jedem E2E-Test, Header-Test für alle Antwortarten des Web-Ports.
 - Werkzeugleisten brechen auf dem Handy um; `mobile`-Prüfung auf Controls außerhalb des Fensters, auch bei 320 px.
 - E2E-Filter um `cmd/`, `migrations/`, `profiles/` erweitert.
-- Screenshots m4-10 für das Handy neu aufgenommen (17 Bilder gesamt).
+- Screenshots m4-10 für das Handy neu aufgenommen (18 Bilder gesamt).
 
 Fehlt:
 
@@ -54,8 +54,12 @@ Vorarbeit zu Schritt 11 (E2E-Suite, ursprünglich mit Kontrastprüfung durch axe
 - Der Push dieses Übergabe-Commits startet die CI für #117 neu; ein älterer Lauf kann dadurch abgebrochen sein. Es zählt der neueste Stand.
 - Nächtlicher Lauf (Stufe 3): bisher nicht beobachtet, nur als manueller Lauf geprüft.
 
-## Offene Fragen
+## Entschieden
 
-- `GO-2026-5932` in `golang.org/x/crypto` 0.58.0: Unser Code ruft die Stelle nicht auf, der Fix existiert nur als Pseudo-Version. Warten auf ein Release oder Pseudo-Version nehmen? Vorschlag: warten.
-- #113 und #114 (Renovate, andere Pakete) sind offen. Nach grüner CI mergen, wie üblich?
+- `GO-2026-5932` in `golang.org/x/crypto` 0.58.0: auf das reguläre Release warten.
+- Renovate: Patch und Minor nach grüner CI selbst mergen, Major vorher melden (CLAUDE.md). #113 und #114 gemergt.
+
+## Offen
+
 - Kandidaten 14 bis 29 warten auf die Revision 2.4; Issue #101 (/backups) folgt nach M5.
+- Screenshot-OK zu m4-10 steht aus.
