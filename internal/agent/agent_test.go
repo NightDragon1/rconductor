@@ -188,9 +188,7 @@ func TestPairAndReconnect(t *testing.T) {
 	waitFor(t, "pairing", func() bool { return r.a.State().AgentID != "" })
 	id := r.a.State().AgentID
 	waitFor(t, "session", func() bool { return p.hub.Connected(id) })
-	if !strings.Contains(r.logs.String(), `"event":"agent.handshake"`) {
-		t.Error("agent.handshake missing")
-	}
+	waitFor(t, "agent.handshake", func() bool { return strings.Contains(r.logs.String(), `"event":"agent.handshake"`) })
 	st, _ := loadState(dir)
 	if st.AgentID != id || st.PanelFingerprint != p.hub.Fingerprint() || st.TokenHash == "" {
 		t.Errorf("state = %+v", st)
