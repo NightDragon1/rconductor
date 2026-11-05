@@ -15,6 +15,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/ops/backup"
 	"github.com/NightDragon1/rconductor/internal/store"
 )
@@ -34,9 +35,7 @@ func TestCreateThenLoad(t *testing.T) {
 	if len(k1.Bytes()) != Size || k1.Path != filepath.Join(dir, FileName) {
 		t.Fatalf("key = %d bytes at %s", len(k1.Bytes()), k1.Path)
 	}
-	if !strings.Contains(logs.String(), `"event":"key.created"`) {
-		t.Errorf("missing key.created:\n%s", logs.String())
-	}
+	logtest.Wait(t, &logs, `"event":"key.created"`)
 
 	k2, err := LoadOrCreate(newLogger(&logs), Options{SecretsDir: dir})
 	if err != nil {
@@ -45,9 +44,7 @@ func TestCreateThenLoad(t *testing.T) {
 	if !bytes.Equal(k1.Bytes(), k2.Bytes()) {
 		t.Error("reloaded key differs")
 	}
-	if !strings.Contains(logs.String(), `"event":"key.loaded"`) {
-		t.Errorf("missing key.loaded:\n%s", logs.String())
-	}
+	logtest.Wait(t, &logs, `"event":"key.loaded"`)
 
 	assertNoKey(t, logs.Bytes(), k1.Bytes(), "log")
 	if s := fmt.Sprintf("%v %s", k1, k1); strings.Contains(s, base64.StdEncoding.EncodeToString(k1.Bytes())) {

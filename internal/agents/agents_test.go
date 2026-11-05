@@ -23,6 +23,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -223,9 +224,7 @@ func TestPairingByToken(t *testing.T) {
 	if e := f.hello(newAgent(t), pt.Fingerprint, agentproto.Hello{AgentID: w.AgentID}); e.Type != agentproto.TypeReject {
 		t.Errorf("stolen ID: %+v", e)
 	}
-	if !strings.Contains(f.logs.String(), `"reason":"pin_mismatch"`) || !strings.Contains(f.logs.String(), `"event":"agent.paired"`) {
-		t.Errorf("events missing:\n%s", f.logs.String())
-	}
+	logtest.Wait(t, f.logs, `"reason":"pin_mismatch"`, `"event":"agent.paired"`)
 	for _, line := range f.auditActions() {
 		if strings.Contains(line, pt.Secret) {
 			t.Errorf("token secret in the audit: %s", line)
@@ -306,9 +305,7 @@ func TestRevoke(t *testing.T) {
 		t.Errorf("agent = %+v", got)
 	}
 	for _, want := range []string{`"event":"agent.revoked"`, `"reason":"revoked"`} {
-		if !strings.Contains(f.logs.String(), want) {
-			t.Errorf("%s missing", want)
-		}
+		logtest.Wait(t, f.logs, want)
 	}
 	if !strings.Contains(strings.Join(f.auditActions(), "\n"), "agent.revoke:ok") {
 		t.Error("revocation not audited")
@@ -344,9 +341,7 @@ func TestPairingByFingerprint(t *testing.T) {
 	if n, _ := f.st.Queries.CountPendingAgents(ctx); n != PendingMax {
 		t.Errorf("%d pending, want %d", n, PendingMax)
 	}
-	if !strings.Contains(f.logs.String(), `"reason":"pending_pairings"`) {
-		t.Error("agent.limit pending_pairings missing")
-	}
+	logtest.Wait(t, f.logs, `"reason":"pending_pairings"`)
 
 	if _, err := f.svc.Approve(ctx, f.sa, list[0].ID); !errors.Is(err, users.ErrForbidden) {
 		t.Fatalf("server admin approves: %v", err)

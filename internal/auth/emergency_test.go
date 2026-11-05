@@ -14,6 +14,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store"
 )
 
@@ -67,11 +68,11 @@ func TestEmergencyAdminOnce(t *testing.T) {
 		t.Fatalf("no initial password printed:\n%s", console.String())
 	}
 	pw := m[1]
+	if n := logtest.WaitCount(t, f.logs, `"event":"auth.initial_password.issued"`, 1); n != 1 {
+		t.Errorf("auth.initial_password.issued %d times, want 1:\n%s", n, f.logs.String())
+	}
 	if strings.Contains(f.logs.String(), pw) {
 		t.Error("initial password appears in the event log")
-	}
-	if n := strings.Count(f.logs.String(), `"event":"auth.initial_password.issued"`); n != 1 {
-		t.Errorf("auth.initial_password.issued %d times, want 1:\n%s", n, f.logs.String())
 	}
 
 	var role, hash string
@@ -98,7 +99,7 @@ func TestEmergencyAdminOnce(t *testing.T) {
 	if err := EnsureEmergencyAdmin(ctx, f.st, f.hasher, EmergencyOptions{Enabled: true}, f.log().Module("auth"), &console); err != nil {
 		t.Fatal(err)
 	}
-	if console.Len() != 0 || strings.Count(f.logs.String(), "auth.initial_password.issued") != 1 {
+	if n := logtest.WaitCount(t, f.logs, "auth.initial_password.issued", 1); console.Len() != 0 || n != 1 {
 		t.Errorf("second start issued a password again:\n%s", console.String())
 	}
 }
@@ -185,12 +186,8 @@ func TestEmergencyAdminReset(t *testing.T) {
 	if sessions != 0 || audited != 1 {
 		t.Errorf("sessions=%d audit=%d", sessions, audited)
 	}
+	logtest.Wait(t, f.logs, []string{`"event":"auth.emergency_admin.reset"`, `"event":"auth.session.revoked"`, "remove RCD_EMERGENCY_ADMIN_RESET"}...)
 	logs := f.logs.String()
-	for _, want := range []string{`"event":"auth.emergency_admin.reset"`, `"event":"auth.session.revoked"`, "remove RCD_EMERGENCY_ADMIN_RESET"} {
-		if !strings.Contains(logs, want) {
-			t.Errorf("log lacks %s", want)
-		}
-	}
 	if strings.Contains(logs, newPw) || strings.Contains(logs, oldPw) {
 		t.Error("password in the event log")
 	}

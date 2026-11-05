@@ -6,11 +6,11 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/auth/password"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/perm"
 )
 
@@ -52,9 +52,7 @@ func TestInviteAndRedeem(t *testing.T) {
 	if u.Pseudonym != "Nova" || u.Role != perm.Moderator {
 		t.Errorf("new user = %+v", u)
 	}
-	if !strings.Contains(f.logs.String(), `"event":"auth.invite.used"`) {
-		t.Error("auth.invite.used missing")
-	}
+	logtest.Wait(t, f.logs, `"event":"auth.invite.used"`)
 	// The template's groups of sa were copied, sa2's group was not.
 	a, err := f.svc.Assignments(ctx, f.as("sa"), u.ID)
 	if err != nil {

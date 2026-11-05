@@ -18,6 +18,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/rcon"
@@ -220,9 +221,7 @@ func TestWrapperRefused(t *testing.T) {
 	if _, err := w.send("m", "execute as @a run say hi"); reason(err) != ReasonWrapperBlocked {
 		t.Errorf("wrapper: %v", err)
 	}
-	if !strings.Contains(w.logs.String(), `"reason":"wrapper_blocked"`) {
-		t.Error("cmd.denied with wrapper_blocked missing")
-	}
+	logtest.Wait(t, w.logs, `"reason":"wrapper_blocked"`)
 	if _, err := w.send("admin", "execute as @a run say hi"); err != nil {
 		t.Errorf("admin wrapper: %v", err)
 	}
@@ -303,16 +302,8 @@ func TestMarking(t *testing.T) {
 		t.Errorf("cmd.result = %s %s %s %s", resActor, resSession, resResult, resPayload)
 	}
 	for _, ev := range []string{"cmd.accepted", "cmd.sent", "cmd.response"} {
-		found := false
-		for line := range strings.Lines(w.logs.String()) {
-			if strings.Contains(line, `"event":"`+ev+`"`) && strings.Contains(line, `"request_id":"`+req.RequestID+`"`) &&
-				strings.Contains(line, `"session":"abcd1234"`) && strings.Contains(line, `"user":"m"`) && strings.Contains(line, `"role":"moderator"`) {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("%s without request ID, session, user and role", ev)
-		}
+		logtest.WaitLine(t, w.logs, `"event":"`+ev+`"`, `"request_id":"`+req.RequestID+`"`,
+			`"session":"abcd1234"`, `"user":"m"`, `"role":"moderator"`)
 	}
 }
 
