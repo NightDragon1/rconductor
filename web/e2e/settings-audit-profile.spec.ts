@@ -100,7 +100,7 @@ test('own profile: real name, contacts, picture; a wrong password is refused (AU
   );
   const picture = page.getByRole('region', { name: 'Profile picture' });
   await picture
-    .getByLabel('Choose a picture (PNG, JPEG or WebP)')
+    .getByLabel('Choose a picture (PNG or JPEG)')
     .setInputFiles({ name: 'me.png', mimeType: 'image/png', buffer: png });
   await expect(picture.getByRole('status')).toHaveText('Picture saved.');
   await expect(picture.getByRole('img', { name: 'Your profile picture' })).toBeVisible();

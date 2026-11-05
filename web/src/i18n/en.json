@@ -686,10 +686,10 @@
     "addContact": "+ Contact",
     "picture": "Profile picture",
     "pictureAlt": "Your profile picture",
-    "choosePicture": "Choose a picture (PNG, JPEG or WebP)",
+    "choosePicture": "Choose a picture (PNG or JPEG)",
     "removePicture": "Remove picture",
     "pictureSaved": "Picture saved.",
-    "pictureRefused": "The picture was refused. Use a small PNG, JPEG or WebP.",
+    "pictureRefused": "The picture was refused. Use a small PNG or JPEG.",
     "pictureRemoved": "Picture removed.",
     "passwordHint": "Your other sessions end when the password changes.",
     "passwordChanged": "Password changed."
