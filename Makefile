@@ -40,7 +40,9 @@ test-integration: images integration-tests
 
 # The tests alone, for images that are already there (CI loads them).
 integration-tests:
-	RCD_PANEL_IMAGE=$(PANEL_IMAGE) go test -tags integration -count=1 ./...
+	witness=$$(mktemp) && \
+	RCD_PANEL_IMAGE=$(PANEL_IMAGE) RCD_EVENT_WITNESS=$$witness go test -tags integration,eventlog -count=1 ./... && \
+	RCD_EVENT_WITNESS=$$witness go test -tags eventcheck -count=1 -run TestEveryEventCode ./internal/logging
 
 # Walking skeleton against a real Minecraft server (pinned version, JAR
 # cached in .cache/minecraft).

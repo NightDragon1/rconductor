@@ -53,7 +53,7 @@ func New(w io.Writer, app string, cfg config.Log) *Factory {
 	} else {
 		h = slog.NewTextHandler(w, opts)
 	}
-	return &Factory{app: app, handler: h}
+	return &Factory{app: app, handler: witness(h, opts)}
 }
 
 // Root returns the logger of the application itself (comp = app).
