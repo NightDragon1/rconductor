@@ -120,7 +120,7 @@ export function AuditPage() {
               )}
               <span className={cn('ml-auto', resultTone[e.result] ?? 'text-muted')}>
                 {t(`history.result.${e.result}`)}
-                {e.reason && <span className="ml-1 font-mono text-xs">({e.reason})</span>}
+                {e.reason && <code className="ml-1 font-mono text-xs">({e.reason})</code>}
               </span>
             </div>
             {e.payload !== undefined &&

@@ -10,16 +10,7 @@ import {
 import { render } from '@testing-library/react';
 import en from '@/i18n/en.json';
 import { initI18n } from '@/i18n';
-
-// pseudo turns every text of the English file into a marked test text, so
-// a test can find text that does not come from a language file (NFR-007).
-export function pseudo(v: unknown): unknown {
-  if (typeof v === 'string') return `⟦${v.replace(/\{\{(\w+)\}\}/g, '{{$1}}')}⟧`;
-  if (v && typeof v === 'object') {
-    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, pseudo(x)]));
-  }
-  return v;
-}
+import { pseudo } from '@/test/pseudo';
 
 export function setLanguage(lng: 'en' | 'xx') {
   return initI18n(lng, { xx: { translation: pseudo(en) as object } });
