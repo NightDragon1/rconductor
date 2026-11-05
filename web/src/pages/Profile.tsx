@@ -201,7 +201,7 @@ export function ProfilePage() {
           id={ids.file}
           type="file"
           className="min-h-11"
-          accept="image/png,image/jpeg,image/webp"
+          accept="image/png,image/jpeg"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) void upload(f);
