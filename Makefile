@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-# A release tag (v1.2.3); without one a semantic dev version, so that panel
+# A release tag (v1.0); without one a semantic dev version, so that panel
 # and agent of one build share the major version (AGT-013).
 VERSION ?= $(shell git describe --tags --dirty --match 'v[0-9]*' 2>/dev/null || echo 0.0.0-dev+$$(git rev-parse --short HEAD 2>/dev/null || echo unknown))
 LDFLAGS := -s -w -X github.com/NightDragon1/rconductor/internal/buildinfo.Version=$(VERSION)
