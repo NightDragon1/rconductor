@@ -74,14 +74,17 @@ export function useConsoleFeed(id: string, logs: boolean) {
         page.items.map((e) => fromWire(e as Wire)),
       ),
       loaded: true,
-      cursor: page.next_cursor || undefined,
+      // Coming back to a server fetches the newest page again; the place
+      // of the older pages stays.
+      cursor: cursor || !b.loaded ? page.next_cursor || undefined : b.cursor,
     }));
   };
   useEffect(() => {
-    if (id && !buf.loaded) void loadPage().catch(() => undefined);
+    // Also when coming back: no live event reached this buffer meanwhile.
+    if (id) void loadPage().catch(() => undefined);
     // Only when the server changes; loadPage reads the current id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, buf.loaded]);
+  }, [id]);
 
   useTopic(id ? `server.${id}.console` : undefined, (m) => {
     if (m.type === 'event' && m.data && typeof m.data === 'object') {
@@ -91,16 +94,18 @@ export function useConsoleFeed(id: string, logs: boolean) {
   useLogsFeed(id, logs);
 
   const own = { userId: me, pseudonym: session?.user.pseudonym, role: session?.user.role };
-  const send = useMutation({
-    mutationFn: async (command: string) =>
+  // The server travels with the command: the answer belongs to the server
+  // it was sent to, also when the user has switched meanwhile (CMD-001).
+  const mutation = useMutation({
+    mutationFn: async ({ server, command }: { server: string; command: string }) =>
       must(
         await api.POST('/servers/{id}/commands', {
-          params: { path: { id } },
+          params: { path: { id: server } },
           body: { command },
         }),
       ),
-    onSuccess: (r) =>
-      updateBuffer(id, (b) =>
+    onSuccess: (r, { server }) =>
+      updateBuffer(server, (b) =>
         addCommands(b, [
           {
             kind: 'cmd',
@@ -114,13 +119,13 @@ export function useConsoleFeed(id: string, logs: boolean) {
           },
         ]),
       ),
-    onError: (e, command) => {
+    onError: (e, { server, command }) => {
       const err = e instanceof ApiError ? e : undefined;
       const status = err?.status ?? 0;
       // Refusals of the pipeline are denied, the rest failed (Design 3.5).
       const result: Result =
         status === 504 ? 'timeout' : [403, 422, 429].includes(status) ? 'denied' : 'error';
-      updateBuffer(id, (b) =>
+      updateBuffer(server, (b) =>
         addCommands(b, [
           {
             kind: 'cmd',
@@ -138,6 +143,11 @@ export function useConsoleFeed(id: string, logs: boolean) {
     },
   });
 
+  const send = {
+    mutate: (command: string) => mutation.mutate({ server: id, command }),
+    // Only a command to this server blocks its input.
+    isPending: mutation.isPending && mutation.variables?.server === id,
+  };
   const loadOlder = () => (buf.cursor ? loadPage(buf.cursor) : Promise.resolve());
   return { buf, me, send, loadOlder };
 }

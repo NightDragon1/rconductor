@@ -173,7 +173,10 @@ export function ConsoleTab() {
   const allowed = useAllowedCommands(id, !!id);
   const [tracks, setTracks] = useState<Tracks>({ own: true, others: true, logs: true });
   const [filter, setFilter] = useState('');
-  const [input, setInput] = useState('');
+  // A draft belongs to its server: a switch must not carry it to another.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const input = drafts[id] ?? '';
+  const setInput = (text: string) => setDrafts((d) => ({ ...d, [id]: text }));
   const [walk, setWalk] = useState(-1);
   const [focus, setFocus] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());

@@ -120,6 +120,35 @@ test('tracks and filter; others live (CMD-014)', async ({ page, state, browser }
   await expect(consoleOf(page).getByRole('article')).toHaveCount(1);
 });
 
+test('an answer stays with its server across a switch (CMD-001)', async ({ page, state }) => {
+  await openConsole(page, state, 'creative');
+  const star = page.getByRole('button', { name: 'Add to favorites' });
+  if (await star.count()) await star.click();
+  await page.goto(`servers/${state.servers.survival}/console`);
+  const star2 = page.getByRole('button', { name: 'Add to favorites' });
+  if (await star2.count()) await star2.click();
+  const bar = page.getByRole('navigation', { name: 'Favorites' });
+
+  // The answer comes after a second, the user is on another server by then.
+  await input(page).fill('say slowly to survival');
+  await input(page).press('Enter');
+  await bar.getByRole('link', { name: 'creative' }).click();
+  await expect(page.getByRole('heading', { name: 'creative', level: 1 })).toBeVisible();
+
+  // A draft stays with its server, and the input here is free at once.
+  await expect(input(page)).toHaveValue('');
+  await input(page).fill('a draft for creative');
+  await page.waitForTimeout(1500);
+  await expect(block(page, 'say slowly to survival')).toHaveCount(0);
+
+  await bar.getByRole('link', { name: 'survival' }).click();
+  await expect(block(page, 'say slowly to survival').last()).toContainText('Done:');
+  await expect(input(page)).toHaveValue('');
+  await bar.getByRole('link', { name: 'creative' }).click();
+  await expect(input(page)).toHaveValue('a draft for creative');
+  await input(page).fill('');
+});
+
 test('completion with Tab and own commands on arrow up (CMD-015)', async ({ page, state }) => {
   await openConsole(page, state, 'survival');
   await send(page, 'say first');
