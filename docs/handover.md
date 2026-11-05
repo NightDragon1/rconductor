@@ -1,44 +1,61 @@
 # Übergabe
 
-Stand: 04.11.2026, Meilenstein M4, Schritt 9 (Abbruch auf Wunsch, Stand gesichert)
+Stand: 05.11.2026, Meilenstein M4, Schritt 10 (Abbruch auf Wunsch, Stand gesichert)
 
 ## Repository
 
-- main: e84ea2d (Entsperren mit Dialog, Suchfeld auf der Befehlsseite), CI grün.
-- m4-wip: 8d3d832, zwei WIP-Commits auf main, mit --no-verify, make check nicht gelaufen.
-  - 2b52548: Kartenlisten statt Tabellen auf dem Handy, Umbruch statt Abschneiden.
-  - 8d3d832: E2E-Prüfung auf abgeschnittenen Text und auf Tabellen.
+- Arbeitsbranch: `m4/step10`, PR #117 offen. Letzter Arbeitsstand 4f671c4, darauf nur dieser Übergabe-Commit.
+- main: 28cc8ea, sauber, CI grün. Schritt 10 ist noch nicht auf main.
+- Der Branch ist fertig, `make check` war bei 4f671c4 grün. Nach main geht er nur über #117: Das Ruleset verlangt die Pflicht-Checks, und deren Lauf ist nicht fertig.
+- Dieser Übergabe-Commit lief mit `--no-verify`, weil keine Tests mehr starten sollten. Er ändert nur diese Datei.
 
 ## Erledigt seit der letzten Übergabe
 
-- #106 behoben und geschlossen (33c7da4): `scripts/pull-test-images.sh` vor Integrations- und Minecraft-Tests.
-- Schritt 9 auf main: 44 px, Avatar im Kopf, ⋮-Menü, Konsole, Befehle, Verwaltung nur lesend, Projekt `mobile`.
-- Kandidaten 25 und 26; Entsperren mit Dialog; Suchfeld „Search commands“ (Desktop und Handy).
-- Neue Abhängigkeit: `@radix-ui/react-dropdown-menu` 2.2.1 (MIT). Neue Ereigniscodes: keine.
+- Schritt 9: Kartenlisten und E2E-Prüfung auf main, #103 gemergt, Screenshots m4-9 freigegeben.
+- Öffentliches Repo: Prüfung ohne Befund, Secret Scanning, Push Protection, Private Vulnerability Reporting, Ruleset, SECURITY.md, CONTRIBUTING.md, Aufbewahrung 7 Tage.
+- CI in drei Stufen (#107), E2E-Filter auf `internal/` und `api/` (#111). Nur Läufe mit Stufe 2 melden die Pflicht-Checks, ein Branch-Push erfüllte sie vorher ohne Test.
+- Alle 12 Dependabot-Alerts behoben (#112, #115), keiner dismissed. #108 bis #110 geschlossen.
+- moby/go-archive und moby/sys/user liegen weder im Agent- noch im Panel-Binary, nur in Tests über testcontainers.
+- Sporadische Tests behoben: `TestAgentThroughTheStack`, `TestHalfOpenConnection` (#116). `pull-test-images.sh` scheitert nicht mehr an `go.sum`-Änderungen.
 
-## Korrektur zur letzten Übergabe
+## Unterbrochene Aufgabe: Schritt 10 (SEC-006, SEC-009)
 
-- 889a1d4: Das Log war abrufbar, nur `--log-failed` blieb leer; die Job-API lieferte es. Die Aussage „nicht mehr abrufbar“ war falsch.
-- Ursache: `TestAgentThroughSocketProxy` mit „No such image“, sporadisch; der Neustart auf demselben Commit war grün. Siehe #106.
+Fertig in #117, lokal grün (161 E2E bestanden, 0 fehlgeschlagen):
 
-## Offen
+- `ForeignText`: Bidi-Zeichen als `⟨U+202E⟩`, je Zeile `<bdi>`, Kopieren liefert das Original, ohne Farbcodes (so bestätigt). Kandidaten 28 und 29.
+- Feindlicher Server, Container und Moderator `hmod` im Stack; `foreign.spec.ts` inklusive Befehlsseite.
+- Unit-Test für die feindliche Agent-Version.
+- CSP-Prüfung in jedem E2E-Test, Header-Test für alle Antwortarten des Web-Ports.
+- Werkzeugleisten brechen auf dem Handy um; `mobile`-Prüfung auf Controls außerhalb des Fensters, auch bei 320 px.
+- E2E-Filter um `cmd/`, `migrations/`, `profiles/` erweitert.
+- Screenshots m4-10 für das Handy neu aufgenommen (17 Bilder gesamt).
 
-- Auf m4-wip ungeprüft: Die letzte Suite wurde abgebrochen, ihr Ergebnis ist unbekannt. Vorher waren die 13 Tests im Projekt `mobile` lokal grün.
-- Screenshots m4-9 sind veraltet: Sie zeigen noch die Tabellen und liegen auf main. Neu aufnehmen.
-- Freigabe der Screenshots m4-9 steht aus.
-- #103: Renovate hat rebased (9d3a7e5), CI lief noch (8 grün, 1 offen). Noch nicht gemergt.
-- Kandidaten 14 bis 26 warten auf die Revision 2.4.
-- Issue #101 (/backups) folgt nach M5.
+Fehlt:
+
+- Grüne CI für #117, danach Merge.
+- Kurzmeldung zu den neuen Handy-Screenshots (hier nachgeholt).
+- Plan für Schritt 11 zeigen, noch nicht vorgelegt.
+
+Nächster Handgriff:
+
+1. `gh pr checks 117`: Bei Grün `gh pr merge 117 --rebase --delete-branch`, die Pflicht-Checks müssen aus dem PR-Lauf stammen. Bei Rot zuerst reproduzieren.
+2. Danach Plan für Schritt 11 zeigen, nicht umsetzen.
+
+Vorarbeit zu Schritt 11 (E2E-Suite, ursprünglich mit Kontrastprüfung durch axe): Der CI-Job und der Test-Stack stehen.
+
+- UI-001: Kontrastprüfung fehlt. `@axe-core/playwright` ist installiert, aber unbenutzt.
+- NFR-007: Der Test mit einer Testsprache fehlt.
+- Alle anderen E2E-Kriterien von M4 werden in den Specs mit ID genannt. Das ist nur per Suche geprüft, nicht je Kriterium gegen `docs/05-abnahme-r1.md`.
+- In M4 sind noch 25 Issues offen; das Schließen gehört zum Abschluss.
 
 ## Offene CI-Läufe
 
-- main: keine, e84ea2d ist grün.
-- m4-wip: Die CI läuft nur für main und PRs, also kein Lauf.
-- #103: ein Job offen.
+- #117, Commit 4f671c4: PR-Lauf 41937362993 lief noch (16 grün, 1 offen: E2E shard 2), Push-Lauf grün.
+- Der Push dieses Übergabe-Commits startet die CI für #117 neu; ein älterer Lauf kann dadurch abgebrochen sein. Es zählt der neueste Stand.
+- Nächtlicher Lauf (Stufe 3): bisher nicht beobachtet, nur als manueller Lauf geprüft.
 
-## Nächster Handgriff
+## Offene Fragen
 
-1. Auf m4-wip: `make check`, dann `npx playwright test` in web/ (volle Suite).
-2. Grün: Änderungen als saubere Commits nach main bringen, ohne Force-Push auf main.
-3. `SCREENSHOTS=9 npx playwright test screenshots --project root -g phone`, Screenshots committen, auf OK warten.
-4. #103 mergen, wenn die CI grün ist.
+- `GO-2026-5932` in `golang.org/x/crypto` 0.58.0: Unser Code ruft die Stelle nicht auf, der Fix existiert nur als Pseudo-Version. Warten auf ein Release oder Pseudo-Version nehmen? Vorschlag: warten.
+- #113 und #114 (Renovate, andere Pakete) sind offen. Nach grüner CI mergen, wie üblich?
+- Kandidaten 14 bis 29 warten auf die Revision 2.4; Issue #101 (/backups) folgt nach M5.
