@@ -78,13 +78,20 @@ func (p *project) logs(service string) string {
 	return string(out)
 }
 
-// published returns the host port of a container port, empty if unpublished.
+// published returns the host address of a container port, empty if it is
+// not published. It asks Docker: compose port prints that case differently
+// from version to version.
 func (p *project) published(service, port string) string {
-	out, err := p.command("port", service, port).Output()
-	if got := strings.TrimSpace(string(out)); err == nil && got != ":0" {
-		return got
+	p.t.Helper()
+	id, err := p.command("ps", "--quiet", service).Output()
+	if err != nil {
+		p.t.Fatal(err)
 	}
-	return ""
+	out, err := exec.Command("docker", "port", strings.TrimSpace(string(id)), port+"/tcp").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func (p *project) signIn(webPort int) *apiUser {
@@ -141,6 +148,9 @@ func TestComposeAllInOne(t *testing.T) {
 	p.up()
 	if got := p.published("panel", "8443"); got != "" {
 		t.Errorf("port 8443 is published as %s", got)
+	}
+	if got := p.published("panel", "8080"); !strings.Contains(got, strconv.Itoa(web)) {
+		t.Errorf("port 8080 is published as %q, want %d", got, web)
 	}
 	admin := p.signIn(web)
 	waitUntil(t, 15*time.Second, "the agent's hint", func() bool {
