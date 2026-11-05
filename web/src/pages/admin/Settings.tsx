@@ -186,7 +186,7 @@ export function SettingsPage() {
                   <span className="flex min-w-0 flex-col">
                     <span className="font-medium">{label}</span>
                     {help && <span className="text-xs text-muted">{help}</span>}
-                    <span className="font-mono text-xs text-muted">{k}</span>
+                    <code className="font-mono text-xs text-muted">{k}</code>
                   </span>
                 );
                 if (v === 'boolean') {

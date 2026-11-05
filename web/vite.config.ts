@@ -3,9 +3,20 @@ import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+import { pseudo } from './src/test/pseudo';
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+// In the mode language every text is marked; only the E2E test of NFR-007
+// builds it, see playwright.config.ts.
+const testLanguage = {
+  name: 'test-language',
+  enforce: 'pre' as const,
+  transform(code: string, id: string) {
+    return id.endsWith('/i18n/en.json') ? JSON.stringify(pseudo(JSON.parse(code))) : undefined;
+  },
+};
+
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), tailwindcss(), ...(mode === 'language' ? [testLanguage] : [])],
   // Relative asset URLs; the panel sets <base href> from RCD_BASE_PATH.
   base: './',
   resolve: {
@@ -29,4 +40,4 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/test/setup.ts'],
   },
-});
+}));
