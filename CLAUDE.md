@@ -29,7 +29,7 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   entscheiden, sondern stoppen und mir den Widerspruch mit Fundstellen zeigen.
 - docs/ nicht verändern. Vorschläge für Änderungen nur als Hinweis an mich.
 - Kleine Schritte: lieber mehrere kleine Commits als ein großer.
-- Renovate-PRs: Patch und Minor nach grüner CI selbst mergen, Major vorher melden.
+- Renovate-PRs: Patch, Minor und Digest nach grüner CI selbst mergen, Major vorher melden.
 
 ## Technik (Details in docs/04-technologie.md)
 - Panel und Agent: Go, aktuelle stabile Version, CGO aus, statische Binaries,
