@@ -21,6 +21,10 @@ coverage.out
 /web/coverage/
 /web/test-results/
 /web/playwright-report/
+
+# Local only: screenshots for reviews and the handover
+/docs/screenshots/
+/docs/handover.md
 /web/.dist-language/
 
 # Editors and OS
@@ -35,4 +39,8 @@ Thumbs.db
 /web/e2e/.panel-*.log
 /web/test-results/
 /web/playwright-report/
+
+# Local only: screenshots for reviews and the handover
+/docs/screenshots/
+/docs/handover.md
 /web/.dist-language/

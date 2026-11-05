@@ -14,7 +14,6 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - docs/05-abnahme-r1.md     Abnahmekriterium je Anforderung
 - docs/06-sicherheit.md     Bedrohungsmodell, Maßnahmen SEC-xxx
 - docs/07-plan-r1.md        Meilensteine M0 bis M5
-- docs/mockups/             Aussehen der Oberfläche
 
 ## Arbeitsweise
 - Arbeite immer nur am Meilenstein, den ich nenne. Nichts aus späteren Meilensteinen
@@ -89,6 +88,8 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 ## Kontext und Berichte
 - Kontext sparsam: docs/handover.md und das betroffene Kapitel lesen, nicht alle
   docs/ bei jedem Schritt.
+- docs/handover.md ist eine lokale Datei (in .gitignore): überschreiben, nicht
+  committen. Screenshots unter docs/screenshots/ bleiben ebenfalls lokal.
 - Berichte wie bisher in Umfang und Struktur; Testzahlen dürfen als Summe je
   Testart stehen.
 

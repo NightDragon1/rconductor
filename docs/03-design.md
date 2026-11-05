@@ -479,7 +479,7 @@ Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in d
 | Serverseite | Kopf mit Status und Aktionen, darunter Reiter; Reiter ohne Recht werden ausgeblendet |
 | Verwaltung | Listen mit Suche; die Benutzerliste zusätzlich mit Filtern, Mehrfachauswahl und Massenaktionen (UI-007), die übrigen Listen sind kurz; Details im Seitenpanel von rechts, die Liste bleibt sichtbar |
 | Mobil | Karten, Befehlsseite und Konsole voll bedienbar, Mitteilungen ab R2; Verwaltung nur lesend: Suche, Filter, Details und Kopieren sind erlaubt, Schreibendes entfällt. Ausnahme für den Notfall: Sperren, Entsperren und Sitzungen beenden im Seitenpanel eines Benutzers, jeweils mit Bestätigungsdialog. Grenze 768 px, sie betrifft nur die Darstellung; das Backend prüft jede Anfrage wie auf dem Desktop. Seitenleiste wird zum Menü, die Zeitleiste der Konsole wird ausgeblendet |
-| Darstellung | Dunkles Design als Standard, helles Design wählbar; Stilrichtung laut Mockups (6.5, D-037) |
+| Darstellung | Dunkles Design als Standard, helles Design wählbar; Stilrichtung laut den Ansichten (6.5, D-037) |
 | Kontrast | Text mindestens 4,5:1; Symbole, Rahmen von Controls, Fokusring und Statuspunkte mindestens 3:1 auf jeder Fläche in beiden Designs (WCAG 1.4.11). Rahmen von Karten und Tabellen sind ausgenommen, sie gliedern nur; eine Karte ist an Titel und Status erkennbar, ihr Fokusring erreicht 3:1 |
 | Fremdtext | Bidi-Steuerzeichen (U+061C, U+200E, U+200F, U+202A bis U+202E, U+2066 bis U+2069) wirken im Freitext nicht: Antworten, Log-Zeilen und angezeigte Befehle zeigen sie als Platzhalter wie ⟨U+202E⟩, jede Zeile steht in einem eigenen bdi-Element. Kopieren liefert den Originaltext ohne Farbcodes; das Backend behält die Zeichen im Freitext (SEC-006). Escaping verhindert Code, aber keine Täuschung: Bidi-Zeichen können einen Namen oder eine Zeile als etwas anderes erscheinen lassen (wie bei Trojan Source). Andere Cf-Zeichen wie der Zero Width Joiner bleiben im Freitext, Emoji und einige Schriften brauchen sie |
 | Restart-Schleife | Mindestens 3 Starts binnen 10 min |
@@ -521,11 +521,9 @@ Aktionen im Kopf (Start, Stop, Restart) erscheinen nur für RCON-Admin und Serve
 
 ### 6.4 Aufbau der Serverseite
 
-&#91;embedded content: Aufbau der Serverseite · Beispiel Konsole für Admins\]
-
 Moderator und Supporter sehen statt der Konsole den Reiter Befehle; Seitenleiste und Kopf bleiben gleich.
 
-### 6.5 Mockups
+### 6.5 Ansichten
 
 | Artboard | Rolle | Zeigt |
 | --- | --- | --- |
@@ -539,8 +537,6 @@ Moderator und Supporter sehen statt der Konsole den Reiter Befehle; Seitenleiste
 Stil: dunkles Design mit Statusrand an den Karten, Monospace für Server- und Befehlsnamen, farbige Rahmen je Servergruppe. Port-Chips auf den Karten sind R2 (UI-005) und nur zur Gesamtwirkung gezeigt. Die Handy-Ansicht steht in 6.6 und als zwei Artboards auf der Mockup-Fläche, das helle Design fehlt noch.
 
 ### 6.6 Handy-Ansicht
-
-&#91;embedded content: Handy-Ansicht · Befehlsseite Moderator und Konsole Admin\]
 
 Die Seitenleiste wird zum Menü, Start, Stopp und Neustart wandern ins Menü im Kopf. Die Befehlskarten stehen untereinander, die Spieler online liegen als Bottom-Sheet am unteren Rand. Die Verwaltung bleibt mobil nur lesend, ausgenommen Sperren, Entsperren und Sitzungen beenden mit Bestätigungsdialog (UI-012, 6.1).
 
