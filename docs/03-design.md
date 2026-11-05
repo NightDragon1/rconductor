@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.4, Entwurf zur Freigabe; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.4, freigegeben; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -49,7 +49,7 @@ Der Agent speichert seinen Schlüssel und den gepinnten Panel-Schlüssel in sein
 
 ### 1.4 Versionsregel
 
-Agent und Panel müssen dieselbe Hauptversion des Releases haben. Bei Abweichung lehnt das Panel mit Grund version ab; der Hinweis erscheint im Panel und im Agent-Log. Innerhalb einer Hauptversion meldet der Agent neue Funktionen über seine Fähigkeitsliste; das Panel blendet aus, was der Agent nicht kann.
+Agent und Panel müssen dieselbe Hauptversion des Releases haben, also dieselbe erste Stelle (D-047). Bei Abweichung lehnt das Panel mit Grund version ab; der Hinweis erscheint im Panel und im Agent-Log. Innerhalb einer Hauptversion meldet der Agent neue Funktionen über seine Fähigkeitsliste; das Panel blendet aus, was der Agent nicht kann.
 
 ### 1.5 Nachrichten
 
@@ -148,7 +148,7 @@ Das Panel markiert den Agent als widerrufen, löst seine Server von ihm (agent\_
 | /agents/{id}/approve | POST | Wartende Kopplung über Fingerprint freigeben (Weg B) | RCON-Admin |
 | /audit | GET | Audit-Log | RCON-Admin; Server-Admin im Scope |
 | /settings | GET, PATCH | Globale Einstellungen | RCON-Admin |
-| /backups | GET, POST | Sicherungen anzeigen und auslösen; folgt nach M5, nicht in 1.0.0 | RCON-Admin |
+| /backups | GET, POST | Sicherungen anzeigen und auslösen; folgt nach M5, nicht in 1.0 | RCON-Admin |
 | /ws | GET (Upgrade) | WebSocket für Live-Daten | alle |
 
 Felder eines Servers je Rolle: RCON-Admin und Server-Admin sehen Protokoll, Host, Port, Zustand der Zugangsdaten (ok, missing, reenter), Agent, Container und Spielports; Moderatoren und Supporter nur Name, Profil und die Servergruppen in ihrem Scope. Das RCON-Passwort gibt die API nie zurück. Agent und Container sind erst mit den Agents (M3) setzbar.
@@ -481,7 +481,7 @@ Panel und Agent laufen mit read-only Root-Dateisystem; geschrieben wird nur in d
 | Fremdtext | Bidi-Steuerzeichen (U+061C, U+200E, U+200F, U+202A bis U+202E, U+2066 bis U+2069) wirken im Freitext nicht: Antworten, Log-Zeilen und angezeigte Befehle zeigen sie als Platzhalter wie ⟨U+202E⟩, jede Zeile steht in einem eigenen bdi-Element. Kopieren liefert den Originaltext ohne Farbcodes; das Backend behält die Zeichen im Freitext (SEC-006) |
 | Restart-Schleife | Mindestens 3 Starts binnen 10 min |
 | Live-Daten | Veraltete Werte werden markiert statt ausgeblendet (Haupttab 4.6) |
-| Bestätigung | Löschen und Widerruf bestätigt ein Dialog. Nicht destruktive Änderungen sendet die Oberfläche erst nach 5 s, bis dahin lassen sie sich rückgängig machen; beim Verlassen der Seite (pagehide) werden offene Änderungen sofort gesendet |
+| Bestätigung | Löschen und Widerruf bestätigt ein Dialog, ebenso ein Rollenwechsel (Hinweis „Zuweisungen werden entfernt, Sessions enden“) und das globale Abschalten der Supporter. Nicht destruktive Änderungen sendet die Oberfläche erst nach 5 s, bis dahin lassen sie sich rückgängig machen; beim Verlassen der Seite (pagehide) werden offene Änderungen sofort gesendet |
 | Kopieren | Ohne Clipboard-API, also ohne sicheren Kontext wie über http://lan-ip, markiert der Knopf den Text und zeigt den Hinweis „Press Ctrl+C“ |
 | Tastaturkürzel | Standardmäßig aus, nur global durch den RCON-Admin aktivierbar |
 | Auslieferung | Pfade ohne Dateiendung erhalten index.html (no-cache) samt base href aus RCD\_BASE\_PATH, ohne Inline-Skript; Pfade mit Dateiendung sind Assets und antworten bei Fehlen mit 404; versteckte Dateien werden nicht ausgeliefert; nur GET und HEAD; ohne gebaute Oberfläche 503 |

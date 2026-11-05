@@ -7,7 +7,7 @@ agent per game host; the panel never touches the Docker socket.
 > Status: under development (release 1 in progress). Users and rights,
 > game servers with RCON, the console over the API and the host agent work;
 > the web UI follows. Compose files and the full operations guide come with
-> release 1.0.0.
+> release 1.0.
 
 ## Running the panel
 

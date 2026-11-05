@@ -1,6 +1,6 @@
 # Kandidaten für Revision 2.4
 
-Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach der Freigabe von Dokumentversion 2.3 aufgefallen sind. Alle Punkte sind in den Entwurf der Version 2.4 eingearbeitet (Gesamtkonzept, Kapitel 13); über die Freigabe entscheidet Rob. Nr. 2 bis 13 sind von Rob für M4 entschieden (Freigabe des M4-Plans, 03.11.2026).
+Stand: Beginn M4 (03.11.2026). Abweichungen, Lücken und Festlegungen, die nach der Freigabe von Dokumentversion 2.3 aufgefallen sind. Alle Punkte sind in die freigegebene Version 2.4 eingearbeitet (Gesamtkonzept, Kapitel 13). Nr. 2 bis 13 sind von Rob für M4 entschieden (Freigabe des M4-Plans, 03.11.2026).
 
 | Nr. | Thema | Betroffen |
 | --- | --- | --- |

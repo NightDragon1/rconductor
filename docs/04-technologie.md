@@ -1,6 +1,6 @@
 # Technologie
 
-Dokumentversion 2.4, Entwurf zur Freigabe; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
+Dokumentversion 2.4, freigegeben; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Abgeleitet aus den Tabs Architektur und Design. Panel und Agent werden in Go geschrieben, die Oberfläche in React mit TypeScript; damit ist D-001 bestätigt und D-002 ersetzt.
 
 ## 1. Grundsätze
 
@@ -61,7 +61,7 @@ SvelteKit (bisher D-002) bringt kleinere Bundles und weniger Code. Bei einer ins
 | Repository | Ein Repository: cmd/panel, cmd/agent, internal, web, profiles, migrations, api/openapi.yaml, deploy/compose, scripts (Hilfsskripte, nicht Teil der Images) |
 | Images | Mehrstufiger Build; Panel auf distroless static als Nicht-Root-Benutzer mit read-only Root-Dateisystem; Agent ebenfalls distroless static |
 | Plattformen | amd64 und arm64 über Go-Cross-Compile und docker buildx |
-| Registry | ghcr.io; Tags 1, 1.2 und 1.2.3, damit die Hauptversion allein genügt (D-023) |
+| Registry | ghcr.io und Docker Hub (PRJ-004); Image-Tags 1 und 1.0, damit die Hauptversion allein genügt (D-023, D-047); Release-Tags wie v1.0 |
 | Lieferkette | SEC-013: SBOM mit syft, Signatur der Images mit cosign keyless, govulncheck als Pflicht-Check, Actions auf Commit-SHA gepinnt, Renovate gruppiert und ohne Automerge |
 | Tests Backend | go test; Integrationstests mit testcontainers-go gegen Postgres und Docker |
 | Tests Oberfläche | Vitest für Komponenten, Playwright für Abläufe im Browser |

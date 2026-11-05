@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.4, Stand 05.11.2026, Status Entwurf zur Freigabe; Änderungen gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.4, Stand 05.11.2026, Status freigegeben; Änderungen gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -41,7 +41,7 @@ Eine zentrale, selbst gehostete Weboberfläche steuert alle RCON-fähigen Spiele
 - Gliederung der Anforderungen nach Kapiteln; ID: Kürzel plus mindestens dreistellige Nummer (z. B. ROLE-003), wird nie neu vergeben.
 - Priorität: Muss, Soll, Kann.
 - Target Release: R1 (erste Version), R2, R3, Backlog.
-- Affected Component: Backend, UI, Agent, Profile, DB.
+- Affected Component: Backend, UI, Agent, Profile, DB, Doku.
 - Rev: Revision der einzelnen Anforderung, startet bei 1 und steigt bei jeder inhaltlichen Änderung.
 
 ## 2. Anforderungen
@@ -80,9 +80,11 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | SEC-010 | Socket-Proxy | Doku empfiehlt einen Socket-Proxy vor dem Docker-Socket, der nur die vom Agent benötigten Endpunkte durchlässt; der Agent funktioniert damit unverändert | Agent, Doku | Kann | R1 | 1 |
 | SEC-011 | Audit-Hash-Kette | Manipulationssichere Verkettung der Audit-Einträge mit Prüffunktion | Backend, DB | Kann | Backlog | 1 |
 | SEC-012 | Keine Geheimnisse in Logs | Passwörter, RCON-Zugangsdaten, Tokens, Schlüssel und Session-IDs erscheinen auf keinem Log-Level; Sessions nur als kurzer Hash; einzige Ausnahme ist die einmalige Ausgabe des Initialpassworts (AUTH-007) | Backend, Agent | Muss | R1 | 1 |
-| SEC-013 | Lieferkette | Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne Automerge; Release-Tags erst nach Veröffentlichung des Repositories | alle | Muss | R1 | 1 |
+| SEC-013 | Lieferkette | Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne Automerge; Release-Tags erst nach Veröffentlichung des Repositories; Signatur und SBOM gelten für ghcr.io und Docker Hub (PRJ-004) | alle | Muss | R1 | 2 |
 | PRJ-001 | Open Source | Veröffentlichung auf GitHub unter GNU AGPL-3.0; Spielprofile sind Teil des Repositories | alle | Muss | R1 | 1 |
 | PRJ-002 | Eigenständigkeit | Eigene Implementierung; Ideen anderer Tools nur sinngemäß, kein fremder Code, kein fremdes Design; ausgenommen kopierte Komponenten mit kompatibler Lizenz, die gekennzeichnet sind | alle | Muss | R1 | 2 |
+| PRJ-003 | GitHub-Release | Je Version ein GitHub-Release mit Tag, Änderungsnotizen, SBOM und Verweis auf die signierten Images | alle | Muss | R1 | 1 |
+| PRJ-004 | Docker Hub | Images zusätzlich auf Docker Hub mit denselben Tags, Signatur und SBOM wie auf ghcr.io | alle | Muss | R1 | 1 |
 
 ### 2.2 Benutzerverwaltung
 
@@ -152,7 +154,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | CMD-001 | Admin-Konsole | Live-Konsole für Admins mit Favoriten und Serverwechsel ohne Seitenwechsel; Darstellung und Eingabe gemäß CMD-012 bis CMD-015, ab R2 auch CMD-016 und CMD-017 | UI | Muss | R1 | 2 |
 | CMD-002 | Freie Eingabe | Freie Befehlseingabe nur für RCON- und Server-Admins | Backend | Muss | R1 | 1 |
 | CMD-003 | Befehlsseite Moderator | Befehle der Befehlsliste als Buttons mit Parameterfeldern; Spielernamen aus aktueller Spielerliste wählbar; Verlauf mit Serverantworten | UI | Muss | R1 | 1 |
-| CMD-004 | Token-Matching | Befehl ist ein Pfad aus ganzen Tokens; alles danach geht unverändert durch („whitelist add tralala“) | Backend | Muss | R1 | 1 |
+| CMD-004 | Token-Matching | Befehl ist ein Pfad aus ganzen Tokens; alles danach geht beim Pfadabgleich unverändert durch („whitelist add tralala“). Für Moderator und Supporter gilt bei Befehlen mit Katalogeintrag zusätzlich die Parameterprüfung (Design 3.3, Schritt 7b) | Backend | Muss | R1 | 2 |
 | CMD-005 | Wrapper-Schutz | Wrapper wie Minecraft „execute … run“ für Moderatoren und Supporter immer gesperrt; Wrapper-Befehle sind im Spielprofil markiert (D-026) | Backend, Profile | Muss | R1 | 2 |
 | CMD-006 | Eingabebereinigung | Zeilenumbrüche und Steuerzeichen werden vor dem Senden entfernt | Backend | Muss | R1 | 1 |
 | CMD-007 | Klassifizierung | Jeder Befehl trägt Request-ID, Session, Benutzer und Rolle; die Antwort erbt die Markierung | Backend | Muss | R1 | 1 |
@@ -227,6 +229,16 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | MSG-003 | Rückmeldung | Empfänger kommentieren eine Mitteilung; der Absender sieht die Rückmeldungen | Backend, UI | Soll | R2 | 1 |
 | MSG-004 | Bewertung | Up- und Downvotes zu Mitteilungen | Backend, UI | Kann | R2 | 1 |
 | MSG-005 | Umfragen | Einfache Umfragen als Mitteilung mit Auswahloptionen | Backend, UI | Kann | R2 | 1 |
+
+### 2.13 Dokumentation
+
+| ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
+| --- | --- | --- | --- | --- | --- | --- |
+| DOC-001 | Installation | Quick-Start; jede Umgebungsvariable und jede Einstellung mit Zweck, Typ, Standard und erlaubten Werten oder Bereichen | Doku | Muss | R1 | 1 |
+| DOC-002 | Überblick | Idee des Projekts, Panel und Agent, warum es einen Agent gibt | Doku | Muss | R1 | 1 |
+| DOC-003 | Rollen und Rechte | Rollen, ihre Rechte und ihre Zuweisung | Doku | Muss | R1 | 1 |
+| DOC-004 | Oberfläche | Aufbau und Bedienung der Oberfläche | Doku | Soll | R1 | 1 |
+| DOC-005 | Technik | Spielprofile und Befehlslisten (Ablage, Laden, Vorrang); Kopplung, Schlüssel, Pinning, Widerruf; Verschlüsselung | Doku | Soll | R1 | 1 |
 
 ## 3. Rollen- und Rechtemodell
 
@@ -383,13 +395,14 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | D-037 | Stilrichtung laut Mockups; dunkles Design als Standard, helles wählbar | Mockups abgenommen; Statusfarben und Monospace-Namen lesen sich auf dunklem Grund am besten | Standard nach Systemeinstellung |
 | D-038 | Datenbankzugriff mit sqlc; SQLite über modernc.org/sqlite, Postgres über pgx | typsicher und SQL-nah; reines Go ohne CGO erlaubt statische Binaries | Bun, ent, mattn/go-sqlite3 (CGO) |
 | D-039 | OpenAPI 3.1 als einzige Quelle für Server-Stubs (oapi-codegen) und Client-Typen (openapi-typescript) | API, Backend und Oberfläche laufen nicht auseinander; Doku der externen API ab R2 fällt mit ab | Typen von Hand pflegen |
-| D-040 | Images für amd64 und arm64, signiert und mit SBOM auf ghcr.io | x86-Server und Raspberry Pi; nachprüfbare Lieferkette | zusätzlich armv7, nur amd64 |
+| D-040 | Images für amd64 und arm64, signiert und mit SBOM auf ghcr.io und Docker Hub (PRJ-004) | x86-Server und Raspberry Pi; nachprüfbare Lieferkette | zusätzlich armv7, nur amd64 |
 | D-041 | Parametertypen player, text, choice, number im Spielprofil; eigene Befehlsdefinitionen (CMD-018) sollen sie übernehmen | CMD-003 braucht Parameterfelder schon in R1, die Argument-Syntax ist vertagt | nur ein freies Argumentfeld je Befehl |
 | D-042 | Abnahme teilweise über Ereigniscodes in den Container-Logs, gelesen per Portainer-MCP | nutzt vorhandenen Zugang ohne neuen Code im Panel; Claude kann Kriterien direkt prüfen | eigener MCP-Endpunkt im Panel |
 | D-043 | Session-Cookie immer HttpOnly und SameSite=Lax; Secure und Präfix \_\_Host- nur über HTTPS | Anmeldung auch ohne TLS-Proxy im LAN (D-011); Lax lässt Links von außen angemeldet ankommen, CSRF bleibt durch die Origin-Prüfung abgedeckt | Secure und SameSite=Strict immer |
 | D-044 | Jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants, Supporter-Freigabe oder Sperre beendet die Sessions des Benutzers; Listeninhalte wirken ohne Abmeldung | keine offene Oberfläche mit veraltetem Stand; Listenpflege meldet niemanden ab | nur Deaktivierung beendet Sessions |
 | D-045 | Profilbild als BLOB in der Datenbank, neu kodiert und verkleinert | ein Backup enthält alle veränderlichen Daten; Metadaten wie EXIF entfallen | Datei unter /data |
 | D-046 | Benutzer entstehen nur per Einladung, dazu der Notfall-Admin; das Token steht nur im URL-Fragment | niemand vergibt Passwörter für andere; ein Weg statt zwei; das Token erscheint in keinem Proxy- oder Panel-Log | POST /users mit Passwortvergabe |
+| D-047 | Versionen sind zweistellig (1.0, 1.1); Inkompatibles erhöht die erste Stelle (D-023), alles andere die zweite; Release-Tags wie v1.0, Image-Tags 1 und 1.0 | die erste Stelle trägt allein die Regel für Panel und Agent, eine dritte Stelle sagt nichts Zusätzliches | dreistellige Versionen (1.0.0) |
 
 ## 7. Releaseplan
 
@@ -419,7 +432,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 2.1 | 01.11.2026 | Freigabe durch Rob: Erkenntnisse aus M0 und M1 eingearbeitet (Kapitel 10); Revision 2 für NFR-010; AUTH-010, AUTH-011, SEC-013 und D-043 bis D-046 neu. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.2 | 02.11.2026 | Freigabe durch Rob: Erkenntnisse aus M2 eingearbeitet (Kapitel 11); Revision 2 für SEC-006, SEC-008 und SRV-001; Design 3.8 (RCON-Verbindung) neu; Einstellungen profiles.poll\_interval, ws.max\_sockets\_per\_session, ws.max\_subscriptions\_per\_socket; Grund-Code timeout. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
 | 2.3 | 03.11.2026 | Freigabe durch Rob: Erkenntnisse aus M3 eingearbeitet (Kapitel 12); Design 1.6 mit den Grenzen von SEC-007, Containername statt Container-ID, Fremdschlüssel servers.agent\_id, Einstellung agents.fingerprint\_pairing, Ereigniscode agent.disconnected, Grund-Codes agent\_unavailable und action\_failed, Grenzen bis zum welcome. Änderungen ab jetzt wieder nur mit neuer Revision der betroffenen Anforderung und Eintrag hier |
-| 2.4 | 05.11.2026 | Entwurf zur Freigabe durch Rob: Erkenntnisse aus M4 eingearbeitet (Kapitel 13); Revision 3 für SEC-006, Revision 2 für SEC-009, PRJ-002, CMD-001, UI-001, UI-004, UI-006, UI-007 und UI-012; neue Ressourcen in Design 2.2, Katalogprüfung in Design 3.3, optimistische Sperre, Ereigniscode logs.tail |
+| 2.4 | 05.11.2026 | Freigabe durch Rob: Erkenntnisse aus M4 eingearbeitet (Kapitel 13); Revision 3 für SEC-006, Revision 2 für SEC-009, SEC-013, PRJ-002, CMD-001, CMD-004, UI-001, UI-004, UI-006, UI-007 und UI-012; DOC-001 bis DOC-005, PRJ-003, PRJ-004 und D-047 neu; neue Ressourcen in Design 2.2, Katalogprüfung in Design 3.3, optimistische Sperre, Ereigniscode logs.tail |
 
 ## 10. Änderungen in Version 2.1
 
@@ -499,11 +512,11 @@ Eingearbeitet aus den Kandidaten von M3 (docs/revision-2.3-kandidaten.md, Nr. 1 
 
 ## 13. Änderungen in Version 2.4
 
-Eingearbeitet aus den Kandidaten von M4 (docs/revision-2.4-kandidaten.md, Nr. 1 bis 31, Nummern wie dort).
+Eingearbeitet aus den Kandidaten von M4 (docs/revision-2.4-kandidaten.md, Nr. 1 bis 31, Nummern wie dort); Nr. 32 bis 36 aus der Freigabe durch Rob.
 
 | Nr. | Änderung | Fundstelle in 2.4 |
 | --- | --- | --- |
-| 1 | /backups und die Backup-Seite folgen nach M5, nicht in 1.0.0 | Design 2.2, 6.2; Plan R1, Kapitel 4 |
+| 1 | /backups und die Backup-Seite folgen nach M5, nicht in 1.0 | Design 2.2, 6.2; Plan R1, Kapitel 4 |
 | 2 | started\_at und restart\_count in snapshot und container.event; Regel für Restart-Schleifen | Design 1.5, 6.1 |
 | 3 | servers.overview mit Laufzeitdaten aller Server im Scope | Design 2.3 |
 | 4 | runtime im Server-Objekt | Design 2.2 |
@@ -521,7 +534,7 @@ Eingearbeitet aus den Kandidaten von M4 (docs/revision-2.4-kandidaten.md, Nr. 1 
 | 16 | Neustart ohne Agent in der Oberfläche | Design 6.3 |
 | 17 | Kopieren ohne sicheren Kontext | Design 6.1, README |
 | 18 | Betriebshinweis zu parallelen RCON-Clients | README |
-| 19 | Prüfung der Katalogparameter im Backend, syntax.player\_pattern | Design 3.3, 3.5, 7.2, 7.3; Abnahme CMD-004 |
+| 19 | Prüfung der Katalogparameter im Backend, syntax.player\_pattern | CMD-004, Design 3.3, 3.5, 7.2, 7.3; Abnahme CMD-004; Sicherheit T-006 |
 | 20 | GET /servers/{id}/logs, Ereigniscode logs.tail | Design 2.2, 8.3 |
 | 21 | DELETE /users/{id}/sessions | Design 2.2 |
 | 22 | GET /agents/{id}/containers | Design 2.2 |
@@ -533,3 +546,8 @@ Eingearbeitet aus den Kandidaten von M4 (docs/revision-2.4-kandidaten.md, Nr. 1 
 | 29 | SEC-009 gilt für den Web-Port | SEC-009, Sicherheit, Abnahme SEC-009 |
 | 30 | Nicht-Text-Kontrast 3:1 (WCAG 1.4.11) | UI-001, Abnahme UI-001, Design 6.1 |
 | 31 | Suche in allen Verwaltungslisten; Filter und Mehrfachauswahl nur in der Benutzerliste | UI-007, Abnahme UI-007, Design 6.1 |
+| 32 | Bestätigungsdialog auch bei Rollenwechsel und beim globalen Abschalten der Supporter | Design 6.1 |
+| 33 | Kapitel 2.13 Dokumentation: DOC-001 bis DOC-005, Umsetzung in M5 | 2.13, Abnahme 10, Plan R1 |
+| 34 | GitHub-Release je Version | PRJ-003, Abnahme PRJ-003, Plan R1 |
+| 35 | Images zusätzlich auf Docker Hub | PRJ-004, SEC-013, D-040, Sicherheit, Technologie 4, Abnahme PRJ-004 und SEC-013, Plan R1 |
+| 36 | Zweistellige Versionen; die Versionsprüfung von AGT-013 folgt in M5 | D-047, Design 1.4, Technologie 4, Plan R1 |

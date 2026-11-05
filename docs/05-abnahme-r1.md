@@ -1,6 +1,6 @@
 # Abnahmekriterien R1
 
-Dokumentversion 2.4, Entwurf zur Freigabe; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
+Dokumentversion 2.4, freigegeben; Änderungen gegenüber 2.3 siehe Gesamtkonzept, Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
 
 | Prüfart | Bedeutung |
 | --- | --- |
@@ -31,13 +31,15 @@ Dokumentversion 2.4, Entwurf zur Freigabe; Änderungen gegenüber 2.3 siehe Gesa
 | SEC-005 | Der Master-Key liegt nur in /secrets; weder Datenbank noch Backup enthalten ihn; RCD\_MASTER\_KEY\_FILE wird gelesen | Integration |
 | PRJ-001 | Repository ist öffentlich unter AGPL-3.0, LICENSE liegt bei, Spielprofile liegen unter profiles/ | Review |
 | PRJ-002 | Kein übernommener Fremdcode außer deklarierten Abhängigkeiten mit kompatibler Lizenz | Review |
+| PRJ-003 | Zu jeder Version gibt es ein GitHub-Release mit Tag, Änderungsnotizen, SBOM und Verweis auf die signierten Images | Review |
+| PRJ-004 | Die Images liegen auf Docker Hub unter denselben Tags wie auf ghcr.io; cosign verify bestätigt dort Signatur und SBOM-Attestierung | Review |
 | SEC-006 | Ein Spielername mit \<script> und eine RCON-Antwort mit HTML erscheinen als Text, nichts wird ausgeführt; Farbcodes werden entfernt und erzeugen keinen Stil; ein Spielername mit U+202E erscheint ohne Umkehrung; im Freitext erscheint U+202E als Platzhalter, Kopieren liefert das Original | E2E, Unit |
 | SEC-007 | Eine Nachricht über der Höchstgröße trennt die Agent-Verbindung; schnelle Verbindungsversuche einer Adresse werden gedrosselt; wartende Kopplungen bleiben unter der Obergrenze | Integration |
 | SEC-008 | Ein WebSocket über der Abo-Grenze erhält error limit statt eines weiteren Abos; ein Socket über der Grenze je Session schließt den ältesten Socket mit error replaced; beide Grenzen ändert nur der RCON-Admin | Integration |
 | SEC-009 | Jede Antwort des Web-Ports trägt die Header laut SEC-009; die Oberfläche läuft ohne CSP-Verletzung in der Browser-Konsole | E2E |
 | SEC-010 | Die Doku enthält ein lauffähiges Beispiel mit Socket-Proxy; alle Agent-Funktionen aus AGT-003 funktionieren damit | Integration, Review |
 | NFR-016 | Jeder Ereigniscode aus Design 8.3 tritt im Testlauf mindestens einmal auf, als gültige JSON-Zeile mit allen Pflichtfeldern aus 8.2 | Integration |
-| SEC-013 | Release-Images für amd64 und arm64 tragen eine cosign-Signatur und eine SBOM-Attestierung, die cosign verify bestätigt; govulncheck ist Pflicht-Check; alle Actions sind auf Commit-SHA gepinnt | Review |
+| SEC-013 | Release-Images für amd64 und arm64 tragen auf ghcr.io und Docker Hub eine cosign-Signatur und eine SBOM-Attestierung, die cosign verify bestätigt; govulncheck ist Pflicht-Check; alle Actions sind auf Commit-SHA gepinnt | Review |
 | SEC-012 | Ein Testlauf auf debug mit bekannten Test-Geheimnissen (Passwort, RCON-Passwort, Token) findet keines davon im Log von Panel und Agent, außer der einmaligen Ausgabe des Initialpassworts | Integration |
 
 ## 2. Benutzer (2.2)
@@ -173,3 +175,13 @@ Diese Kriterien lassen sich ganz oder zum Teil über die Ereigniscodes aus Desig
 | NFR-005 | cache.stale und agent.disconnected nach Agent-Trennung | teilweise |
 
 Voll heißt: Der Log-Nachweis genügt für die Abnahme. Teilweise heißt: Das Log belegt den Ablauf, das Ergebnis (z. B. Inhalt einer Sicherung) wird zusätzlich geprüft.
+
+## 10. Dokumentation (2.13)
+
+| ID | Kriterium | Prüfart |
+| --- | --- | --- |
+| DOC-001 | Mit dem Quick-Start läuft eine neue Installation; jede Umgebungsvariable aus Design 5.2 und 5.3 und jede Einstellung aus Design 5.6 steht mit Zweck, Typ, Standard und erlaubten Werten oder Bereichen in der Doku | Review |
+| DOC-002 | Die Doku erklärt die Idee, Panel und Agent und warum es einen Agent gibt | Review |
+| DOC-003 | Die Doku nennt jede Rolle mit ihren Rechten und ihrer Zuweisung, passend zu Kapitel 3 des Gesamtkonzepts | Review |
+| DOC-004 | Die Doku beschreibt Aufbau und Bedienung der Oberfläche | Review |
+| DOC-005 | Die Doku beschreibt Ablage, Laden und Vorrang von Spielprofilen und Befehlslisten, Kopplung, Schlüssel, Pinning, Widerruf und die Verschlüsselung | Review |
