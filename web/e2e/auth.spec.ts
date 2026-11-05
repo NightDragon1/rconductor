@@ -12,6 +12,17 @@ test('the RCON admin signs in and out', async ({ page, state }) => {
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });
 
+test('signing out closes the live socket at once (AUTH-006)', async ({ page, state }) => {
+  let closed = false;
+  page.on('websocket', (ws) => ws.on('close', () => (closed = true)));
+  await login(page, 'sadmin', secret(state, 'sadmin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  expect(closed).toBe(false);
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+  await expect.poll(() => closed, { timeout: 5000 }).toBe(true);
+});
+
 test('a wrong password is refused', async ({ page }) => {
   await login(page, 'admin', 'not the password');
   await expect(page.getByRole('alert')).toHaveText('Pseudonym or password is wrong.');
