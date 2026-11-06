@@ -4,7 +4,6 @@ package auth
 
 import (
 	"net/netip"
-	"strings"
 	"sync"
 	"time"
 )
@@ -93,13 +92,21 @@ func newThrottle() *throttle {
 
 func (t *throttle) size() int { return len(t.accounts) + len(t.pairs) }
 
-// accountKey is what the counters remember of a pseudonym, bounded: the name
-// comes from anyone who tries to sign in and stays in memory (T-025).
+// accountKey is what the counters remember of a pseudonym. It is a copy of
+// bounded size: the name comes from anyone who tries to sign in, and a slice
+// would keep the whole string in memory (T-025). It folds ASCII only, like the
+// NOCASE lookup of the user, so two accounts never share a counter.
 func accountKey(pseudonym string) string {
 	if len(pseudonym) > maxAccountKey {
 		pseudonym = pseudonym[:maxAccountKey]
 	}
-	return strings.ToLower(pseudonym)
+	key := []byte(pseudonym)
+	for i, c := range key {
+		if 'A' <= c && c <= 'Z' {
+			key[i] = c + 'a' - 'A'
+		}
+	}
+	return string(key)
 }
 
 // check returns the delay before the password check and, if the pair is

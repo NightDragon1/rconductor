@@ -40,6 +40,8 @@ export interface ConsoleBuffer {
   logs: LogBlock[];
   loaded: boolean; // the first page of the history is in
   cursor?: string; // next older page of the history
+  epoch?: number; // counts refills: an older page from before one is void
+  running?: number; // commands to this server without an answer yet
 }
 
 export const emptyBuffer: ConsoleBuffer = { cmds: [], logs: [], loaded: false };

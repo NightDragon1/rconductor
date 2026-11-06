@@ -172,7 +172,9 @@ export function ConsoleTab() {
   const hasAgent = !!server?.agent_id;
   const allowed = useAllowedCommands(id, !!id);
   const [tracks, setTracks] = useState<Tracks>({ own: true, others: true, logs: true });
-  const [filter, setFilter] = useState('');
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const filter = filters[id] ?? '';
+  const setFilter = (text: string) => setFilters((f) => ({ ...f, [id]: text }));
   // A draft belongs to its server: a switch must not carry it to another.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const input = drafts[id] ?? '';

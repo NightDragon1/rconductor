@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -261,11 +262,36 @@ func TestOverlongPasswordIsWrong(t *testing.T) {
 	}
 }
 
-// TestLongPseudonymStaysSmall covers T-025: the counters keep a bounded key,
-// whatever name a client sends.
+// TestLongPseudonymStaysSmall covers T-025: the counters keep a small copy of
+// a name, not the string the name was cut from.
 func TestLongPseudonymStaysSmall(t *testing.T) {
-	if n := len(accountKey(strings.Repeat("x", 2<<20))); n > maxAccountKey {
-		t.Errorf("key of %d bytes", n)
+	tr := newThrottle()
+	ip := netip.MustParseAddr("192.0.2.81")
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	for i := range 50 {
+		name := fmt.Sprintf("%d", i) + strings.Repeat("x", 1<<20)
+		tr.fail(accountKey(name), ip, time.Now(), 5, time.Minute)
+	}
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	if grown := int64(after.HeapAlloc) - int64(before.HeapAlloc); grown > 4<<20 {
+		t.Errorf("50 names of 1 MiB keep %d bytes", grown)
+	}
+	runtime.KeepAlive(tr)
+}
+
+// TestAccountsNeverShareACounter: the key folds like the lookup, so a similar
+// account cannot clear the counters of another (T-002).
+func TestAccountsNeverShareACounter(t *testing.T) {
+	for _, pair := range [][2]string{{"Kai", "\u212Aai"}, {"Müller", "MÜLLER"}, {"admin", "adm\u0130n"}} {
+		if accountKey(pair[0]) == accountKey(pair[1]) {
+			t.Errorf("%q and %q share a key", pair[0], pair[1])
+		}
+	}
+	if accountKey("MoD") != accountKey("mod") {
+		t.Error("ASCII case must fold, as in the lookup")
 	}
 }
 

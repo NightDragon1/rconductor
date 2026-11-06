@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
-import { addCommands, emptyBuffer, resetBuffers, useBuffer } from '@/lib/console';
+import { addCommands, emptyBuffer, resetBuffers, updateBuffer, useBuffer } from '@/lib/console';
 import { useConsoleFeed } from './useConsoleFeed';
 
 vi.mock('@/api/session', () => ({ useSession: () => ({ data: undefined }) }));
@@ -16,6 +16,14 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 const page = { data: { items: [], next_cursor: '' }, response: new Response() };
+
+const fromEntry = (n: number) => ({
+  kind: 'cmd' as const,
+  id: `r${n}`,
+  ts: new Date(n * 1000).toISOString(),
+  command: 'say',
+  result: 'ok' as const,
+});
 
 function feed() {
   return renderHook(
@@ -80,6 +88,75 @@ describe('useConsoleFeed (CMD-001)', () => {
     rerender({ id: 'a' });
     await waitFor(() => expect(result.current.a.cmds.map((c) => c.id)).toEqual(['r100']));
     expect(result.current.a.cursor).toBe('new');
+  });
+
+  const entry = (n: number) => ({
+    request_id: `r${n}`,
+    ts: new Date(n * 1000).toISOString(),
+    command: 'say',
+    result: 'ok',
+  });
+  const answer = (items: unknown[], next_cursor: string) =>
+    ({ data: { items, next_cursor }, response: new Response() }) as never;
+
+  it('takes the cursor of the newest page even if a command of it is known', async () => {
+    const get = vi.spyOn(api, 'GET').mockResolvedValue(answer([entry(10)], 'old'));
+    const { result } = feed();
+    await waitFor(() => expect(result.current.a.cmds).toHaveLength(1));
+    // The own command of the outage is in the buffer and in the new page.
+    updateBuffer('a', (b) => addCommands(b, [fromEntry(100)]));
+    get.mockResolvedValue(answer([entry(100)], 'new'));
+    await act(() => client.invalidateQueries());
+    await waitFor(() => expect(result.current.a.cursor).toBe('new'));
+    expect(result.current.a.cmds.map((c) => c.id)).toEqual(['r100']);
+  });
+
+  it('keeps live commands newer than the page', async () => {
+    const get = vi.spyOn(api, 'GET').mockResolvedValue(answer([entry(10)], 'old'));
+    const { result } = feed();
+    await waitFor(() => expect(result.current.a.cmds).toHaveLength(1));
+    updateBuffer('a', (b) => addCommands(b, [fromEntry(200)]));
+    get.mockResolvedValue(answer([entry(100)], 'new'));
+    await act(() => client.invalidateQueries());
+    await waitFor(() => expect(result.current.a.cursor).toBe('new'));
+    expect(result.current.a.cmds.map((c) => c.id)).toEqual(['r100', 'r200']);
+  });
+
+  it('drops an older page that comes after a refill', async () => {
+    const get = vi.spyOn(api, 'GET').mockResolvedValue(answer([entry(10)], 'old'));
+    const { result } = feed();
+    await waitFor(() => expect(result.current.a.cursor).toBe('old'));
+    let older: (v: unknown) => void = () => undefined;
+    get.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          older = resolve as (v: unknown) => void;
+        }) as never,
+    );
+    let pending: Promise<unknown> = Promise.resolve();
+    act(() => {
+      pending = result.current.feed.loadOlder();
+    });
+    get.mockResolvedValue(answer([entry(100)], 'new'));
+    await act(() => client.invalidateQueries());
+    await waitFor(() => expect(result.current.a.cursor).toBe('new'));
+    await act(async () => {
+      older(answer([entry(1)], ''));
+      await pending;
+    });
+    expect(result.current.a.cursor).toBe('new');
+    expect(result.current.a.cmds.map((c) => c.id)).toEqual(['r100']);
+  });
+
+  it('knows a running command after a remount', async () => {
+    vi.spyOn(api, 'GET').mockResolvedValue(page as never);
+    vi.spyOn(api, 'POST').mockImplementation(() => new Promise(() => undefined) as never);
+    const first = feed();
+    act(() => first.result.current.feed.send.mutate('stop'));
+    await waitFor(() => expect(first.result.current.feed.send.isPending).toBe(true));
+    first.unmount();
+    const second = feed();
+    expect(second.result.current.feed.send.isPending).toBe(true);
   });
 
   it('does not take a running command for failed once it is answered', () => {

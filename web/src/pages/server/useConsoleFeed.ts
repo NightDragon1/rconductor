@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
 import { api, ApiError, must } from '@/api/client';
 import { useSession } from '@/api/session';
 import {
@@ -63,25 +62,38 @@ export function useConsoleFeed(id: string, logs: boolean) {
   const buf = useBuffer(id);
 
   const loadPage = async (cursor?: string) => {
+    const epoch = buf.epoch;
     const page = must(
       await api.GET('/servers/{id}/history', {
         params: { path: { id }, query: { limit: 50, cursor } },
       }),
     );
     const items = page.items.map((e) => fromWire(e as Wire));
-    updateBuffer(id, (b) => {
-      // Coming back fetches the newest page again. If it does not reach what
-      // the buffer holds, commands lie between them: the page starts over,
-      // so that older pages stay reachable without a gap.
-      const known = new Set(b.cmds.map((c) => c.id));
-      const gap = !cursor && b.loaded && !!page.next_cursor && !items.some((e) => known.has(e.id));
-      const base = gap ? { ...b, cmds: [] } : b;
-      return {
-        ...addCommands(base, items),
-        loaded: true,
-        cursor: cursor || !b.loaded || gap ? page.next_cursor || undefined : b.cursor,
-      };
-    });
+    if (cursor) {
+      updateBuffer(id, (b) =>
+        b.epoch === epoch ? { ...addCommands(b, items), cursor: page.next_cursor || undefined } : b,
+      );
+      return null;
+    }
+    // A refill starts over from the newest page, so older pages stay
+    // reachable without a gap, whatever arrived meanwhile. Kept are live
+    // commands newer than the page and refusals only this tab knows.
+    const ids = new Set(items.map((e) => e.id));
+    const newest = Math.max(-Infinity, ...items.map((e) => Date.parse(e.ts)));
+    updateBuffer(id, (b) => ({
+      ...addCommands(
+        {
+          ...b,
+          cmds: b.cmds.filter(
+            (c) => ids.has(c.id) || c.id.startsWith('local-') || Date.parse(c.ts) > newest,
+          ),
+        },
+        items,
+      ),
+      loaded: true,
+      cursor: page.next_cursor || undefined,
+      epoch: (b.epoch ?? 0) + 1,
+    }));
     return null;
   };
   // A query, so that it also runs after a reconnect of the socket (Design
@@ -102,9 +114,9 @@ export function useConsoleFeed(id: string, logs: boolean) {
   });
   useLogsFeed(id, logs);
 
-  const [running, setRunning] = useState<Record<string, number>>({});
+  // In the buffer, so a tab that remounts still knows what is under way.
   const count = (server: string, by: number) =>
-    setRunning((r) => ({ ...r, [server]: (r[server] ?? 0) + by }));
+    updateBuffer(server, (b) => ({ ...b, running: Math.max(0, (b.running ?? 0) + by) }));
   const own = { userId: me, pseudonym: session?.user.pseudonym, role: session?.user.role };
   // The server travels with the command: the answer belongs to the server
   // it was sent to, also when the user has switched meanwhile (CMD-001).
@@ -160,7 +172,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
   const send = {
     mutate: (command: string) => mutation.mutate({ server: id, command }),
     // Only a command to this server blocks its input.
-    isPending: (running[id] ?? 0) > 0,
+    isPending: (buf.running ?? 0) > 0,
   };
   const loadOlder = () => (buf.cursor ? loadPage(buf.cursor) : Promise.resolve());
   return { buf, me, send, loadOlder };
