@@ -21,7 +21,7 @@ syntax:
   player_pattern: "^[A-Za-z0-9_]{1,16}$"
 players:
   command: list
-  pattern: "players online: (.*)$"
+  pattern: "players online:\\s*(.*)$"
   separator: ", "
 stop:
   command: stop

@@ -63,26 +63,37 @@ func (p *Pattern) String() string { return p.re.String() }
 // cut to MaxLineLen bytes, are searched; the search stops at the time
 // limit or when ctx ends.
 func (p *Pattern) FirstMatch(ctx context.Context, text string) ([]string, bool, error) {
+	m, _, ok, err := p.FirstMatchNext(ctx, text)
+	return m, ok, err
+}
+
+// FirstMatchNext works like FirstMatch and also returns the line after the
+// matching one, cut the same way; it is empty when there is none.
+func (p *Pattern) FirstMatchNext(ctx context.Context, text string) ([]string, string, bool, error) {
 	deadline := time.Now().Add(p.timeout)
 	lines := 0
+	var found []string
 	for line := range strings.Lines(text) {
+		line = strings.TrimRight(line, "\r\n")
+		if len(line) > MaxLineLen {
+			line = line[:MaxLineLen]
+		}
+		if found != nil {
+			return found, line, true, nil
+		}
 		if lines == MaxLines {
 			break
 		}
 		lines++
 		if time.Now().After(deadline) {
-			return nil, false, ErrTimeout
+			return nil, "", false, ErrTimeout
 		}
 		if err := ctx.Err(); err != nil {
-			return nil, false, err
-		}
-		line = strings.TrimRight(line, "\r\n")
-		if len(line) > MaxLineLen {
-			line = line[:MaxLineLen]
+			return nil, "", false, err
 		}
 		if m := p.re.FindStringSubmatch(line); m != nil {
-			return m[1:], true, nil
+			found = m[1:]
 		}
 	}
-	return nil, false, nil
+	return found, "", found != nil, nil
 }

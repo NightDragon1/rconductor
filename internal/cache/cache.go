@@ -38,6 +38,8 @@ const (
 // ErrNoPlayerList means the server's profile defines no player list.
 var ErrNoPlayerList = errors.New("the game profile has no player list")
 
+var errNoMatch = errors.New("the answer does not fit the player pattern")
+
 // Executor runs a command on a server's connection.
 type Executor interface {
 	Execute(ctx context.Context, serverID, command string) (string, error)
@@ -50,6 +52,9 @@ type Players struct {
 	// Stale is set when the value is older than PlayersStale or the RCON
 	// connection was lost since (Overview 4.6).
 	Stale bool
+	// Unknown is set when the answer did not fit the profile's pattern;
+	// Names is empty then and says nothing about the players online.
+	Unknown bool
 }
 
 type entry struct {
@@ -188,13 +193,18 @@ func (c *Cache) fetch(ctx context.Context, serverID string) error {
 		return err
 	}
 	names, err := parsePlayers(fctx, answer, cfg)
-	if err != nil {
+	unknown := errors.Is(err, errNoMatch)
+	if err != nil && !unknown {
 		return err
 	}
 	c.mu.Lock()
-	e.players = Players{Names: names, UpdatedAt: c.now()}
+	first := unknown && !e.players.Unknown
+	e.players = Players{Names: names, Unknown: unknown, UpdatedAt: c.now()}
 	e.invalidated = false
 	c.mu.Unlock()
+	if first {
+		c.log.Warn("the answer does not fit the player pattern of the profile", slog.String(logging.KeyServer, serverID))
+	}
 	if c.onPlayers != nil {
 		c.onPlayers(serverID)
 	}
@@ -219,25 +229,34 @@ func (c *Cache) playerConfig(ctx context.Context, serverID string) (*profiles.Pl
 
 // parsePlayers takes the first capture group of the profile's pattern and
 // splits it at the separator; names are foreign data, cleaned and bounded
-// in length and count (SEC-006).
+// in length and count (SEC-006). When the group is empty, the names are on
+// the next line, as old Minecraft versions print them. An answer the
+// pattern does not fit gives errNoMatch: the number is unknown, not 0.
 func parsePlayers(ctx context.Context, answer string, cfg *profiles.Players) ([]string, error) {
 	p, err := pattern.Compile(cfg.Pattern, 1)
 	if err != nil {
 		return nil, err
 	}
-	m, ok, err := p.FirstMatch(ctx, answer)
+	m, next, ok, err := p.FirstMatchNext(ctx, answer)
 	if err != nil {
 		return nil, err
 	}
+	if !ok {
+		return nil, errNoMatch
+	}
 	names := []string{}
-	if !ok || strings.TrimSpace(m[0]) == "" {
+	list := m[0]
+	if strings.TrimSpace(list) == "" {
+		list = next
+	}
+	if strings.TrimSpace(list) == "" {
 		return names, nil
 	}
 	sep := cfg.Separator
 	if sep == "" {
 		sep = ","
 	}
-	for raw := range strings.SplitSeq(m[0], sep) {
+	for raw := range strings.SplitSeq(list, sep) {
 		name := foreign.Name(raw, MaxPlayerName)
 		if name == "" {
 			continue

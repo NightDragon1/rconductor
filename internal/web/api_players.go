@@ -23,6 +23,9 @@ func (s *apiServer) GetPlayers(ctx context.Context, req api.GetPlayersRequestObj
 	case err != nil:
 		return nil, &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeServerUnavailable}
 	}
+	if p.Unknown {
+		return api.GetPlayers200JSONResponse(api.PlayerList{Available: false, Players: []string{}}), nil
+	}
 	out := api.PlayerList{Available: true, Players: p.Names, Stale: p.Stale}
 	if out.Players == nil {
 		out.Players = []string{}
