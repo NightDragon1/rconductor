@@ -154,15 +154,17 @@ func newTestDocker(t *testing.T) (*Docker, *fakeDocker, *lockedBuf) {
 	t.Helper()
 	fd := &fakeDocker{events: make(chan events.Message, 4), items: []container.Summary{
 		{ID: "id-mc", Names: []string{"/mc"}, Image: "itzg/minecraft-server", State: "running",
-			Labels: map[string]string{"rcon.manage": "true"},
+			Labels: map[string]string{"rconductor.manage": "true"},
 			Ports:  []container.PortSummary{{PrivatePort: 25575, PublicPort: 25575, Type: "tcp"}},
 			Mounts: []container.MountPoint{{Type: "volume", Name: "mc-data"}, {Type: "bind", Source: "/etc/hosts"}}},
 		{ID: "id-db", Names: []string{"/db"}, Image: "postgres", State: "running", Labels: map[string]string{}},
-		{ID: "id-other", Names: []string{"/other"}, Image: "x", State: "running", Labels: map[string]string{"rcon.manage": "false"}},
+		{ID: "id-other", Names: []string{"/other"}, Image: "x", State: "running", Labels: map[string]string{"rconductor.manage": "false"}},
+		// The label of the test versions up to 0.9 allows nothing any more.
+		{ID: "id-old", Names: []string{"/old"}, Image: "x", State: "running", Labels: map[string]string{"rcon.manage": "true"}},
 	}}
 	logs := &lockedBuf{}
 	log := logging.New(logs, "agent", config.Log{Format: "json"}).Root()
-	return newDocker(fd, config.Agent{LabelKey: "rcon.manage", LabelValue: "true"}, log), fd, logs
+	return newDocker(fd, config.Agent{LabelKey: "rconductor.manage", LabelValue: "true"}, log), fd, logs
 }
 
 func order(t *testing.T, d *Docker, typ string, payload any) (agentproto.Result, *recorder) {

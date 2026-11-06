@@ -54,7 +54,7 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_PAIRING_TOKEN` / `RCD_PAIRING_TOKEN_FILE` | secret | empty | token from the panel | pairing with a token; ignored after the pairing |
 | `RCD_PANEL_ADDR` | address | empty | `host:port` | panel agent port, for pairing by fingerprint or to override the token's address |
 | `RCD_AGENT_NAME` | text | host name | any | name shown in the panel |
-| `RCD_LABEL` | text | `rcon.manage=true` | `key=value` | label that allows a container |
+| `RCD_LABEL` | text | `rconductor.manage=true` | `key=value` | label that allows a container |
 | `RCD_DOCKER_HOST` | URL | `unix:///var/run/docker.sock` | Docker address, also a socket proxy such as `tcp://socket-proxy:2375` | Docker API |
 | `RCD_SECRETS_DIR` | path | `/secrets` | directory | agent key and pairing |
 | `RCD_LOG_LEVEL` | text | `info` | `debug`, `info`, `warn`, `error` | log level |

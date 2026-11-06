@@ -18,6 +18,10 @@ docker compose -f all-in-one.yaml up -d
 docker compose -f all-in-one.yaml logs panel | grep password:
 ```
 
+`DOCKER_GID` is the group that owns the Docker socket on your host. The agent
+runs as a non-root user and reaches the socket through this group, so
+`stat -c %g /var/run/docker.sock` above reads the number for you.
+
 1. Open `http://<host>:8080` and sign in as `admin` with the password from the
    log. You are asked for a new one; the initial password is shown only once.
 2. Under **Agents**, choose **Pair an agent**, then **Make token**, and add the
@@ -29,7 +33,7 @@ docker compose -f all-in-one.yaml logs panel | grep password:
    ```
 
    Until it has a token the agent waits and says so in its log.
-3. Give your game containers the label `rcon.manage=true`; the agent manages
+3. Give your game containers the label `rconductor.manage=true`; the agent manages
    only those.
 4. Under **Servers and groups**, choose **New server**: name, game profile,
    host, RCON port and password, and optionally agent and container.

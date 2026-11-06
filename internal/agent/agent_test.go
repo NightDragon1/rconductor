@@ -173,7 +173,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 
 func agentCfg(t *testing.T, dir string) config.Agent {
 	t.Helper()
-	return config.Agent{Name: "host-1", SecretsDir: dir, LabelKey: "rcon.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
+	return config.Agent{Name: "host-1", SecretsDir: dir, LabelKey: "rconductor.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
 }
 
 // TestPairAndReconnect covers AGT-011 and AGT-012 with way A: the agent
@@ -346,7 +346,7 @@ func TestNoPanel(t *testing.T) {
 // its key pair, says what is missing and waits (Design 5.5).
 func TestAgentWithoutPanel(t *testing.T) {
 	var out lockedBuf
-	cfg := config.Agent{SecretsDir: t.TempDir(), DockerHost: "unix:///nonexistent.sock", LabelKey: "rcon.manage", LabelValue: "true",
+	cfg := config.Agent{SecretsDir: t.TempDir(), DockerHost: "unix:///nonexistent.sock", LabelKey: "rconductor.manage", LabelValue: "true",
 		Log: config.Log{Format: "json"}}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

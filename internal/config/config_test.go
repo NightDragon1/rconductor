@@ -191,7 +191,7 @@ func TestHashConcurrencyStaysMeasured(t *testing.T) {
 
 func TestLoadAgent(t *testing.T) {
 	c, err := LoadAgent(envOf(map[string]string{"RCD_LOG_FORMAT": "json"}), filesOf(nil))
-	if err != nil || c.Log.Format != "json" || c.LabelKey != "rcon.manage" || c.LabelValue != "true" ||
+	if err != nil || c.Log.Format != "json" || c.LabelKey != "rconductor.manage" || c.LabelValue != "true" ||
 		c.DockerHost != "unix:///var/run/docker.sock" || c.SecretsDir != "/secrets" || c.PairingToken != "" {
 		t.Fatalf("defaults: %+v, %v", c, err)
 	}
