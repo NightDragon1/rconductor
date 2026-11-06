@@ -8,11 +8,13 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	_ "modernc.org/sqlite" // registers the pure-Go "sqlite" driver (D-038)
+	"modernc.org/sqlite" // registers the pure-Go "sqlite" driver (D-038)
+	sqlite3 "modernc.org/sqlite/lib"
 
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 )
@@ -53,6 +55,13 @@ func Open(ctx context.Context, dataDir string) (*Store, error) {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 	return &Store{DB: db, Path: path, Queries: sqlitedb.New(db)}, nil
+}
+
+// IsBusy reports whether err means that the database stayed locked by another
+// writer for the whole busy timeout.
+func IsBusy(err error) bool {
+	var e *sqlite.Error
+	return errors.As(err, &e) && e.Code()&0xff == sqlite3.SQLITE_BUSY
 }
 
 // Close closes the database.

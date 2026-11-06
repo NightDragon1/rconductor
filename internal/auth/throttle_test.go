@@ -760,3 +760,37 @@ func TestClientLimitSetting(t *testing.T) {
 		t.Errorf("invalid value = %d", got)
 	}
 }
+
+// TestFailedLoginsAreAuditedUnderLoad covers V-3 on the login: each failure in
+// a burst from many addresses leaves its row, also while another writer holds
+// the database past the busy timeout.
+func TestFailedLoginsAreAuditedUnderLoad(t *testing.T) {
+	f := newSessionFixture(t, true)
+	ctx := context.Background()
+	before := f.count(t, `SELECT count(*) FROM audit_log`)
+	tx, err := f.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE settings SET key = key`); err != nil {
+		t.Fatal(err)
+	}
+	var failed atomic.Int32
+	var wg sync.WaitGroup
+	for i := range 300 {
+		wg.Go(func() {
+			c := clientAt(fmt.Sprintf("198.51.%d.%d", i/250, i%250))
+			if _, _, err := f.svc.Login(ctx, fmt.Sprintf("n%d", i), "wrong password!!", c); errors.Is(err, ErrInvalidCredentials) {
+				failed.Add(1)
+			}
+		})
+	}
+	time.Sleep(6 * time.Second)
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	if n, want := f.count(t, `SELECT count(*) FROM audit_log`)-before, int(failed.Load()); n != want || want == 0 {
+		t.Errorf("%d audit rows for %d failed logins", n, want)
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -57,8 +58,22 @@ type Entry struct {
 	Reason     string // reason code as in the API (Design 3.5)
 }
 
+// writeWait is how long an entry outside a transaction tries to get written.
+// It is far above the busy timeout of the database: nobody is left to tell
+// about a failure, and under load many writers wait for each other (V-3).
+var writeWait = 2 * time.Minute
+
+const busyPause = 50 * time.Millisecond
+
+// writers lets one entry at a time ask the database, so that they queue here
+// instead of competing for the lock inside SQLite, which is not fair.
+var writers = make(chan struct{}, 1)
+
 // Write stores e through db, which may be a transaction so that a change
-// and its audit entry commit together. It returns the entry ID.
+// and its audit entry commit together. It returns the entry ID. Outside a
+// transaction the entry is written even if the client has hung up, and a
+// locked database is retried: a refused attempt under load is what the log is
+// for.
 func Write(ctx context.Context, db sqlitedb.DBTX, e Entry) (string, error) {
 	if e.ID == "" {
 		id, err := store.NewID()
@@ -75,7 +90,7 @@ func Write(ctx context.Context, db sqlitedb.DBTX, e Entry) (string, error) {
 		}
 		payload = b
 	}
-	err := sqlitedb.New(db).InsertAudit(ctx, sqlitedb.InsertAuditParams{
+	params := sqlitedb.InsertAuditParams{
 		ID:         e.ID,
 		Ts:         store.Now(),
 		Kind:       string(e.Kind),
@@ -89,11 +104,39 @@ func Write(ctx context.Context, db sqlitedb.DBTX, e Entry) (string, error) {
 		Payload:    string(payload),
 		Result:     string(e.Result),
 		ReasonCode: null(e.Reason),
-	})
+	}
+	var err error
+	if _, direct := db.(*sql.DB); direct {
+		err = insertRetrying(ctx, db, params)
+	} else {
+		err = sqlitedb.New(db).InsertAudit(ctx, params)
+	}
 	if err != nil {
 		return "", fmt.Errorf("write audit entry %s: %w", e.Action, err)
 	}
 	return e.ID, nil
+}
+
+func insertRetrying(ctx context.Context, db sqlitedb.DBTX, params sqlitedb.InsertAuditParams) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeWait)
+	defer cancel()
+	select {
+	case writers <- struct{}{}:
+		defer func() { <-writers }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	for {
+		err := sqlitedb.New(db).InsertAudit(ctx, params)
+		if !store.IsBusy(err) {
+			return err
+		}
+		select {
+		case <-time.After(busyPause):
+		case <-ctx.Done():
+			return err
+		}
+	}
 }
 
 func null(s string) sql.NullString { return sql.NullString{String: s, Valid: s != ""} }
