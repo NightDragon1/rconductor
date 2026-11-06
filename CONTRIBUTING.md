@@ -55,7 +55,8 @@ issue.
 - The Docker Hub secrets live only in that environment.
 - The release notes come from `CHANGELOG.md`, which lists real releases only.
 - Test versions `0.x` follow D-047: only the image tag `0.x`, no major or `latest`
-  tag, a GitHub pre-release and no entry in the changelog.
+  tag, a GitHub pre-release with the fixed text "Testversion vor 1.0" and no entry
+  in the changelog. Signature and SBOM are the same as for a real release.
 
 ## License headers
 

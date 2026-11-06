@@ -28,12 +28,20 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   Sub-Agent ohne Vorkontext (Stichprobe der Abnahmen und Sicherheit).
 - Widerspricht eine Anforderung einer anderen oder dem Design: nicht selbst
   entscheiden, sondern stoppen und mir den Widerspruch mit Fundstellen zeigen.
-- docs/ nicht verändern. Vorschläge für Änderungen nur als Hinweis an mich.
+- docs/ nicht verändern, außer auf meinen ausdrücklichen Auftrag. Vorschläge für
+  Änderungen nur als Hinweis an mich.
 - Kleine Schritte: lieber mehrere kleine Commits als ein großer.
 - Renovate-PRs: Patch, Minor und Digest nach grüner CI selbst mergen, Major vorher melden.
 - Bei Eingriffen in die Git-Historie Renovate pausieren (renovate.json "enabled": false),
   danach wieder aktivieren.
-- Releases: Regeln in CONTRIBUTING.md, Abschnitt Release.
+- Releases: Regeln in CONTRIBUTING.md, Abschnitt Release. Ein echtes Release nur nach
+  meinem OK; die Freigabe im Environment release mache ich.
+- Keine Sub-Agents für Release-Schritte und für Eingriffe in die Git-Historie.
+- Kein Force-Push. Falsche Nachricht in einem gepushten Commit: Kommentar am
+  betroffenen Issue, die Historie bleibt.
+- Nichts systemweit installieren. Die Minecraft-EULA nie stellvertretend akzeptieren.
+- Status prüfen, nicht annehmen: CI-Läufe, Merges und Issues vor jeder Meldung
+  abfragen. Nicht Abgefragtes als ungeprüft melden, nie als "offen".
 
 ## Technik (Details in docs/04-technologie.md)
 - Panel und Agent: Go, aktuelle stabile Version, CGO aus, statische Binaries,
@@ -107,7 +115,7 @@ STOPP: Laufende Arbeit sofort beenden, nichts Neues anfangen.
    Sonst: Branch wip/<datum>, --no-verify, Nachricht "wip: <was lief>", pushen.
 2. Nicht auf CI warten, keine Tests mehr starten.
 3. docs/handover.md lokal überschreiben (nicht committen): Branch/Commit, erledigt,
-   unterbrochene Aufgabe, offene CI-Läufe, offene Fragen.
+   unterbrochene Aufgabe, offene CI-Läufe, offene Fragen, "Offene Aufträge" im Wortlaut.
 4. Kurze Meldung. Danach nichts.
 
 START: docs/handover.md und Git-Stand lesen. Offene CI-Läufe prüfen. wip/-Branch
