@@ -2,7 +2,6 @@
 import type { Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Changes wait five seconds for Undo (UI-008).
 const saved = { timeout: 9000 };
 
 async function as(page: Page, state: StackState, user: string, path: string, title: string) {
@@ -40,10 +39,13 @@ test('a list keeps one command locked for supporters (ROLE-007)', async ({ page,
     await panel.getByRole('button', { name: 'Add' }).click();
   }
   await panel.getByLabel('say passable to supporters').check();
+  await panel.getByRole('button', { name: 'Save' }).click();
   await expect(panel.getByRole('status')).toHaveText('Saved.', saved);
   // All passable: the page refuses before the backend would.
   await panel.getByLabel('list passable to supporters').check();
   await expect(panel.getByRole('alert')).toContainText('At least one command must stay locked');
+  await expect(panel.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await panel.getByLabel('list passable to supporters').uncheck();
   await page.reload();
   const row = page.getByRole('row').filter({ hasText: 'event-cmds' });
   await expect(row).toContainText('list, say');
@@ -82,6 +84,7 @@ test('a moderator group gives its members servers and commands (ROLE-004, ROLE-0
   await panel.getByLabel('Command list').selectOption({ label: 'event-cmds' });
   await panel.getByLabel('+ Member').selectOption({ label: 'mod2' });
   await panel.getByLabel('+ Server or group').selectOption({ label: 'arena' });
+  await panel.getByRole('button', { name: 'Save' }).click();
   await expect(panel.getByRole('status')).toHaveText('Saved.', saved);
   await expect(page.getByRole('row').filter({ hasText: 'event-mods' })).toContainText('event-cmds');
 
@@ -136,10 +139,12 @@ test('a stale draft is not sent; reload shows the other change (revision 2.4 can
 
   await theirs.getByLabel('Add a command path').fill('say');
   await theirs.getByRole('button', { name: 'Add' }).click();
+  await theirs.getByRole('button', { name: 'Save' }).click();
   await expect(theirs.getByRole('status')).toHaveText('Saved.', saved);
 
   await mine.getByLabel('Add a command path').fill('list');
   await mine.getByRole('button', { name: 'Add' }).click();
+  await mine.getByRole('button', { name: 'Save' }).click();
   await expect(mine.getByRole('alert')).toHaveText('Changed by someone else – reload', saved);
   const entries = await page.evaluate(async () => {
     const r = await fetch('api/v1/command-lists').then((x) => x.json());
@@ -152,4 +157,43 @@ test('a stale draft is not sent; reload shows the other change (revision 2.4 can
   await expect(mine.getByRole('cell').filter({ hasText: /^say$/ })).toBeVisible();
   await expect(mine.getByRole('cell').filter({ hasText: /^list$/ })).toHaveCount(0);
   await other.close();
+});
+
+test('save goes out at once, undo takes it back, leaving asks first (UI-008, D-048)', async ({
+  page,
+  state,
+}) => {
+  await as(page, state, 'admin', 'admin/command-lists', 'Command lists');
+  await page.getByPlaceholder('Name of a new list').fill('undo-test');
+  await page.getByRole('button', { name: 'Create list' }).click();
+  const panel = page.getByRole('complementary', { name: 'Details of undo-test' });
+  const entries = () =>
+    page.evaluate(async () => {
+      const r = await fetch('api/v1/command-lists').then((x) => x.json());
+      return (r.items as { name: string; entries: { path: string }[] }[])
+        .find((l) => l.name === 'undo-test')
+        ?.entries.map((e) => e.path);
+    });
+  await panel.getByLabel('Add a command path').fill('say');
+  await panel.getByRole('button', { name: 'Add' }).click();
+  // Nothing goes out before Save.
+  expect(await entries()).toEqual([]);
+
+  // Leaving asks, by panel and by navigation; staying keeps the draft.
+  await panel.getByRole('button', { name: 'Close the details' }).click();
+  const ask = page.getByRole('dialog');
+  await expect(ask).toContainText('Leave without saving?');
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('link', { name: 'Audit', exact: true }).click();
+  await expect(ask).toContainText('Leave without saving?');
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(panel.getByText('say')).toBeVisible();
+
+  await panel.getByRole('button', { name: 'Save' }).click();
+  const note = page.getByRole('status').filter({ hasText: 'Saved: List undo-test changed' });
+  await expect(note).toBeVisible();
+  expect(await entries()).toEqual(['say']);
+  await note.getByRole('button', { name: 'Undo' }).click();
+  await expect(panel.getByText('say')).toHaveCount(0);
+  await expect.poll(entries).toEqual([]);
 });
