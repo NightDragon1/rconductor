@@ -17,6 +17,23 @@ import { PhoneNote } from './PhoneNote';
 type Values = Record<string, unknown>;
 export const settingsKey = ['settings'] as const;
 
+// Whether the explanations show is a per-browser convenience (UI-014).
+const helpKey = 'rcd.settings.help';
+function storedHelp() {
+  try {
+    return localStorage.getItem(helpKey) !== 'off';
+  } catch {
+    return true;
+  }
+}
+function storeHelp(on: boolean) {
+  try {
+    localStorage.setItem(helpKey, on ? 'on' : 'off');
+  } catch {
+    // private mode: the choice lasts for this page only
+  }
+}
+
 // Keys with their own label and help in the language file.
 const keyTexts = [
   'agents_fingerprint_pairing',
@@ -83,6 +100,7 @@ const sectionOf = (key: string) => sections.find(([, re]) => re.test(key))?.[0] 
 export function SettingsPage() {
   const { t } = useTranslation();
   const phone = usePhone();
+  const [showHelp, setShowHelp] = useState(storedHelp);
   const qc = useQueryClient();
   const { schedule } = useUndo();
   const settings = useQuery({
@@ -165,6 +183,20 @@ export function SettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold">{t('nav.settings')}</h1>
         <p className="text-sm text-muted">{t('settings.explain')}</p>
+        {!phone && (
+          <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="max-md:size-11"
+              checked={showHelp}
+              onChange={(e) => {
+                setShowHelp(e.target.checked);
+                storeHelp(e.target.checked);
+              }}
+            />
+            {t('settings.showHelp')}
+          </label>
+        )}
       </div>
       <PhoneNote />
       {settings.isPending && <p className="text-muted">{t('app.loading')}</p>}
@@ -188,7 +220,7 @@ export function SettingsPage() {
                 const head = (
                   <span className="flex min-w-0 flex-col">
                     <span className="font-medium">{label}</span>
-                    {help && <span className="text-xs text-muted">{help}</span>}
+                    {showHelp && help && <span className="text-xs text-muted">{help}</span>}
                     <code className="font-mono text-xs text-muted">{k}</code>
                   </span>
                 );

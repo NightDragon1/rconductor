@@ -7,7 +7,7 @@ import { api } from '@/api/client';
 import { sessionKey } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/PasswordInput';
 import { Label } from '@/components/ui/label';
 
 // ChangePasswordPage is the only page while a password change is forced
@@ -41,10 +41,9 @@ export function ChangePasswordPage() {
           {(['current', 'new', 'repeat'] as const).map((name) => (
             <div key={name} className="space-y-1">
               <Label htmlFor={name}>{t(`password.${name}`)}</Label>
-              <Input
+              <PasswordInput
                 id={name}
                 name={name}
-                type="password"
                 required
                 autoComplete={name === 'current' ? 'current-password' : 'new-password'}
               />

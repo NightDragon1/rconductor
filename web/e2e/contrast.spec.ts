@@ -8,7 +8,7 @@ import { pages, serverTabs } from './pages';
 // axe measures what the browser really drew; the colors of symbols and
 // frames are checked per design in src/lib/contrast.test.ts.
 async function design(page: Page, theme: string) {
-  await page.addInitScript((t) => localStorage.setItem('rcd.theme', t), theme);
+  await page.addInitScript((t) => localStorage.setItem('rcd.design', t), theme);
 }
 
 async function check(page: Page, theme: string, what: string) {
