@@ -359,6 +359,7 @@ Ein täglicher Job entfernt Audit-Einträge nach Ablauf der Frist (Standard 90 T
 | RCD\_PASSWORD\_HASH\_CONCURRENCY | 2 | Gleichzeitige Passwortberechnungen (1 bis 64), je 64 MiB |
 | RCD\_MAX\_CONNECTIONS | 512 | Offene Verbindungen am Web-Port (16 bis 65536), WebSockets eingeschlossen; weitere warten, bis eine endet (Sicherheit T-025) |
 | RCD\_MAX\_CLIENT\_CONNECTIONS | 128 | Offene Verbindungen einer Client-Adresse am Web-Port (1 bis 65536), ein IPv6-/64 zählt als eine; weitere werden sofort geschlossen; Adressen aus RCD\_TRUSTED\_PROXIES ausgenommen (Sicherheit T-025) |
+| RCD\_MAX\_ANONYMOUS\_CONNECTION\_SECONDS | 30 | Eine Verbindung ohne gültige Session endet nach dieser Zeit (10 bis 3600), nach ihrer laufenden Anfrage; WebSockets und vertrauenswürdige Proxys sind ausgenommen (Sicherheit T-025) |
 | RCD\_LOG\_LEVEL | info | debug, info, warn, error |
 | RCD\_LOG\_FORMAT | text | text oder json |
 

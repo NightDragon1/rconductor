@@ -27,7 +27,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 | ID | STRIDE | Bedrohung | Maßnahme | Status |
 | --- | --- | --- | --- | --- |
 | T-001 | Spoofing | Diebstahl oder Fixierung einer Session | Serverseitige Sessions, Cookie HttpOnly und SameSite=Lax, über HTTPS Secure mit Präfix \_\_Host-, neue Session-ID nach Anmeldung (Design 2.1, D-043) | abgedeckt; ohne TLS-Proxy Restrisiko im LAN (SEC-001) |
-| T-002 | Spoofing | Passwort-Raten | Argon2id, Login-Schutz, auch bei parallelen Versuchen und je IPv6-/64; Anmeldungen des Besitzers setzen die Zähler anderer Clients nicht zurück, ein Client ist über alle Namen begrenzt, laufende Zähler werden nie verdrängt, eine volle Tabelle lässt keine ungezählten Versuche in voller Geschwindigkeit durch (AUTH-001, SEC-004, Design 3.7) | abgedeckt |
+| T-002 | Spoofing | Passwort-Raten | Argon2id, Login-Schutz, auch bei parallelen Versuchen und je IPv6-/64; Anmeldungen des Besitzers setzen die Zähler anderer Clients nicht zurück, ein Client ist über alle Namen begrenzt, laufende Zähler werden nie verdrängt, eine volle Tabelle lehnt ab, was sie nicht zählen kann (AUTH-001, SEC-004, Design 3.7) | abgedeckt für eine Adresse; R-11, R-12 |
 | T-003 | Spoofing | Fremder Agent gibt sich als gekoppelter Agent aus | Gegenseitig gepinnte Ed25519-Schlüssel, Widerruf (AGT-012) | abgedeckt |
 | T-004 | Spoofing | Angreifer fängt den ersten Kontakt bei Weg B ab (Trust on First Use) | Weg B standardmäßig aus, Fingerprint-Abgleich (D-024) | Restrisiko bei aktivem Weg B |
 | T-005 | Tampering | Befehlsinjektion über Zeilenumbrüche oder Steuerzeichen | Bereinigung vor dem Senden (CMD-006) | abgedeckt |
@@ -41,7 +41,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 | T-013 | Information Disclosure | Server außerhalb des Scopes werden sichtbar | 404 statt 403 (Design 3.1) | abgedeckt |
 | T-014 | Information Disclosure | Geheimnisse in Container-Logs | Logs nur für RCON- und Server-Admin, nur bei offener Ansicht (UI-009, AGT-008) | abgedeckt |
 | T-015 | Information Disclosure | Kopplungs-Token oder Initialpasswort in docker inspect bzw. Container-Log | Token einmalig und 24 h gültig, \_FILE-Variante (D-033); Initialpasswort nach Änderung ungültig (AUTH-007) | abgedeckt |
-| T-016 | Denial of Service | Befehlsflut gegen einen Spieleserver | Ratenlimit (CMD-019), Warteschlange je Server (PROT-002); ein gesperrter Client füllt das Audit-Log nicht, je Client und Sperrfenster sind die Audit-Einträge begrenzt | abgedeckt |
+| T-016 | Denial of Service | Befehlsflut gegen einen Spieleserver | Ratenlimit (CMD-019), Warteschlange je Server (PROT-002); ein gesperrter Client füllt das Audit-Log nicht, je Client und Sperrfenster sind die Audit-Einträge begrenzt; Einträge gehen unter Last nicht verloren | abgedeckt; R-05 |
 | T-017 | Denial of Service | Übergroße Nachrichten oder Verbindungsflut am Agent-Port | Größenlimits und Handshake-Rate am Agent-Port, je IPv6-/64 gezählt, Verbindungen insgesamt und je Client begrenzt, begrenzte wartende Kopplungen, ohne Agent-Session endet die Verbindung mit der ersten Antwort (SEC-007) | abgedeckt |
 | T-018 | Denial of Service | Viele WebSockets oder Abos je Session | Begrenzung der Sockets je Session und der Abos je Socket (SEC-008) | abgedeckt |
 | T-019 | Denial of Service | Regex mit hoher Laufzeit im Panel | RE2, Zeilenlimit, Timeout (SEC-003) | abgedeckt |
@@ -49,7 +49,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 | T-021 | Elevation of Privilege | Kompromittiertes Panel übernimmt den Host über den Agent | Agent erlaubt nur die Operationen aus Design 1.5 und nur gelabelte Container (AGT-002, AGT-004) | abgedeckt |
 | T-022 | Elevation of Privilege | Kompromittierter Agent übernimmt den Host | Agent minimal, distroless, als Nicht-Root ohne offenen Port; zusätzlicher Socket-Proxy vor dem Docker-Socket als Empfehlung (SEC-010), der nur Auflisten, Inspizieren, Ereignisse, Logs, Statistiken, start, stop und restart durchlässt. Zugriff auf den Docker-Socket bleibt root-äquivalent. Beim empfohlenen Proxy erlaubt ALLOW\_RESTARTS auch kill; der Agent ruft es nie auf, ein kompromittierter Agent könnte es, gleichwertig zu stop | Restrisiko, gemindert |
 | T-023 | Elevation of Privilege | Kompromittierter Agent greift das Panel an | Agent-Daten gelten als Fremddaten (SEC-006, SEC-007); Agent erhält nur Aufträge, keine Daten anderer Hosts | abgedeckt |
-| T-025 | Denial of Service | Speicher wird ohne Anmeldung erschöpft: über Argon2id (64 MiB je Berechnung) oder große Request-Bodys | Begrenzung gleichzeitiger Berechnungen, Login-Schutz, Einladungs-Token vor der Passwortarbeit geprüft (Design 3.7), Bodys höchstens 256 KiB, ohne Session 16 KiB, Profilbild 2 MiB, schreibende Anfragen ohne Session werden vor dem Lesen des Bodys abgelehnt, gemerkte Pseudonyme begrenzt (Design 2.1), offene Verbindungen am Web-Port insgesamt und je Client begrenzt, Schreibfrist 60 s (RCD\_MAX\_CONNECTIONS, RCD\_MAX\_CLIENT\_CONNECTIONS, Design 5.2); Speichergrenze im Compose | abgedeckt |
+| T-025 | Denial of Service | Speicher wird erschöpft oder Plätze werden gehalten, ohne Anmeldung oder mit einer Session jeder Rolle: über Argon2id (64 MiB je Berechnung), große Request-Bodys oder viele Verbindungen | Begrenzung gleichzeitiger Berechnungen, Login-Schutz, Einladungs-Token vor der Passwortarbeit geprüft (Design 3.7), Bodys höchstens 256 KiB, ohne Session 16 KiB, Profilbild 2 MiB, schreibende Anfragen ohne Session werden vor dem Lesen des Bodys abgelehnt, gemerkte Pseudonyme begrenzt (Design 2.1), offene Verbindungen am Web-Port insgesamt und je Client begrenzt, Schreibfrist 60 s, Verbindungen ohne Session enden nach 30 s (RCD\_MAX\_CONNECTIONS, RCD\_MAX\_CLIENT\_CONNECTIONS, RCD\_MAX\_ANONYMOUS\_CONNECTION\_SECONDS, Design 5.2), Bodys in Arbeit unabhängig von der Rolle begrenzt (Design 2.1); Speichergrenze im Compose | abgedeckt, gemessen; R-06, R-07 |
 | T-026 | Tampering | Manipulierte Abhängigkeit oder Image in der Lieferkette | Signierte Images mit SBOM, govulncheck, gepinnte Actions und Basis-Images (SEC-013) | abgedeckt |
 | T-024 | Information Disclosure | Geheimnisse in den Logs von Panel und Agent, die über Portainer, Log-Sammler oder MCP von Dritten gelesen werden | Schwärzung auf allen Log-Levels, Sessions nur als Hash, Abnahme über Logs nur gegen Testinstanzen (SEC-012, Design 8.1) | abgedeckt |
 
@@ -67,15 +67,32 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 
 ## 5. Restrisiken
 
-- Wer Root auf dem Spiele-Host oder Zugriff auf den Agent-Container hat, kontrolliert die Container dieses Hosts; der Agent kann das nicht verhindern.
-- RCON selbst ist unverschlüsselt; Schutz nur über Netztrennung.
-- Wer Zugriff auf Datenbank und /secrets des Panels hat, kann alles lesen und das Audit-Log ändern.
-- Bei aktivem Weg B hängt die Sicherheit am Fingerprint-Abgleich durch Menschen.
-- Audit-Zeilen für erfundene Namen: Ohne Anmeldung erzeugt jeder Fehlversuch einen Audit-Eintrag, auch unbekannte Namen zählen wie bekannte (Design 3.7). Je Client und Sperrfenster ist das durch login.max\_client\_failures begrenzt, bei Standardwerten auf höchstens 72 Einträge. Viele Adressen zusammen erzeugen entsprechend mehr, gebremst nur durch die begrenzte Passwortberechnung.
-- Das Verbindungslimit schützt den Speicher, nicht die Erreichbarkeit: Eine Adresse belegt höchstens RCD\_MAX\_CLIENT\_CONNECTIONS. Viele Adressen zusammen können alle Plätze belegen und mit kleinen Anfragen dauerhaft halten; neue Besucher warten dann, bestehende WebSockets laufen weiter. Hinter einem Reverse Proxy sieht das Panel nur dessen Adresse, dort gehört eine Begrenzung je Adresse an den Proxy.
-- Wer eine Session hat, kann mit vielen großen Anfragen viel Speicher belegen: Bis 256 KiB je Anfrage werden dekodiert, die Grenze dafür ist nur das Verbindungslimit und die Speichergrenze im Compose.
-- Bei vielen gleichzeitigen richtigen Anmeldungen desselben Kontos vom selben Client kann 429 kommen: Laufende Versuche zählen vor ihrem Ergebnis (Design 3.7). Der nächste Versuch nach dem Ende der laufenden gelingt.
-- Besitzer und Angreifer hinter derselben Adresse oder demselben IPv6-/64 gelten als ein Client; die Anmeldung des Besitzers löscht dann auch die Fehlversuche des Angreifers.
-- Die Sperre je Client trifft alle hinter derselben Adresse: Hinter NAT, im gemeinsamen IPv6-/64 oder hinter einem Proxy ohne Eintrag in den vertrauenswürdigen Proxys teilen sich alle die login.max\_client\_failures Fehlversuche. Erreicht einer die Grenze, kann sich dort für die Sperrdauer niemand neu anmelden, auch nicht mit dem richtigen Passwort; bestehende Sessions bleiben. Für große gemeinsame Adressen ist der Wert in den Einstellungen anzuheben.
-- Viele Adressen zusammen umgehen die Grenze je Client: Jede Adresse hat ihre eigenen Versuche, je Konto bleiben es login.max\_failures je Adresse.
-- Eine volle Zähltabelle schützt das Passwort auf Kosten der Erreichbarkeit: Rund 100 Adressen mit laufenden Zählern füllen die 10 000 Einträge. Danach kommt bis zum Ende dieser Zähler für alle noch nicht gezählten Clients zusammen nur ein Versuch je 4 s durch, alle anderen erhalten 429; auch Berechtigte müssen wiederholen. Fehlversuche ohne Platz bleiben ungezählt, sind aber auf diesen einen Versuch je 4 s begrenzt.
+Ein Restrisiko gilt erst mit Messung und nach ausdrücklicher Freigabe durch den Projektinhaber (Kapitel 6). Die Freigabe steht bei allen Einträgen noch aus.
+
+| ID | Risiko | Messung | Widerspruch zu einer Anforderung | Freigabe |
+| --- | --- | --- | --- | --- |
+| R-01 | Wer Root auf dem Spiele-Host oder Zugriff auf den Agent-Container hat, kontrolliert die Container dieses Hosts; der Agent kann das nicht verhindern. | Nicht messbar, folgt aus dem Aufbau | Nein | offen |
+| R-02 | RCON selbst ist unverschlüsselt; Schutz nur über Netztrennung (T-012). | Nicht messbar, folgt aus dem Protokoll | Nein | offen |
+| R-03 | Wer Zugriff auf Datenbank und /secrets des Panels hat, kann alles lesen und das Audit-Log ändern (T-009). | Nicht messbar, folgt aus dem Aufbau | Nein | offen |
+| R-04 | Bei aktivem Weg B hängt die Sicherheit am Fingerprint-Abgleich durch Menschen (T-004). | Nicht messbar | Nein | offen |
+| R-05 | Audit-Zeilen für erfundene Namen: Ohne Anmeldung erzeugt jeder Fehlversuch einen Eintrag. Je Client und Sperrfenster ist das begrenzt, viele Adressen zusammen erzeugen entsprechend mehr. | Test: höchstens 72 Einträge je Client und Fenster bei Standardwerten | Nein | offen |
+| R-06 | Das Verbindungslimit schützt den Speicher, die Erreichbarkeit nur begrenzt: Viele Adressen zusammen können alle Plätze belegen, wenn sie sofort neu verbinden; neue Besucher warten, bestehende WebSockets laufen weiter. Hinter einem Reverse Proxy gehört die Begrenzung je Adresse an den Proxy, dessen Adresse altert nicht. | 4 Adressen, je 128 Verbindungen, sofortiges Neuverbinden, 180 s: 90 von 90 Besuchern bedient, Median 10 s, Maximum 30 s | Prüfen: nur noch Wartezeit bis zum Höchstalter | offen |
+| R-07 | Wer eine Session hat, kann mit vielen großen Anfragen das Budget der Bodys belegen: Schreibende Anfragen anderer warten dann bis zu 5 s und erhalten 503. Lesen und Konsole bleiben davon unberührt. | 640 Worker, 256 KiB je Anfrage, 120 s, 1 GiB: Spitze 467 MiB, kein OOM. Test je Rolle: rund 300 MiB Heap. Nicht gemessen: RCD\_PASSWORD\_HASH\_CONCURRENCY über 2 (je Berechnung 64 MiB mehr) | Nein | offen |
+| R-08 | Bei vielen gleichzeitigen richtigen Anmeldungen desselben Kontos vom selben Client kann 429 kommen: Laufende Versuche zählen vor ihrem Ergebnis (Design 3.7). Der nächste Versuch nach dem Ende der laufenden gelingt. | Test | Nein | offen |
+| R-09 | Besitzer und Angreifer hinter derselben Adresse oder demselben IPv6-/64 gelten als ein Client; die Anmeldung des Besitzers löscht dann auch die Fehlversuche des Angreifers für dieses Konto. Der Zähler über alle Namen bleibt. | Test des Zählers über alle Namen; Grundfall folgt aus dem Aufbau | Nein | offen |
+| R-10 | Die Sperre je Client trifft alle hinter derselben Adresse: Hinter NAT, im gemeinsamen IPv6-/64 oder hinter einem Proxy ohne Eintrag in den vertrauenswürdigen Proxys teilen sich alle die login.max\_client\_failures Fehlversuche. Erreicht einer die Grenze, kann sich dort für die Sperrdauer niemand neu anmelden; bestehende Sessions bleiben. Für große gemeinsame Adressen ist der Wert anzuheben. | Test | Nein | offen |
+| R-11 | Viele Adressen zusammen umgehen die Grenze je Client: Jede Adresse hat ihre eigenen Versuche, je Konto bleiben es login.max\_failures je Adresse. | Rechnung: 100 Adressen ergeben 500 Versuche je Konto und Fenster | Nein | offen |
+| R-12 | Eine volle Zähltabelle schützt das Passwort auf Kosten der Erreichbarkeit: Rund 100 Adressen mit laufenden Zählern füllen die 10 000 Einträge. Danach erhalten alle noch nicht gezählten Clients bis zum Ende dieser Zähler 429, auch mit richtigem Passwort; bestehende Sessions bleiben. | Test der Ablehnung; im Lasttest war die Tabelle nach rund 130 s voll (60 000 Adressen) | Prüfen: Anmeldung zeitweise nicht möglich | offen |
+| R-13 | Ohne TLS-Proxy laufen Sessions im LAN ungeschützt (T-001). | Nicht messbar, folgt aus dem Aufbau | Nein | offen |
+
+## 6. Schwere und Restrisiken
+
+| Stufe | Maßstab |
+| --- | --- |
+| hoch | Ohne Anmeldung oder mit niedrigster Rolle erreichbar und Ausfall des Panels, Datenabfluss zwischen Benutzern, Rechteausweitung oder Umgehung von Sperre oder Audit |
+| mittel | Sicherheitsschutz geschwächt, aber begrenzt; oder nur mit erhöhter Rolle erreichbar |
+| niedrig | Randfall, Härtung, Funktionsfehler ohne Sicherheitsbezug |
+
+Funktionsfehler ohne Sicherheitsbezug sind nie hoch oder mittel im Sinne einer Release-Schwelle; sie blockieren 1.0, nicht 0.x.
+
+Ein Restrisiko braucht eine Messung und die ausdrückliche Freigabe des Projektinhabers. Widerspricht es einer Anforderung, braucht es eine Revision.
