@@ -1,6 +1,6 @@
 # Design
 
-Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept, Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
+Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept, Kapitel 16, gegenüber 2.5 Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Baut auf dem Tab Architektur auf; Die Zeit- und Ratenwerte in 1.1, 1.2 und 3.4 sind mit vergleichbaren Systemen abgeglichen und festgelegt; übrige Zahlenwerte werden bei der Umsetzung bestätigt.
 
 ## 1. Agent-Protokoll
 
@@ -49,7 +49,7 @@ Der Agent speichert seinen Schlüssel und den gepinnten Panel-Schlüssel in sein
 
 ### 1.4 Versionsregel
 
-Agent und Panel müssen dieselbe Hauptversion des Releases haben, also dieselbe erste Stelle (D-047). Bei Abweichung lehnt das Panel mit Grund version ab; der Hinweis erscheint im Panel und im Agent-Log. Innerhalb einer Hauptversion meldet der Agent neue Funktionen über seine Fähigkeitsliste; das Panel blendet aus, was der Agent nicht kann.
+Agent und Panel müssen dieselbe Hauptversion des Releases haben, also dieselbe erste Stelle (D-047). Bei Abweichung lehnt das Panel mit Grund version ab; der Hinweis erscheint im Panel-Log und im Agent-Log. Innerhalb einer Hauptversion meldet der Agent neue Funktionen über seine Fähigkeitsliste; das Panel blendet aus, was der Agent nicht kann.
 
 ### 1.5 Nachrichten
 
@@ -113,6 +113,7 @@ Das Panel markiert den Agent als widerrufen, löst seine Server von ihm (agent\_
 | Reservierte Pfade | /api (jede Version), /healthz und /metrics werden nie von der Oberfläche beantwortet; /healthz und /metrics werden mit NFR-006 (R2) befüllt. Ohne die Reservierung beantwortete die Auslieferung sie mit index.html, und ein Healthcheck meldete fälschlich „gesund“ |
 | HAProxy | Normales HTTP/1.1, kein HTTP/2 nötig; für den WebSocket genügt ein ausreichendes timeout tunnel |
 | Fehler | Einheitlich als Problem Details nach RFC 9457 |
+| Größe | Jeder Request-Body ist auf 2 MiB begrenzt, darüber 413; Passwörter über 512 Byte gelten bei der Anmeldung als falsch |
 | Gleichzeitige Änderungen | Benutzergruppen, Befehlslisten, Server und Servergruppen tragen ein Feld version, /settings eine gemeinsame Version als ETag. Schreiben nennt die gelesene Version in If-Match (Pflicht, sonst 428); die Prüfung ist atomar in der Datenbank in derselben Transaktion wie das Schreiben, bei Abweichung 409 und nichts wird geschrieben. Rolle und Scope werden vor der Version geprüft (3.1). Die Oberfläche zeigt „Changed by someone else – reload“ und sendet den Entwurf nicht |
 | Listen | Cursorbasierte Paginierung für Audit und Verlauf |
 | Externe API | R1 nur für die eigene Oberfläche. Ab R2 dokumentiert mit OpenAPI 3.1 und API-Tokens je Benutzer (Bearer), gleicher Rechteumfang wie der Benutzer, eigene Ablaufzeit, widerrufbar |
@@ -136,7 +137,7 @@ Das Panel markiert den Agent als widerrufen, löst seine Server von ihm (agent\_
 | /user-groups, /user-groups/{id} | GET, POST, PATCH, DELETE | Benutzer- und Moderatorgruppen mit Mitgliedern und Grants an die ganze Gruppe | RCON-Admin, Server-Admin |
 | /command-lists, /command-lists/{id} | GET, POST, PATCH, DELETE | Befehlslisten und weitergebbare Befehle | RCON-Admin, Server-Admin |
 | /server-groups | GET, POST, PATCH, DELETE | Servergruppen | RCON-Admin; Server-Admin lesend im Scope |
-| /servers, /servers/{id} | GET, POST, PATCH, DELETE | Spieleserver und RCON-Zugangsdaten; GET liefert runtime (Containerzustand, Startzeit, Restarts, letzte Messwerte mit Zeit und veraltet, Spielerzahl) als Startwert für Karten und Kopf, Agent-Teile nur für Admins | RCON-Admin; übrige lesend im Scope |
+| /servers, /servers/{id} | GET, POST, PATCH, DELETE | Spieleserver und RCON-Zugangsdaten; eine Änderung von Host oder Port verlangt das Passwort erneut, damit es nie unbestätigt an eine neue Adresse geht; GET liefert runtime (Containerzustand, Startzeit, Restarts, letzte Messwerte mit Zeit und veraltet, Spielerzahl) als Startwert für Karten und Kopf, Agent-Teile nur für Admins | RCON-Admin; übrige lesend im Scope |
 | /servers/{id}/commands | GET, POST | GET: Pfade, die der Aufrufer senden darf, mit den Katalogparametern des Profils und player\_pattern; für Admins der Katalog des Profils (CMD-015). POST: Befehl senden; Antwort synchron mit Timeout, zusätzlich als Ereignis an alle Abonnenten | alle im Scope, gefiltert |
 | /servers/{id}/history | GET | Befehlsverlauf | im Scope, laut Verlaufssichtbarkeit |
 | /servers/{id}/logs | GET | Letzte Logzeilen über logs.tail, lines Standard 200, höchstens 500; Fremddaten (SEC-006), nur an den Aufrufer, nie in den Live-Ringpuffer. Ohne Agent 503 agent\_unavailable; das Ratenlimit des Agents kommt als 429 rate\_limited an | RCON-Admin; Server-Admin im Scope |
@@ -193,7 +194,7 @@ Verkleinert sich ein Scope oben, verkleinert er sich sofort für alle darunter. 
 5. RCON-Admin und Server-Admin: weiter mit Schritt 8.
 6. Wrapper: Ist der Befehlsname im Spielprofil als Wrapper markiert, wird er für Moderator und Supporter immer abgelehnt, unabhängig von der Liste.
 7. Liste: Token-Pfad-Abgleich gegen die für diesen Server geltende Liste (3.2). Ein Eintrag erlaubt nur ganze Tokens und alles danach; Vergleich mit Groß-/Kleinschreibung laut Spielprofil, Standard ohne.
-   7b. Katalogparameter (Moderator, Supporter): Befehle mit Katalogeintrag werden gegen die Parameter des Spielprofils geprüft (7.3); maßgeblich ist der längste Katalogpfad, mit dem der Befehl beginnt. Weitere Tokens nach den Parametern sind nur erlaubt, wenn der letzte Parameter vom Typ text ist, so scheitern time set day extra und whitelist add x y. Bei Abweichung 422 invalid mit dem Parameternamen im Detail oder „unexpected argument“, Audit-Eintrag cmd.denied. CMD-004 regelt den Pfad, nicht die Form der Argumente. Befehle ohne Katalogeintrag und die freie Eingabe von RCON-Admin und Server-Admin bleiben unverändert. Einschränkungen je Listeneintrag, die ein Server-Admin festlegt, folgen mit CMD-009 (R2); die Prüfung in R1 kennt nur die festen Parameter aus dem Spielprofil und gilt für alle Listen gleich.
+   7b. Katalogparameter (Moderator, Supporter): Befehle mit Katalogeintrag werden gegen die Parameter des Spielprofils geprüft (7.3); maßgeblich ist der längste Katalogpfad, mit dem der Befehl beginnt. Enthält der Befehl einen Befehlstrenner des Spielprofils (syntax.separators), wird er abgelehnt, denn der Abgleich sähe nicht, was danach folgt. Weitere Tokens nach den Parametern sind nur erlaubt, wenn der letzte Parameter vom Typ text ist, so scheitern time set day extra und whitelist add x y. Bei Abweichung 422 invalid mit dem Parameternamen im Detail oder „unexpected argument“, Audit-Eintrag cmd.denied. CMD-004 regelt den Pfad, nicht die Form der Argumente. Befehle ohne Katalogeintrag und die freie Eingabe von RCON-Admin und Server-Admin bleiben unverändert. Einschränkungen je Listeneintrag, die ein Server-Admin festlegt, folgen mit CMD-009 (R2); die Prüfung in R1 kennt nur die festen Parameter aus dem Spielprofil und gilt für alle Listen gleich.
 8. Ratenlimit (3.4).
 9. Markierung mit Request-ID, Session, Benutzer und Rolle.
 10. Audit-Eintrag cmd.sent vor dem Senden (ID = Request-ID); eine Ablehnung ist ein einzelner Eintrag cmd.denied mit Grund.
@@ -258,6 +259,8 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | Zähler | Im Arbeitsspeicher, höchstens 10 000 Einträge; enden nach der Sperrdauer ohne Fehlversuch, mit erfolgreicher Anmeldung und beim Neustart. Ist die Tabelle voll, wird der älteste nicht gesperrte Eintrag verdrängt; gesperrte Einträge werden nie verdrängt; ist sie ganz mit Sperren gefüllt, gilt für neue Versuche die höchste Verzögerung (4 s) |
 | Passwortberechnung | Argon2id mit t=3, 64 MiB, p=4; höchstens RCD\_PASSWORD\_HASH\_CONCURRENCY Berechnungen gleichzeitig, sonst nach 5 s Wartezeit 503 busy |
 | Passwörter | 12 bis 128 Zeichen |
+
+Laufende Versuche zählen schon vor ihrem Ergebnis, so kommt auch ein paralleler Schub nicht über die Grenze. IPv6-Adressen zählen je /64. Ein gesperrter Client erzeugt je Sperre einen Audit-Eintrag, nicht einen je Versuch.
 
 ### 3.8 RCON-Verbindung
 
@@ -349,7 +352,7 @@ Ein täglicher Job entfernt Audit-Einträge nach Ablauf der Frist (Standard 90 T
 | RCD\_DATA\_DIR | /data | SQLite, Profilbilder, eigene Spielprofile |
 | RCD\_SECRETS\_DIR | /secrets | Master-Key, Panel-Schlüssel |
 | RCD\_BACKUP\_DIR | /backups | Sicherungen |
-| RCD\_MASTER\_KEY\_FILE | leer | Master-Key aus einer anderen Datei, z. B. Docker-Secret; leer: /secrets, beim ersten Start erzeugt |
+| RCD\_MASTER\_KEY\_FILE | leer | Master-Key aus einer anderen Datei, z. B. Docker-Secret; fehlt sie, startet das Panel nicht. Leer: /secrets, beim ersten Start erzeugt |
 | RCD\_EMERGENCY\_ADMIN | true | Notfall-Admin aktiv |
 | RCD\_EMERGENCY\_ADMIN\_RESET | false | true: beim Start neues Initialpasswort für den Notfall-Admin (AUTH-011); danach wieder entfernen |
 | RCD\_PASSWORD\_HASH\_CONCURRENCY | 2 | Gleichzeitige Passwortberechnungen (1 bis 64), je 64 MiB |
@@ -378,6 +381,10 @@ services:
     image: ghcr.io/<owner>/rconductor-panel:1
     restart: unless-stopped
     read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
     ports:
       - "8080:8080"
       - "8443:8443"
@@ -401,6 +408,10 @@ services:
     image: ghcr.io/<owner>/rconductor-agent:1
     restart: unless-stopped
     read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
     group_add: ["<GID des Docker-Sockets>"]
     environment:
       RCD_PAIRING_TOKEN: "<Token aus dem Panel>"
@@ -421,6 +432,10 @@ services:
     image: ghcr.io/<owner>/rconductor-panel:1
     restart: unless-stopped
     read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
     ports:
       - "8080:8080"
     environment:
@@ -433,6 +448,10 @@ services:
     image: ghcr.io/<owner>/rconductor-agent:1
     restart: unless-stopped
     read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
     group_add: ["<GID des Docker-Sockets>"]
     environment:
       RCD_PAIRING_TOKEN: "<Token aus dem Panel>"
@@ -460,7 +479,7 @@ Globale Einstellungen in settings; nur der RCON-Admin liest und ändert sie übe
 | invite.lifetime | 72 h | Gültigkeit von Einladungen (UI-008) |
 | supporters.enabled | aus | Globale Supporter-Freigabe (ROLE-006); Abschalten beendet die Sessions aller Supporter |
 | ui.shortcuts\_enabled | aus | Tastaturkürzel (6.1); für alle Benutzer lesbar über /auth/session (Feld ui) |
-| audit.retention\_days | 90 | Aufbewahrung des Audit-Logs (AUD-003) |
+| audit.retention\_days | 90 (30 bis 3650) | Aufbewahrung des Audit-Logs (AUD-003) |
 | ratelimit.<rolle>.per\_minute, ratelimit.<rolle>.burst | laut 3.4 (z. B. ratelimit.moderator: 20 und 5) | Ratenlimit je Rolle (CMD-019); <rolle> ist rcon\_admin, server\_admin, moderator oder supporter |
 | profiles.poll\_interval | 30 s (1 s bis 1 h) | Abgleich der Profildateien zusätzlich zu Dateiereignissen (CAT-003, 7.1) |
 | ws.max\_sockets\_per\_session | 20 (1 bis 100) | WebSockets je Session (SEC-008); darüber wird der älteste Socket mit error replaced geschlossen |
@@ -563,6 +582,7 @@ Die Seitenleiste wird zum Menü, Start, Stopp und Neustart wandern ins Menü im 
 | syntax.strip\_prefix | nein | Präfix, das vor dem Abgleich entfernt wird, Standard / | R1 |
 | syntax.max\_length | nein | Höchstlänge eines Befehls nach der Bereinigung | R1 |
 | syntax.wrappers | nein | Befehle, die für Moderator und Supporter immer gesperrt sind (D-026) | R1 |
+| syntax.separators | nein | Zeichenfolgen, an denen die Konsole des Spiels Befehle trennt, z. B. ; bei Source-Servern; für Moderator und Supporter abgelehnt (3.3) | R1 |
 | syntax.player\_pattern | nein | RE2-Muster für einen ganzen Spielernamen (7.3), z. B. Minecraft Java ^[A-Za-z0-9\_]{1,16}$ | R1 |
 | players.command, players.pattern, players.separator | nein | Befehl und RE2-Muster für die Spielerliste | R1 |
 | stop.command | nein | Befehl für den Neustart ohne Agent (AGT-009) | R1 |

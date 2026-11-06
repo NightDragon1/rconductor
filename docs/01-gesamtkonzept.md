@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.6, Stand 06.11.2026, Status freigegeben; Änderungen gegenüber 2.5 in Kapitel 15, gegenüber 2.4 in Kapitel 14, gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.7, Stand 06.11.2026, Status freigegeben; Änderungen gegenüber 2.6 in Kapitel 16, gegenüber 2.5 in Kapitel 15, gegenüber 2.4 in Kapitel 14, gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -60,7 +60,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | NFR-006 | Metriken | Prometheus-Metriken und Healthcheck-Endpoint | Backend, Agent | Soll | R2 | 1 |
 | NFR-007 | Sprachen | Oberfläche in Englisch ab R1, Übersetzungsstruktur von Anfang an; Deutsch als zweite Sprache ab R2; weitere Sprachen als Dateien ergänzbar | UI | Muss | R1 | 1 |
 | NFR-008 | Backups | Regelmäßige automatische Backups der veränderlichen Daten (Datenbank, Befehlslisten, Einstellungen) nach /backups; der Master-Key wird getrennt davon gesichert (SEC-005) | Backend | Soll | R1 | 1 |
-| NFR-009 | Erweiterbarkeit | Niedrig priorisierte Anforderungen werden in der Architektur von Anfang an berücksichtigt, damit spätere Releases nichts umbauen müssen | alle | Muss | R1 | 1 |
+| NFR-009 | Erweiterbarkeit | Niedrig priorisierte Anforderungen werden in der Architektur von Anfang an berücksichtigt, damit spätere Releases nichts umbauen müssen; Schnittstellen für Auth-Anbieter und Datenbanktreiber folgen in R2 | alle | Muss | R1 | 2 |
 | NFR-010 | Volumes | Alle Daten liegen in eigenen Volumes: /data (SQLite mit Profilbildern, eigene Profile), /secrets (Master-Key, Agent-Schlüssel), /backups; README beschreibt genau, was wo liegt | Backend, Doku | Muss | R1 | 2 |
 | NFR-011 | Datenbankwahl per Env | RCD\_DB\_DRIVER wählt sqlite (Standard) oder postgres. postgres ohne RCD\_DB\_URL: interner Postgres-Dienst aus der mitgelieferten Compose-Datei, Zugangsdaten automatisch über Init-Skript bzw. .env vorbereitet. postgres mit RCD\_DB\_URL: externer Server, alle Zugangsdaten (Host, Port, Datenbank, Benutzer, Passwort) kommen vom Betreiber | Backend, Doku | Soll | R2 | 2 |
 | NFR-012 | Datenbankwechsel | Wechsel von SQLite nach Postgres per Befehl, ohne Datenverlust | Backend | Soll | R2 | 1 |
@@ -80,7 +80,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | SEC-010 | Socket-Proxy | Doku empfiehlt einen Socket-Proxy vor dem Docker-Socket, der nur die vom Agent benötigten Endpunkte durchlässt; der Agent funktioniert damit unverändert | Agent, Doku | Kann | R1 | 1 |
 | SEC-011 | Audit-Hash-Kette | Manipulationssichere Verkettung der Audit-Einträge mit Prüffunktion | Backend, DB | Kann | Backlog | 1 |
 | SEC-012 | Keine Geheimnisse in Logs | Passwörter, RCON-Zugangsdaten, Tokens, Schlüssel und Session-IDs erscheinen auf keinem Log-Level; Sessions nur als kurzer Hash; einzige Ausnahme ist die einmalige Ausgabe des Initialpassworts (AUTH-007) | Backend, Agent | Muss | R1 | 1 |
-| SEC-013 | Lieferkette | Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne Automerge; Release-Tags erst nach Veröffentlichung des Repositories; Signatur und SBOM gelten für ghcr.io und Docker Hub (PRJ-004) | alle | Muss | R1 | 2 |
+| SEC-013 | Lieferkette | Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne ungeprüftes Automerge: Merge durch Claude Code nach grüner CI und Sichtung des Changelogs zulässig, Major nur nach Freigabe; Release-Tags erst nach Veröffentlichung des Repositories; Signatur und SBOM gelten für ghcr.io und Docker Hub (PRJ-004) | alle | Muss | R1 | 3 |
 | PRJ-001 | Open Source | Veröffentlichung auf GitHub unter GNU AGPL-3.0; Spielprofile sind Teil des Repositories | alle | Muss | R1 | 1 |
 | PRJ-002 | Eigenständigkeit | Eigene Implementierung; Ideen anderer Tools nur sinngemäß, kein fremder Code, kein fremdes Design; ausgenommen kopierte Komponenten mit kompatibler Lizenz, die gekennzeichnet sind | alle | Muss | R1 | 2 |
 | PRJ-003 | GitHub-Release | Je Version ein GitHub-Release mit Tag, Änderungsnotizen, SBOM und Verweis auf die signierten Images | alle | Muss | R1 | 1 |
@@ -142,7 +142,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
 | --- | --- | --- | --- | --- | --- | --- |
 | CAT-001 | Spielprofile | Profildatei je Spiel im Repository: Protokoll, Standardport, Spielports, Befehlskatalog, Muster für Version und Spieler, Parameter der Katalogbefehle; Format laut Design 7 | Profile | Muss | R1 | 2 |
-| CAT-002 | Nur Orientierung | Katalog dient Autovervollständigung und Schnelleingabe, erlaubt oder verbietet nichts; Befehlslisten dürfen beliebige Befehle enthalten | Backend, UI | Muss | R1 | 1 |
+| CAT-002 | Nur Orientierung | Katalog dient Autovervollständigung und Schnelleingabe und erlaubt nichts; seine Parameter schränken nur Moderator und Supporter ein (Design 3.3, Schritt 7b); Befehlslisten dürfen beliebige Befehle enthalten | Backend, UI | Muss | R1 | 2 |
 | CAT-003 | Hot Reload | Profildateien sind die Quelle; beim Start und bei jeder Dateiänderung werden sie in die Datenbank importiert, ohne Neustart des Panels; die Oberfläche arbeitet ausschließlich aus der Datenbank | Backend | Muss | R1 | 1 |
 | CAT-004 | Kategorien | Katalogbefehle kategorisiert (spielerbezogen, Welt, Server, kritisch); daraus Standard-Befehlsliste für Moderatoren | Profile, UI | Soll | R2 | 1 |
 | CAT-005 | Befehlssyntax je Spiel | Spielprofil legt Groß-/Kleinschreibung, Präfixe (z. B. /), Wrapper-Befehle und maximale Befehlslänge fest; Standard: ohne Groß-/Kleinschreibung, führender / wird entfernt | Profile, Backend | Muss | R1 | 1 |
@@ -187,7 +187,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | AGT-010 | Weitere Backends | Agent-Backends für systemd (LinuxGSM) und Kubernetes | Agent | Kann | R3 | 1 |
 | AGT-011 | Verbindungsrichtung | Agent baut die Verbindung zum Panel auf; Panel-Adresse per Env; Agent benötigt keinen offenen Port | Agent, Backend | Muss | R1 | 1 |
 | AGT-012 | Gegenseitige Authentifizierung | Beide Seiten erzeugen Ed25519-Schlüssel und pinnen den Schlüssel der Gegenseite; Verbindung über TLS 1.3 direkt zum Agent-Port des Panels, nie über einen Reverse Proxy (D-019); Widerruf eines Agents im Panel | Agent, Backend | Muss | R1 | 2 |
-| AGT-013 | Versionsregel | Panel und Agent brauchen dieselbe Hauptversion; bei Abweichung lehnt das Panel die Verbindung mit Hinweis im Panel und im Agent-Log ab; neue Funktionen innerhalb einer Hauptversion meldet der Agent über eine Fähigkeitsliste | Agent, Backend | Muss | R1 | 1 |
+| AGT-013 | Versionsregel | Panel und Agent brauchen dieselbe Hauptversion; bei Abweichung lehnt das Panel die Verbindung mit Hinweis im Panel-Log und im Agent-Log ab; neue Funktionen innerhalb einer Hauptversion meldet der Agent über eine Fähigkeitsliste | Agent, Backend | Muss | R1 | 2 |
 
 ### 2.9 Landingpage und Dashboard
 
@@ -215,7 +215,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 
 | ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
 | --- | --- | --- | --- | --- | --- | --- |
-| AUD-001 | Audit-Log | Wer, wann, Server, Befehl, Ergebnis, abgelehnt ja/nein; auch Agent-Aktionen und Verwaltungsänderungen | Backend, DB | Muss | R1 | 1 |
+| AUD-001 | Audit-Log | Wer, wann, Server, Befehl, Ergebnis, abgelehnt ja/nein; auch Agent-Aktionen und Verwaltungsänderungen; ein Befehl erzeugt die Einträge cmd.sent und cmd.result (Design 3.3) | Backend, DB | Muss | R1 | 2 |
 | AUD-002 | Statistiken | Interne Statistiken aus den klassifizierten Befehlen | Backend, UI | Kann | R2 | 1 |
 | AUD-003 | Aufbewahrung | Einträge werden standardmäßig 90 Tage aufbewahrt und danach automatisch gelöscht; nur der RCON-Admin kann die Frist ändern | Backend | Muss | R1 | 1 |
 | AUD-004 | Einsicht | RCON-Admin sieht das gesamte Audit-Log; Server-Admins sehen nur Einträge ihres Scopes und können die Frist nicht ändern | Backend, UI | Muss | R1 | 1 |
@@ -435,6 +435,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 2.4 | 05.11.2026 | Freigabe durch Rob: Erkenntnisse aus M4 eingearbeitet (Kapitel 13); Revision 3 für SEC-006, Revision 2 für SEC-009, SEC-013, PRJ-002, CMD-001, CMD-004, UI-001, UI-004, UI-006, UI-007 und UI-012; DOC-001 bis DOC-005, PRJ-003, PRJ-004 und D-047 neu; neue Ressourcen in Design 2.2, Katalogprüfung in Design 3.3, optimistische Sperre, Ereigniscode logs.tail |
 | 2.5 | 05.11.2026 | Freigabe durch Rob: Begründungen aus den Kandidaten eingearbeitet, Trigger der optimistischen Sperre und group\_add nachgetragen, Verweise auf Mockups und Kandidaten-Dateien entfernt (Kapitel 14). Keine Anforderung ändert sich |
 | 2.6 | 06.11.2026 | Freigabe durch Rob: D-037 und Design 6.5 ohne Verweis auf Mockups, D-047 um Testversionen 0.x ergänzt (Kapitel 15). Keine Anforderung ändert sich |
+| 2.7 | 06.11.2026 | Freigabe durch Rob: Ergebnisse der Abnahme und des Reviews des Bedrohungsmodells eingearbeitet (Kapitel 16); Revision 2 für CAT-002, AGT-013, AUD-001, NFR-009; Revision 3 für SEC-013 |
 
 ## 10. Änderungen in Version 2.1
 
@@ -579,3 +580,24 @@ Vorbereitung des Release 1.0: Die Kandidaten-Dateien und die Mockups liegen nich
 | 1 | Stilrichtung verweist auf die Ansichten | D-037 |
 | 2 | Spaltenkopf Ansicht, Absatz Stil ohne Verweis auf die Mockup-Fläche | Design 6.5 |
 | 3 | Testversionen 0.x: nur Image-Tag 0.x, kein Haupt- oder latest-Tag, GitHub-Pre-Release, kein CHANGELOG-Eintrag | D-047 |
+
+## 16. Änderungen in Version 2.7
+
+Aus der Abnahme in M5 und dem Review des Bedrohungsmodells.
+
+| Nr. | Änderung | Fundstelle in 2.7 |
+| --- | --- | --- |
+| 1 | CAT-002 präzisiert: Der Katalog erlaubt nichts, seine Parameter schränken nur Moderator und Supporter ein | CAT-002 |
+| 2 | Hinweis bei Versionsabweichung steht im Panel-Log und im Agent-Log | AGT-013, Design 1.4, Abnahme AGT-013 |
+| 3 | Ein Befehl erzeugt zwei Audit-Einträge | AUD-001, Abnahme AUD-001 |
+| 4 | Auth-Anbieter und Datenbanktreiber als Schnittstellen erst in R2 | NFR-009, Abnahme NFR-009, Architektur 7 |
+| 5 | Kein ungeprüftes Automerge; Merge durch Claude Code nach grüner CI und Sichtung des Changelogs, Major nach Freigabe | SEC-013, Sicherheit |
+| 6 | Header gelten für Antworten des Panels; Fehler von net/http vor dem Handler sind ausgenommen | Abnahme SEC-009 |
+| 7 | Mit gelöschtem erzeugtem Master-Key startet das Panel; ein fehlender RCD\_MASTER\_KEY\_FILE stoppt den Start | Abnahme SRV-002, Design 5.2 |
+| 8 | Abnahme SEC-007: echtes TLS mit gefälschter Registry genügt | Abnahme SEC-007 |
+| 9 | Aufbewahrung des Audit-Logs mindestens 30 Tage | Design 5.6, Sicherheit T-009 |
+| 10 | Befehlstrenner im Spielprofil (syntax.separators), abgelehnt für Moderator und Supporter | Design 3.3, 7.2, Sicherheit T-006 |
+| 11 | Änderung von Host oder Port verlangt das RCON-Passwort | Design 2.2, Sicherheit T-011 |
+| 12 | Grenzen für Anfragen und Login-Schutz | Design 2.1, 3.7, Sicherheit T-002, T-016, T-025 |
+| 13 | Bedrohungsmodell: Status aktualisiert, T-019 im Panel, T-025 erweitert | Sicherheit |
+| 14 | Compose-Beispiele mit cap\_drop, no-new-privileges und Limits | Design 5.4, 5.5 |
