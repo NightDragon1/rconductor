@@ -143,6 +143,44 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/Invalid"
+  /servers/test-connection:
+    post:
+      operationId: testServerConnection
+      summary: Test RCON data without saving; RCON admin only (SRV-007).
+      description: >-
+        With server_id and unchanged host, port and password (an empty
+        password counts as unchanged) the answer is the status of the
+        running connection, nothing connects. New or changed data open a
+        short connection that only authenticates and closes at once. An
+        empty password at a new address is refused: the stored password
+        never goes there. Limited per user. No data of the game server
+        comes back.
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionTest"
+      responses:
+        "200":
+          description: The result of the test.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionTestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "429":
+          $ref: "#/components/responses/RateLimited"
   /servers/{id}:
     parameters:
       - $ref: "#/components/parameters/ServerID"
@@ -1862,6 +1900,39 @@ components:
           type: string
           maxLength: 255
           description: Container name on the agent's host; set together with agent_id.
+
+    ConnectionTest:
+      type: object
+      properties:
+        server_id:
+          type: string
+          format: uuid
+          description: The server being edited; missing when a new one is created.
+        profile_id:
+          type: string
+          format: uuid
+        host:
+          type: string
+          minLength: 1
+          maxLength: 253
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 512
+
+    ConnectionTestResult:
+      type: object
+      required: [result]
+      properties:
+        result:
+          type: string
+          enum: [ok, auth_failed, unreachable]
 
     ServerRuntime:
       type: object

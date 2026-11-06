@@ -156,3 +156,23 @@ test('the RCON admin reaches every administration page (ROLE-002)', async ({ pag
     await expect(page.getByRole('heading', { name: 'Page not found' })).toHaveCount(0);
   }
 });
+
+test('test connection reports the state without saving (SRV-007)', async ({ page, state }) => {
+  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  await page.getByRole('button', { name: 'New server' }).click();
+  const panel = page.getByRole('complementary', { name: 'Details of New server' });
+  await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Host').fill('127.0.0.1');
+  await panel.getByLabel('RCON port').fill('1');
+  await panel.getByLabel('RCON password').fill('some password');
+  await panel.getByRole('button', { name: 'Test connection' }).click();
+  await expect(panel.getByText('cannot be reached')).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: '127.0.0.1:1' })).toHaveCount(0);
+
+  // The running connection answers for unchanged data.
+  await panel.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('row').filter({ hasText: 'survival' }).getByRole('button').first().click();
+  const open = page.getByRole('complementary', { name: 'Details of survival' });
+  await open.getByRole('button', { name: 'Test connection' }).click();
+  await expect(open.getByText('Connection works')).toBeVisible();
+});

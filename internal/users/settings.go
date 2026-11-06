@@ -23,6 +23,13 @@ const (
 	DefaultWSMaxSubs    = 16
 )
 
+// SettingConnectionTests limits tests of RCON data per user and minute
+// (SRV-007).
+const (
+	SettingConnectionTests = "servers.connection_test_per_minute"
+	DefaultConnectionTests = 10
+)
+
 // SettingShortcuts switches keyboard shortcuts on for everyone (UI-008);
 // off by default, readable by all through the session (revision 2.4
 // candidate 7).
@@ -97,6 +104,7 @@ var settingRules = map[string]rule{
 	profiles.SettingPollInterval:  durationRule(profiles.MinPollInterval, time.Hour),
 	SettingFingerprintPairing:     boolRule,
 	SettingShortcuts:              boolRule,
+	SettingConnectionTests:        intRule(1, 120),
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and

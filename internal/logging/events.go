@@ -55,6 +55,8 @@ const (
 	RCONAuthFailed   Code = "rcon.auth_failed"
 	RCONDisconnected Code = "rcon.disconnected"
 	RCONReconnect    Code = "rcon.reconnect"
+	// RCONConnectionTest is a test of RCON data (SRV-007), with its result.
+	RCONConnectionTest Code = "rcon.connection_test"
 )
 
 // Game profiles.
@@ -103,7 +105,7 @@ var AllCodes = []Code{
 	AuthInitialPassword, AuthInviteUsed, AuthEmergencyReset,
 	PermDenied, PermRecomputed,
 	CmdAccepted, CmdDenied, CmdSent, CmdResponse, CmdTimeout,
-	RCONConnected, RCONAuthFailed, RCONDisconnected, RCONReconnect,
+	RCONConnected, RCONAuthFailed, RCONDisconnected, RCONReconnect, RCONConnectionTest,
 	ProfileImported, ProfileRejected, ProfileOverridden,
 	AgentConnected, AgentRejected, AgentPaired, AgentRevoked, AgentLimit, AgentDisconnected,
 	AgentHandshake, AgentForbidden, AgentUnsupported, DockerAction,

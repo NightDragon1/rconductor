@@ -110,6 +110,7 @@ function ServerPanel({
   const [message, setMessage] = useState<Message>(null);
   const [conflict, setConflict] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const base = useRef(server);
   const containers = useQuery({
     queryKey: ['agent-containers', d.agent_id],
@@ -128,6 +129,27 @@ function ServerPanel({
     container_name: d.agent_id ? d.container_name : '',
     game_ports: d.ownPorts ? d.game_ports : [],
   });
+
+  // Tests what is in the form without saving it (SRV-007).
+  const testConnection = async () => {
+    setTesting(true);
+    setMessage(null);
+    let result = '';
+    const r = await outcome(server?.id ?? 'new', async () => {
+      const { host, port, profile_id, password } = body();
+      ({ result } = must(
+        await api.POST('/servers/test-connection', {
+          body: { server_id: server?.id, host, port, profile_id, password },
+        }),
+      ));
+    });
+    setTesting(false);
+    setMessage(
+      r.ok
+        ? { ok: result === 'ok', text: t(`servers.testResult.${result}`) }
+        : { ok: false, text: reasonText(t, r.reason) },
+    );
+  };
 
   const save = (e: FormEvent) => {
     e.preventDefault();
@@ -403,6 +425,16 @@ function ServerPanel({
           <div className="flex flex-wrap gap-2">
             {!conflict && (
               <Button type="submit">{server ? t('servers.save') : t('servers.create')}</Button>
+            )}
+            {!conflict && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={testing || !d.host.trim()}
+                onClick={() => void testConnection()}
+              >
+                {t('servers.testConnection')}
+              </Button>
             )}
             {conflict && (
               <Button

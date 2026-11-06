@@ -182,6 +182,23 @@ func (m *Manager) Status(id string) (Status, time.Time) {
 	return w.state()
 }
 
+// Try opens a connection that only authenticates and closes it at once,
+// for a test of RCON data. It is the one exception to one connection per
+// server (PROT-002 rev. 2, D-049) and sends no command.
+func (m *Manager) Try(ctx context.Context, protocol, addr string, password logging.Secret) error {
+	adapter, err := m.adapters.Get(protocol)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, m.opts.DialTimeout)
+	defer cancel()
+	conn, err := adapter.Dial(ctx, addr, password)
+	if err != nil {
+		return err
+	}
+	return conn.Close()
+}
+
 // Execute queues a command for a server and waits for its answer, or for
 // ctx to end. Commands of all users go through the same connection one
 // after the other.

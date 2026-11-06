@@ -348,6 +348,9 @@ func matrix() []matrixOp {
 		{"POST", "/servers", "OFFFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/servers", body: map[string]any{"name": f.unique("new"), "profile_id": f.profile(), "host": "127.0.0.1", "port": 2, "password": "x"}}
 		}, false},
+		{"POST", "/servers/test-connection", "OFFFFFUP", func(f *rightsFixture, _ string) request {
+			return request{path: "/servers/test-connection", body: map[string]any{"profile_id": f.profile(), "host": "127.0.0.1", "port": 1, "password": "x"}}
+		}, false},
 		{"GET", "/servers/{id}", "OONOOOUP", serverPath(""), false},
 		{"PATCH", "/servers/{id}", "OFFFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/servers/" + f.server, body: map[string]any{"name": "main"}}

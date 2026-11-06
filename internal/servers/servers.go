@@ -103,6 +103,7 @@ type Service struct {
 	// agents and rcon carry out actions (AGT-003, AGT-009).
 	agents Agents
 	rcon   Executor
+	tests  testLimiter
 }
 
 // NewService returns the server administration; box encrypts credentials

@@ -482,6 +482,12 @@
     "new": "New server",
     "create": "Create server",
     "save": "Save",
+    "testConnection": "Test connection",
+    "testResult": {
+      "ok": "Connection works: the game server accepted the password.",
+      "auth_failed": "The game server refused the password.",
+      "unreachable": "The game server cannot be reached at this address."
+    },
     "delete": "Delete server …",
     "deleteTitle": "Delete the server {{name}}?",
     "deleteText": "Its history stays in the audit; groups and grants lose it at once. This cannot be undone.",
@@ -645,6 +651,10 @@
       "ws_max_subscriptions_per_socket": {
         "label": "Subscriptions per connection",
         "help": "Live topics one browser tab may follow at once."
+      },
+      "servers_connection_test_per_minute": {
+        "label": "Connection tests per minute",
+        "help": "How often one user may test RCON data in the server dialog."
       },
       "profiles_poll_interval": {
         "label": "Game profile check",

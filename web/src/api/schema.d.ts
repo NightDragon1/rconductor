@@ -99,6 +99,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/servers/test-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test RCON data without saving; RCON admin only (SRV-007).
+         * @description With server_id and unchanged host, port and password (an empty password counts as unchanged) the answer is the status of the running connection, nothing connects. New or changed data open a short connection that only authenticates and closes at once. An empty password at a new address is refused: the stored password never goes there. Limited per user. No data of the game server comes back.
+         */
+        post: operations["testServerConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/servers/{id}": {
         parameters: {
             query?: never;
@@ -975,6 +995,23 @@ export interface components {
             /** @description Container name on the agent's host; set together with agent_id. */
             container_name?: string;
         };
+        ConnectionTest: {
+            /**
+             * Format: uuid
+             * @description The server being edited; missing when a new one is created.
+             */
+            server_id?: string;
+            /** Format: uuid */
+            profile_id?: string;
+            host?: string;
+            port?: number;
+            /** Format: password */
+            password?: string;
+        };
+        ConnectionTestResult: {
+            /** @enum {string} */
+            result: "ok" | "auth_failed" | "unreachable";
+        };
         /** @description Runtime data, kept in memory with its age (NFR-005); the same data comes live in servers.overview with kind runtime. Player count for everyone in scope, the container only for RCON admin and server admin (UI-006). */
         ServerRuntime: {
             /** @enum {string} */
@@ -1597,6 +1634,36 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             422: components["responses"]["Invalid"];
+        };
+    };
+    testServerConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionTest"];
+            };
+        };
+        responses: {
+            /** @description The result of the test. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+            429: components["responses"]["RateLimited"];
         };
     };
     getServer: {

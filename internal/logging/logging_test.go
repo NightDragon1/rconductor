@@ -146,8 +146,9 @@ func TestCodesUniqueAndWellFormed(t *testing.T) {
 	}
 	// Design 8.3 (revision 2.2) lists 46; agent.disconnected comes with
 	// revision 2.3 candidate 5, logs.tail with revision 2.4 candidate 20,
-	// audit.entry_lost with the addendum to revision 2.7.
-	if len(AllCodes) != 49 {
-		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected, logs.tail and audit.entry_lost", len(AllCodes))
+	// audit.entry_lost with the addendum to revision 2.7, and
+	// rcon.connection_test with revision 2.8.
+	if len(AllCodes) != 50 {
+		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected, logs.tail, audit.entry_lost and rcon.connection_test", len(AllCodes))
 	}
 }
