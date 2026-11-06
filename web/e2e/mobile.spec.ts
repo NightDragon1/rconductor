@@ -104,6 +104,8 @@ for (const [user, tabs] of [
     for (const path of [
       'servers',
       'profile',
+      'no-such-page',
+      ...(user === 'admin' || user === 'sadmin' ? ['audit'] : []),
       ...tabs.map((t) => `servers/${state.servers.survival}/${t}`),
     ]) {
       await page.goto(path);

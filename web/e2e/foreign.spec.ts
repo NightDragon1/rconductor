@@ -75,6 +75,22 @@ test('a hostile answer stays text in console and history (SEC-006)', async ({ pa
   await harmless(page, entry.locator('pre'));
 });
 
+test('hostile answers stay text in the audit log (SEC-006)', async ({ page, state }) => {
+  await open(page, state, 'console');
+  await run(page, 'say audited');
+  await page.goto('audit');
+  const entry = page.getByRole('listitem').filter({ hasText: 'cmd.result' }).first();
+  await entry.getByText('Details').click();
+  // The payload is JSON, so the quotes of the markup stand escaped.
+  const box = entry.locator('pre');
+  await expect(box).toContainText('<script>window.__xss=1</script>');
+  await expect(box.locator('img, script')).toHaveCount(0);
+  expect(await page.evaluate(() => '__xss' in window)).toBe(false);
+  await expect(box).toContainText('hello §zworld');
+  await expect(box).not.toContainText('§a');
+  await expect(box.locator('[data-code]')).toHaveCount(1);
+});
+
 test('hostile log lines stay text (SEC-006)', async ({ page, state }) => {
   await open(page, state, 'logs');
   await harmless(page, page.getByRole('region', { name: 'Logs' }).locator('pre'));

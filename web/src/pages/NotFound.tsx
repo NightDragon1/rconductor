@@ -7,7 +7,7 @@ export function NotFoundPage() {
   return (
     <main className="p-8">
       <h1 className="mb-4 text-xl font-semibold">{t('notFound.title')}</h1>
-      <Link to="/" className="text-accent underline">
+      <Link to="/" className="tap text-accent underline">
         {t('notFound.back')}
       </Link>
     </main>

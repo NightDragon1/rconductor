@@ -150,7 +150,7 @@ function FavoritesBar({ current }: { current: string }) {
           aria-current={s.id === current ? 'page' : undefined}
           className={cn(
             'tap rounded-md border px-2.5 py-1 font-mono text-sm',
-            s.id === current ? 'border-accent text-text' : 'border-border text-muted',
+            s.id === current ? 'border-accent text-text' : 'border-control text-muted',
           )}
         >
           <bdi>{s.name}</bdi>
@@ -247,7 +247,7 @@ export function ConsoleTab() {
       onClick={() => setTracks((x) => ({ ...x, [key]: !x[key] }))}
       className={cn(
         'flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm max-md:min-h-11',
-        tracks[key] ? 'border-accent text-text' : 'border-border text-muted',
+        tracks[key] ? 'border-accent text-text' : 'border-control text-muted',
       )}
     >
       <span className={cn('size-2 rounded-full', dot)} aria-hidden />

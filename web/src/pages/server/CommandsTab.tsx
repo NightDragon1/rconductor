@@ -82,7 +82,7 @@ function Field({
                   'min-h-9 rounded-md border px-3 font-mono text-sm max-md:min-h-11',
                   value === v
                     ? 'border-accent bg-surface-raised text-text'
-                    : 'border-border text-muted',
+                    : 'border-control text-muted',
                 )}
               >
                 {v}
@@ -402,7 +402,7 @@ export function CommandsTab() {
                           'min-h-9 rounded-md border px-2.5 font-mono text-sm max-md:min-h-11',
                           active && values[active.path]?.[active.param] === n
                             ? 'border-accent text-text'
-                            : 'border-border',
+                            : 'border-control',
                         )}
                       >
                         <bdi>{n}</bdi>

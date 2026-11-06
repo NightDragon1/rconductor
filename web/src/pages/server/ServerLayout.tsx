@@ -102,7 +102,7 @@ function Head({ server, role }: { server: Server; role?: string }) {
           to="/servers"
           aria-label={t('nav.servers')}
           title={t('nav.servers')}
-          className="flex size-11 shrink-0 items-center justify-center rounded-md border border-border"
+          className="flex size-11 shrink-0 items-center justify-center rounded-md border border-control"
         >
           <ChevronLeft aria-hidden className="size-5" />
         </Link>
@@ -180,7 +180,7 @@ export function ServerLayout() {
   return (
     <div className="flex flex-col gap-5">
       <nav aria-label={t('server.breadcrumb')} className="text-sm text-muted max-md:hidden">
-        <Link to="/servers" className="underline">
+        <Link to="/servers" className="tap underline">
           {t('nav.servers')}
         </Link>
         {group && (

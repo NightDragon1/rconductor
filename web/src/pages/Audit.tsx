@@ -6,8 +6,10 @@ import { api, must } from '@/api/client';
 import { useServers } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { useManagedUsers } from '@/api/users';
+import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { dateTime } from '@/lib/format';
+import { stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
 
 type Kind = 'command' | 'agent' | 'admin' | 'auth';
@@ -127,9 +129,11 @@ export function AuditPage() {
               e.payload !== null &&
               Object.keys(e.payload as object).length > 0 && (
                 <details>
-                  <summary className="cursor-pointer text-muted">{t('audit.details')}</summary>
-                  <pre className="mt-1 overflow-x-auto rounded bg-surface-raised p-2 font-mono text-xs whitespace-pre-wrap">
-                    {JSON.stringify(e.payload, null, 2)}
+                  <summary className="cursor-pointer text-muted max-md:py-3">
+                    {t('audit.details')}
+                  </summary>
+                  <pre className="mt-1 rounded bg-surface-raised p-2 font-mono text-xs whitespace-pre-wrap wrap-anywhere">
+                    <ForeignText text={stripCodes(JSON.stringify(e.payload, null, 2))} />
                   </pre>
                 </details>
               )}

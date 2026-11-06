@@ -88,7 +88,7 @@ export function ServerCard({
       className={cn(
         'flex min-w-0 flex-col gap-3 rounded-lg border border-l-4 border-border bg-surface p-4',
         edge[tone],
-        status === 'stopped' && 'opacity-85',
+        status === 'stopped' && 'opacity-90',
       )}
     >
       <div className="flex items-start justify-between gap-2">
