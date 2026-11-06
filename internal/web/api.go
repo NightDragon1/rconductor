@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"golang.org/x/sync/semaphore"
+
 	"github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
@@ -47,6 +49,9 @@ type apiServer struct {
 	profiles *users.Profiles
 	log      *slog.Logger
 	proxies  Proxies
+	// decode and pictures bound the bodies in work (limitBodies).
+	decode   *semaphore.Weighted
+	pictures *semaphore.Weighted
 }
 
 var _ api.StrictServerInterface = (*apiServer)(nil)
