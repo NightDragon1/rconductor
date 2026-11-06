@@ -194,11 +194,23 @@ export function resetBuffers() {
 }
 
 let owner: string | undefined;
+let generation = 0;
 
 // bufferOwner names the signed-in user. The buffers hold what this user may
 // see, so they go before another user's page renders (Design 6.3).
 export function bufferOwner(user: string | undefined) {
   if (user === owner) return;
   owner = user;
+  generation += 1;
   buffers.clear();
+}
+
+// bufferWriter is updateBuffer for an answer that comes later: taken when a
+// request starts, it writes nothing once another user owns the buffers. An
+// answer can outlive the session it was asked for.
+export function bufferWriter(): typeof updateBuffer {
+  const asked = generation;
+  return (server, f) => {
+    if (asked === generation) updateBuffer(server, f);
+  };
 }

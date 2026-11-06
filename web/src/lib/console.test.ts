@@ -5,6 +5,7 @@ import {
   addCommands,
   addLogLines,
   bufferOwner,
+  bufferWriter,
   newLines,
   prependTail,
   emptyBuffer,
@@ -172,5 +173,27 @@ describe('repeated log lines (#149)', () => {
   it('adds all lines after a gap or into an empty buffer', () => {
     expect(newLines(buf(['a']), ['y', 'z'])).toEqual(['y', 'z']);
     expect(newLines(emptyBuffer, ['y'])).toEqual(['y']);
+  });
+});
+
+describe('bufferWriter (Design 6.3)', () => {
+  const buffers = (server: string) => renderHook(() => useBuffer(server)).result.current;
+
+  it('writes for the user who asked, not for the next one', () => {
+    resetBuffers();
+    bufferOwner('alice');
+    const late = bufferWriter();
+    late('s', (b) => ({ ...b, running: 1 }));
+    expect(buffers('s').running).toBe(1);
+
+    bufferOwner('bob');
+    late('s', (b) => ({ ...b, running: 2 }));
+    expect(buffers('s').running).toBeUndefined();
+
+    // A later sign-in of the same user does not bring old answers back.
+    bufferOwner('alice');
+    late('s', (b) => ({ ...b, running: 3 }));
+    expect(buffers('s').running).toBeUndefined();
+    bufferOwner(undefined);
   });
 });
