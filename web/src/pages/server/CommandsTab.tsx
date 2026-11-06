@@ -269,7 +269,12 @@ function HistoryItem({ b }: { b: CmdBlock }) {
 // CommandsTab is the command page of moderator and supporter (CMD-003):
 // the commands of their list as cards with fields from the game profile,
 // the players online to pick from, and their own history.
+// A form belongs to its server: the key drops what was typed on a switch.
 export function CommandsTab() {
+  return <ServerCommands key={useServer()?.id} />;
+}
+
+function ServerCommands() {
   const { t } = useTranslation();
   const server = useServer();
   const id = server?.id ?? '';

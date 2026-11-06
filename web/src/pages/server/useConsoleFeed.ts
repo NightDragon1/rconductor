@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMutation } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { api, ApiError, must } from '@/api/client';
 import { useSession } from '@/api/session';
 import {
@@ -68,23 +68,32 @@ export function useConsoleFeed(id: string, logs: boolean) {
         params: { path: { id }, query: { limit: 50, cursor } },
       }),
     );
-    updateBuffer(id, (b) => ({
-      ...addCommands(
-        b,
-        page.items.map((e) => fromWire(e as Wire)),
-      ),
-      loaded: true,
-      // Coming back to a server fetches the newest page again; the place
-      // of the older pages stays.
-      cursor: cursor || !b.loaded ? page.next_cursor || undefined : b.cursor,
-    }));
+    const items = page.items.map((e) => fromWire(e as Wire));
+    updateBuffer(id, (b) => {
+      // Coming back fetches the newest page again. If it does not reach what
+      // the buffer holds, commands lie between them: the page starts over,
+      // so that older pages stay reachable without a gap.
+      const known = new Set(b.cmds.map((c) => c.id));
+      const gap = !cursor && b.loaded && !!page.next_cursor && !items.some((e) => known.has(e.id));
+      const base = gap ? { ...b, cmds: [] } : b;
+      return {
+        ...addCommands(base, items),
+        loaded: true,
+        cursor: cursor || !b.loaded || gap ? page.next_cursor || undefined : b.cursor,
+      };
+    });
+    return null;
   };
-  useEffect(() => {
-    // Also when coming back: no live event reached this buffer meanwhile.
-    if (id) void loadPage().catch(() => undefined);
-    // Only when the server changes; loadPage reads the current id.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  // A query, so that it also runs after a reconnect of the socket (Design
+  // 2.3) and retries: no live event reached this buffer meanwhile.
+  useQuery({
+    queryKey: ['console-history', id],
+    queryFn: () => loadPage(),
+    enabled: !!id,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
 
   useTopic(id ? `server.${id}.console` : undefined, (m) => {
     if (m.type === 'event' && m.data && typeof m.data === 'object') {
@@ -93,6 +102,9 @@ export function useConsoleFeed(id: string, logs: boolean) {
   });
   useLogsFeed(id, logs);
 
+  const [running, setRunning] = useState<Record<string, number>>({});
+  const count = (server: string, by: number) =>
+    setRunning((r) => ({ ...r, [server]: (r[server] ?? 0) + by }));
   const own = { userId: me, pseudonym: session?.user.pseudonym, role: session?.user.role };
   // The server travels with the command: the answer belongs to the server
   // it was sent to, also when the user has switched meanwhile (CMD-001).
@@ -104,6 +116,8 @@ export function useConsoleFeed(id: string, logs: boolean) {
           body: { command },
         }),
       ),
+    onMutate: ({ server }) => count(server, 1),
+    onSettled: (_r, _e, { server }) => count(server, -1),
     onSuccess: (r, { server }) =>
       updateBuffer(server, (b) =>
         addCommands(b, [
@@ -146,7 +160,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
   const send = {
     mutate: (command: string) => mutation.mutate({ server: id, command }),
     // Only a command to this server blocks its input.
-    isPending: mutation.isPending && mutation.variables?.server === id,
+    isPending: (running[id] ?? 0) > 0,
   };
   const loadOlder = () => (buf.cursor ? loadPage(buf.cursor) : Promise.resolve());
   return { buf, me, send, loadOlder };

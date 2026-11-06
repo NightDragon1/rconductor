@@ -177,7 +177,9 @@ export function ConsoleTab() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const input = drafts[id] ?? '';
   const setInput = (text: string) => setDrafts((d) => ({ ...d, [id]: text }));
-  const [walk, setWalk] = useState(-1);
+  const [walks, setWalks] = useState<Record<string, number>>({});
+  const walk = walks[id] ?? -1;
+  const setWalk = (i: number) => setWalks((w) => ({ ...w, [id]: i }));
   const [focus, setFocus] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [older, setOlder] = useState(false);
