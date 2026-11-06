@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -247,6 +248,30 @@ func TestOversizedMessage(t *testing.T) {
 	logtest.Wait(t, f.logs, `"reason":"too_large"`)
 	if f.hub.Connected("agent-1") {
 		t.Error("agent still connected")
+	}
+}
+
+// TestIdleConnectionEnds covers T-017: a client that finishes the handshake
+// and one plain request cannot keep the connection without a session.
+func TestIdleConnectionEnds(t *testing.T) {
+	f := newFixtureWith(t, Options{HelloTimeout: 300 * time.Millisecond})
+	cfg, err := agentproto.ClientConfig(agentKey(t), f.panel.Fingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := tls.Dial("tcp", f.addr, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.Write([]byte("GET /x HTTP/1.1\r\nHost: x\r\n\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.Copy(io.Discard, conn); err != nil {
+		t.Errorf("the idle connection stayed open: %v", err)
 	}
 }
 

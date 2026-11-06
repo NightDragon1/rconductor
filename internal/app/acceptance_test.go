@@ -73,12 +73,17 @@ func TestCommandRulesOverTheAPI(t *testing.T) {
 		map[string]any{"path": "say", "passable": true},
 		map[string]any{"path": "execute", "passable": true},
 		map[string]any{"path": "whitelist add", "passable": true},
+		map[string]any{"path": "/mymod reload", "passable": true},
 	)
 	if status, _, b := f.send(rA, "op steve"); status != http.StatusOK {
 		t.Errorf("free input of the RCON admin = %d %v", status, b)
 	}
 	if status, _, b := f.send(rSI, "op steve"); status != http.StatusOK {
 		t.Errorf("free input of the server admin = %d %v", status, b)
+	}
+	// CAT-002: the catalog limits nobody with free input.
+	if status, _, b := f.send(rA, "list uuids"); status != http.StatusOK {
+		t.Errorf("list uuids of the RCON admin = %d %v", status, b)
 	}
 	for _, role := range []string{rMR, rSU} {
 		for command, want := range map[string]struct {
@@ -96,6 +101,12 @@ func TestCommandRulesOverTheAPI(t *testing.T) {
 		}
 		if status, _, b := f.send(role, "whitelist add x"); status != http.StatusOK {
 			t.Errorf("%s sends whitelist add x = %d %v", role, status, b)
+		}
+		// CAT-002: a command no catalog knows, listed with its prefix.
+		for _, command := range []string{"mymod reload", "/mymod reload"} {
+			if status, _, b := f.send(role, command); status != http.StatusOK {
+				t.Errorf("%s sends %s = %d %v", role, command, status, b)
+			}
 		}
 	}
 }
@@ -597,4 +608,32 @@ func TestBigBodies(t *testing.T) {
 	if status, _ := f.raw(rA, http.MethodPut, "/me/avatar", picture); status == http.StatusRequestEntityTooLarge {
 		t.Errorf("a body of 1 MiB is refused as too large")
 	}
+}
+
+// TestStoredPasswordStaysAtItsHost covers T-011: changing host or port needs
+// the password again, or a stolen session could read it at a listener.
+func TestStoredPasswordStaysAtItsHost(t *testing.T) {
+	f := newRightsFixture(t)
+	if status, reason := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]string{"host": "attacker.example"}); status != http.StatusUnprocessableEntity && status != http.StatusBadRequest {
+		t.Errorf("new host without password = %d %s", status, reason)
+	}
+	if status, _ := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]any{"port": 1}); status < 400 {
+		t.Errorf("new port without password = %d", status)
+	}
+	if status, _ := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]string{"name": "renamed"}); status != http.StatusOK {
+		t.Errorf("another field = %d", status)
+	}
+	if status, _ := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]string{"host": "mc.example", "password": "a new password"}); status != http.StatusOK {
+		t.Errorf("new host with password = %d", status)
+	}
+}
+
+// TestAuditRetentionFloor covers T-009: a stolen session cannot erase the
+// audit log by a short retention.
+func TestAuditRetentionFloor(t *testing.T) {
+	f := newRightsFixture(t)
+	if status, _ := f.raw(rA, http.MethodPatch, "/settings", map[string]int{"audit.retention_days": 29}); status < 400 {
+		t.Errorf("29 days = %d", status)
+	}
+	f.as(rA).must(http.MethodPatch, "/settings", map[string]int{"audit.retention_days": 30}, nil, http.StatusOK)
 }

@@ -71,7 +71,7 @@ are written like `24h`, `15m`, `30s`.
 | `login.lockout_duration` | duration | 15m | 1m to 24h | length of a lockout |
 | `invite.lifetime` | duration | 72h | 1m to 30 days | validity of an invitation link |
 | `supporters.enabled` | boolean | off | on, off | supporters at all; switching off ends the sessions of all supporters |
-| `audit.retention_days` | number | 90 | 1 to 3650 | days the audit log is kept |
+| `audit.retention_days` | number | 90 | 30 to 3650 | days the audit log is kept |
 | `ratelimit.rcon_admin.per_minute` | number | 120 | 1 to 10000 | commands per minute |
 | `ratelimit.rcon_admin.burst` | number | 20 | 1 to 1000 | commands in one go |
 | `ratelimit.server_admin.per_minute` | number | 60 | 1 to 10000 | commands per minute |

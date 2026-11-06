@@ -307,6 +307,22 @@ func TestMarking(t *testing.T) {
 	}
 }
 
+// TestCommandSeparator covers T-006: where the game's console splits at a
+// separator, a list entry cannot see what follows it. Admins stay free.
+func TestCommandSeparator(t *testing.T) {
+	w := newWorld(t)
+	w.exec(`UPDATE game_profiles SET rules = json_set(rules, '$.syntax.separators', json('[";"]'))`)
+	if _, err := w.send("m", "kick steve; op eve"); reason(err) != ReasonInvalid {
+		t.Errorf("moderator with a separator: %v", err)
+	}
+	if _, err := w.send("m", "kick steve"); err != nil {
+		t.Errorf("without a separator: %v", err)
+	}
+	if _, err := w.send("admin", "say a; say b"); err != nil {
+		t.Errorf("admin with a separator: %v", err)
+	}
+}
+
 // TestAnswerIsForeignData covers the command part of SEC-006: HTML stays
 // text, control characters and invalid UTF-8 go, color codes stay for the
 // interface, in the answer, the history and the audit alike.

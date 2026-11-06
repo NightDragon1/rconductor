@@ -100,6 +100,9 @@ func TestChangePassword(t *testing.T) {
 	if err := f.p.ChangePassword(ctx, req, "initial password 1", "short"); !errors.As(err, &inv) {
 		t.Errorf("short new password: %v", err)
 	}
+	if err := f.p.ChangePassword(ctx, req, "initial password 1", "initial password 1"); !errors.As(err, &inv) {
+		t.Errorf("the same password again: %v", err)
+	}
 	if err := f.p.ChangePassword(ctx, req, "initial password 1", "a brand new password"); err != nil {
 		t.Fatal(err)
 	}

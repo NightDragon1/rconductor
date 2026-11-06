@@ -81,7 +81,7 @@ func (f *importFixture) write(t *testing.T, name, content string) {
 }
 
 func custom(id, name string) string {
-	return "schema: 1\nid: " + id + "\nname: " + name + "\nprotocol: { type: source-rcon, default_port: 27015 }\ncatalog:\n  - path: status\n"
+	return "schema: 1\nid: " + id + "\nname: " + name + "\nprotocol: { type: source-rcon, default_port: 27015 }\ncatalog:\n  - { path: status, description: a command }\n"
 }
 
 // TestSync covers CAT-001 and CAT-003: shipped profiles are imported with
