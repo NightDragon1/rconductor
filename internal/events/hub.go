@@ -106,8 +106,11 @@ type message struct {
 type subscription struct {
 	topic   string
 	server  string // empty for servers.overview
-	kind    string // overview, status or console
+	kind    string // overview, rights, status or console
 	release func()
+	// scope is the servers of the user when last looked at, for overview
+	// and rights; under Hub.mu.
+	scope []string
 	// Until ready, events wait in pending: none may come before subscribed
 	// and the current state (Design 2.3, issue #99). after is the last
 	// delivery the current state holds. All three under Hub.mu.
@@ -337,10 +340,14 @@ func (h *Hub) pingLoop(ctx context.Context, c *client) {
 	}
 }
 
-// parseTopic splits server.<id>.<kind> and servers.overview (Design 2.3).
+// parseTopic splits server.<id>.<kind>, servers.overview and user.rights
+// (Design 2.3).
 func parseTopic(topic string) (server, kind string, err error) {
-	if topic == "servers.overview" {
+	switch topic {
+	case "servers.overview":
 		return "", "overview", nil
+	case "user.rights":
+		return "", "rights", nil
 	}
 	parts := strings.Split(topic, ".")
 	if len(parts) != 3 || parts[0] != "server" || parts[1] == "" {
@@ -391,18 +398,11 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 	}
 	s := &subscription{topic: topic, server: server, kind: kind}
 	switch {
-	case kind == "overview" && h.viewer != nil:
-		// The overview views every server in scope: their player lists
-		// stay fresh while it is open (Gesamtkonzept 4.6).
+	case kind == "overview" || kind == "rights":
 		if rights, err := h.perm.For(ctx, c.p.UserID); err == nil {
-			var releases []func()
-			for _, id := range rights.ServerIDs() {
-				releases = append(releases, h.viewer.Watch(ctx, id))
-			}
-			s.release = func() {
-				for _, r := range releases {
-					r()
-				}
+			s.scope = rights.ServerIDs()
+			if kind == "overview" {
+				s.release = h.watch(ctx, s.scope)
 			}
 		}
 	case kind == "logs":
@@ -455,6 +455,23 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 	h.mu.Unlock()
 }
 
+// watch views the servers of an overview: their player lists stay fresh
+// while it is open (Gesamtkonzept 4.6). The result ends the view.
+func (h *Hub) watch(ctx context.Context, ids []string) func() {
+	if h.viewer == nil {
+		return nil
+	}
+	releases := make([]func(), 0, len(ids))
+	for _, id := range ids {
+		releases = append(releases, h.viewer.Watch(ctx, id))
+	}
+	return func() {
+		for _, r := range releases {
+			r()
+		}
+	}
+}
+
 func agentKind(kind string) bool { return kind == "metrics" || kind == "logs" }
 
 // PublishAgentData sends metrics or log lines of a server to the
@@ -477,7 +494,9 @@ func (h *Hub) unsubscribe(c *client, topic string) {
 
 // Recheck evaluates every subscription again after a change of rights;
 // subscriptions to servers that left the scope end with an error, also
-// when the session stays (revision 2.2 candidate 4).
+// when the session stays (revision 2.2 candidate 4). When the servers of a
+// user changed, the overview views the new ones and user.rights tells the
+// interface to load again (D-044).
 func (h *Hub) Recheck() {
 	ctx := context.Background()
 	h.mu.Lock()
@@ -491,10 +510,14 @@ func (h *Hub) Recheck() {
 		if err != nil {
 			continue
 		}
-		var gone []*subscription
+		ids := rights.ServerIDs()
+		var gone, moved []*subscription
 		h.mu.Lock()
 		for topic, s := range c.subs {
 			if s.server == "" {
+				if !slices.Equal(s.scope, ids) {
+					moved = append(moved, s)
+				}
 				continue
 			}
 			if sr, ok := rights.Server(s.server); !ok || (agentKind(s.kind) && !sr.Agent) {
@@ -510,6 +533,39 @@ func (h *Hub) Recheck() {
 			h.log.Info("subscription withdrawn", append(h.attrs(c), slog.String("topic", s.topic), slog.String(logging.KeyReason, ReasonRevoked))...)
 			c.send(message{Type: "error", Topic: s.topic, Reason: ReasonRevoked})
 		}
+		for _, s := range moved {
+			h.follow(ctx, c, s, ids)
+		}
+	}
+}
+
+// follow brings a subscription without a server to the new servers of its
+// user; the views of the overview change before the old ones end, so that
+// a server in both stays viewed.
+func (h *Hub) follow(ctx context.Context, c *client, s *subscription, ids []string) {
+	var view func()
+	if s.kind == "overview" {
+		view = h.watch(ctx, ids)
+	}
+	h.mu.Lock()
+	active := c.subs[s.topic] == s
+	old := s.release
+	if active {
+		s.scope = ids
+		if s.kind == "overview" {
+			s.release = view
+		}
+	}
+	h.mu.Unlock()
+	switch {
+	case !active:
+		if view != nil {
+			view()
+		}
+	case s.kind == "rights":
+		h.deliver(c, s, message{Type: "event", Topic: s.topic})
+	case old != nil:
+		old()
 	}
 }
 

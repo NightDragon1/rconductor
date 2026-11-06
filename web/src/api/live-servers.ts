@@ -2,8 +2,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { useTopic } from '@/lib/live-context';
-import { applyOverview, useServers, type Server } from './servers';
-import { useSession } from './session';
+import { applyOverview, serversKey, useServers, type Server } from './servers';
+import { sessionKey, useSession } from './session';
 
 // useLiveServers returns the servers in scope and keeps them live over
 // servers.overview (Design 2.3).
@@ -12,6 +12,12 @@ export function useLiveServers() {
   const { data: session } = useSession();
   useTopic(session ? 'servers.overview' : undefined, (m) => {
     if (m.type === 'event') applyOverview(qc, m.data);
+  });
+  // The servers of the user changed while the session stays (D-044).
+  useTopic(session ? 'user.rights' : undefined, (m) => {
+    if (m.type !== 'event') return;
+    void qc.invalidateQueries({ queryKey: serversKey });
+    void qc.invalidateQueries({ queryKey: sessionKey });
   });
   return useServers();
 }
