@@ -122,7 +122,7 @@ func (v *View) SetPlayers(p *cache.Cache) {
 func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Runtime {
 	rt := Runtime{Kind: "runtime", ServerID: serverID}
 	if v.players != nil {
-		if p, ok := v.players.Cached(serverID); ok {
+		if p, ok := v.players.Cached(serverID); ok && !p.Unknown {
 			n, at := len(p.Names), p.UpdatedAt
 			rt.Players, rt.PlayersAt, rt.PlayersStale = &n, &at, p.Stale
 		}

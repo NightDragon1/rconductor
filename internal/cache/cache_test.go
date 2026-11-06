@@ -94,6 +94,67 @@ func TestPlayersCached(t *testing.T) {
 	}
 }
 
+// TestPlayerAnswers covers SRV-006 and UI-004 with the real profile: the
+// one-line answer of current Minecraft, the two-line answer of old versions
+// and an answer that does not fit, which is unknown and never 0.
+func TestPlayerAnswers(t *testing.T) {
+	cases := map[string]struct {
+		answer  string
+		names   []string
+		unknown bool
+	}{
+		"one line":             {answer: "There are 2 of a max of 20 players online: Steve, Alex", names: []string{"Steve", "Alex"}},
+		"one line, none":       {answer: "There are 0 of a max of 20 players online: ", names: []string{}},
+		"two lines":            {answer: "There are 2/20 players online:\nSteve, Alex\n", names: []string{"Steve", "Alex"}},
+		"two lines, CRLF":      {answer: "There are 1/20 players online:\r\nSteve\r\n", names: []string{"Steve"}},
+		"two lines, none":      {answer: "There are 0/20 players online:\n\n", names: []string{}},
+		"first line only":      {answer: "There are 0/20 players online:", names: []string{}},
+		"does not fit":         {answer: "Unknown command. Try /help", unknown: true},
+		"empty answer":         {answer: "", unknown: true},
+		"names on a third row": {answer: "There are 1/20 players online:\n\nSteve\n", names: []string{}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			c, ex, _ := newCache(t)
+			ex.answer.Store(tc.answer)
+			p, err := c.Players(context.Background(), "s1")
+			if err != nil || p.Unknown != tc.unknown || p.Stale || !slices.Equal(p.Names, tc.names) {
+				t.Errorf("players = %+v %v", p, err)
+			}
+		})
+	}
+}
+
+// TestUnknownReplacesLastValue: a known list does not survive an answer
+// that no longer fits, the note is logged once, and a fitting answer ends it.
+func TestUnknownReplacesLastValue(t *testing.T) {
+	c, ex, logs := newCache(t)
+	ctx := context.Background()
+	now := time.Now()
+	c.now = func() time.Time { return now }
+	if p, err := c.Players(ctx, "s1"); err != nil || p.Unknown || len(p.Names) != 2 {
+		t.Fatalf("players = %+v %v", p, err)
+	}
+	ex.answer.Store("something else")
+	for range 2 {
+		now = now.Add(PlayersStale + time.Second)
+		if p, err := c.Players(ctx, "s1"); err != nil || !p.Unknown || len(p.Names) != 0 {
+			t.Fatalf("players = %+v %v", p, err)
+		}
+	}
+	if p, ok := c.Cached("s1"); !ok || !p.Unknown {
+		t.Errorf("cached = %+v %v", p, ok)
+	}
+	if n := strings.Count(logs.String(), "does not fit the player pattern"); n != 1 {
+		t.Errorf("logged %d times", n)
+	}
+	ex.answer.Store("There are 1 of a max of 20 players online: Steve")
+	now = now.Add(PlayersStale + time.Second)
+	if p, _ := c.Players(ctx, "s1"); p.Unknown || len(p.Names) != 1 {
+		t.Errorf("players = %+v", p)
+	}
+}
+
 // TestStaleKeptAndMarked: a value that cannot be refreshed is shown with
 // its time and marked stale, never hidden; a lost connection marks it at
 // once and logs cache.stale (NFR-005).
