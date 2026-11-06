@@ -281,7 +281,7 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 	if err != nil {
 		return "", Principal{}, err
 	}
-	s.throttle.success(key)
+	s.throttle.success(key, c.IP, s.now(), lockout)
 	s.log.Info("login", logging.Event(logging.AuthLoginOK),
 		slog.String(logging.KeyRequestID, c.RequestID), slog.String(logging.KeySession, p.SessionRef()),
 		slog.String(logging.KeyUser, p.Pseudonym), slog.String(logging.KeyRole, p.Role))

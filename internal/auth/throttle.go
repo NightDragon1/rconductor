@@ -73,8 +73,9 @@ func clientKey(ip netip.Addr) netip.Addr {
 // the delay, per account and client address for the lockout, so that an
 // attacker cannot lock a user out from everywhere. Unknown pseudonyms are
 // counted like real ones, so the behavior reveals nothing about which
-// accounts exist. Counters end after the lockout duration without failures
-// and with a successful login. A restart forgets them.
+// accounts exist. Counters end after the lockout duration without failures;
+// a successful login ends only what its own client counted. A restart forgets
+// them.
 type throttle struct {
 	mu       sync.Mutex
 	capacity int
@@ -212,15 +213,22 @@ func lockedUntilOf(c *counter) time.Time {
 	return c.lockedUntil
 }
 
-// success clears the counters of the account.
-func (t *throttle) success(account string) {
+// success clears what this client counted: its pair and its share of the
+// account counter. Failures of other clients stay, so a login of the owner
+// gives an attacker no new attempts (T-002). A share older than the window
+// may not be in the account counter any more and stays there too.
+func (t *throttle) success(account string, ip netip.Addr, now time.Time, window time.Duration) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	delete(t.accounts, account)
-	for k := range t.pairs {
-		if k.account == account {
-			delete(t.pairs, k)
-		}
+	key := pairKey{account, clientKey(ip)}
+	p := t.pairs[key]
+	delete(t.pairs, key)
+	c := t.accounts[account]
+	if p == nil || c == nil || now.Sub(p.last) >= window {
+		return
+	}
+	if c.failures -= p.failures; c.failures <= 0 {
+		delete(t.accounts, account)
 	}
 }
 

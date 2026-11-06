@@ -256,11 +256,11 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 | Verzögerung | Je Konto ab dem dritten Fehlversuch in Folge 1 s, dann 2 s, dann 4 s vor der Passwortprüfung |
 | Sperre | Je Konto und Client-Adresse nach login.max\_failures (Standard 5) Fehlversuchen für login.lockout\_duration (Standard 15 min); auch das richtige Passwort wird dann mit 429 abgelehnt |
 | Unbekannte Benutzer | Zählen wie bekannte; gleiche Antwort, gleiche Fehlermeldung, gleiche Argon2id-Arbeit über einen Ersatz-Hash |
-| Zähler | Im Arbeitsspeicher, höchstens 10 000 Einträge; enden nach der Sperrdauer ohne Fehlversuch, mit erfolgreicher Anmeldung und beim Neustart. Ist die Tabelle voll, wird der älteste nicht gesperrte Eintrag verdrängt; gesperrte Einträge werden nie verdrängt; ist sie ganz mit Sperren gefüllt, gilt für neue Versuche die höchste Verzögerung (4 s) |
+| Zähler | Im Arbeitsspeicher, höchstens 10 000 Einträge; enden nach der Sperrdauer ohne Fehlversuch und beim Neustart. Eine erfolgreiche Anmeldung löscht nur die Zähler des eigenen Clients: die Sperr-Zähler dieses Clients und seinen Anteil am Konto-Zähler. Fehlversuche anderer Clients bleiben, auch ihre Verzögerung; Anmeldungen des Besitzers verschaffen einem Angreifer so keine weiteren Versuche. Ist die Tabelle voll, wird der älteste nicht gesperrte Eintrag verdrängt; gesperrte Einträge werden nie verdrängt; ist sie ganz mit Sperren gefüllt, gilt für neue Versuche die höchste Verzögerung (4 s) |
 | Passwortberechnung | Argon2id mit t=3, 64 MiB, p=4; höchstens RCD\_PASSWORD\_HASH\_CONCURRENCY Berechnungen gleichzeitig, sonst nach 5 s Wartezeit 503 busy |
 | Passwörter | 12 bis 128 Zeichen |
 
-Laufende Versuche zählen schon vor ihrem Ergebnis, so kommt auch ein paralleler Schub nicht über die Grenze. IPv6-Adressen zählen je /64. Ein gesperrter Client erzeugt je Sperre einen Audit-Eintrag, nicht einen je Versuch.
+Laufende Versuche zählen schon vor ihrem Ergebnis, so kommt auch ein paralleler Schub nicht über die Grenze. IPv6-Adressen zählen je /64. Ein gesperrter Client erzeugt je Sperre einen Audit-Eintrag, nicht einen je Versuch. Weil laufende Versuche zählen, kann ein Client bei vielen gleichzeitigen richtigen Anmeldungen desselben Kontos 429 erhalten (Sicherheit, Restrisiken).
 
 ### 3.8 RCON-Verbindung
 

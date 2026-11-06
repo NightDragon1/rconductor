@@ -38,13 +38,13 @@ func TestLoginDelay(t *testing.T) {
 	if !slices.Equal(f.delays, want) {
 		t.Errorf("delays = %v, want %v", f.delays, want)
 	}
-	// A successful login resets the counter.
+	// A login from another client leaves the delay in place (Design 3.7).
 	f.delays = nil
 	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt("192.0.2.50")); err != nil {
 		t.Fatal(err)
 	}
 	_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", clientAt("192.0.2.50"))
-	if len(f.delays) != 1 { // the successful login itself was delayed once
+	if !slices.Equal(f.delays, []time.Duration{4 * time.Second, 4 * time.Second}) {
 		t.Errorf("delays after success = %v", f.delays)
 	}
 }
@@ -322,5 +322,127 @@ func TestHangUpIsAudited(t *testing.T) {
 	f.svc.audit(ctx, audit.Entry{Kind: audit.KindAuth, Action: "login", Result: audit.ResultDenied, Reason: "unauthenticated"})
 	if n := f.count(t, `SELECT count(*) FROM audit_log WHERE action = 'login'`); n != 1 {
 		t.Errorf("%d audit rows after a hang-up", n)
+	}
+}
+
+// TestOwnerLoginGivesNoAttempts covers T-002: the owner signing in between the
+// guesses of an attacker neither resets the attacker's count nor the delay.
+func TestOwnerLoginGivesNoAttempts(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx := context.Background()
+	attacker, owner := clientAt("198.51.100.7"), clientAt("192.0.2.10")
+	guesses := 0
+	for range 3 * DefaultMaxFailures {
+		if _, _, err := f.svc.Login(ctx, "Mod", testPassword, owner); err != nil {
+			t.Fatalf("owner: %v", err)
+		}
+		if _, _, err := f.svc.Login(ctx, "Mod", "wrong password!!", attacker); errors.Is(err, ErrInvalidCredentials) {
+			guesses++
+		}
+	}
+	if guesses != DefaultMaxFailures {
+		t.Errorf("%d guesses in one lockout, the limit is %d", guesses, DefaultMaxFailures)
+	}
+	f.delays = nil
+	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, owner); err != nil {
+		t.Fatalf("owner: %v", err)
+	}
+	if len(f.delays) != 1 || f.delays[0] != 4*time.Second {
+		t.Errorf("delay after the owner's logins = %v, want 4s", f.delays)
+	}
+}
+
+// TestOwnerLoginDuringABurst covers T-002 with both sides in parallel.
+func TestOwnerLoginDuringABurst(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx := context.Background()
+	attacker, owner := clientAt("198.51.100.7"), clientAt("192.0.2.10")
+	var wg sync.WaitGroup
+	var guessed atomic.Int32
+	wg.Go(func() {
+		for range 20 {
+			if _, _, err := f.svc.Login(ctx, "Mod", testPassword, owner); err != nil {
+				t.Errorf("owner: %v", err)
+			}
+		}
+	})
+	for range 40 {
+		wg.Go(func() {
+			if _, _, err := f.svc.Login(ctx, "Mod", "wrong password!!", attacker); errors.Is(err, ErrInvalidCredentials) {
+				guessed.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	if n := guessed.Load(); n > int32(DefaultMaxFailures) {
+		t.Errorf("%d guesses got through, the limit is %d", n, DefaultMaxFailures)
+	}
+}
+
+// TestLoginEndsOwnFailuresOnly covers Design 3.7: a login takes back the
+// failures of its client from the account, those of others stay.
+func TestLoginEndsOwnFailuresOnly(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx := context.Background()
+	attacker, owner := clientAt("198.51.100.7"), clientAt("2001:db8:1:2::1")
+	wrong := func(c Client, n int) {
+		for range n {
+			_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", c)
+		}
+	}
+	wrong(owner, 2)
+	wrong(attacker, 2)
+	// Another address of the owner's /64 is the same client.
+	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt("2001:db8:1:2::2")); err != nil {
+		t.Fatal(err)
+	}
+	f.delays = nil
+	wrong(owner, 1) // 2 failures left on the account: 1 s
+	if !slices.Equal(f.delays, []time.Duration{time.Second}) {
+		t.Errorf("delays = %v, want 1s", f.delays)
+	}
+	// The owner's own count began anew, the attacker's did not.
+	wrong(owner, DefaultMaxFailures-2)
+	var locked *LockedError
+	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, owner); errors.As(err, &locked) {
+		t.Errorf("owner locked after %d failures", DefaultMaxFailures-1)
+	}
+	wrong(attacker, DefaultMaxFailures-2)
+	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, attacker); !errors.As(err, &locked) {
+		t.Errorf("attacker after %d failures: %v", DefaultMaxFailures, err)
+	}
+}
+
+// TestLoginAloneEndsTheAccountCount covers the normal case of Design 3.7:
+// typing errors of a single client leave no delay behind.
+func TestLoginAloneEndsTheAccountCount(t *testing.T) {
+	th, ip := newThrottle(), func(i int) netip.Addr { return netip.AddrFrom4([4]byte{192, 0, 2, byte(i)}) }
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	for range 3 {
+		th.fail("mod", ip(1), now, 5, time.Hour)
+	}
+	th.success("mod", ip(1), now, time.Hour)
+	if th.size() != 0 {
+		t.Errorf("%d counters left", th.size())
+	}
+}
+
+// TestStaleShareStays covers Design 3.7: failures older than the window may
+// have left the account counter already, so they take nothing from it.
+func TestStaleShareStays(t *testing.T) {
+	th, ip := newThrottle(), func(i int) netip.Addr { return netip.AddrFrom4([4]byte{192, 0, 2, byte(i)}) }
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	th.fail("mod", ip(1), now, 5, time.Hour)
+	later := now.Add(2 * time.Hour)
+	th.fail("mod", ip(2), later, 5, time.Hour) // starts a new account count
+	th.success("mod", ip(1), later, time.Hour)
+	if d, _ := th.check("mod", ip(3), later, time.Hour); d != 0 {
+		t.Fatalf("delay = %v", d)
+	}
+	if c := th.accounts["mod"]; c == nil || c.failures != 1 {
+		t.Errorf("account counter = %+v, want 1 failure", c)
 	}
 }
