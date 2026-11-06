@@ -194,6 +194,9 @@ jobs:
     needs: [scope, web]
     if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    # Browser and its libraries come with the image; its version follows
+    # @playwright/test (renovate.json). The stack needs no Docker.
+    container: mcr.microsoft.com/playwright:v1.65.0-noble@sha256:6e3fb709361521eb27161606e6da6d2674e5e89fa16516cb37d6fdd91372273d
     strategy:
       fail-fast: false
       matrix:
@@ -214,15 +217,9 @@ jobs:
         with:
           name: ui
           path: internal/webui/dist
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ hashFiles('web/package-lock.json') }}
-      - name: Browser and its libraries
+      - name: Web dependencies
         working-directory: web
-        run: |
-          npm ci --no-audit --no-fund
-          npx playwright install --with-deps chromium
+        run: npm ci --no-audit --no-fund
       - name: Tests
         working-directory: web
         env:
