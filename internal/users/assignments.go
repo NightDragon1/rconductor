@@ -221,7 +221,11 @@ func (s *Service) UpdateAssignments(ctx context.Context, req Request, id string,
 	if err != nil {
 		return Assignments{}, err
 	}
-	if len(changes) > 0 {
+	if _, scope := changes["admin_scopes"]; scope && len(changes) == 1 {
+		// The scope alone ends no session (D-044): rights are checked on
+		// each request, and dropping the cache checks open sockets again.
+		s.perm.Invalidate()
+	} else if len(changes) > 0 {
 		if err := s.rightsChanged(ctx, req, "assignments.update", id); err != nil {
 			return Assignments{}, err
 		}

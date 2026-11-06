@@ -48,8 +48,22 @@ func TestAdminScopes(t *testing.T) {
 	if !slices.Equal(r.ServerIDs(), []string{"s1", "s2"}) {
 		t.Errorf("server admin scope = %v", r.ServerIDs())
 	}
-	if !slices.Contains(f.revoked, f.ids["sa"]) {
-		t.Error("sessions not ended after a scope change (W2)")
+	if len(f.revoked) != 0 {
+		t.Errorf("a scope change ended sessions of %v (D-044)", f.revoked)
+	}
+
+	// Sections without a change do not count; a removed scope is gone at once.
+	f.revoked = nil
+	none := []string{}
+	both := AssignmentsUpdate{AdminScopes: &[]Target{{ServerID: "s2"}}, Groups: &none}
+	if _, err := f.svc.UpdateAssignments(ctx, f.as("admin"), f.ids["sa"], both); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.revoked) != 0 {
+		t.Errorf("groups without a change ended sessions of %v", f.revoked)
+	}
+	if r, _ := f.checker.For(ctx, f.ids["sa"]); !slices.Equal(r.ServerIDs(), []string{"s2"}) {
+		t.Errorf("removed scope still counts: %v", r.ServerIDs())
 	}
 
 	// A server admin cannot change his own scope: he does not manage himself.

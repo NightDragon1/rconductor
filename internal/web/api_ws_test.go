@@ -249,6 +249,47 @@ func TestSubscriptionWithdrawn(t *testing.T) {
 	w.subscribed(t, "servers.overview", 1)
 }
 
+// TestRightsEvent covers D-044: when the servers of a user change, the
+// session and socket stay, the withdrawn topic ends, and user.rights tells
+// the interface to load again, only for the user it concerns.
+func TestRightsEvent(t *testing.T) {
+	w := newWSFixture(t)
+	w.grantModerator(t)
+	mod := w.login(t, "Mod")
+	c, _, err := w.dial(t, mod, w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	send(t, c, "subscribe", "user.rights")
+	w.subscribed(t, "user.rights", 1)
+	admin := w.login(t, "Boss")
+	other, _, err := w.dial(t, admin, w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	send(t, other, "subscribe", "user.rights")
+	w.subscribed(t, "user.rights", 2)
+
+	for i, ids := range []string{`[]`, `["` + w.server + `"]`} {
+		rec := w.do(t, call{method: http.MethodPatch, path: "/api/v1/server-groups/" + w.group, cookies: []*http.Cookie{admin},
+			origin: "http://panel.lan", body: `{"server_ids":` + ids + `}`})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("group change = %d %s", rec.Code, rec.Body.String())
+		}
+		m, err := next(t, c, 5*time.Second)
+		if err != nil || m.Type != "event" || m.Topic != "user.rights" || len(m.Data) != 0 {
+			t.Fatalf("change %d: %+v %v", i, m, err)
+		}
+	}
+	if rec := w.do(t, call{method: http.MethodGet, path: "/api/v1/auth/session", cookies: []*http.Cookie{mod}}); rec.Code != http.StatusOK {
+		t.Errorf("session ended: %d", rec.Code)
+	}
+	// The scope of the RCON admin did not change: nothing for him.
+	if m, err := next(t, other, 300*time.Millisecond); err == nil {
+		t.Errorf("event for the admin: %+v", m)
+	}
+}
+
 // TestSessionEndClosesSocket covers the WebSocket part of AUTH-006.
 func TestSessionEndClosesSocket(t *testing.T) {
 	w := newWSFixture(t)

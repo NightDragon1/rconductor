@@ -108,3 +108,37 @@ test('the search narrows the cards', async ({ page, state }) => {
   await expect(page.getByRole('article')).toHaveCount(1);
   await expect(card(page, 'arena')).toBeVisible();
 });
+
+test('a scope change reaches an open page, the session stays (D-044, AUTH-006)', async ({
+  browser,
+  page,
+  state,
+}) => {
+  await login(page, 'sadmin', secret(state, 'sadmin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  const card = page.getByRole('link', { name: 'outpost' });
+  await expect(card).toHaveCount(0);
+
+  const admin = await browser.newContext({ baseURL: state.base_url });
+  const adminPage = await admin.newPage();
+  await login(adminPage, 'admin', secret(state, 'admin'));
+  await expect(adminPage.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  const users = await (await adminPage.request.get('api/v1/users')).json();
+  const id = users.items.find((u: { pseudonym: string }) => u.pseudonym === 'sadmin').id;
+  const path = `api/v1/users/${id}/assignments`;
+  const before = (await (await adminPage.request.get(path)).json()).admin_scopes;
+  const put = async (admin_scopes: unknown[]) => {
+    const r = await adminPage.request.put(path, {
+      data: { admin_scopes },
+      headers: { Origin: new URL(state.base_url).origin },
+    });
+    expect(r.status()).toBe(200);
+  };
+
+  await put([...before, { server_id: state.servers.outpost }]);
+  await expect(card).toBeVisible();
+  await put(before);
+  await expect(card).toHaveCount(0);
+  await expect(page).not.toHaveURL(/login/);
+  await admin.close();
+});
