@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Runs the full check before every commit. Enable once per clone with
+# Lint and tests of the staged files before every commit. Enable once per
+# clone with
 #   git config core.hooksPath .githooks
 set -euo pipefail
-exec "$(git rev-parse --show-toplevel)/scripts/check.sh"
+exec "$(git rev-parse --show-toplevel)/scripts/check-changed.sh"

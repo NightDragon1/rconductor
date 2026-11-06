@@ -31,8 +31,11 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - docs/ nicht verändern, außer auf meinen ausdrücklichen Auftrag. Vorschläge für
   Änderungen nur als Hinweis an mich.
 - Kleine Schritte: lieber mehrere kleine Commits als ein großer.
-- PRs nach grüner CI selbst mergen, außer Änderungen an CLAUDE.md, CONTRIBUTING.md,
-  Release-Workflow (auch die von ihm aufgerufenen Skripte) und Rulesets: die merge ich.
+- PRs mit gh pr merge --auto --squash mergen, außer Änderungen an CLAUDE.md,
+  CONTRIBUTING.md, .github/workflows/, Release-Skripten und Rulesets: die merge ich.
+- Nicht stapeln: Der nächste unabhängige Schritt startet von main; abhängige Schritte
+  warten auf den Merge.
+- Rote PR-CI nach Abschluss des laufenden Schritts sofort beheben.
 - Renovate-PRs: Patch, Minor und Digest nach grüner CI selbst mergen, Major vorher melden.
 - Bei Eingriffen in die Git-Historie Renovate pausieren (renovate.json "enabled": false),
   danach wieder aktivieren.
@@ -111,15 +114,17 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 ## Tests und Prüfung
 - Go: go test ./..., Integrationstests mit testcontainers-go.
 - Oberfläche: Vitest, Abläufe mit Playwright.
-- Vor jedem Commit: make check (golangci-lint, ESLint, Prettier, generierter Code,
-  alle Tests grün). Der Pre-Commit-Hook in .githooks ruft es auf; einmal je Klon
+- Vor jedem Commit: Lint und Tests der geänderten Pakete (Go mit -race), über den
+  Pre-Commit-Hook. Vor jedem Push: make check vollständig (golangci-lint, ESLint,
+  Prettier, generierter Code, alle Tests grün), über den Pre-Push-Hook; einmal je Klon
   aktivieren mit git config core.hooksPath .githooks.
 - Nach jedem Meilenstein: kurze Zusammenfassung, welche Anforderungs-IDs
   erledigt sind und welche Ereigniscodes neu sind.
 - Tests lokal gezielt:
   - Während eines Teilschritts nur betroffene Tests: go test der geänderten
     Pakete, vitest related, playwright --grep auf die betroffenen Specs.
-  - Vor jedem Commit: make check (Lint, Unit, Vitest).
+  - Vor jedem Commit: Lint und Tests der geänderten Pakete.
+  - Vor jedem Push: make check (Lint, Unit, Vitest).
   - Volle E2E-Suite und Integrationstests lokal nur am Ende eines Schritts
     oder wenn Backend und Oberfläche gemeinsam geändert wurden.
   - Minecraft-Test lokal nie; das macht die CI.

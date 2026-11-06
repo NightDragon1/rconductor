@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The full check before every push.
+set -euo pipefail
+exec "$(git rev-parse --show-toplevel)/scripts/check.sh"
