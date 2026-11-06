@@ -50,6 +50,9 @@ type counter struct {
 	reported bool
 }
 
+// maxAccountKey is far above any pseudonym (Design 3.6 allows 64 characters).
+const maxAccountKey = 256
+
 type pairKey struct {
 	account string
 	ip      netip.Addr
@@ -90,7 +93,14 @@ func newThrottle() *throttle {
 
 func (t *throttle) size() int { return len(t.accounts) + len(t.pairs) }
 
-func accountKey(pseudonym string) string { return strings.ToLower(pseudonym) }
+// accountKey is what the counters remember of a pseudonym, bounded: the name
+// comes from anyone who tries to sign in and stays in memory (T-025).
+func accountKey(pseudonym string) string {
+	if len(pseudonym) > maxAccountKey {
+		pseudonym = pseudonym[:maxAccountKey]
+	}
+	return strings.ToLower(pseudonym)
+}
 
 // check returns the delay before the password check and, if the pair is
 // locked, the remaining lockout.
@@ -113,7 +123,7 @@ func (t *throttle) check(account string, ip netip.Addr, now time.Time, window ti
 
 // reserve counts an attempt as running. It refuses when the failures so far
 // and the running attempts already reach the limit.
-func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, maxFailures int) bool {
+func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, window time.Duration, maxFailures int) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	key := pairKey{account, clientKey(ip)}
@@ -123,7 +133,10 @@ func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, maxFail
 		if now.Before(c.lockedUntil) {
 			return false
 		}
-		failures = c.failures
+		// Failures end after the window, as in fail.
+		if now.Sub(c.last) < window {
+			failures = c.failures
+		}
 	}
 	if failures+t.running[key] >= maxFailures {
 		return false

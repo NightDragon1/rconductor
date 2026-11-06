@@ -4,28 +4,36 @@ package web
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/NightDragon1/rconductor/internal/api"
 )
 
-// MaxBody bounds every request body. The largest legal one is a profile
-// picture of 1 MiB; login and the other JSON bodies decode before any
-// session check, so without it anyone could fill the memory (T-025).
-const MaxBody = 2 << 20
+// Request bodies are bounded (T-025): JSON decodes before any session check
+// and takes far more memory than its bytes, so its limit is small; only a
+// profile picture of 1 MiB needs more.
+const (
+	MaxBody        = 256 << 10
+	MaxPictureBody = 2 << 20
+)
 
 // APIPolicy is the Content-Security-Policy of every answer that is not the
 // interface: nothing may load or frame it (SEC-009).
 const APIPolicy = "default-src 'none'; frame-ancestors 'none'"
 
-// withBodyLimit refuses a body over MaxBody by its declared length and cuts
-// one of unknown length at the limit.
+// withBodyLimit refuses a body over the limit by its declared length and cuts
+// one of unknown length there.
 func withBodyLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.ContentLength > MaxBody {
+		limit := int64(MaxBody)
+		if strings.HasSuffix(r.URL.Path, "/me/avatar") {
+			limit = MaxPictureBody
+		}
+		if r.ContentLength > limit {
 			WriteProblem(w, http.StatusRequestEntityTooLarge, api.ReasonCodeInvalid, "the request is too large")
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, MaxBody)
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		next.ServeHTTP(w, r)
 	})
 }

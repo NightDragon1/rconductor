@@ -113,7 +113,7 @@ Das Panel markiert den Agent als widerrufen, löst seine Server von ihm (agent\_
 | Reservierte Pfade | /api (jede Version), /healthz und /metrics werden nie von der Oberfläche beantwortet; /healthz und /metrics werden mit NFR-006 (R2) befüllt. Ohne die Reservierung beantwortete die Auslieferung sie mit index.html, und ein Healthcheck meldete fälschlich „gesund“ |
 | HAProxy | Normales HTTP/1.1, kein HTTP/2 nötig; für den WebSocket genügt ein ausreichendes timeout tunnel |
 | Fehler | Einheitlich als Problem Details nach RFC 9457 |
-| Größe | Jeder Request-Body ist auf 2 MiB begrenzt, darüber 413; Passwörter über 512 Byte gelten bei der Anmeldung als falsch |
+| Größe | Request-Bodys sind auf 256 KiB begrenzt, ein Profilbild auf 2 MiB, darüber 413; Passwörter über 512 Byte gelten bei der Anmeldung als falsch; der Login-Schutz merkt sich höchstens 256 Byte eines Pseudonyms |
 | Gleichzeitige Änderungen | Benutzergruppen, Befehlslisten, Server und Servergruppen tragen ein Feld version, /settings eine gemeinsame Version als ETag. Schreiben nennt die gelesene Version in If-Match (Pflicht, sonst 428); die Prüfung ist atomar in der Datenbank in derselben Transaktion wie das Schreiben, bei Abweichung 409 und nichts wird geschrieben. Rolle und Scope werden vor der Version geprüft (3.1). Die Oberfläche zeigt „Changed by someone else – reload“ und sendet den Entwurf nicht |
 | Listen | Cursorbasierte Paginierung für Audit und Verlauf |
 | Externe API | R1 nur für die eigene Oberfläche. Ab R2 dokumentiert mit OpenAPI 3.1 und API-Tokens je Benutzer (Bearer), gleicher Rechteumfang wie der Benutzer, eigene Ablaufzeit, widerrufbar |

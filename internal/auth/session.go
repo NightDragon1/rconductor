@@ -219,7 +219,7 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 		return "", Principal{}, &LockedError{RetryAfter: locked}
 	}
 	// Attempts in parallel count before their result is known (T-002).
-	if !s.throttle.reserve(key, c.IP, s.now(), maxFailures) {
+	if !s.throttle.reserve(key, c.IP, s.now(), lockout, maxFailures) {
 		return "", Principal{}, &LockedError{RetryAfter: time.Second}
 	}
 	defer s.throttle.release(key, c.IP)
@@ -358,7 +358,8 @@ func (s *Service) loginDenied(ctx context.Context, c Client, userID, pseudonym, 
 // audit writes an entry outside a transaction; a failure is logged, the
 // login answer stays the same.
 func (s *Service) audit(ctx context.Context, e audit.Entry) {
-	if _, err := audit.Write(ctx, s.st.DB, e); err != nil {
+	// A client that hangs up must not keep its attempt out of the log.
+	if _, err := audit.Write(context.WithoutCancel(ctx), s.st.DB, e); err != nil {
 		s.log.Error("audit entry not written", slog.String("action", e.Action), slog.Any("err", err))
 	}
 }

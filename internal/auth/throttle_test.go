@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
@@ -257,5 +258,43 @@ func TestOverlongPasswordIsWrong(t *testing.T) {
 	f.user(t, storetest.User{Pseudonym: "Mod"})
 	if _, _, err := f.svc.Login(context.Background(), "Mod", strings.Repeat(testPassword, 1000), clientAt("192.0.2.79")); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// TestLongPseudonymStaysSmall covers T-025: the counters keep a bounded key,
+// whatever name a client sends.
+func TestLongPseudonymStaysSmall(t *testing.T) {
+	if n := len(accountKey(strings.Repeat("x", 2<<20))); n > maxAccountKey {
+		t.Errorf("key of %d bytes", n)
+	}
+}
+
+// TestLowerLimitLocksNobodyOutForGood: failures from before a lower limit end
+// with their window, so the right password works again.
+func TestLowerLimitLocksNobodyOutForGood(t *testing.T) {
+	tr := newThrottle()
+	now := time.Now()
+	ip := netip.MustParseAddr("192.0.2.80")
+	for range 4 {
+		tr.fail("mod", ip, now, 5, time.Minute)
+	}
+	if tr.reserve("mod", ip, now, time.Minute, 3) {
+		t.Error("failures within the window do not count")
+	}
+	if !tr.reserve("mod", ip, now.Add(2*time.Minute), time.Minute, 3) {
+		t.Error("old failures still block the login")
+	}
+}
+
+// TestHangUpIsAudited covers SEC-004: a client that hangs up during the check
+// still leaves its failed attempt in the audit log.
+func TestHangUpIsAudited(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f.svc.audit(ctx, audit.Entry{Kind: audit.KindAuth, Action: "login", Result: audit.ResultDenied, Reason: "unauthenticated"})
+	if n := f.count(t, `SELECT count(*) FROM audit_log WHERE action = 'login'`); n != 1 {
+		t.Errorf("%d audit rows after a hang-up", n)
 	}
 }

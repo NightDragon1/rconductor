@@ -596,7 +596,7 @@ func TestBigBodies(t *testing.T) {
 		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode
 	}
-	huge := append(append([]byte(`{"pseudonym":"admin","password":"`), bytes.Repeat([]byte("x"), 3<<20)...), []byte(`"}`)...)
+	huge := append(append([]byte(`{"pseudonym":"admin","password":"`), bytes.Repeat([]byte("x"), 300<<10)...), []byte(`"}`)...)
 	if status := post(bytes.NewReader(huge), int64(len(huge))); status != http.StatusRequestEntityTooLarge {
 		t.Errorf("declared length = %d", status)
 	}
