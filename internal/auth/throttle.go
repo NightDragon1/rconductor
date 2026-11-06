@@ -33,12 +33,12 @@ type loginLimits struct {
 // made-up pseudonyms.
 const maxTracked = 10000
 
-// maxDelayFailures is a failure count that yields the highest delay.
-const maxDelayFailures = 4
-
 // purgeGap spaces the scans for ended counters of a full table: an attempt
 // that finds no room must not cost a walk over all counters each time.
 const purgeGap = time.Second
+
+// fullReportGap spaces the reports of a full table.
+const fullReportGap = time.Minute
 
 // delayFor returns the wait before checking a password after n consecutive
 // failures of the account: 1 s from the third on, then 2 s, then 4 s.
@@ -102,8 +102,10 @@ type throttle struct {
 	// held counts the places reserved for the counters of running attempts.
 	held      int
 	nextPurge time.Time
-	// nextOverflow is when the next attempt without room may run.
-	nextOverflow time.Time
+	// full is set when an attempt finds no room; nextFullReport spaces the
+	// reports of that.
+	full           bool
+	nextFullReport time.Time
 }
 
 func newThrottle() *throttle {
@@ -157,16 +159,12 @@ func (t *throttle) check(account string, ip netip.Addr, now time.Time, window ti
 type ticket struct {
 	// places is the room held for the counters of the attempt.
 	places int
-	// crowded is set if there was no room: the attempt runs with the
-	// highest delay, and its failure may stay uncounted.
-	crowded bool
 }
 
 // reserve counts an attempt as running. It refuses when the failures so far
 // and the running attempts reach a limit. An attempt needs a place for each
-// counter it may start. If the table has none, all clients share one attempt
-// per highest delay and the others are refused: a full table must not let
-// attempts through uncounted at full speed (Design 3.7).
+// counter it may start. If the table has none it is refused: an attempt that
+// could not be counted must not run at all (Design 3.7).
 func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, lim loginLimits) (ticket, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -200,16 +198,26 @@ func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, lim log
 	}
 	tk := ticket{places: t.missing(account, key, now, lim.lockout)}
 	if t.crowded(tk.places, now, lim.lockout) {
-		if now.Before(t.nextOverflow) {
-			return ticket{}, false
-		}
-		t.nextOverflow = now.Add(delayFor(maxDelayFailures))
-		tk = ticket{crowded: true}
+		t.full = true
+		return ticket{}, false
 	}
 	t.held += tk.places
 	t.running[key]++
 	t.clientRunning[client]++
 	return tk, true
+}
+
+// reportFull reports whether attempts were refused for lack of room since the
+// last report. Reports are spaced: the refused can repeat at HTTP speed.
+func (t *throttle) reportFull(now time.Time) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.full || now.Before(t.nextFullReport) {
+		return false
+	}
+	t.full = false
+	t.nextFullReport = now.Add(fullReportGap)
+	return true
 }
 
 // release ends a reserved attempt.

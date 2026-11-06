@@ -167,7 +167,7 @@ func TestEvictionRules(t *testing.T) {
 	// The window of the first three counters has ended, the others run.
 	later := now.Add(time.Hour)
 	tk, ok := th.reserve("new", ip(3), later, lim)
-	if !ok || tk.crowded {
+	if !ok || tk.places != 3 {
 		t.Fatalf("no room although counters ended: %+v %v", tk, ok)
 	}
 	if _, kept := th.accounts["old"]; kept {
@@ -192,7 +192,6 @@ func TestFloodKeepsRunningCounters(t *testing.T) {
 	for i := range 200 {
 		c := clientAt(fmt.Sprintf("198.51.100.%d", i))
 		_, _, _ = f.svc.Login(ctx, fmt.Sprintf("made-up-%d", i), "wrong password!!", c)
-		f.now = f.now.Add(4 * time.Second) // past the shared attempt of a full table
 	}
 	if n := f.svc.throttle.size(); n > 60 {
 		t.Errorf("%d counters, the table holds 60", n)
@@ -217,29 +216,19 @@ func fullTable(now time.Time) *throttle {
 	return th
 }
 
-// TestFullTableFailsClosed covers Design 3.7: with no room for its counters an
-// attempt is never let through as if nothing happened. All clients together
-// get one attempt per highest delay, the others are refused.
+// TestFullTableFailsClosed covers Design 3.7: an attempt without room for its
+// counters is refused, whoever sends it, and no attempt runs uncounted.
 func TestFullTableFailsClosed(t *testing.T) {
 	now := time.Now()
 	th := fullTable(now)
 	lim := limits(5, time.Hour)
 	ip := func(i int) netip.Addr { return netip.AddrFrom4([4]byte{203, 0, 113, byte(i)}) }
 
-	tk, ok := th.reserve("a", ip(1), now, lim)
-	if !ok || !tk.crowded || tk.places != 0 {
-		t.Fatalf("first attempt on a full table = %+v %v", tk, ok)
-	}
 	for i := range 100 {
-		if _, ok := th.reserve(fmt.Sprintf("b%d", i), ip(2+i), now.Add(3*time.Second), lim); ok {
-			t.Fatalf("attempt %d got through within the gap", i)
+		at := now.Add(time.Duration(i) * time.Minute / 4)
+		if _, ok := th.reserve(fmt.Sprintf("b%d", i), ip(i), at, lim); ok {
+			t.Fatalf("attempt %d got through a full table", i)
 		}
-	}
-	if _, ok := th.reserve("c", ip(200), now.Add(4*time.Second), lim); !ok {
-		t.Error("no attempt after the gap")
-	}
-	if pair, client := th.fail("a", ip(1), now, lim, tk); pair || client {
-		t.Error("lockout from a counter without room")
 	}
 	if th.size() != 9 {
 		t.Errorf("full table grew to %d", th.size())
@@ -247,33 +236,50 @@ func TestFullTableFailsClosed(t *testing.T) {
 
 	// Who is already counted keeps going, and keeps being counted.
 	x := netip.AddrFrom4([4]byte{198, 51, 100, 0})
-	tk, ok = th.reserve("x0", x, now, lim)
-	if !ok || tk.crowded {
-		t.Fatalf("counted client refused: %+v %v", tk, ok)
+	tk, ok := th.reserve("x0", x, now, lim)
+	if !ok {
+		t.Fatal("counted client refused")
 	}
 	th.fail("x0", x, now, lim, tk)
 	if c := th.pairs[pairKey{"x0", x}]; c.failures != 2 {
 		t.Errorf("failures = %d", c.failures)
 	}
+	// A known client with a new name needs a place too.
+	if _, ok := th.reserve("new", x, now, lim); ok {
+		t.Error("new counter on a full table")
+	}
+	// Room comes back with the end of the counters.
+	if _, ok := th.reserve("late", ip(1), now.Add(2*time.Hour), lim); !ok {
+		t.Error("no attempt after the counters ended")
+	}
 }
 
-// TestFullTableDelaysTheLogin covers Design 3.7 on the login itself: the
-// attempt without room waits the highest delay, the right password works, and
-// the next attempt within the gap is refused without any password check.
-func TestFullTableDelaysTheLogin(t *testing.T) {
+// TestFullTableRefusesTheLogin covers Design 3.7 on the login itself: no
+// password check runs, also not for the right password, and the refusals leave
+// one report per minute at most.
+func TestFullTableRefusesTheLogin(t *testing.T) {
 	f := newSessionFixture(t, true)
 	f.user(t, storetest.User{Pseudonym: "Mod"})
 	f.svc.throttle = fullTable(f.now)
 	ctx := context.Background()
-	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt("203.0.113.5")); err != nil {
-		t.Fatalf("login on a full table: %v", err)
-	}
-	if !slices.Equal(f.delays, []time.Duration{4 * time.Second}) {
-		t.Errorf("delays = %v, want 4s", f.delays)
-	}
+	before := f.count(t, `SELECT count(*) FROM audit_log`)
 	var locked *LockedError
-	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt("203.0.113.6")); !errors.As(err, &locked) {
-		t.Errorf("second attempt within the gap = %v", err)
+	for i := range 20 {
+		if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt(fmt.Sprintf("203.0.113.%d", i))); !errors.As(err, &locked) {
+			t.Fatalf("login on a full table = %v", err)
+		}
+	}
+	if len(f.delays) != 0 {
+		t.Errorf("delays = %v", f.delays)
+	}
+	if n := f.count(t, `SELECT count(*) FROM audit_log`) - before; n != 1 {
+		t.Errorf("%d audit rows for 20 refusals, want 1", n)
+	}
+	logtest.Wait(t, f.logs, `"event":"auth.lockout"`, `"scope":"table"`)
+	f.now = f.now.Add(time.Minute)
+	_, _, _ = f.svc.Login(ctx, "Mod", testPassword, clientAt("203.0.113.99"))
+	if n := f.count(t, `SELECT count(*) FROM audit_log`) - before; n != 2 {
+		t.Errorf("%d audit rows after a minute, want 2", n)
 	}
 }
 
@@ -289,17 +295,14 @@ func TestHeldPlacesFitTheirCounters(t *testing.T) {
 	var held []ticket
 	for i := range 3 {
 		tk, ok := th.reserve(fmt.Sprintf("u%d", i), ip(i), now, lim)
-		if !ok || tk.crowded || tk.places != 3 {
+		if !ok || tk.places != 3 {
 			t.Fatalf("attempt %d = %+v %v", i, tk, ok)
 		}
 		held = append(held, tk)
 	}
-	if tk, ok := th.reserve("u9", ip(9), now, lim); !ok || !tk.crowded {
-		t.Fatalf("fourth attempt found room that is held: %+v %v", tk, ok)
+	if _, ok := th.reserve("u9", ip(9), now, lim); ok {
+		t.Fatal("fourth attempt found room that is held")
 	}
-	// The overflow attempt ends first and must not take a held place.
-	th.fail("u9", ip(9), now, lim, ticket{crowded: true})
-	th.release("u9", ip(9), ticket{crowded: true})
 	for i, tk := range held {
 		th.fail(fmt.Sprintf("u%d", i), ip(i), now, lim, tk)
 		th.release(fmt.Sprintf("u%d", i), ip(i), tk)
