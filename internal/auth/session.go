@@ -134,10 +134,11 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 // EnsureDefaults stores the default session settings unless they exist.
 func EnsureDefaults(ctx context.Context, st *store.Store) error {
 	for key, v := range map[string]any{
-		SettingIdleTimeout: DefaultIdleTimeout.String(),
-		SettingMaxLifetime: DefaultMaxLifetime.String(),
-		SettingMaxFailures: DefaultMaxFailures,
-		SettingLockout:     DefaultLockout.String(),
+		SettingIdleTimeout:       DefaultIdleTimeout.String(),
+		SettingMaxLifetime:       DefaultMaxLifetime.String(),
+		SettingMaxFailures:       DefaultMaxFailures,
+		SettingMaxClientFailures: DefaultMaxClientFailures,
+		SettingLockout:           DefaultLockout.String(),
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
@@ -163,25 +164,28 @@ func (s *Service) policy(ctx context.Context) (idle, maxLife time.Duration) {
 }
 
 // loginPolicy reads the login protection settings.
-func (s *Service) loginPolicy(ctx context.Context) (maxFailures int, lockout time.Duration) {
-	maxFailures, lockout = DefaultMaxFailures, DefaultLockout
-	var n int
-	if err := s.st.GlobalSetting(ctx, SettingMaxFailures, &n); err == nil {
+func (s *Service) loginPolicy(ctx context.Context) loginLimits {
+	lim := loginLimits{maxFailures: DefaultMaxFailures, maxClientFailures: DefaultMaxClientFailures, lockout: DefaultLockout}
+	for key, dst := range map[string]*int{SettingMaxFailures: &lim.maxFailures, SettingMaxClientFailures: &lim.maxClientFailures} {
+		var n int
+		if err := s.st.GlobalSetting(ctx, key, &n); err != nil {
+			continue
+		}
 		if n >= 1 {
-			maxFailures = n
+			*dst = n
 		} else {
-			s.log.Warn("invalid login setting, using default", slog.String("setting", SettingMaxFailures))
+			s.log.Warn("invalid login setting, using default", slog.String("setting", key))
 		}
 	}
 	var v string
 	if err := s.st.GlobalSetting(ctx, SettingLockout, &v); err == nil {
 		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
-			lockout = d
+			lim.lockout = d
 		} else {
 			s.log.Warn("invalid login setting, using default", slog.String("setting", SettingLockout))
 		}
 	}
-	return maxFailures, lockout
+	return lim
 }
 
 // MaxLifetime is the configured maximum session lifetime, also used for
@@ -202,8 +206,8 @@ func HashToken(token string) string {
 // after the same Argon2id work, or password.ErrBusy.
 func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (string, Principal, error) {
 	key := accountKey(pseudonym)
-	maxFailures, lockout := s.loginPolicy(ctx)
-	delay, locked := s.throttle.check(key, c.IP, s.now(), lockout)
+	lim := s.loginPolicy(ctx)
+	delay, locked := s.throttle.check(key, c.IP, s.now(), lim.lockout)
 
 	u, err := s.st.Queries.GetLoginUser(ctx, pseudonym)
 	known := err == nil
@@ -213,16 +217,20 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 	if locked > 0 {
 		// Without a session anyone can repeat this at HTTP speed: one
 		// audit row per lockout, not per attempt (T-016).
-		if s.throttle.firstRefused(key, c.IP) {
+		if s.throttle.firstRefused(key, c.IP, s.now()) {
 			s.loginDenied(ctx, c, u.ID, u.Pseudonym, "rate_limited", "locked")
 		}
 		return "", Principal{}, &LockedError{RetryAfter: locked}
 	}
 	// Attempts in parallel count before their result is known (T-002).
-	if !s.throttle.reserve(key, c.IP, s.now(), lockout, maxFailures) {
+	tk, ok := s.throttle.reserve(key, c.IP, s.now(), lim)
+	if !ok {
 		return "", Principal{}, &LockedError{RetryAfter: time.Second}
 	}
-	defer s.throttle.release(key, c.IP)
+	defer s.throttle.release(key, c.IP, tk)
+	if tk.crowded {
+		delay = delayFor(maxDelayFailures)
+	}
 	// A longer password cannot be right; it costs no more work than any other.
 	if len(pw) > 4*password.MaxLength {
 		pw = ""
@@ -234,21 +242,12 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 	}
 	fail := func(cause string) (string, Principal, error) {
 		s.loginDenied(ctx, c, u.ID, u.Pseudonym, "unauthenticated", cause)
-		if s.throttle.fail(key, c.IP, s.now(), maxFailures, lockout) {
-			attrs := []any{
-				logging.Event(logging.AuthLockout), slog.String(logging.KeyRequestID, c.RequestID),
-				slog.String(logging.KeyReason, "rate_limited"), slog.String("ip", c.IP.String()),
-				slog.Duration("lockout", lockout),
-			}
-			if u.Pseudonym != "" {
-				attrs = append(attrs, slog.String(logging.KeyUser, u.Pseudonym))
-			}
-			s.log.Warn("login locked for this client", attrs...)
-			s.audit(ctx, audit.Entry{
-				Kind: audit.KindAuth, TargetType: "user", TargetID: u.ID, Action: "lockout",
-				Result: audit.ResultDenied, Reason: "rate_limited",
-				Payload: map[string]string{"ip": c.IP.String(), "duration": lockout.String(), "request_id": c.RequestID},
-			})
+		pairLocked, clientLocked := s.throttle.fail(key, c.IP, s.now(), lim, tk)
+		if pairLocked {
+			s.lockedOut(ctx, c, u.ID, u.Pseudonym, "account", lim.lockout)
+		}
+		if clientLocked {
+			s.lockedOut(ctx, c, u.ID, u.Pseudonym, "client", lim.lockout)
 		}
 		return "", Principal{}, ErrInvalidCredentials
 	}
@@ -260,13 +259,13 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 		return fail("unknown_user")
 	}
 
-	ok, err := s.hasher.Verify(ctx, u.PasswordHash, pw)
+	match, err := s.hasher.Verify(ctx, u.PasswordHash, pw)
 	if err != nil {
 		return "", Principal{}, err
 	}
 	reason := ""
 	switch {
-	case !ok:
+	case !match:
 		reason = "wrong_password"
 	case u.DisabledAt.Valid:
 		reason = "disabled"
@@ -281,7 +280,7 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 	if err != nil {
 		return "", Principal{}, err
 	}
-	s.throttle.success(key, c.IP, s.now(), lockout)
+	s.throttle.success(key, c.IP, s.now(), lim.lockout)
 	s.log.Info("login", logging.Event(logging.AuthLoginOK),
 		slog.String(logging.KeyRequestID, c.RequestID), slog.String(logging.KeySession, p.SessionRef()),
 		slog.String(logging.KeyUser, p.Pseudonym), slog.String(logging.KeyRole, p.Role))
@@ -352,6 +351,25 @@ func (s *Service) loginDenied(ctx context.Context, c Client, userID, pseudonym, 
 		Kind: audit.KindAuth, TargetType: "user", TargetID: userID, Action: "login",
 		Result: audit.ResultDenied, Reason: reason,
 		Payload: map[string]string{"ip": c.IP.String(), "cause": cause, "request_id": c.RequestID},
+	})
+}
+
+// lockedOut records a lockout that began: of one account for this client, or
+// of this client for all names.
+func (s *Service) lockedOut(ctx context.Context, c Client, userID, pseudonym, scope string, lockout time.Duration) {
+	attrs := []any{
+		logging.Event(logging.AuthLockout), slog.String(logging.KeyRequestID, c.RequestID),
+		slog.String(logging.KeyReason, "rate_limited"), slog.String("ip", c.IP.String()),
+		slog.String("scope", scope), slog.Duration("lockout", lockout),
+	}
+	if pseudonym != "" {
+		attrs = append(attrs, slog.String(logging.KeyUser, pseudonym))
+	}
+	s.log.Warn("login locked for this client", attrs...)
+	s.audit(ctx, audit.Entry{
+		Kind: audit.KindAuth, TargetType: "user", TargetID: userID, Action: "lockout",
+		Result: audit.ResultDenied, Reason: "rate_limited",
+		Payload: map[string]string{"ip": c.IP.String(), "scope": scope, "duration": lockout.String(), "request_id": c.RequestID},
 	})
 }
 
