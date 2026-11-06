@@ -14,11 +14,11 @@ import (
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
-// TestNoEntryIsLostUnderLoad covers V-3: hundreds of writers at once, while
+// TestV3AuditNotLostUnderLock covers V-3: hundreds of writers at once, while
 // another writer holds the database longer than SQLite waits on its own.
 // Entries written outside a transaction have no caller left to report a
 // failure to, so each of them must arrive.
-func TestNoEntryIsLostUnderLoad(t *testing.T) {
+func TestV3AuditNotLostUnderLock(t *testing.T) {
 	st := storetest.New(t)
 	ctx := context.Background()
 	tx, err := st.DB.BeginTx(ctx, nil)
@@ -59,9 +59,9 @@ func TestNoEntryIsLostUnderLoad(t *testing.T) {
 	}
 }
 
-// TestWriteInsideATransactionFailsAtOnce: a transaction has a caller that
+// TestV3WriteInsideATransactionFailsAtOnce: a transaction has a caller that
 // rolls back, the retry is only for entries on their own.
-func TestWriteInsideATransactionFailsAtOnce(t *testing.T) {
+func TestV3WriteInsideATransactionFailsAtOnce(t *testing.T) {
 	st := storetest.New(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	tx, err := st.DB.BeginTx(context.Background(), nil)

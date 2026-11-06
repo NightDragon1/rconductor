@@ -178,9 +178,9 @@ func TestEvictionRules(t *testing.T) {
 	}
 }
 
-// TestFloodKeepsRunningCounters covers T-002: the flood of made-up names from
+// TestR1B2FloodKeepsRunningCounters covers T-002: the flood of made-up names from
 // other addresses cannot wipe the failures of an attacker.
-func TestFloodKeepsRunningCounters(t *testing.T) {
+func TestR1B2FloodKeepsRunningCounters(t *testing.T) {
 	f := newSessionFixture(t, true)
 	if _, err := f.st.DB.ExecContext(context.Background(), `UPDATE settings SET value = '60' WHERE key = ?`, SettingMaxTracked); err != nil {
 		t.Fatal(err)
@@ -238,10 +238,10 @@ func attempt(t *testing.T, th *throttle, name string, ip netip.Addr, at time.Tim
 	return true
 }
 
-// TestFullTableCountsItsLine covers Design 3.7: an attempt without room for
+// TestL1FullTableCountsItsLine covers Design 3.7: an attempt without room for
 // its counters is counted on the sketch, and an attacker gets no attempts beyond
 // the limits there either, whichever account it goes for.
-func TestFullTableCountsItsLine(t *testing.T) {
+func TestL1FullTableCountsItsLine(t *testing.T) {
 	now := time.Now()
 	th := fullTable(now)
 	lim := limits(5, time.Hour)
@@ -268,10 +268,10 @@ func TestFullTableCountsItsLine(t *testing.T) {
 	}
 }
 
-// TestFailureWithoutRoomStaysCounted: an attempt found its counters, they
+// TestR3B4FailureWithoutRoomStaysCounted: an attempt found its counters, they
 // ended while it ran and their places went to others. Its failure goes to the
 // sketch instead of nowhere.
-func TestFailureWithoutRoomStaysCounted(t *testing.T) {
+func TestR3B4FailureWithoutRoomStaysCounted(t *testing.T) {
 	now := time.Now()
 	th := fullTable(now)
 	lim := limits(5, time.Hour)
@@ -285,6 +285,160 @@ func TestFailureWithoutRoomStaysCounted(t *testing.T) {
 	}
 	if n := th.overflow.count(accountName("gone"), now, time.Hour); n != 1 {
 		t.Errorf("account on the sketch = %d", n)
+	}
+}
+
+// TestR4B2CountedAttackerFallsBehind: what a client did in the table counts in
+// the line as well. The addresses that filled the table have no attempts left
+// there and cannot keep anyone out.
+func TestR4B2CountedAttackerFallsBehind(t *testing.T) {
+	now := time.Now()
+	th := fullTable(now)
+	lim := limits(5, time.Hour)
+	x := netip.AddrFrom4([4]byte{198, 51, 100, 0})
+	if _, ok := th.reserve("new", x, now, lim); !ok {
+		t.Fatal("one failure in the table keeps a client out of the line")
+	}
+	th.clients[x].failures = 5
+	if _, ok := th.reserve("other", x, now, lim); ok {
+		t.Error("a client with 5 failures in the table got a place in the line")
+	}
+}
+
+// TestR4B3RunningAttemptsCountInLine: an attempt that left the line but has no
+// result yet still counts, so its client cannot queue again meanwhile.
+func TestR4B3RunningAttemptsCountInLine(t *testing.T) {
+	now := time.Now()
+	th := fullTable(now)
+	lim := limits(5, time.Hour)
+	ip := netip.AddrFrom4([4]byte{203, 0, 113, 8})
+	sleep := func(context.Context, time.Duration) error { return nil }
+	clock := func() time.Time { return now }
+	running := 0
+	for i := range 50 {
+		name := fmt.Sprintf("n%d", i)
+		tk, ok := th.reserve(name, ip, now, lim)
+		if !ok {
+			continue
+		}
+		if _, turn, err := th.wait(t.Context(), tk.place, name, sleep, clock, time.Hour); err != nil || !turn {
+			t.Fatalf("wait = %v, %v", turn, err)
+		}
+		running++ // no result yet: neither fail nor release
+	}
+	if running != 5 {
+		t.Errorf("%d attempts of one client running at once, the limit is 5", running)
+	}
+}
+
+// TestR4B4SketchCountsWithRoom: failures from the line go on counting when the
+// table has room again, so its end gives no new attempts.
+func TestR4B4SketchCountsWithRoom(t *testing.T) {
+	now := time.Now()
+	th := newThrottle()
+	th.capacity = 100
+	lim := limits(5, time.Hour)
+	ip := netip.AddrFrom4([4]byte{203, 0, 113, 9})
+	for range 5 {
+		th.overflow.add(pairName(pairKey{"victim", ip}), now, time.Hour)
+	}
+	if _, ok := th.reserve("victim", ip, now, lim); ok {
+		t.Error("the pair got new attempts with room in the table")
+	}
+	for range DefaultMaxClientFailures {
+		th.overflow.add(clientName(ip), now, time.Hour)
+	}
+	if _, ok := th.reserve("other", ip, now, lim); ok {
+		t.Error("the client got new attempts with room in the table")
+	}
+}
+
+// TestR4B3PairOnTheLine is the pair part of B-3: four failures, then attempts
+// at once, stay within the limit of the pair.
+func TestR4B3PairOnTheLine(t *testing.T) {
+	now := time.Now()
+	th := fullTable(now)
+	lim := limits(5, time.Hour)
+	ip := netip.AddrFrom4([4]byte{203, 0, 113, 8})
+	sleep := func(context.Context, time.Duration) error { return nil }
+	clock := func() time.Time { return now }
+	total := 0
+	for range 4 {
+		if attempt(t, th, "victim", ip, now, lim) {
+			total++
+		}
+	}
+	for range 10 {
+		tk, ok := th.reserve("victim", ip, now, lim)
+		if !ok {
+			continue
+		}
+		if _, turn, err := th.wait(t.Context(), tk.place, "victim", sleep, clock, time.Hour); err != nil || !turn {
+			t.Fatalf("wait = %v, %v", turn, err)
+		}
+		total++
+	}
+	if total > 5 {
+		t.Errorf("%d attempts on one pair, the limit is 5", total)
+	}
+}
+
+// TestR4B4NoNewAttemptsOnceThereIsRoom is the way of the review: a pair used up
+// its attempts in the line, then the table gets room.
+func TestR4B4NoNewAttemptsOnceThereIsRoom(t *testing.T) {
+	now := time.Now()
+	th := fullTable(now)
+	lim := limits(5, time.Hour)
+	ip := netip.AddrFrom4([4]byte{203, 0, 113, 9})
+	for attempt(t, th, "victim", ip, now, lim) {
+	}
+	lim.maxTracked = 100
+	if _, ok := th.reserve("victim", ip, now, lim); ok {
+		t.Error("new attempts for the pair once the table has room")
+	}
+}
+
+// TestR4B5ReportDoesNotHoldTheLine: the audit entry about the full table comes
+// after the turn. With the database locked the first client hangs up, and the
+// turn must not stay taken for the time the entry waits.
+func TestR4B5ReportDoesNotHoldTheLine(t *testing.T) {
+	f := fullFixture(t)
+	f.svc.now = time.Now
+	f.svc.throttle = fullTable(time.Now())
+	ctx := context.Background()
+	tx, err := f.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE settings SET key = key`); err != nil {
+		t.Fatal(err)
+	}
+	first, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _, _ = f.svc.Login(first, "Mod", testPassword, clientAt("203.0.113.1"))
+	}()
+	time.Sleep(300 * time.Millisecond)
+	cancel()
+	time.Sleep(300 * time.Millisecond)
+	f.svc.throttle.mu.Lock()
+	taken := f.svc.throttle.turnTaken
+	f.svc.throttle.mu.Unlock()
+	_ = tx.Rollback()
+	<-done
+	if taken {
+		t.Error("the turn stayed taken while the report waits for the database")
+	}
+}
+
+// TestSketchNeedsTwoCollisions: a name counts as the lower of its two slots.
+func TestSketchNeedsTwoCollisions(t *testing.T) {
+	now := time.Now()
+	k := newSketch()
+	k.rows[0].slot("owner", now, time.Hour).failures = 50
+	if n := k.count("owner", now, time.Hour); n != 0 {
+		t.Errorf("one collision counts %d", n)
 	}
 }
 
@@ -369,10 +523,10 @@ func fullFixture(t *testing.T) *sessionFixture {
 	return f
 }
 
-// TestFullTableLetsTheOwnerIn is the point of the line: with the table full of
+// TestR12FullTableLetsTheOwnerIn is the point of the line: with the table full of
 // other clients the right password works after a bounded wait, and one report
 // per minute at most goes to the audit log.
-func TestFullTableLetsTheOwnerIn(t *testing.T) {
+func TestR12FullTableLetsTheOwnerIn(t *testing.T) {
 	f := fullFixture(t)
 	ctx := context.Background()
 	for i := range 3 {
@@ -770,11 +924,11 @@ func TestStaleShareStays(t *testing.T) {
 	}
 }
 
-// TestMadeUpNamesGiveNoAttempts is the attack of the review (T-002): four
+// TestR1B1MadeUpNamesGiveNoAttempts is the attack of the review (T-002): four
 // guesses, then 5000 made-up names to push the own counters out, then the next
 // guesses. Round after round it brings no attempt beyond the limit, and the
 // rows it leaves in the audit log stay bounded (T-016).
-func TestMadeUpNamesGiveNoAttempts(t *testing.T) {
+func TestR1B1MadeUpNamesGiveNoAttempts(t *testing.T) {
 	f := newSessionFixture(t, true)
 	f.user(t, storetest.User{Pseudonym: "Mod"})
 	ctx := context.Background()
@@ -818,9 +972,9 @@ func TestMadeUpNamesGiveNoAttempts(t *testing.T) {
 	}
 }
 
-// TestAuditRowsPerClientAreBounded covers T-016 with the most rows a client
+// TestR1B3AuditRowsPerClientAreBounded covers T-016 with the most rows a client
 // can cause: every name up to its own lockout, then the client lockout.
-func TestAuditRowsPerClientAreBounded(t *testing.T) {
+func TestR1B3AuditRowsPerClientAreBounded(t *testing.T) {
 	f := newSessionFixture(t, true)
 	ctx := context.Background()
 	attacker := clientAt("192.0.2.93")
@@ -960,10 +1114,10 @@ func TestClientLimitSetting(t *testing.T) {
 	}
 }
 
-// TestFailedLoginsAreAuditedUnderLoad covers V-3 on the login: each failure in
+// TestV3FailedLoginsAreAuditedUnderLoad covers V-3 on the login: each failure in
 // a burst from many addresses leaves its row, also while another writer holds
 // the database past the busy timeout.
-func TestFailedLoginsAreAuditedUnderLoad(t *testing.T) {
+func TestV3FailedLoginsAreAuditedUnderLoad(t *testing.T) {
 	f := newSessionFixture(t, true)
 	ctx := context.Background()
 	before := f.count(t, `SELECT count(*) FROM audit_log`)

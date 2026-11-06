@@ -225,16 +225,16 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 	}
 	// Attempts in parallel count before their result is known (T-002).
 	tk, ok := s.throttle.reserve(key, c.IP, s.now(), lim)
-	if s.throttle.reportFull(s.now()) {
-		s.lockedOut(ctx, c, "", "", "table", fullReportGap)
-	}
 	if !ok {
+		s.reportFull(ctx, c)
 		return "", Principal{}, &LockedError{RetryAfter: time.Second}
 	}
 	defer s.throttle.release(key, c.IP, tk)
 	if tk.place != nil {
 		// The wait comes first: the delay counts what went before in line.
 		d, turn, err := s.throttle.wait(ctx, tk.place, key, s.sleep, s.now, lim.lockout)
+		// After the turn: the entry can take long, and the line goes on.
+		s.reportFull(ctx, c)
 		if err != nil {
 			return "", Principal{}, err
 		}
@@ -364,6 +364,12 @@ func (s *Service) loginDenied(ctx context.Context, c Client, userID, pseudonym, 
 		Result: audit.ResultDenied, Reason: reason,
 		Payload: map[string]string{"ip": c.IP.String(), "cause": cause, "request_id": c.RequestID},
 	})
+}
+
+func (s *Service) reportFull(ctx context.Context, c Client) {
+	if s.throttle.reportFull(s.now()) {
+		s.lockedOut(ctx, c, "", "", "table", fullReportGap)
+	}
 }
 
 // lockedOut records a lockout that began: of one account for this client, of

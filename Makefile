@@ -9,7 +9,7 @@ SQLC_VERSION := 1.31.1
 SQLC ?= sqlc
 export CGO_ENABLED := 0
 
-.PHONY: all build web panel agent images test test-integration integration-tests test-minecraft test-e2e lint vuln generate check
+.PHONY: all build web panel agent images test test-integration integration-tests test-minecraft test-e2e measure-login measure-panel lint vuln generate check
 
 all: lint test web build
 
@@ -54,6 +54,15 @@ test-minecraft:
 # downloaded (into the user's cache); CI installs its system libraries.
 test-e2e:
 	cd web && npm ci --no-audit --no-fund && npm run build && npx playwright install chromium && npx playwright test
+
+# The measurements behind the residual risks (Sicherheit chapter 5). They take
+# minutes, so they are in no check.
+measure-login:
+	go test -tags measure -count=1 -v -timeout 30m -run TestMeasure ./internal/auth
+
+# MODE=body or hold, see scripts/measure-panel.sh.
+measure-panel:
+	scripts/measure-panel.sh $(MODE) $(SECONDS)
 
 # Full pre-commit gate (also run by the hook in .githooks).
 check:

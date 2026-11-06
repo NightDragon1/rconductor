@@ -203,7 +203,8 @@ func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, lim log
 	}
 	client := netlimit.ClientKey(ip)
 	key := pairKey{account, client}
-	failures := 0
+	// What the sketch holds counts on top, also when the table has room again.
+	failures := t.overflow.count(pairName(key), now, lim.lockout)
 	if c := t.pairs[key]; c != nil {
 		// A lockout that began since the check counts too.
 		if now.Before(c.lockedUntil) {
@@ -211,19 +212,19 @@ func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, lim log
 		}
 		// Failures end after the window, as in fail.
 		if now.Sub(c.last) < lim.lockout {
-			failures = c.failures
+			failures += c.failures
 		}
 	}
 	if failures+t.running[key] >= lim.maxFailures {
 		return ticket{}, false
 	}
-	failures = 0
+	failures = t.overflow.count(clientName(client), now, lim.lockout)
 	if c := t.clients[client]; c != nil {
 		if now.Before(c.lockedUntil) {
 			return ticket{}, false
 		}
 		if now.Sub(c.first) < lim.lockout {
-			failures = c.failures
+			failures += c.failures
 		}
 	}
 	if failures+t.clientRunning[client] >= lim.maxClientFailures {
@@ -232,7 +233,7 @@ func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, lim log
 	tk := ticket{places: t.missing(account, key, now, lim.lockout)}
 	if t.crowded(tk.places, now, lim.lockout) {
 		t.full = true
-		place := t.joinLine(key, now, lim)
+		place := t.joinLine(key.ip, failures+t.clientRunning[client], lim)
 		if place == nil {
 			return ticket{}, false
 		}
@@ -244,19 +245,19 @@ func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, lim log
 	return tk, true
 }
 
-// joinLine takes a client into the overflow line, or returns nil. On the
-// sketch a client has the attempts of one account, over all names: there are
-// many clients on a full table, and the line has few places. In a full line
-// a client takes the place of the one with the most failures, if that is more
-// than its own.
-func (t *throttle) joinLine(key pairKey, now time.Time, lim loginLimits) *waiter {
-	failures := t.overflow.count(clientName(key.ip), now, lim.lockout)
-	if failures >= lim.maxFailures || t.overflow.count(pairName(key), now, lim.lockout) >= lim.maxFailures {
+// joinLine takes a client into the overflow line, or returns nil. failures
+// is all the client did in this window: counted in the table or on the sketch,
+// and still running. In the line a client has the attempts of one account, over
+// all names: there are many clients on a full table, and the line has few
+// places. In a full line a client takes the place of the one with the most
+// failures, if that is more than its own.
+func (t *throttle) joinLine(client netip.Addr, failures int, lim loginLimits) *waiter {
+	if failures >= lim.maxFailures {
 		return nil
 	}
 	worst := -1
 	for i, w := range t.line {
-		if w.client == key.ip {
+		if w.client == client {
 			return nil
 		}
 		if worst < 0 || w.failures >= t.line[worst].failures {
@@ -270,7 +271,7 @@ func (t *throttle) joinLine(key pairKey, now time.Time, lim loginLimits) *waiter
 		t.line[worst].answer <- false
 		t.line = slices.Delete(t.line, worst, worst+1)
 	}
-	w := &waiter{client: key.ip, failures: failures, answer: make(chan bool, 1)}
+	w := &waiter{client: client, failures: failures, answer: make(chan bool, 1)}
 	t.line = append(t.line, w)
 	t.nextTurn()
 	return w
@@ -505,14 +506,19 @@ func purge[K comparable](counters map[K]*counter, now time.Time, window time.Dur
 	}
 }
 
-// sketchSlots gives the sketch 1 MiB. Far fewer attempts than slots get through
-// the overflow line in a window.
+// sketchSlots gives the two rows of the sketch 4 MiB. Far fewer attempts than
+// slots get through the overflow line in a window.
 const sketchSlots = 1 << 16
 
 // sketch counts failures per window in a fixed amount of memory, for what the
-// table has no room for. Two names can share a slot: that only counts more,
-// never less, and without the seed nobody can aim for it.
+// table has no room for. A name has one slot in each of two rows and counts as
+// the lower of them: names sharing a slot can only count more, never less, and
+// that takes two collisions at once. Without the seeds nobody can aim for it.
 type sketch struct {
+	rows [2]sketchRow
+}
+
+type sketchRow struct {
 	seed  maphash.Seed
 	slots []sketchSlot
 }
@@ -523,15 +529,19 @@ type sketchSlot struct {
 }
 
 func newSketch() *sketch {
-	return &sketch{seed: maphash.MakeSeed(), slots: make([]sketchSlot, sketchSlots)}
+	s := &sketch{}
+	for i := range s.rows {
+		s.rows[i] = sketchRow{seed: maphash.MakeSeed(), slots: make([]sketchSlot, sketchSlots)}
+	}
+	return s
 }
 
 func accountName(account string) string { return "a\x00" + account }
 func pairName(k pairKey) string         { return "p\x00" + k.ip.String() + "\x00" + k.account }
 func clientName(ip netip.Addr) string   { return "c\x00" + ip.String() }
 
-func (s *sketch) slot(name string, now time.Time, window time.Duration) *sketchSlot {
-	slot := &s.slots[maphash.String(s.seed, name)%sketchSlots]
+func (r *sketchRow) slot(name string, now time.Time, window time.Duration) *sketchSlot {
+	slot := &r.slots[maphash.String(r.seed, name)%sketchSlots]
 	if now.Sub(slot.first) >= window {
 		*slot = sketchSlot{first: now}
 	}
@@ -539,9 +549,11 @@ func (s *sketch) slot(name string, now time.Time, window time.Duration) *sketchS
 }
 
 func (s *sketch) count(name string, now time.Time, window time.Duration) int {
-	return s.slot(name, now, window).failures
+	return min(s.rows[0].slot(name, now, window).failures, s.rows[1].slot(name, now, window).failures)
 }
 
 func (s *sketch) add(name string, now time.Time, window time.Duration) {
-	s.slot(name, now, window).failures++
+	for i := range s.rows {
+		s.rows[i].slot(name, now, window).failures++
+	}
 }

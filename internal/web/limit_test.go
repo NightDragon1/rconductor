@@ -265,9 +265,9 @@ func closed(c net.Conn, wait time.Duration) bool {
 	return !errors.As(err, &timeout) || !timeout.Timeout()
 }
 
-// TestConnectionWithoutSessionAges covers V-2: a request now and then does not
+// TestV2ConnectionWithoutSessionAges covers V-2: a request now and then does not
 // hold a place for good, and the place is free afterwards.
-func TestConnectionWithoutSessionAges(t *testing.T) {
+func TestV2ConnectionWithoutSessionAges(t *testing.T) {
 	o := netlimit.Options{Max: 1, PerClient: 1, MaxAge: 300 * time.Millisecond}
 	addr, _, _ := servedWith(t, o, okHandler(), io.Discard)
 	c := dial(t, addr)
@@ -362,5 +362,27 @@ func TestSessionRequestReachesKeep(t *testing.T) {
 	}
 	if closed(with, 100*time.Millisecond) {
 		t.Error("a valid session lost its connection")
+	}
+}
+
+// TestBrokenRequestsAreRefused comes from an exploratory check without a
+// finding, so it has no state before a fix to fail on: requests the HTTP server
+// must refuse by itself stay refused behind the connection limit.
+func TestBrokenRequestsAreRefused(t *testing.T) {
+	addr, _, _ := servedAt(t, 8, okHandler(), io.Discard)
+	for name, c := range map[string]struct{ request, want string }{
+		"no host":          {"GET / HTTP/1.1\r\nConnection: close\r\n\r\n", "400"},
+		"bad request line": {"NONSENSE\r\n\r\n", "400"},
+		"header too big":   {"GET / HTTP/1.1\r\nHost: x\r\nX-A: " + strings.Repeat("a", 2<<20) + "\r\n\r\n", "431"},
+	} {
+		conn := dial(t, addr)
+		if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		go func() { _, _ = fmt.Fprint(conn, c.request) }()
+		line, err := bufio.NewReader(conn).ReadString('\n')
+		if err != nil || !strings.Contains(line, c.want) {
+			t.Errorf("%s: %q, %v", name, line, err)
+		}
 	}
 }

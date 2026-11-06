@@ -4,10 +4,15 @@ package users
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"time"
+
+	"golang.org/x/sync/semaphore"
 )
 
 // Limits of profile pictures (AUTH-009, decision M1).
@@ -17,10 +22,26 @@ const (
 	avatarSize      = 512
 )
 
+// A small file can decode to much: 4096 × 4096 pixels of 16 bits and alpha take
+// 128 MiB from 130 KiB of PNG, and any role may upload one (T-025). So what is
+// being decoded is bounded by its pixels, not by the size of the file. A
+// progressive JPEG needs the most per pixel.
+const (
+	avatarDecodeBudget  = 128 << 20
+	avatarBytesPerPixel = 8
+	jpegBytesPerPixel   = 16
+	avatarDecodeWait    = 5 * time.Second
+)
+
+var avatarDecoding = semaphore.NewWeighted(avatarDecodeBudget)
+
+// ErrBusy means too many pictures are being decoded at the moment.
+var ErrBusy = errors.New("too many pictures in work")
+
 // processAvatar checks an upload by its content and returns a re-encoded,
 // downscaled image with its media type. Re-encoding drops all metadata
 // such as EXIF; only PNG and JPEG are accepted.
-func processAvatar(data []byte) ([]byte, string, error) {
+func processAvatar(ctx context.Context, data []byte) ([]byte, string, error) {
 	if len(data) > MaxAvatarBytes {
 		return nil, "", &InvalidError{Detail: "a profile picture has at most 1 MiB"}
 	}
@@ -31,6 +52,17 @@ func processAvatar(data []byte) ([]byte, string, error) {
 	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width > maxAvatarPixels || cfg.Height > maxAvatarPixels {
 		return nil, "", &InvalidError{Detail: "a profile picture has at most 4096 × 4096 pixels"}
 	}
+	perPixel := int64(avatarBytesPerPixel)
+	if format == "jpeg" {
+		perPixel = jpegBytesPerPixel
+	}
+	weight := min(int64(cfg.Width)*int64(cfg.Height)*perPixel, avatarDecodeBudget)
+	wait, cancel := context.WithTimeout(ctx, avatarDecodeWait)
+	defer cancel()
+	if err := avatarDecoding.Acquire(wait, weight); err != nil {
+		return nil, "", ErrBusy
+	}
+	defer avatarDecoding.Release(weight)
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, "", &InvalidError{Detail: "the image cannot be read"}

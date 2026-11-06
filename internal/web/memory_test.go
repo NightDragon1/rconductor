@@ -3,7 +3,10 @@
 package web
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -90,10 +93,10 @@ func peakHeap(f func()) uint64 {
 	return 0
 }
 
-// TestBodiesStayWithinMemory covers T-025 for every role: the rights are
+// TestV1BodiesStayWithinMemory covers T-025 for every role: the rights are
 // checked after decoding, so a session of any role can send the largest
 // bodies in parallel, up to the connection limit of the web port.
-func TestBodiesStayWithinMemory(t *testing.T) {
+func TestV1BodiesStayWithinMemory(t *testing.T) {
 	if testing.Short() {
 		t.Skip("load test")
 	}
@@ -223,5 +226,90 @@ func TestPublicBodiesKeepTheirWay(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{}`)))
 	if rec.Code != http.StatusOK {
 		t.Errorf("login with the budget used up = %d", rec.Code)
+	}
+}
+
+// pictureBomb is a small file that takes 128 MiB when decoded.
+func pictureBomb(t *testing.T) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	e := png.Encoder{CompressionLevel: png.BestCompression}
+	if err := e.Encode(&b, image.NewNRGBA64(image.Rect(0, 0, 4096, 4096))); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+// TestR4B1PictureBombStaysWithinMemory covers T-025: the size of a file says little
+// about its pixels, and the lowest role may set a picture.
+func TestR4B1PictureBombStaysWithinMemory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("load test")
+	}
+	f := newAPIFixture(t, Proxies{})
+	storetest.CreateUser(t, f.st, storetest.User{Pseudonym: "low", Role: "supporter", PasswordHash: f.passwordHash(t), CreatedBy: f.adminID})
+	session := f.login(t, "low")
+	body := pictureBomb(t)
+	var served atomic.Int32
+	peak := peakHeap(func() {
+		var wg sync.WaitGroup
+		for range 16 {
+			wg.Go(func() {
+				r := httptest.NewRequest(http.MethodPut, "http://panel.lan/api/v1/me/avatar", bytes.NewReader(body))
+				r.Header.Set("Content-Type", "image/png")
+				r.Header.Set("Origin", "http://panel.lan")
+				r.AddCookie(session)
+				rec := httptest.NewRecorder()
+				f.h.ServeHTTP(rec, r)
+				if rec.Code == http.StatusNoContent {
+					served.Add(1)
+				} else if rec.Code != http.StatusServiceUnavailable {
+					t.Errorf("picture = %d %s", rec.Code, rec.Body.String())
+				}
+			})
+		}
+		wg.Wait()
+	})
+	t.Logf("peak %d MiB, %d pictures set", peak>>20, served.Load())
+	if peak > memoryLimit {
+		t.Errorf("heap grew by %d MiB, the limit is %d MiB", peak>>20, memoryLimit>>20)
+	}
+	if served.Load() == 0 {
+		t.Error("no picture got through")
+	}
+}
+
+// TestR4B8PictureSlowSender keeps the proof of a known gap: pictures take their
+// budget before they are read, so four slow uploads block all others for up
+// to the read timeout. It fails on today's code; see #160.
+func TestR4B8PictureSlowSender(t *testing.T) {
+	t.Skip("known gap before 1.0, see #160")
+	h := budgetFixture(func(_ http.ResponseWriter, r *http.Request) { _, _ = io.Copy(io.Discard, r.Body) })
+	for range pictureBudget / MaxPictureBody {
+		pr, pw := io.Pipe()
+		defer func() { _ = pw.Close() }()
+		r := httptest.NewRequest(http.MethodPut, "/api/v1/me/avatar", pr)
+		r.ContentLength = 1000
+		go h.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	time.Sleep(100 * time.Millisecond)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/v1/me/avatar", strings.NewReader("x")))
+	if rec.Code != http.StatusOK {
+		t.Errorf("picture behind slow senders = %d", rec.Code)
+	}
+}
+
+// TestR4PathEndingsGiveNoWayAroundTheBudget: limits go by the end of the path,
+// but an escaped path that only looks like a public or picture route ends
+// before any body is read. The review found no gap here, so this test has no
+// state before a fix to fail on; it guards the check.
+func TestR4PathEndingsGiveNoWayAroundTheBudget(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	session := f.login(t, "Mod")
+	for _, p := range []string{"/api/v1/users/x%2Fauth%2Flogin", "/api/v1/users/x%2Fme%2Favatar", "/api/v1/server-groups/x%2Fauth%2Flogin", "/api/v1/auth%2Flogin"} {
+		if code := f.raw(http.MethodPatch, p, `{}`, session); code < 400 || code >= 500 {
+			t.Errorf("%s = %d", p, code)
+		}
 	}
 }

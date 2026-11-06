@@ -44,7 +44,7 @@ describe('Shell (Design 6.3)', () => {
     bufferOwner(undefined);
   });
 
-  it('gives the next user a socket of their own', async () => {
+  it('round 3 B-1: gives the next user a socket of their own', async () => {
     await setLanguage('en');
     await renderPage(() => <Shell />);
     const { opened, closed } = live;

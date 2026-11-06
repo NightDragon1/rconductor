@@ -88,7 +88,7 @@ func logLost(params sqlitedb.InsertAuditParams, cause error) {
 	log.Error("audit entry not written, kept here", logging.Event(logging.AuditLost),
 		slog.String("id", params.ID), slog.String("ts", params.Ts), slog.String("kind", params.Kind),
 		slog.String("actor_id", params.ActorID.String), slog.String("actor_role", params.ActorRole.String),
-		slog.String("session_id", params.SessionID.String), slog.String("server_id", params.ServerID.String),
+		slog.String("session_hash", params.SessionID.String), slog.String("server_id", params.ServerID.String),
 		slog.String("target_type", params.TargetType.String), slog.String("target_id", params.TargetID.String),
 		slog.String("action", params.Action), slog.String("payload", params.Payload),
 		slog.String("result", params.Result), slog.String("reason", params.ReasonCode.String),

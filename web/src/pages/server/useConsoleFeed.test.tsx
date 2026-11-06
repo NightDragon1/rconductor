@@ -80,7 +80,7 @@ describe('useConsoleFeed (CMD-001)', () => {
     expect(result.current.b.cmds).toEqual([]);
   });
 
-  it('keeps the answer of a command from the next user', async () => {
+  it('K-1: keeps the answer of a command from the next user', async () => {
     let answer: (v: unknown) => void = () => undefined;
     bufferOwner('alice');
     vi.spyOn(api, 'GET').mockResolvedValue(page as never);
@@ -107,7 +107,7 @@ describe('useConsoleFeed (CMD-001)', () => {
     expect(result.current.a.running ?? 0).toBe(0);
   });
 
-  it('keeps the refusal of a command from the next user', async () => {
+  it('K-1: keeps the refusal of a command from the next user', async () => {
     let refuse: (v: unknown) => void = () => undefined;
     bufferOwner('alice');
     vi.spyOn(api, 'GET').mockResolvedValue(page as never);
@@ -127,7 +127,7 @@ describe('useConsoleFeed (CMD-001)', () => {
     expect(result.current.a.cmds).toEqual([]);
   });
 
-  it('keeps the history of a user from the next user', async () => {
+  it('K-1: keeps the history of a user from the next user', async () => {
     let page1: (v: unknown) => void = () => undefined;
     bufferOwner('alice');
     const get = vi.spyOn(api, 'GET').mockImplementation(

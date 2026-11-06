@@ -27,6 +27,8 @@ func adminRequest(ctx context.Context) users.Request {
 func adminError(err error) error {
 	var inv *users.InvalidError
 	switch {
+	case errors.Is(err, users.ErrBusy):
+		return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeBusy, retryAfter: 5, detail: "busy, try again"}
 	case errors.Is(err, users.ErrNotFound):
 		return &problem{status: http.StatusNotFound, reason: api.ReasonCodeNotFound}
 	case errors.Is(err, users.ErrConflict):
