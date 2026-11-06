@@ -53,7 +53,9 @@ type Panel struct {
 	EmergencyAdminReset bool
 	// HashConcurrency limits parallel Argon2id computations (64 MiB each).
 	HashConcurrency int
-	Log             Log
+	// MaxConnections limits the open connections of the web port (T-025).
+	MaxConnections int
+	Log            Log
 }
 
 // Agent is the start-up configuration of the agent. Until M3 only the
@@ -101,6 +103,7 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 		EmergencyAdmin:      r.boolean("RCD_EMERGENCY_ADMIN", true),
 		EmergencyAdminReset: r.boolean("RCD_EMERGENCY_ADMIN_RESET", false),
 		HashConcurrency:     r.integer("RCD_PASSWORD_HASH_CONCURRENCY", 2, 1, 64),
+		MaxConnections:      r.integer("RCD_MAX_CONNECTIONS", 512, 16, 65536),
 		Log:                 r.log(),
 	}
 	if c.AgentPublicAddr != "" {

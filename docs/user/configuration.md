@@ -39,6 +39,7 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_EMERGENCY_ADMIN` | boolean | `true` | boolean | emergency admin enabled |
 | `RCD_EMERGENCY_ADMIN_RESET` | boolean | `false` | boolean | on start, a new initial password for the emergency admin, its sessions end and a lock is lifted; remove it afterwards |
 | `RCD_PASSWORD_HASH_CONCURRENCY` | number | `2` | 1 to 64 | password hashes computed at once, each takes 64 MiB of RAM |
+| `RCD_MAX_CONNECTIONS` | number | `512` | 16 to 65536 | open connections of the web port, WebSockets included; further ones wait until one ends |
 | `RCD_LOG_LEVEL` | text | `info` | `debug`, `info`, `warn`, `error` | log level |
 | `RCD_LOG_FORMAT` | text | `text` | `text`, `json` | log format; audit-relevant events carry a fixed event code |
 

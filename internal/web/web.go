@@ -100,14 +100,16 @@ func NewHandler(opts Options) http.Handler {
 	return withSecurityHeaders(withRequestID(withBodyLimit(withClient(opts.Proxies, mux))))
 }
 
-// Serve listens on addr and serves h until ctx ends, then shuts down
-// gracefully. ready, if set, receives the bound address.
-func Serve(ctx context.Context, addr string, h http.Handler, log *slog.Logger, ready func(net.Addr)) error {
+// Serve listens on addr and serves h with at most maxConns open connections
+// until ctx ends, then shuts down gracefully. ready, if set, receives the
+// bound address.
+func Serve(ctx context.Context, addr string, maxConns int, h http.Handler, log *slog.Logger, ready func(net.Addr)) error {
 	var lc net.ListenConfig
-	ln, err := lc.Listen(ctx, "tcp", addr)
+	tcp, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", addr, err)
 	}
+	ln := newLimitListener(tcp, maxConns, log)
 	srv := &http.Server{
 		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,

@@ -222,7 +222,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
 		Agents: agentSvc, Runtime: views,
 	})
-	return web.Serve(ctx, cfg.HTTPAddr, handler, webLog,
+	return web.Serve(ctx, cfg.HTTPAddr, cfg.MaxConnections, handler, webLog,
 		func(addr net.Addr) {
 			logs.Root().Info("ready", logging.Event(logging.AppReady),
 				slog.String(logging.KeyVersion, buildinfo.Version), slog.String("http_addr", addr.String()),
