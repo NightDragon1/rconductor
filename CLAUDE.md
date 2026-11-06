@@ -93,6 +93,10 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   es eine Revision.
 - Blinde Prüfungen haben je Runde einen festen Umfang. Funde außerhalb: nur hoch
   blockiert, der Rest wird Issue.
+- PoCs aus blinden Prüfungen werden immer als Regressionstests übernommen, nie nur im
+  Scratchpad gelassen: Name mit Befund-ID, im jeweiligen Paket; jeder Test muss auf
+  dem Code vor dem Fix fehlschlagen, sonst im Test vermerken. Restrisiken mit Messung
+  verweisen auf Test oder Skript.
 
 ## Tests und Prüfung
 - Go: go test ./..., Integrationstests mit testcontainers-go.
