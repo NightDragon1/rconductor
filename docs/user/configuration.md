@@ -16,6 +16,7 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | Variable | Type | Default | Allowed | Purpose |
 | --- | --- | --- | --- | --- |
 | `RCD_VERSION` | text | `1` | an image tag such as `1`, `1.0` or `0.9` | version of panel and agent images |
+| `RCD_IMAGE_REPO` | text | `docker.io/nightdragon1` | also `ghcr.io/nightdragon1` | registry and owner of the images in the Compose files |
 | `RCD_WEB_PORT` | number | `8080` | a free port | published web port |
 | `RCD_AGENT_PORT` | number | `8443` | a free port | published agent port (panel.yaml) |
 | `DOCKER_GID` | number | `999` | group of `/var/run/docker.sock` | lets the agent reach the socket |
@@ -41,6 +42,8 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_PASSWORD_HASH_CONCURRENCY` | number | `2` | 1 to 64 | password hashes computed at once, each takes 64 MiB of RAM |
 | `RCD_MAX_CONNECTIONS` | number | `512` | 16 to 65536 | open connections of the web port, WebSockets included; further ones wait until one ends |
 | `RCD_MAX_CLIENT_CONNECTIONS` | number | `128` | 1 to 65536 | open connections of one client address, an IPv6 /64 counts as one; further ones are closed; trusted proxies have no limit of their own |
+| `RCD_MAX_ANONYMOUS_CONNECTION_SECONDS` | number | `30` | 10 to 3600 | a connection without a valid session ends after this time, once its running request is done; behind a trusted proxy the proxy address is exempt |
+| `GOMEMLIMIT` | text | empty | as in Go, such as `800MiB`, or `off` | memory the Go runtime aims for; empty means 80 % of the memory limit of the container, or none without one |
 | `RCD_LOG_LEVEL` | text | `info` | `debug`, `info`, `warn`, `error` | log level |
 | `RCD_LOG_FORMAT` | text | `text` | `text`, `json` | log format; audit-relevant events carry a fixed event code |
 
@@ -71,6 +74,7 @@ are written like `24h`, `15m`, `30s`.
 | `session.max_lifetime` | duration | 7 days | 1m to 90 days | a session ends after this time at the latest |
 | `login.max_failures` | number | 5 | 1 to 100 | failed sign-ins before a lockout |
 | `login.max_client_failures` | number | 50 | 1 to 1000 | failed sign-ins from one address over all names within the lockout duration before that address is locked; everyone behind one address shares this count, so raise it for a large shared address |
+| `login.max_tracked` | number | 100000 | 1000 to 1000000 | login counters kept in memory; on a full table sign-ins not yet counted wait in one line |
 | `login.lockout_duration` | duration | 15m | 1m to 24h | length of a lockout |
 | `invite.lifetime` | duration | 72h | 1m to 30 days | validity of an invitation link |
 | `supporters.enabled` | boolean | off | on, off | supporters at all; switching off ends the sessions of all supporters |

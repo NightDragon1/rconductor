@@ -148,3 +148,29 @@ func TestSyntaxDefaults(t *testing.T) {
 		t.Error("path not normalized")
 	}
 }
+
+// TestRequiredFieldsAreChecked comes from an exploratory check without a
+// finding, so it has no state before a fix to fail on: a profile without a
+// required field is refused, and the separator of the player list is optional.
+func TestRequiredFieldsAreChecked(t *testing.T) {
+	for name, missing := range map[string]string{
+		"description": "    description: Show players online\n",
+		"name":        "name: Minecraft (Java Edition)\n",
+		"schema":      "schema: 1\n",
+		"protocol":    "protocol:\n  type: source-rcon\n  default_port: 25575\n",
+		"pattern":     "  pattern: \"players online: (.*)$\"\n",
+	} {
+		if !strings.Contains(design74, missing) {
+			t.Fatalf("%s is not in the example", name)
+		}
+		if _, err := Parse([]byte(strings.Replace(design74, missing, "", 1))); err == nil {
+			t.Errorf("profile without %s accepted", name)
+		}
+	}
+	if _, err := Parse(nil); err == nil {
+		t.Error("empty profile accepted")
+	}
+	if _, err := Parse([]byte(strings.Replace(design74, "  separator: \", \"\n", "", 1))); err != nil {
+		t.Errorf("profile without a separator: %v", err)
+	}
+}

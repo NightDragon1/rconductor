@@ -8,7 +8,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MAX_LOG_LINES, prependTail, updateBuffer, useBuffer } from '@/lib/console';
+import { bufferWriter, MAX_LOG_LINES, prependTail, updateBuffer, useBuffer } from '@/lib/console';
 import { stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
 import { useLogsFeed } from './useConsoleFeed';
@@ -52,11 +52,12 @@ export function LogsView({ server }: { server: Server }) {
     setEarlier('busy');
     setProblem('');
     const want = Math.min(MAX_LOG_LINES, all.length + STEP);
+    const write = bufferWriter();
     try {
       const tail = must(
         await api.GET('/servers/{id}/logs', { params: { path: { id }, query: { lines: want } } }),
       );
-      updateBuffer(id, (b) => prependTail(b, tail.lines));
+      write(id, (b) => prependTail(b, tail.lines));
       // Fewer lines than asked: the log has no more.
       setEarlier(tail.lines.length < want || want >= MAX_LOG_LINES ? 'done' : 'idle');
     } catch (e) {

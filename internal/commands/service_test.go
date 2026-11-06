@@ -593,3 +593,17 @@ func (w *world) listVersion(id string) *int64 {
 	}
 	return &v
 }
+
+// TestSlashChangesNoDecision comes from an exploratory check without a finding,
+// so it has no state before a fix to fail on: with or without the leading slash
+// a command gets the same answer.
+func TestSlashChangesNoDecision(t *testing.T) {
+	w := newWorld(t)
+	w.exec(`INSERT INTO command_list_entries (id, command_list_id, path, passable) VALUES ('za', 'l', '/mymod reload', 0)`)
+	w.c.Invalidate()
+	_, with := w.send("m", "/mymod reload")
+	_, without := w.send("m", "mymod reload")
+	if reason(with) != reason(without) {
+		t.Errorf("with slash %q, without %q", reason(with), reason(without))
+	}
+}

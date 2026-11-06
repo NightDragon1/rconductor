@@ -246,8 +246,11 @@ func TestOversizedMessage(t *testing.T) {
 	}
 	logtest.Wait(t, f.logs, `"event":"agent.limit","agent_id":"agent-1","reason":"message_size"`)
 	logtest.Wait(t, f.logs, `"reason":"too_large"`)
-	if f.hub.Connected("agent-1") {
-		t.Error("agent still connected")
+	// The session is logged as ended just before it leaves the hub.
+	for end := time.Now().Add(5 * time.Second); f.hub.Connected("agent-1"); time.Sleep(time.Millisecond) {
+		if time.Now().After(end) {
+			t.Fatal("agent still connected")
+		}
 	}
 }
 

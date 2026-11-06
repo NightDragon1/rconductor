@@ -4,7 +4,14 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
-import { addCommands, emptyBuffer, resetBuffers, updateBuffer, useBuffer } from '@/lib/console';
+import {
+  addCommands,
+  bufferOwner,
+  emptyBuffer,
+  resetBuffers,
+  updateBuffer,
+  useBuffer,
+} from '@/lib/console';
 import { useConsoleFeed } from './useConsoleFeed';
 
 vi.mock('@/api/session', () => ({ useSession: () => ({ data: undefined }) }));
@@ -42,6 +49,7 @@ function feed() {
 describe('useConsoleFeed (CMD-001)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    bufferOwner(undefined);
     resetBuffers();
     client.clear();
   });
@@ -70,6 +78,98 @@ describe('useConsoleFeed (CMD-001)', () => {
     );
     await waitFor(() => expect(result.current.a.cmds.map((c) => c.id)).toEqual(['r1']));
     expect(result.current.b.cmds).toEqual([]);
+  });
+
+  it('K-1: keeps the answer of a command from the next user', async () => {
+    let answer: (v: unknown) => void = () => undefined;
+    bufferOwner('alice');
+    vi.spyOn(api, 'GET').mockResolvedValue(page as never);
+    const post = vi.spyOn(api, 'POST').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve as (v: unknown) => void;
+        }) as never,
+    );
+    const { result } = feed();
+    act(() => result.current.feed.send.mutate('secret'));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+
+    act(() => bufferOwner('bob'));
+    act(() =>
+      answer({
+        data: { request_id: 'r9', ts: '2026-11-06T10:00:00Z', command: 'secret', response: 'x' },
+        response: new Response(),
+      }),
+    );
+    await waitFor(() => expect(result.current.feed.send.isPending).toBe(false));
+    await new Promise((r) => setTimeout(r));
+    expect(result.current.a.cmds).toEqual([]);
+    expect(result.current.a.running ?? 0).toBe(0);
+  });
+
+  it('K-1: keeps the refusal of a command from the next user', async () => {
+    let refuse: (v: unknown) => void = () => undefined;
+    bufferOwner('alice');
+    vi.spyOn(api, 'GET').mockResolvedValue(page as never);
+    const post = vi.spyOn(api, 'POST').mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          refuse = reject as (v: unknown) => void;
+        }) as never,
+    );
+    const { result } = feed();
+    act(() => result.current.feed.send.mutate('secret'));
+    await waitFor(() => expect(post).toHaveBeenCalled());
+
+    act(() => bufferOwner('bob'));
+    act(() => refuse(new Error('gone')));
+    await new Promise((r) => setTimeout(r));
+    expect(result.current.a.cmds).toEqual([]);
+  });
+
+  it('K-1: keeps the history of a user from the next user', async () => {
+    let page1: (v: unknown) => void = () => undefined;
+    bufferOwner('alice');
+    const get = vi.spyOn(api, 'GET').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          page1 = resolve as (v: unknown) => void;
+        }) as never,
+    );
+    const { result } = feed();
+    await waitFor(() => expect(get).toHaveBeenCalled());
+
+    act(() => bufferOwner('bob'));
+    act(() =>
+      page1({
+        data: {
+          items: [
+            { request_id: 'a1', ts: '2026-11-06T10:00:00Z', command: 'secret', result: 'ok' },
+          ],
+          next_cursor: '',
+        },
+        response: new Response(),
+      }),
+    );
+    await new Promise((r) => setTimeout(r));
+    expect(result.current.a.cmds).toEqual([]);
+  });
+
+  it('round 5 B5-1: keeps a late live event from the next user', async () => {
+    bufferOwner('alice');
+    vi.spyOn(api, 'GET').mockResolvedValue(page as never);
+    const { result } = feed();
+    await waitFor(() => expect(topics.has('server.a.console')).toBe(true));
+    const listener = topics.get('server.a.console');
+
+    act(() => bufferOwner('bob'));
+    act(() =>
+      listener?.({
+        type: 'event',
+        data: { request_id: 'a1', ts: '2026-11-06T10:00:00Z', command: 'secret', result: 'ok' },
+      } as never),
+    );
+    expect(result.current.a.cmds).toEqual([]);
   });
 
   it('leaves no gap after more commands than a page while away', async () => {

@@ -618,6 +618,10 @@
         "label": "Failed sign-ins per address",
         "help": "Failures from one address, over all names, before it is locked. People behind one address share this count."
       },
+      "login_max_tracked": {
+        "label": "Sign-in counters in memory",
+        "help": "When they run out, sign-ins not yet counted wait in one line."
+      },
       "login_lockout_duration": {
         "label": "Lock after failed sign-ins",
         "help": "How long sign-in stays locked after too many failures."

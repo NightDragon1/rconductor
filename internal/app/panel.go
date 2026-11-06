@@ -19,6 +19,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agenthub"
 	agentadmin "github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/agentview"
+	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
@@ -28,6 +29,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	eventbus "github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/memlimit"
 	"github.com/NightDragon1/rconductor/internal/netlimit"
 	"github.com/NightDragon1/rconductor/internal/ops/backup"
 	"github.com/NightDragon1/rconductor/internal/ops/cleanup"
@@ -65,6 +67,8 @@ type PanelOptions struct {
 func RunPanel(ctx context.Context, cfg config.Panel, out io.Writer, opts PanelOptions) error {
 	logs := logging.New(out, "panel", cfg.Log)
 	root := logs.Root()
+	audit.SetLostLog(root)
+	memlimit.Apply(root)
 	root.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version))
 
 	err := runPanel(ctx, cfg, logs, opts)
@@ -223,7 +227,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
 		Agents: agentSvc, Runtime: views,
 	})
-	return web.Serve(ctx, cfg.HTTPAddr, netlimit.Options{Max: cfg.MaxConnections, PerClient: cfg.MaxClientConnections, Exempt: proxies.Trust}, handler, webLog,
+	return web.Serve(ctx, cfg.HTTPAddr, netlimit.Options{Max: cfg.MaxConnections, PerClient: cfg.MaxClientConnections, MaxAge: cfg.MaxAnonymousAge, Exempt: proxies.Trust}, handler, webLog,
 		func(addr net.Addr) {
 			logs.Root().Info("ready", logging.Event(logging.AppReady),
 				slog.String(logging.KeyVersion, buildinfo.Version), slog.String("http_addr", addr.String()),

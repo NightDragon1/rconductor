@@ -15,15 +15,15 @@ RCON port, and none of yours should.
 | `deploy/compose/panel.yaml` | the panel host of a separate setup; set `RCD_AGENT_PUBLIC_ADDR` to the address agents reach it under |
 | `deploy/compose/agent.yaml` | each game host of a separate setup |
 
-The files use `ghcr.io/nightdragon1/...:1`. The same tags are on Docker Hub as
-`nightdragon1/rconductor-panel` and `nightdragon1/rconductor-agent`. Panel and
-agent must have the same major version, the first number of the version; the
+The files use `docker.io/nightdragon1/...:1`. The same tags are on ghcr.io; to
+use it, set `RCD_IMAGE_REPO=ghcr.io/nightdragon1`. Panel and agent must have the same major version, the first number of the version; the
 tag `1` gives you that. Versions have two parts: `1.0`, `1.1`. The first number
 rises when something is incompatible. See [Updating](#updating).
 
 Values come from the environment or an `.env` file next to the Compose file:
 `DOCKER_GID` (group of the Docker socket), `RCD_PAIRING_TOKEN`, `RCD_VERSION`
-(image tag, default `1`), and for ports `RCD_WEB_PORT` and `RCD_AGENT_PORT`.
+(image tag, default `1`), `RCD_IMAGE_REPO` (registry, default
+`docker.io/nightdragon1`), and for ports `RCD_WEB_PORT` and `RCD_AGENT_PORT`.
 
 To check the signature of an image:
 
@@ -80,9 +80,15 @@ Going back to an older version is not supported once the database has been migra
 To go back, stop the panel, restore the backup as described under
 [Volumes and files](../../README.md#volumes-and-files) and start the old version.
 
-To install a certain version instead of the newest, for example a test version, put
-it into `.env` before the first start: `RCD_VERSION=0.9`. Test versions have only
-their exact tag and are marked as pre-releases.
+To install a certain version instead of the newest, put it into `.env` before the
+first start: `RCD_VERSION=1.0`.
+
+### Test versions
+
+Before 1.0 the tag `1` does not exist yet, so a test version must be set explicitly
+in `.env` before the first start: `RCD_VERSION=0.9`. A version `0.x` is a pre-release
+with known issues, listed in its release notes. It has only its exact tag, there is
+no `0` or `latest`.
 
 ## Reverse proxy
 

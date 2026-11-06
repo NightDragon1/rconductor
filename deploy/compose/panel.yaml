@@ -4,7 +4,7 @@
 # is the address agents reach the panel under; it goes into pairing tokens.
 services:
   panel:
-    image: ghcr.io/nightdragon1/rconductor-panel:${RCD_VERSION:-1}
+    image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-panel:${RCD_VERSION:-1}
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
@@ -16,6 +16,8 @@ services:
       - "${RCD_AGENT_PORT:-8443}:8443"
     environment:
       RCD_AGENT_PUBLIC_ADDR: "${RCD_AGENT_PUBLIC_ADDR:-}"
+      # Empty: 80 % of mem_limit, set by the panel.
+      GOMEMLIMIT: "${GOMEMLIMIT:-}"
     volumes:
       - data:/data
       - secrets:/secrets

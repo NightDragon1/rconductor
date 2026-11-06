@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
@@ -85,11 +87,11 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies}
+	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies, decode: semaphore.NewWeighted(decodeBudget), pictures: semaphore.NewWeighted(pictureBudget)}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,
-		Middlewares: []api.MiddlewareFunc{srv.requireSession, srv.checkOrigin},
+		Middlewares: []api.MiddlewareFunc{srv.limitBodies, srv.requireSession, srv.checkOrigin},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			WriteProblem(w, http.StatusBadRequest, api.ReasonCodeInvalid, err.Error())
 		},
@@ -103,6 +105,16 @@ func NewHandler(opts Options) http.Handler {
 		})
 	}
 	return withSecurityHeaders(withRequestID(withBodyLimit(withClient(opts.Proxies, mux))))
+}
+
+type connKey struct{}
+
+// keepConn exempts the connection of a request from the age limit of
+// connections without a session.
+func keepConn(ctx context.Context) {
+	if c, ok := ctx.Value(connKey{}).(net.Conn); ok {
+		netlimit.Keep(c)
+	}
 }
 
 // Serve listens on addr and serves h within the connection limits until ctx
@@ -124,6 +136,20 @@ func Serve(ctx context.Context, addr string, limits netlimit.Options, h http.Han
 		MaxHeaderBytes:    64 << 10,
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 		BaseContext:       func(net.Listener) context.Context { return ctx },
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			return context.WithValue(ctx, connKey{}, c)
+		},
+		ConnState: func(c net.Conn, state http.ConnState) {
+			switch state {
+			case http.StateActive:
+				netlimit.Busy(c, true)
+			case http.StateIdle:
+				netlimit.Busy(c, false)
+			case http.StateHijacked:
+				// Only a session gets a WebSocket, and it runs on.
+				netlimit.Keep(c)
+			}
+		},
 	}
 	if ready != nil {
 		ready(ln.Addr())

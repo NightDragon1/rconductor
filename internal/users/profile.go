@@ -198,7 +198,7 @@ func (p *Profiles) SetAvatar(ctx context.Context, req Request, data []byte) erro
 	var img []byte
 	var typ sql.NullString
 	if data != nil {
-		out, mediaType, err := processAvatar(data)
+		out, mediaType, err := processAvatar(ctx, data)
 		if err != nil {
 			return err
 		}

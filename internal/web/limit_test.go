@@ -6,11 +6,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,12 +30,17 @@ const noAnswer = 300 * time.Millisecond
 // servedAt runs Serve with the limit and returns its address and its end.
 func servedAt(t *testing.T, limit int, h http.Handler, logs io.Writer) (string, context.CancelFunc, <-chan error) {
 	t.Helper()
+	return servedWith(t, netlimit.Options{Max: limit, PerClient: limit}, h, logs)
+}
+
+func servedWith(t *testing.T, o netlimit.Options, h http.Handler, logs io.Writer) (string, context.CancelFunc, <-chan error) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	ready := make(chan net.Addr, 1)
 	ended := make(chan error, 1)
 	go func() {
-		ended <- Serve(ctx, "127.0.0.1:0", netlimit.Options{Max: limit, PerClient: limit}, h, slog.New(slog.NewTextHandler(logs, nil)), func(a net.Addr) { ready <- a })
+		ended <- Serve(ctx, "127.0.0.1:0", o, h, slog.New(slog.NewTextHandler(logs, nil)), func(a net.Addr) { ready <- a })
 	}()
 	select {
 	case a := <-ready:
@@ -245,5 +252,137 @@ func TestServerDropsAClientThatDoesNotRead(t *testing.T) {
 	}
 	if line, err := get(dial(t, addr), 5*time.Second); err != nil || !strings.Contains(line, "204") {
 		t.Errorf("the place stayed taken: %q, %v", line, err)
+	}
+}
+
+// closed reports whether the peer ends c within wait.
+func closed(c net.Conn, wait time.Duration) bool {
+	if err := c.SetReadDeadline(time.Now().Add(wait)); err != nil {
+		return true
+	}
+	_, err := c.Read(make([]byte, 1))
+	var timeout net.Error
+	return !errors.As(err, &timeout) || !timeout.Timeout()
+}
+
+// TestV2ConnectionWithoutSessionAges covers V-2: a request now and then does not
+// hold a place for good, and the place is free afterwards.
+func TestV2ConnectionWithoutSessionAges(t *testing.T) {
+	o := netlimit.Options{Max: 1, PerClient: 1, MaxAge: 300 * time.Millisecond}
+	addr, _, _ := servedWith(t, o, okHandler(), io.Discard)
+	c := dial(t, addr)
+	if line, err := get(c, time.Second); err != nil || !strings.Contains(line, "204") {
+		t.Fatalf("first request: %q, %v", line, err)
+	}
+	if !closed(c, 2*time.Second) {
+		t.Fatal("connection outlived its age")
+	}
+	if line, err := get(dial(t, addr), 2*time.Second); err != nil || !strings.Contains(line, "204") {
+		t.Errorf("the place stayed taken: %q, %v", line, err)
+	}
+}
+
+// TestAgeWaitsForTheRunningRequest: a request that runs over the age gets
+// its answer, then the connection ends.
+func TestAgeWaitsForTheRunningRequest(t *testing.T) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	o := netlimit.Options{Max: 2, PerClient: 2, MaxAge: 100 * time.Millisecond}
+	addr, _, _ := servedWith(t, o, h, io.Discard)
+	c := dial(t, addr)
+	if line, err := get(c, 2*time.Second); err != nil || !strings.Contains(line, "204") {
+		t.Fatalf("the running request lost its answer: %q, %v", line, err)
+	}
+	if !closed(c, 2*time.Second) {
+		t.Error("connection went on after the request")
+	}
+}
+
+// TestSessionKeepsItsConnection: who showed a session stays, as a browser with
+// an open panel does, and so does a WebSocket.
+func TestSessionKeepsItsConnection(t *testing.T) {
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		keepConn(r.Context())
+		w.WriteHeader(http.StatusNoContent)
+	})
+	o := netlimit.Options{Max: 2, PerClient: 2, MaxAge: 200 * time.Millisecond}
+	addr, _, _ := servedWith(t, o, h, io.Discard)
+	c := dial(t, addr)
+	if line, err := get(c, time.Second); err != nil || !strings.Contains(line, "204") {
+		t.Fatalf("request: %q, %v", line, err)
+	}
+	if closed(c, 600*time.Millisecond) {
+		t.Fatal("connection with a session was ended")
+	}
+	if line, err := get(c, time.Second); err != nil || !strings.Contains(line, "204") {
+		t.Errorf("second request: %q, %v", line, err)
+	}
+}
+
+// TestProxyConnectionsDoNotAge: a trusted proxy carries many visitors over
+// its connections; it has no session of its own to show.
+func TestProxyConnectionsDoNotAge(t *testing.T) {
+	o := netlimit.Options{Max: 2, PerClient: 1, MaxAge: 200 * time.Millisecond, Exempt: func(netip.Addr) bool { return true }}
+	addr, _, _ := servedWith(t, o, okHandler(), io.Discard)
+	c := dial(t, addr)
+	if line, err := get(c, time.Second); err != nil || !strings.Contains(line, "204") {
+		t.Fatalf("request: %q, %v", line, err)
+	}
+	if closed(c, 600*time.Millisecond) {
+		t.Error("connection of the proxy was ended")
+	}
+}
+
+// TestSessionRequestReachesKeep covers the path of a real request: the API
+// keeps the connection once the session is valid, and only then.
+func TestSessionRequestReachesKeep(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	session := f.login(t, "Mod")
+	o := netlimit.Options{Max: 4, PerClient: 4, MaxAge: 300 * time.Millisecond}
+	addr, _, _ := servedWith(t, o, f.h, io.Discard)
+	ask := func(c net.Conn, cookie string) {
+		t.Helper()
+		if _, err := fmt.Fprintf(c, "GET /api/v1/auth/session HTTP/1.1\r\nHost: panel.lan\r\nCookie: %s\r\n\r\n", cookie); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := bufio.NewReader(c).ReadString('\n'); err != nil {
+			t.Fatal(err)
+		}
+	}
+	with, without := dial(t, addr), dial(t, addr)
+	ask(with, session.Name+"="+session.Value)
+	ask(without, session.Name+"=wrong")
+	if !closed(without, 2*time.Second) {
+		t.Error("a made-up session kept its connection")
+	}
+	if closed(with, 100*time.Millisecond) {
+		t.Error("a valid session lost its connection")
+	}
+}
+
+// TestBrokenRequestsAreRefused comes from an exploratory check without a
+// finding, so it has no state before a fix to fail on: requests the HTTP server
+// must refuse by itself stay refused behind the connection limit.
+func TestBrokenRequestsAreRefused(t *testing.T) {
+	addr, _, _ := servedAt(t, 8, okHandler(), io.Discard)
+	for name, c := range map[string]struct{ request, want string }{
+		"no host":          {"GET / HTTP/1.1\r\nConnection: close\r\n\r\n", "400"},
+		"bad request line": {"NONSENSE\r\n\r\n", "400"},
+		"header too big":   {"GET / HTTP/1.1\r\nHost: x\r\nX-A: " + strings.Repeat("a", 2<<20) + "\r\n\r\n", "431"},
+	} {
+		conn := dial(t, addr)
+		if err := conn.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		go func() { _, _ = fmt.Fprint(conn, c.request) }()
+		line, err := bufio.NewReader(conn).ReadString('\n')
+		if err != nil || !strings.Contains(line, c.want) {
+			t.Errorf("%s: %q, %v", name, line, err)
+		}
 	}
 }

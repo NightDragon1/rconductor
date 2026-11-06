@@ -6,6 +6,7 @@ import { useSession } from '@/api/session';
 import {
   addCommands,
   addLogLines,
+  bufferWriter,
   newLines,
   updateBuffer,
   useBuffer,
@@ -48,12 +49,13 @@ const latestRefill = new Map<string, number>();
 // on: subscribed means followed, so only while someone views the logs
 // (UI-009, G2).
 export function useLogsFeed(id: string, on: boolean) {
+  const [write] = useState(bufferWriter);
   useTopic(id && on ? `server.${id}.logs` : undefined, (m) => {
     const d = m.data as { lines?: unknown; current?: unknown } | undefined;
     if (m.type === 'event' && Array.isArray(d?.lines)) {
       const lines = d.lines.filter((l): l is string => typeof l === 'string');
       const ts = new Date().toISOString();
-      updateBuffer(id, (b) => addLogLines(b, d.current === true ? newLines(b, lines) : lines, ts));
+      write(id, (b) => addLogLines(b, d.current === true ? newLines(b, lines) : lines, ts));
     }
   });
 }
@@ -67,9 +69,13 @@ export function useConsoleFeed(id: string, logs: boolean) {
   const me = session?.user.id;
   const buf = useBuffer(id);
   const [confirmed, setConfirmed] = useState(0);
+  // Taken at mount: a socket can still deliver between a change of user and
+  // its end, and that must not reach the buffers of the next user.
+  const [live] = useState(bufferWriter);
 
   const loadPage = async (cursor?: string) => {
     const epoch = buf.epoch;
+    const write = bufferWriter();
     const refill = cursor ? 0 : (latestRefill.get(id) ?? 0) + 1;
     if (refill) latestRefill.set(id, refill);
     const page = must(
@@ -79,7 +85,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
     );
     const items = page.items.map((e) => fromWire(e as Wire));
     if (cursor) {
-      updateBuffer(id, (b) =>
+      write(id, (b) =>
         b.epoch === epoch ? { ...addCommands(b, items), cursor: page.next_cursor || undefined } : b,
       );
       return null;
@@ -91,7 +97,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
     // commands newer than the page and refusals only this tab knows.
     const ids = new Set(items.map((e) => e.id));
     const newest = Math.max(-Infinity, ...items.map((e) => Date.parse(e.ts)));
-    updateBuffer(id, (b) => ({
+    write(id, (b) => ({
       ...addCommands(
         {
           ...b,
@@ -121,29 +127,37 @@ export function useConsoleFeed(id: string, logs: boolean) {
   useTopic(id ? `server.${id}.console` : undefined, (m) => {
     if (m.type === 'subscribed') setConfirmed((n) => n + 1);
     if (m.type === 'event' && m.data && typeof m.data === 'object') {
-      updateBuffer(id, (b) => addCommands(b, [fromWire(m.data as Wire)]));
+      live(id, (b) => addCommands(b, [fromWire(m.data as Wire)]));
     }
   });
   useLogsFeed(id, logs);
 
   // In the buffer, so a tab that remounts still knows what is under way.
-  const count = (server: string, by: number) =>
-    updateBuffer(server, (b) => ({ ...b, running: Math.max(0, (b.running ?? 0) + by) }));
+  const count = (write: typeof updateBuffer, server: string, by: number) =>
+    write(server, (b) => ({ ...b, running: Math.max(0, (b.running ?? 0) + by) }));
   const own = { userId: me, pseudonym: session?.user.pseudonym, role: session?.user.role };
   // The server travels with the command: the answer belongs to the server
-  // it was sent to, also when the user has switched meanwhile (CMD-001).
+  // it was sent to, also when the user has switched meanwhile (CMD-001),
+  // and to the user who sent it (Design 6.3).
   const mutation = useMutation({
-    mutationFn: async ({ server, command }: { server: string; command: string }) =>
+    mutationFn: async ({
+      server,
+      command,
+    }: {
+      server: string;
+      command: string;
+      write: typeof updateBuffer;
+    }) =>
       must(
         await api.POST('/servers/{id}/commands', {
           params: { path: { id: server } },
           body: { command },
         }),
       ),
-    onMutate: ({ server }) => count(server, 1),
-    onSettled: (_r, _e, { server }) => count(server, -1),
-    onSuccess: (r, { server }) =>
-      updateBuffer(server, (b) =>
+    onMutate: ({ server, write }) => count(write, server, 1),
+    onSettled: (_r, _e, { server, write }) => count(write, server, -1),
+    onSuccess: (r, { server, write }) =>
+      write(server, (b) =>
         addCommands(b, [
           {
             kind: 'cmd',
@@ -157,13 +171,13 @@ export function useConsoleFeed(id: string, logs: boolean) {
           },
         ]),
       ),
-    onError: (e, { server, command }) => {
+    onError: (e, { server, command, write }) => {
       const err = e instanceof ApiError ? e : undefined;
       const status = err?.status ?? 0;
       // Refusals of the pipeline are denied, the rest failed (Design 3.5).
       const result: Result =
         status === 504 ? 'timeout' : [403, 422, 429].includes(status) ? 'denied' : 'error';
-      updateBuffer(server, (b) =>
+      write(server, (b) =>
         addCommands(b, [
           {
             kind: 'cmd',
@@ -183,7 +197,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
   });
 
   const send = {
-    mutate: (command: string) => mutation.mutate({ server: id, command }),
+    mutate: (command: string) => mutation.mutate({ server: id, command, write: bufferWriter() }),
     // Only a command to this server blocks its input.
     isPending: (buf.running ?? 0) > 0,
   };

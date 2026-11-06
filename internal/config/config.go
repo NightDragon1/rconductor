@@ -15,6 +15,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Lookup returns the value of an environment variable and whether it is set.
@@ -58,7 +59,10 @@ type Panel struct {
 	// MaxClientConnections limits them per client address; trusted proxies
 	// have no limit of their own.
 	MaxClientConnections int
-	Log                  Log
+	// MaxAnonymousAge ends a connection that showed no session after this
+	// time (T-025).
+	MaxAnonymousAge time.Duration
+	Log             Log
 }
 
 // Agent is the start-up configuration of the agent. Until M3 only the
@@ -108,6 +112,7 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 		HashConcurrency:      r.integer("RCD_PASSWORD_HASH_CONCURRENCY", 2, 1, 64),
 		MaxConnections:       r.integer("RCD_MAX_CONNECTIONS", 512, 16, 65536),
 		MaxClientConnections: r.integer("RCD_MAX_CLIENT_CONNECTIONS", 128, 1, 65536),
+		MaxAnonymousAge:      time.Duration(r.integer("RCD_MAX_ANONYMOUS_CONNECTION_SECONDS", 30, 10, 3600)) * time.Second,
 		Log:                  r.log(),
 	}
 	if c.AgentPublicAddr != "" {
