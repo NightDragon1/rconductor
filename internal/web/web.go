@@ -107,6 +107,16 @@ func NewHandler(opts Options) http.Handler {
 	return withSecurityHeaders(withRequestID(withBodyLimit(withClient(opts.Proxies, mux))))
 }
 
+type connKey struct{}
+
+// keepConn exempts the connection of a request from the age limit of
+// connections without a session.
+func keepConn(ctx context.Context) {
+	if c, ok := ctx.Value(connKey{}).(net.Conn); ok {
+		netlimit.Keep(c)
+	}
+}
+
 // Serve listens on addr and serves h within the connection limits until ctx
 // ends, then shuts down gracefully. ready, if set, receives the bound address.
 func Serve(ctx context.Context, addr string, limits netlimit.Options, h http.Handler, log *slog.Logger, ready func(net.Addr)) error {
@@ -126,6 +136,20 @@ func Serve(ctx context.Context, addr string, limits netlimit.Options, h http.Han
 		MaxHeaderBytes:    64 << 10,
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 		BaseContext:       func(net.Listener) context.Context { return ctx },
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			return context.WithValue(ctx, connKey{}, c)
+		},
+		ConnState: func(c net.Conn, state http.ConnState) {
+			switch state {
+			case http.StateActive:
+				netlimit.Busy(c, true)
+			case http.StateIdle:
+				netlimit.Busy(c, false)
+			case http.StateHijacked:
+				// Only a session gets a WebSocket, and it runs on.
+				netlimit.Keep(c)
+			}
+		},
 	}
 	if ready != nil {
 		ready(ln.Addr())

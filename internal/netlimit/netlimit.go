@@ -34,6 +34,10 @@ type Options struct {
 	Max int
 	// PerClient is the number of open connections of one client address.
 	PerClient int
+	// MaxAge, if set, ends a connection this long after it was opened unless
+	// Keep was called for it: anyone can open one, and a request now and
+	// then would hold its place for good. It waits for a running request.
+	MaxAge time.Duration
 	// Exempt, if set, names addresses without a limit of their own: behind
 	// a proxy all visitors share its address.
 	Exempt func(netip.Addr) bool
@@ -132,12 +136,20 @@ func (l *Listener) Accept() (net.Conn, error) {
 		}
 		client := ClientKey(addr)
 		if l.admit(client) {
-			return &conn{Conn: c, l: l, client: client, counted: true}, nil
+			return l.limited(c, client), nil
 		}
 		_ = c.Close()
 		<-l.slots
 		l.warn("connection limit of a client reached, connection closed", l.opts.PerClient)
 	}
+}
+
+func (l *Listener) limited(c net.Conn, client netip.Addr) *conn {
+	lc := &conn{Conn: c, l: l, client: client, counted: true}
+	if l.opts.MaxAge > 0 {
+		lc.age = time.AfterFunc(l.opts.MaxAge, lc.expire)
+	}
+	return lc
 }
 
 // Close ends the listener and a waiting Accept.
@@ -153,9 +165,62 @@ type conn struct {
 	client  netip.Addr
 	counted bool
 	release sync.Once
+
+	mu      sync.Mutex
+	age     *time.Timer
+	kept    bool
+	busy    bool
+	expired bool
+}
+
+// expire ends the connection, or marks it to end after the running request.
+func (c *conn) expire() {
+	c.mu.Lock()
+	c.expired = !c.kept
+	end := c.expired && !c.busy
+	c.mu.Unlock()
+	if end {
+		_ = c.Close()
+	}
+}
+
+// Keep exempts a connection from MaxAge, because it proved who sends on it.
+func Keep(nc net.Conn) {
+	c, ok := nc.(*conn)
+	if !ok {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.kept = true
+	c.expired = false
+	if c.age != nil {
+		c.age.Stop()
+	}
+}
+
+// Busy tells whether a request is running on the connection. An expired
+// connection ends as soon as none is.
+func Busy(nc net.Conn, busy bool) {
+	c, ok := nc.(*conn)
+	if !ok {
+		return
+	}
+	c.mu.Lock()
+	c.busy = busy
+	end := c.expired && !busy
+	c.mu.Unlock()
+	if end {
+		_ = c.Close()
+	}
 }
 
 func (c *conn) Close() error {
+	c.mu.Lock()
+	if c.age != nil {
+		c.age.Stop()
+	}
+	c.mu.Unlock()
 	err := c.Conn.Close()
 	c.release.Do(func() {
 		if c.counted {

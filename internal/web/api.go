@@ -153,6 +153,7 @@ func (s *apiServer) authenticate(next api.StrictHandlerFunc, operationID string)
 				p, err := s.auth.Authenticate(ctx, token)
 				switch {
 				case err == nil:
+					keepConn(ctx)
 					ctx = context.WithValue(ctx, principalKey{}, p)
 					// AUTH-006: every request is tied to its session in the log.
 					s.log.Debug("request", slog.String(logging.KeyRequestID, RequestID(ctx)),
