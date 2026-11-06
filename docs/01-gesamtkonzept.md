@@ -604,3 +604,4 @@ Aus der Abnahme in M5 und dem Review des Bedrohungsmodells.
 | 15 | Nachtrag: Eine erfolgreiche Anmeldung löscht nur die Zähler des eigenen Clients | Design 3.7, Sicherheit T-002 |
 | 16 | Nachtrag: Offene Verbindungen am Web-Port insgesamt und je Client begrenzt (RCD\_MAX\_CONNECTIONS, RCD\_MAX\_CLIENT\_CONNECTIONS); schreibende Anfragen ohne Session werden vor dem Body abgelehnt, ohne Session höchstens 16 KiB | Design 2.1, 5.2, Sicherheit T-025 |
 | 17 | Nachtrag: Größte echte Anfragen je Route belegt; Restrisiken für erfundene Namen, Verbindungslimit, 429 und gemeinsame Adressen | Design 2.1, Sicherheit Kapitel 5 |
+| 18 | Nachtrag: Sperre je Client über alle Namen (login.max\_client\_failures); volle Zähltabelle lässt nichts ungeschützt durch, verdrängt werden nur beendete Zähler | Design 3.7, Sicherheit T-002, T-016, Kapitel 5 |
