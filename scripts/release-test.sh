@@ -45,5 +45,45 @@ if scripts/release-notes.sh 7.0 false >/dev/null 2>&1; then
   fails=$((fails + 1))
 fi
 
+# release-verify.sh against stand-ins for docker and cosign. The stand-ins
+# read what the registry holds from $WORLD.
+world=$(mktemp -d)
+trap 'rm -rf "$world"' EXIT
+cat > "$world/docker" <<'STUB'
+#!/bin/sh
+for ref; do :; done
+if [ "$4" = --raw ]; then
+  printf '{"manifests":[{"platform":{"os":"linux","architecture":"amd64"},"digest":"sha256:a"},{"platform":{"os":"linux","architecture":"arm64"},"digest":"sha256:b"},{"platform":{"os":"unknown","architecture":"unknown"},"digest":"sha256:c"}]}'
+  exit 0
+fi
+if grep -qx "${ref##*:}" "$WORLD/tags"; then echo sha256:i; exit 0; fi
+echo "$ref: not found" >&2
+exit 1
+STUB
+cat > "$world/cosign" <<'STUB'
+#!/bin/sh
+case "$2" in *@sha256:b) grep -qx bad-arm64 "$WORLD/faults" && exit 1 ;; esac
+[ "$1" = verify ] && exit 0
+arch=amd64
+case "$2" in *@sha256:b) arch=arm64 ;; esac
+grep -qx wrong-sbom "$WORLD/faults" && arch=amd64
+printf '{"payload":"%s"}\n' "$(printf 'pkg:deb/x?arch=%s pkg:deb/y?arch=all' "$arch" | base64 -w0)"
+STUB
+chmod +x "$world/docker" "$world/cosign"
+verify() { # tag, tags in the registry, faults
+  printf '%s\n' $2 > "$world/tags"
+  printf '%s\n' "$3" > "$world/faults"
+  WORLD=$world PATH="$world:$PATH" scripts/release-verify.sh "$1" >/dev/null 2>&1
+}
+verify v0.10 0.10 "" || { echo "verify: a good test version failed" >&2; fails=$((fails + 1)); }
+verify v1.0 "1.0 1" "" || { echo "verify: a good release failed" >&2; fails=$((fails + 1)); }
+for bad in "v0.10|0.10 latest|" "v0.10|0.10 0|" "v0.10|0.10 1|" "v1.0|1.0|" "v0.10|0.10|bad-arm64" "v0.10|0.10|wrong-sbom"; do
+  tag=${bad%%|*} rest=${bad#*|}
+  if verify "$tag" "${rest%%|*}" "${rest#*|}"; then
+    echo "verify: must fail: $bad" >&2
+    fails=$((fails + 1))
+  fi
+done
+
 [ "$fails" -eq 0 ] || exit 1
 echo "release scripts ok"
