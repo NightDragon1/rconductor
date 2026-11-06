@@ -1062,6 +1062,8 @@ export interface components {
             lines: string[];
             /** @description Lines or the whole were cut to the limits. */
             truncated: boolean;
+            /** @description The last lines, sent to a new subscriber; the client may hold them already. */
+            current?: boolean;
         };
         AllowedCommands: {
             free_input: boolean;

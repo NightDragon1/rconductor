@@ -10,6 +10,7 @@ import { api } from '@/api/client';
 import { useSession } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { bufferOwner } from '@/lib/console';
 import { cn } from '@/lib/utils';
 import { applyTheme, storedTheme } from '@/lib/theme';
 import { adminNav, mainNav, type NavEntry } from '@/nav';
@@ -29,6 +30,8 @@ function storedCollapsed(): boolean {
 // on phones (Design 6.1, 6.2).
 export function Shell() {
   const { t } = useTranslation();
+  const { data: account } = useSession();
+  bufferOwner(account?.user.id);
   const [collapsed, setCollapsed] = useState(storedCollapsed);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -203,6 +206,7 @@ function UserBlock({ collapsed }: { collapsed: boolean }) {
   async function logout() {
     await api.POST('/auth/logout');
     qc.clear();
+    bufferOwner(undefined);
     await navigate({ to: '/login' });
   }
 

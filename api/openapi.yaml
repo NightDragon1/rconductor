@@ -2044,6 +2044,11 @@ components:
         truncated:
           type: boolean
           description: Lines or the whole were cut to the limits.
+        current:
+          type: boolean
+          description: >-
+            The last lines, sent to a new subscriber; the client may hold them
+            already.
 
     AllowedCommands:
       type: object

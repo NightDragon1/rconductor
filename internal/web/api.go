@@ -110,6 +110,33 @@ func principal(ctx context.Context) (auth.Principal, bool) {
 	return p, ok
 }
 
+// requireSession refuses a write without a session before its body is read:
+// the generated handlers decode JSON ahead of authenticate, and decoding takes
+// many times the memory of the body (T-025). Only the public operations come
+// through, under their own small limit (withBodyLimit).
+func (s *apiServer) requireSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || publicBody(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if token := readSessionCookie(r); s.auth != nil && token != "" {
+			_, err := s.auth.Authenticate(r.Context(), token)
+			switch {
+			case err == nil:
+				next.ServeHTTP(w, r)
+				return
+			case errors.Is(err, auth.ErrUnauthenticated):
+				clearSessionCookie(w, r)
+			default:
+				s.writeError(w, r, err)
+				return
+			}
+		}
+		s.writeError(w, r, errUnauthenticated())
+	})
+}
+
 // authenticate resolves the session cookie for every operation, rejects
 // non-public operations without a session, and makes the HTTP request and
 // response writer available to the handlers (for cookies).

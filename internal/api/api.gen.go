@@ -713,6 +713,9 @@ type InviteRedeem struct {
 type LogTail struct {
 	Container string `json:"container"`
 
+	// Current The last lines, sent to a new subscriber; the client may hold them already.
+	Current *bool `json:"current,omitempty"`
+
 	// Lines Foreign data from the container (SEC-006).
 	Lines    []string           `json:"lines"`
 	ServerId openapi_types.UUID `json:"server_id"`

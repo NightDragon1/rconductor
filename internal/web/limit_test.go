@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,6 +18,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/NightDragon1/rconductor/internal/netlimit"
 )
 
 // noAnswer is how long a connection stays silent to count as waiting.
@@ -32,7 +33,7 @@ func servedAt(t *testing.T, limit int, h http.Handler, logs io.Writer) (string, 
 	ready := make(chan net.Addr, 1)
 	ended := make(chan error, 1)
 	go func() {
-		ended <- Serve(ctx, "127.0.0.1:0", limit, h, slog.New(slog.NewTextHandler(logs, nil)), func(a net.Addr) { ready <- a })
+		ended <- Serve(ctx, "127.0.0.1:0", netlimit.Options{Max: limit, PerClient: limit}, h, slog.New(slog.NewTextHandler(logs, nil)), func(a net.Addr) { ready <- a })
 	}()
 	select {
 	case a := <-ready:
@@ -202,50 +203,6 @@ func TestShutdownWithAFullListener(t *testing.T) {
 	}
 }
 
-// TestSlotIsGivenBackOnce covers T-025: a second Close frees no second slot.
-func TestSlotIsGivenBackOnce(t *testing.T) {
-	var lc net.ListenConfig
-	tcp, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	l := newLimitListener(tcp, 2, slog.New(slog.DiscardHandler))
-	defer func() { _ = l.Close() }()
-	take := func() net.Conn {
-		t.Helper()
-		dial(t, tcp.Addr().String())
-		c, err := l.Accept()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return c
-	}
-	first, second := take(), take()
-	_ = first.Close()
-	_ = first.Close()
-	if n := len(l.slots); n != 1 {
-		t.Errorf("slots in use = %d, want 1", n)
-	}
-	_ = second.Close()
-}
-
-// TestAcceptErrorGivesTheSlotBack covers T-025: a failed accept leaks nothing.
-func TestAcceptErrorGivesTheSlotBack(t *testing.T) {
-	var lc net.ListenConfig
-	tcp, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	l := newLimitListener(tcp, 1, slog.New(slog.DiscardHandler))
-	_ = tcp.Close()
-	if _, err := l.Accept(); !errors.Is(err, net.ErrClosed) {
-		t.Errorf("Accept = %v", err)
-	}
-	if n := len(l.slots); n != 0 {
-		t.Errorf("slots in use = %d", n)
-	}
-}
-
 // syncBuffer collects log lines of the server goroutines.
 type syncBuffer struct {
 	mu sync.Mutex
@@ -262,4 +219,31 @@ func (s *syncBuffer) String() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.b.String()
+}
+
+// TestServerDropsAClientThatDoesNotRead covers T-025: a client that asks for
+// much, reads nothing and stays connected loses its place at the write deadline.
+func TestServerDropsAClientThatDoesNotRead(t *testing.T) {
+	defer func(d time.Duration) { writeTimeout = d }(writeTimeout)
+	writeTimeout = 200 * time.Millisecond
+	big := bytes.Repeat([]byte("x"), 1<<20)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/big" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		for {
+			if _, err := w.Write(big); err != nil {
+				return
+			}
+		}
+	})
+	addr, _, _ := servedAt(t, 1, h, io.Discard)
+	c := dial(t, addr)
+	if _, err := fmt.Fprint(c, "GET /big HTTP/1.1\r\nHost: test\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	if line, err := get(dial(t, addr), 5*time.Second); err != nil || !strings.Contains(line, "204") {
+		t.Errorf("the place stayed taken: %q, %v", line, err)
+	}
 }

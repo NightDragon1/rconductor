@@ -41,6 +41,9 @@ type Proxies struct {
 // start-up.
 func (p Proxies) HTTPSKnown() bool { return p.PublicURL != nil && p.PublicURL.Scheme == "https" }
 
+// Trust reports whether a is a trusted proxy.
+func (p Proxies) Trust(a netip.Addr) bool { return p.trusted(a) }
+
 func (p Proxies) trusted(a netip.Addr) bool {
 	a = a.Unmap()
 	for _, pre := range p.Trusted {

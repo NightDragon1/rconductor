@@ -6,6 +6,7 @@ import { useSession } from '@/api/session';
 import {
   addCommands,
   addLogLines,
+  newLines,
   updateBuffer,
   useBuffer,
   type CmdBlock,
@@ -48,10 +49,11 @@ const latestRefill = new Map<string, number>();
 // (UI-009, G2).
 export function useLogsFeed(id: string, on: boolean) {
   useTopic(id && on ? `server.${id}.logs` : undefined, (m) => {
-    const d = m.data as { lines?: unknown } | undefined;
+    const d = m.data as { lines?: unknown; current?: unknown } | undefined;
     if (m.type === 'event' && Array.isArray(d?.lines)) {
       const lines = d.lines.filter((l): l is string => typeof l === 'string');
-      updateBuffer(id, (b) => addLogLines(b, lines, new Date().toISOString()));
+      const ts = new Date().toISOString();
+      updateBuffer(id, (b) => addLogLines(b, d.current === true ? newLines(b, lines) : lines, ts));
     }
   });
 }

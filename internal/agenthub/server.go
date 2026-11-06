@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/netlimit"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 )
 
@@ -34,6 +36,10 @@ const (
 	// helloTimeout counts from the end of the TLS handshake (revision 2.3
 	// no. 13).
 	helloTimeout = 10 * time.Second
+	// Connections of the agent port in total and per client address, far
+	// above the number of hosts of one panel (T-017).
+	maxAgentConns          = 1024
+	maxAgentConnsPerClient = 64
 )
 
 // handshakeDone holds when the TLS handshake of a connection ended.
@@ -176,7 +182,7 @@ func (h *Hub) Serve(ctx context.Context, addr string, ready func(net.Addr)) erro
 	if err != nil {
 		return err
 	}
-	tl := newHandshakeListener(ctx, ln, cfg, h)
+	tl := newHandshakeListener(ctx, netlimit.New(ln, netlimit.Options{Max: maxAgentConns, PerClient: maxAgentConnsPerClient, Log: h.log}), cfg, h)
 	mux := http.NewServeMux()
 	mux.HandleFunc(agentproto.Path, h.handle)
 	srv := &http.Server{
@@ -193,6 +199,9 @@ func (h *Hub) Serve(ctx context.Context, addr string, ready func(net.Addr)) erro
 			return context.WithValue(ctx, handshakeDone{}, time.Now())
 		},
 	}
+	// Only the upgrade to an agent session is of use here, so a connection
+	// that gets anything else ends with its answer (T-017).
+	srv.SetKeepAlivesEnabled(false)
 	if ready != nil {
 		ready(ln.Addr())
 	}
@@ -232,6 +241,10 @@ func newHandshakeListener(ctx context.Context, ln net.Listener, cfg *tls.Config,
 				return
 			}
 			remote := hostOf(c.RemoteAddr())
+			// Rotating inside an IPv6 /64 is one source (T-017).
+			if ip, err := netip.ParseAddr(remote); err == nil {
+				remote = netlimit.ClientKey(ip).String()
+			}
 			if !h.throttle.allow(remote) {
 				h.throttle.logOnce(h.log, remote)
 				_ = c.Close()

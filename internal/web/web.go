@@ -20,6 +20,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/cache"
 	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/events"
+	"github.com/NightDragon1/rconductor/internal/netlimit"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -30,6 +31,10 @@ import (
 const APIBase = "/api/v1"
 
 const shutdownTimeout = 10 * time.Second
+
+// writeTimeout makes a client that does not read its answers give its
+// connection back (T-025); WebSockets clear this deadline.
+var writeTimeout = 60 * time.Second
 
 // reservedPaths are never served by the UI: the API (any version) and the
 // health and metrics endpoints planned with NFR-006.
@@ -84,7 +89,7 @@ func NewHandler(opts Options) http.Handler {
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,
-		Middlewares: []api.MiddlewareFunc{srv.checkOrigin},
+		Middlewares: []api.MiddlewareFunc{srv.requireSession, srv.checkOrigin},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			WriteProblem(w, http.StatusBadRequest, api.ReasonCodeInvalid, err.Error())
 		},
@@ -100,20 +105,21 @@ func NewHandler(opts Options) http.Handler {
 	return withSecurityHeaders(withRequestID(withBodyLimit(withClient(opts.Proxies, mux))))
 }
 
-// Serve listens on addr and serves h with at most maxConns open connections
-// until ctx ends, then shuts down gracefully. ready, if set, receives the
-// bound address.
-func Serve(ctx context.Context, addr string, maxConns int, h http.Handler, log *slog.Logger, ready func(net.Addr)) error {
+// Serve listens on addr and serves h within the connection limits until ctx
+// ends, then shuts down gracefully. ready, if set, receives the bound address.
+func Serve(ctx context.Context, addr string, limits netlimit.Options, h http.Handler, log *slog.Logger, ready func(net.Addr)) error {
 	var lc net.ListenConfig
 	tcp, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", addr, err)
 	}
-	ln := newLimitListener(tcp, maxConns, log)
+	limits.Log = log
+	ln := netlimit.New(tcp, limits)
 	srv := &http.Server{
 		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      writeTimeout,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    64 << 10,
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),

@@ -54,6 +54,9 @@ func TestLoadPanelDefaults(t *testing.T) {
 	if c.MaxConnections != 512 {
 		t.Errorf("max connections = %d, want 512", c.MaxConnections)
 	}
+	if c.MaxClientConnections != 128 {
+		t.Errorf("max client connections = %d, want 128", c.MaxClientConnections)
+	}
 }
 
 func TestLoadPanelValues(t *testing.T) {
@@ -158,6 +161,7 @@ func TestInvalidValuesReportedTogether(t *testing.T) {
 
 		"RCD_PASSWORD_HASH_CONCURRENCY": "0",
 		"RCD_MAX_CONNECTIONS":           "15",
+		"RCD_MAX_CLIENT_CONNECTIONS":    "0",
 	}), filesOf(nil))
 	if err == nil {
 		t.Fatal("want error")
@@ -166,7 +170,7 @@ func TestInvalidValuesReportedTogether(t *testing.T) {
 		"RCD_HTTP_ADDR", "RCD_AGENT_PUBLIC_ADDR", "RCD_BASE_PATH", "RCD_TRUSTED_PROXIES",
 		"RCD_DB_DRIVER", "RCD_EMERGENCY_ADMIN", "RCD_PUBLIC_URL", "RCD_LOG_LEVEL", "RCD_LOG_FORMAT",
 		"RCD_PASSWORD_HASH_CONCURRENCY",
-		"RCD_MAX_CONNECTIONS",
+		"RCD_MAX_CONNECTIONS", "RCD_MAX_CLIENT_CONNECTIONS",
 	} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error does not mention %s: %v", key, err)

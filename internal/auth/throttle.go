@@ -6,6 +6,8 @@ import (
 	"net/netip"
 	"sync"
 	"time"
+
+	"github.com/NightDragon1/rconductor/internal/netlimit"
 )
 
 // Settings keys of the login protection and their defaults (SEC-004,
@@ -57,18 +59,6 @@ type pairKey struct {
 	ip      netip.Addr
 }
 
-// clientKey is the address the lockout counts: an IPv6 client usually owns a
-// whole /64, so rotating inside it must not start a new count.
-func clientKey(ip netip.Addr) netip.Addr {
-	ip = ip.Unmap()
-	if ip.Is6() {
-		if p, err := ip.Prefix(64); err == nil {
-			return p.Addr()
-		}
-	}
-	return ip
-}
-
 // throttle counts consecutive login failures in memory: per account for
 // the delay, per account and client address for the lockout, so that an
 // attacker cannot lock a user out from everywhere. Unknown pseudonyms are
@@ -115,7 +105,7 @@ func accountKey(pseudonym string) string {
 func (t *throttle) check(account string, ip netip.Addr, now time.Time, window time.Duration) (delay, locked time.Duration) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if c := t.pairs[pairKey{account, clientKey(ip)}]; c != nil && now.Before(c.lockedUntil) {
+	if c := t.pairs[pairKey{account, netlimit.ClientKey(ip)}]; c != nil && now.Before(c.lockedUntil) {
 		return 0, c.lockedUntil.Sub(now)
 	}
 	if c := t.accounts[account]; c != nil && now.Sub(c.last) < window {
@@ -134,7 +124,7 @@ func (t *throttle) check(account string, ip netip.Addr, now time.Time, window ti
 func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, window time.Duration, maxFailures int) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	key := pairKey{account, clientKey(ip)}
+	key := pairKey{account, netlimit.ClientKey(ip)}
 	failures := 0
 	if c := t.pairs[key]; c != nil {
 		// A lockout that began since the check counts too.
@@ -157,7 +147,7 @@ func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, window 
 func (t *throttle) release(account string, ip netip.Addr) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	key := pairKey{account, clientKey(ip)}
+	key := pairKey{account, netlimit.ClientKey(ip)}
 	if t.running[key]--; t.running[key] <= 0 {
 		delete(t.running, key)
 	}
@@ -168,7 +158,7 @@ func (t *throttle) release(account string, ip netip.Addr) {
 func (t *throttle) firstRefused(account string, ip netip.Addr) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	c := t.pairs[pairKey{account, clientKey(ip)}]
+	c := t.pairs[pairKey{account, netlimit.ClientKey(ip)}]
 	if c == nil || c.reported {
 		return false
 	}
@@ -191,7 +181,7 @@ func (t *throttle) fail(account string, ip netip.Addr, now time.Time, maxFailure
 	if _, ok := t.accounts[account]; ok || t.makeRoom(now, lockout) {
 		t.accounts[account] = bump(t.accounts[account])
 	}
-	key := pairKey{account, clientKey(ip)}
+	key := pairKey{account, netlimit.ClientKey(ip)}
 	if _, ok := t.pairs[key]; !ok && !t.makeRoom(now, lockout) {
 		return false
 	}
@@ -220,7 +210,7 @@ func lockedUntilOf(c *counter) time.Time {
 func (t *throttle) success(account string, ip netip.Addr, now time.Time, window time.Duration) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	key := pairKey{account, clientKey(ip)}
+	key := pairKey{account, netlimit.ClientKey(ip)}
 	p := t.pairs[key]
 	delete(t.pairs, key)
 	c := t.accounts[account]
