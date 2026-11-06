@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Three stages (scripts/ci-scope.sh decides):
-#   1. every push: SPDX, Go lint and test, web lint and test, govulncheck
+#   1. every run: SPDX, Go lint and test, web lint and test, govulncheck
 #   2. push to main and pull requests: integration, E2E, amd64 image
 #   3. nightly, manual and tags: arm64 images and Minecraft, and everything
 #      else regardless of paths
@@ -16,7 +16,7 @@ name: CI
 
 on:
   push:
-    branches: ["**", "!renovate/**"]
+    branches: [main]
   pull_request:
   schedule:
     - cron: "17 2 * * *"
