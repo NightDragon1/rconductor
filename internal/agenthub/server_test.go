@@ -432,3 +432,31 @@ func TestBeforeWelcome(t *testing.T) {
 		t.Error("a 100 KiB message after welcome ended the session")
 	}
 }
+
+// TestOtherRequestsEndTheConnection covers T-017: anything but the upgrade to
+// an agent session ends with its answer, a client cannot stay with new requests.
+func TestOtherRequestsEndTheConnection(t *testing.T) {
+	f := newFixture(t, ThrottleOptions{})
+	cfg, err := agentproto.ClientConfig(agentKey(t), f.panel.Fingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := tls.Dial("tcp", f.addr, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if _, err := io.WriteString(c, "GET /other HTTP/1.1\r\nHost: test\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	answer, err := io.ReadAll(c)
+	if err != nil {
+		t.Fatalf("connection stayed open: %v", err)
+	}
+	if !bytes.Contains(answer, []byte("404")) {
+		t.Errorf("answer = %q", answer)
+	}
+}

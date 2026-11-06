@@ -9,13 +9,19 @@ import (
 	"github.com/NightDragon1/rconductor/internal/api"
 )
 
-// Request bodies are bounded (T-025): JSON decodes before any session check
-// and takes far more memory than its bytes, so its limit is small; only a
-// profile picture of 1 MiB needs more.
+// Request bodies are bounded (T-025): JSON takes far more memory than its
+// bytes when decoded, so its limit is small, and smaller still for the
+// operations open to anyone. Only a profile picture of 1 MiB needs more.
 const (
 	MaxBody        = 256 << 10
+	MaxPublicBody  = 16 << 10
 	MaxPictureBody = 2 << 20
 )
+
+// publicBody reports whether path takes a body without a session.
+func publicBody(path string) bool {
+	return strings.HasSuffix(path, "/auth/login") || strings.HasSuffix(path, "/invites/redeem")
+}
 
 // APIPolicy is the Content-Security-Policy of every answer that is not the
 // interface: nothing may load or frame it (SEC-009).
@@ -26,7 +32,10 @@ const APIPolicy = "default-src 'none'; frame-ancestors 'none'"
 func withBodyLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		limit := int64(MaxBody)
-		if strings.HasSuffix(r.URL.Path, "/me/avatar") {
+		switch {
+		case publicBody(r.URL.Path):
+			limit = MaxPublicBody
+		case strings.HasSuffix(r.URL.Path, "/me/avatar"):
 			limit = MaxPictureBody
 		}
 		if r.ContentLength > limit {

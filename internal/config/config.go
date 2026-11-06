@@ -53,7 +53,12 @@ type Panel struct {
 	EmergencyAdminReset bool
 	// HashConcurrency limits parallel Argon2id computations (64 MiB each).
 	HashConcurrency int
-	Log             Log
+	// MaxConnections limits the open connections of the web port (T-025).
+	MaxConnections int
+	// MaxClientConnections limits them per client address; trusted proxies
+	// have no limit of their own.
+	MaxClientConnections int
+	Log                  Log
 }
 
 // Agent is the start-up configuration of the agent. Until M3 only the
@@ -86,22 +91,24 @@ func LoadAgentFromOS() (Agent, error) { return LoadAgent(os.LookupEnv, os.ReadFi
 func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 	r := reader{env: env, readFile: readFile}
 	c := Panel{
-		HTTPAddr:            r.addr("RCD_HTTP_ADDR", ":8080"),
-		AgentAddr:           r.addr("RCD_AGENT_ADDR", ":8443"),
-		AgentPublicAddr:     r.str("RCD_AGENT_PUBLIC_ADDR", ""),
-		PublicURL:           r.publicURL("RCD_PUBLIC_URL"),
-		BasePath:            r.basePath("RCD_BASE_PATH", "/"),
-		TrustedProxies:      r.prefixes("RCD_TRUSTED_PROXIES"),
-		DBDriver:            r.dbDriver("RCD_DB_DRIVER", "sqlite"),
-		DBURL:               r.secret("RCD_DB_URL"),
-		DataDir:             r.str("RCD_DATA_DIR", "/data"),
-		SecretsDir:          r.str("RCD_SECRETS_DIR", "/secrets"),
-		BackupDir:           r.str("RCD_BACKUP_DIR", "/backups"),
-		MasterKeyFile:       r.str("RCD_MASTER_KEY_FILE", ""),
-		EmergencyAdmin:      r.boolean("RCD_EMERGENCY_ADMIN", true),
-		EmergencyAdminReset: r.boolean("RCD_EMERGENCY_ADMIN_RESET", false),
-		HashConcurrency:     r.integer("RCD_PASSWORD_HASH_CONCURRENCY", 2, 1, 64),
-		Log:                 r.log(),
+		HTTPAddr:             r.addr("RCD_HTTP_ADDR", ":8080"),
+		AgentAddr:            r.addr("RCD_AGENT_ADDR", ":8443"),
+		AgentPublicAddr:      r.str("RCD_AGENT_PUBLIC_ADDR", ""),
+		PublicURL:            r.publicURL("RCD_PUBLIC_URL"),
+		BasePath:             r.basePath("RCD_BASE_PATH", "/"),
+		TrustedProxies:       r.prefixes("RCD_TRUSTED_PROXIES"),
+		DBDriver:             r.dbDriver("RCD_DB_DRIVER", "sqlite"),
+		DBURL:                r.secret("RCD_DB_URL"),
+		DataDir:              r.str("RCD_DATA_DIR", "/data"),
+		SecretsDir:           r.str("RCD_SECRETS_DIR", "/secrets"),
+		BackupDir:            r.str("RCD_BACKUP_DIR", "/backups"),
+		MasterKeyFile:        r.str("RCD_MASTER_KEY_FILE", ""),
+		EmergencyAdmin:       r.boolean("RCD_EMERGENCY_ADMIN", true),
+		EmergencyAdminReset:  r.boolean("RCD_EMERGENCY_ADMIN_RESET", false),
+		HashConcurrency:      r.integer("RCD_PASSWORD_HASH_CONCURRENCY", 2, 1, 64),
+		MaxConnections:       r.integer("RCD_MAX_CONNECTIONS", 512, 16, 65536),
+		MaxClientConnections: r.integer("RCD_MAX_CLIENT_CONNECTIONS", 128, 1, 65536),
+		Log:                  r.log(),
 	}
 	if c.AgentPublicAddr != "" {
 		if _, _, err := net.SplitHostPort(c.AgentPublicAddr); err != nil {

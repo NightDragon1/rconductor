@@ -10,6 +10,7 @@ info:
   description: >-
     REST API between the browser and the panel (Design 2). In R1 it serves
     only the panel's own web UI. Errors use Problem Details (RFC 9457).
+    Bodies over 256 KiB, a profile picture over 2 MiB, get 413 (Design 2.1).
   license:
     name: AGPL-3.0-or-later
     identifier: AGPL-3.0-or-later
@@ -2043,6 +2044,11 @@ components:
         truncated:
           type: boolean
           description: Lines or the whole were cut to the limits.
+        current:
+          type: boolean
+          description: >-
+            The last lines, sent to a new subscriber; the client may hold them
+            already.
 
     AllowedCommands:
       type: object

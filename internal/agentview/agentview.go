@@ -83,7 +83,10 @@ type Logs struct {
 	Container string   `json:"container"`
 	Lines     []string `json:"lines"`
 	Truncated bool     `json:"truncated,omitempty"`
-	Seq       uint64   `json:"-"`
+	// Current marks the last lines sent to a new subscriber, which the
+	// client may hold already (UI-009).
+	Current bool   `json:"current,omitempty"`
+	Seq     uint64 `json:"-"`
 }
 
 // Sequence implements events.Sequenced.
@@ -224,7 +227,7 @@ func (v *View) Current(ctx context.Context, serverID, kind string) (any, bool) {
 		return v.metricsOf(serverID, agentID, container)
 	case "logs":
 		lines, seq := v.data.Logs(agentID, container)
-		return Logs{ServerID: serverID, Container: container, Lines: lines, Seq: seq}, true
+		return Logs{ServerID: serverID, Container: container, Lines: lines, Current: true, Seq: seq}, true
 	}
 	return nil, false
 }

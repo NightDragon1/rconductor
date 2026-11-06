@@ -68,6 +68,18 @@ export function addCommands(buf: ConsoleBuffer, entries: CmdBlock[]): ConsoleBuf
 
 let logSeq = 0;
 
+// newLines returns the lines of a delivery that follow what the buffer
+// holds: the panel repeats the last lines to every new subscription.
+export function newLines(buf: ConsoleBuffer, lines: string[]): string[] {
+  const held = buf.logs.flatMap((l) => l.lines);
+  for (let n = Math.min(held.length, lines.length); n > 0; n--) {
+    if (lines.slice(0, n).every((line, i) => line === held[held.length - n + i])) {
+      return lines.slice(n);
+    }
+  }
+  return lines;
+}
+
 // addLogLines appends one delivery of log lines and drops the oldest
 // lines over MAX_LOG_LINES.
 export function addLogLines(buf: ConsoleBuffer, lines: string[], ts: string): ConsoleBuffer {
@@ -178,5 +190,15 @@ export function useBuffer(server: string): ConsoleBuffer {
 
 // resetBuffers is for tests.
 export function resetBuffers() {
+  buffers.clear();
+}
+
+let owner: string | undefined;
+
+// bufferOwner names the signed-in user. The buffers hold what this user may
+// see, so they go before another user's page renders (Design 6.3).
+export function bufferOwner(user: string | undefined) {
+  if (user === owner) return;
+  owner = user;
   buffers.clear();
 }

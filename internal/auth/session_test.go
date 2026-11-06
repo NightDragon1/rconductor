@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/netip"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,11 +23,13 @@ import (
 const testPassword = "a long enough password"
 
 type sessionFixture struct {
-	st     *store.Store
-	svc    *Service
-	logs   *bytes.Buffer
-	now    time.Time
-	delays []time.Duration
+	st   *store.Store
+	svc  *Service
+	logs *bytes.Buffer
+	now  time.Time
+	// delaysMu guards delays: parallel logins sleep at the same time.
+	delaysMu sync.Mutex
+	delays   []time.Duration
 }
 
 func newSessionFixture(t *testing.T, emergency bool) *sessionFixture {
@@ -44,6 +47,8 @@ func newSessionFixture(t *testing.T, emergency bool) *sessionFixture {
 	f.svc = NewService(st, h, logging.New(logs, "panel", config.Log{Format: "json"}).Module("auth"), emergency)
 	f.svc.now = func() time.Time { return f.now }
 	f.svc.sleep = func(_ context.Context, d time.Duration) error {
+		f.delaysMu.Lock()
+		defer f.delaysMu.Unlock()
 		f.delays = append(f.delays, d)
 		return nil
 	}

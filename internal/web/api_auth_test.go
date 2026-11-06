@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -345,5 +347,62 @@ func TestReasonCodes(t *testing.T) {
 	var pr *problem
 	if !errors.As(errBusy(), &pr) || pr.reason != api.ReasonCodeBusy || pr.status != http.StatusServiceUnavailable || pr.retryAfter != 1 {
 		t.Errorf("busy = %+v", pr)
+	}
+}
+
+// countingBody records whether anyone read it.
+type countingBody struct {
+	io.Reader
+	read *atomic.Bool
+}
+
+func (b countingBody) Read(p []byte) (int, error) {
+	b.read.Store(true)
+	return b.Reader.Read(p)
+}
+
+// TestWriteWithoutSessionReadsNoBody covers T-025: JSON decodes ahead of the
+// session check of the operation, so a write without a session goes first.
+func TestWriteWithoutSessionReadsNoBody(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	for _, c := range []struct {
+		method, path string
+		cookie       bool
+	}{
+		{http.MethodPatch, "/api/v1/settings", false},
+		{http.MethodPost, "/api/v1/command-lists", false},
+		{http.MethodPut, "/api/v1/me/avatar", false},
+		{http.MethodPatch, "/api/v1/settings", true},
+	} {
+		var read atomic.Bool
+		req := httptest.NewRequestWithContext(context.Background(), c.method, "http://panel.lan"+c.path, countingBody{strings.NewReader(`{"a":[[],[]]}`), &read})
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", "http://panel.lan")
+		if c.cookie {
+			req.AddCookie(&http.Cookie{Name: cookieNameFor(req), Value: "made-up"})
+		}
+		rec := httptest.NewRecorder()
+		f.h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s = %d, want 401", c.method, c.path, rec.Code)
+		}
+		if read.Load() {
+			t.Errorf("%s %s read the body without a session", c.method, c.path)
+		}
+	}
+}
+
+// TestPublicBodiesAreSmall covers T-025: what anyone may send is decoded, so
+// its limit is far below that of signed-in users.
+func TestPublicBodiesAreSmall(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	big := `{"pseudonym":"Mod","password":"` + strings.Repeat("x", MaxPublicBody) + `"}`
+	for _, path := range []string{"/api/v1/auth/login", "/api/v1/invites/redeem"} {
+		if rec := f.do(t, call{method: http.MethodPost, path: path, body: big, origin: "http://panel.lan"}); rec.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("%s = %d, want 413", path, rec.Code)
+		}
+	}
+	if rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/auth/login", body: loginBody("Mod", testPassword), origin: "http://panel.lan"}); rec.Code != http.StatusOK {
+		t.Errorf("normal login = %d", rec.Code)
 	}
 }

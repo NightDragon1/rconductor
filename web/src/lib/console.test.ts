@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   addCommands,
   addLogLines,
+  bufferOwner,
+  newLines,
   prependTail,
   emptyBuffer,
   MAX_COMMANDS,
   MAX_LOG_LINES,
   ownCommands,
+  resetBuffers,
   suggest,
+  updateBuffer,
+  useBuffer,
   visible,
   type CmdBlock,
 } from './console';
@@ -114,5 +120,57 @@ describe('earlier log lines (revision 2.4 candidate 20)', () => {
     const lines = after.logs.flatMap((l) => l.lines);
     expect(lines).toHaveLength(MAX_LOG_LINES);
     expect(lines.slice(0, 3)).toEqual(['o3', 'o4', 'n0']);
+  });
+});
+
+describe('owner of the buffers (Design 6.3)', () => {
+  const held = () => renderHook(() => useBuffer('s1')).result.current.logs.length;
+
+  it('forgets everything when another user signs in', () => {
+    bufferOwner('admin');
+    updateBuffer('s1', (b) => addLogLines(b, ['op secret'], '2026-11-06T10:00:00Z'));
+    expect(held()).toBe(1);
+    bufferOwner('moderator');
+    expect(held()).toBe(0);
+  });
+
+  it('forgets everything on signing out, also what arrives afterwards', () => {
+    bufferOwner('admin');
+    updateBuffer('s1', (b) => addLogLines(b, ['first'], '2026-11-06T10:00:00Z'));
+    bufferOwner(undefined);
+    expect(held()).toBe(0);
+    updateBuffer('s1', (b) => addLogLines(b, ['late answer'], '2026-11-06T10:00:01Z'));
+    bufferOwner('admin');
+    expect(held()).toBe(0);
+  });
+
+  it('keeps the buffers of the same user', () => {
+    bufferOwner('admin');
+    updateBuffer('s1', (b) => addLogLines(b, ['mine'], '2026-11-06T10:00:00Z'));
+    bufferOwner('admin');
+    expect(held()).toBe(1);
+    resetBuffers();
+  });
+});
+
+describe('repeated log lines (#149)', () => {
+  const buf = (lines: string[]) => addLogLines(emptyBuffer, lines, '2026-11-06T10:00:00Z');
+
+  it('adds nothing when all lines are here', () => {
+    expect(newLines(buf(['a', 'b', 'c']), ['b', 'c'])).toEqual([]);
+    expect(newLines(buf(['a', 'b', 'c']), ['a', 'b', 'c'])).toEqual([]);
+  });
+
+  it('adds only what followed', () => {
+    expect(newLines(buf(['a', 'b']), ['a', 'b', 'c', 'd'])).toEqual(['c', 'd']);
+  });
+
+  it('keeps lines that repeat in the log itself', () => {
+    expect(newLines(buf(['x', 'x']), ['x', 'x', 'x'])).toEqual(['x']);
+  });
+
+  it('adds all lines after a gap or into an empty buffer', () => {
+    expect(newLines(buf(['a']), ['y', 'z'])).toEqual(['y', 'z']);
+    expect(newLines(emptyBuffer, ['y'])).toEqual(['y']);
   });
 });
