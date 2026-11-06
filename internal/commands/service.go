@@ -140,6 +140,13 @@ func NewService(st *store.Store, c *perm.Checker, exec Executor, log *slog.Logge
 	return &Service{st: st, perm: c, exec: exec, log: log, limiter: newLimiter(), now: time.Now, timeout: Timeout}
 }
 
+// SetTimeout replaces Timeout; zero keeps it.
+func (s *Service) SetTimeout(d time.Duration) {
+	if d > 0 {
+		s.timeout = d
+	}
+}
+
 type payload struct {
 	Command string `json:"command"`
 }

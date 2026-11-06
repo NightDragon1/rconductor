@@ -47,6 +47,7 @@ const (
 const (
 	SettingAuditRetentionDays = "audit.retention_days"
 	DefaultAuditRetentionDays = 90
+	MinAuditRetentionDays     = 30
 )
 
 // rule checks one setting value; it returns the value to store.
@@ -96,9 +97,11 @@ var settingRules = map[string]rule{
 	"login.max_client_failures":   intRule(1, 1000),
 	"login.max_tracked":           intRule(1000, 1000000),
 	"login.lockout_duration":      durationRule(time.Minute, 24*time.Hour),
+	"login.overflow_gap":          durationRule(50*time.Millisecond, 10*time.Second),
+	"login.overflow_line":         intRule(1, 1000),
 	SettingInviteLifetime:         durationRule(time.Minute, 30*24*time.Hour),
 	perm.SettingSupportersEnabled: boolRule,
-	SettingAuditRetentionDays:     intRule(30, 3650),
+	SettingAuditRetentionDays:     intRule(MinAuditRetentionDays, 3650),
 	SettingWSMaxSockets:           intRule(1, 100),
 	SettingWSMaxSubs:              intRule(1, 64),
 	profiles.SettingPollInterval:  durationRule(profiles.MinPollInterval, time.Hour),

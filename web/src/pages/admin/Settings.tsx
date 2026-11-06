@@ -46,6 +46,8 @@ const keyTexts = [
   'login_max_client_failures',
   'login_max_failures',
   'login_max_tracked',
+  'login_overflow_gap',
+  'login_overflow_line',
   'profiles_poll_interval',
   'servers_connection_test_per_minute',
   'session_idle_timeout',
