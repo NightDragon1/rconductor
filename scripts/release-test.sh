@@ -34,6 +34,11 @@ images=$(scripts/release-images.sh agent "$(field v1.0 tags)" | grep -v EOF | wc
 expect "v1.0 image count" 4 "$(echo $images)"
 
 expect "notes of a test version" "Testversion vor 1.0" "$(scripts/release-notes.sh 0.9 true | head -n 1)"
+expect "known issues of a test version" "## Known issues" "$(scripts/release-notes.sh 0.9 true | sed -n 3p)"
+if scripts/release-notes.sh 1.0 false | grep -q "Known issues"; then
+  echo "a real release must not carry the known issues of a test version" >&2
+  fails=$((fails + 1))
+fi
 expect "notes of 1.0" "First release." "$(scripts/release-notes.sh 1.0 false | sed -n 2p)"
 if scripts/release-notes.sh 7.0 false >/dev/null 2>&1; then
   echo "a version without a changelog entry must be refused" >&2

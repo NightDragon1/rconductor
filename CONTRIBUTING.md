@@ -48,6 +48,12 @@ is done when its acceptance criterion in `docs/05-abnahme-r1.md` passes in a
 test. Please do not change the concept in `docs/`; propose changes in an
 issue.
 
+## Merging
+
+Pull requests are merged after a green CI, by Claude Code as well. Changes to
+`CLAUDE.md`, `CONTRIBUTING.md`, the release workflow with its scripts and the
+rulesets are merged by the owner only.
+
 ## Release
 
 - A release starts only with a tag `v*`, such as `v1.0`, and needs the approval in
@@ -55,8 +61,8 @@ issue.
 - The Docker Hub secrets live only in that environment.
 - The release notes come from `CHANGELOG.md`, which lists real releases only.
 - Test versions `0.x` follow D-047: only the image tag `0.x`, no major or `latest`
-  tag, a GitHub pre-release with the fixed text "Testversion vor 1.0" and no entry
-  in the changelog. Signature and SBOM are the same as for a real release.
+  tag, a GitHub pre-release with the fixed text "Testversion vor 1.0" and its known
+  issues from `scripts/release-notes.sh`, and no entry in the changelog. Signature and SBOM are the same as for a real release.
 
 ## License headers
 

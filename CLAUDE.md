@@ -31,6 +31,8 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - docs/ nicht verändern, außer auf meinen ausdrücklichen Auftrag. Vorschläge für
   Änderungen nur als Hinweis an mich.
 - Kleine Schritte: lieber mehrere kleine Commits als ein großer.
+- PRs nach grüner CI selbst mergen, außer Änderungen an CLAUDE.md, CONTRIBUTING.md,
+  Release-Workflow (auch die von ihm aufgerufenen Skripte) und Rulesets: die merge ich.
 - Renovate-PRs: Patch, Minor und Digest nach grüner CI selbst mergen, Major vorher melden.
 - Bei Eingriffen in die Git-Historie Renovate pausieren (renovate.json "enabled": false),
   danach wieder aktivieren.
@@ -77,6 +79,19 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - Alle Daten von Spieleservern und Agents gelten als Fremddaten (SEC-006).
 - Keine Abhängigkeit mit AGPL-inkompatibler Lizenz. Neue Abhängigkeiten nur
   mit kurzer Begründung im Plan.
+
+## Schwere von Befunden
+- hoch: ohne Anmeldung oder mit niedrigster Rolle erreichbar UND Ausfall des Panels,
+  Datenabfluss zwischen Benutzern, Rechteausweitung oder Umgehung von Sperre/Audit.
+- mittel: Sicherheitsschutz geschwächt, aber begrenzt; oder nur mit erhöhter Rolle
+  erreichbar.
+- niedrig: Randfall, Härtung, Funktionsfehler ohne Sicherheitsbezug.
+- Funktionsfehler ohne Sicherheitsbezug sind nie hoch/mittel im Sinne einer
+  Release-Schwelle; sie blockieren 1.0, nicht 0.x.
+- Restrisiko: nur mit Messung und nur nach meiner ausdrücklichen Freigabe.
+  Widerspricht es einer Anforderung, braucht es eine Revision.
+- Blinde Prüfungen haben je Runde einen festen Umfang. Funde außerhalb: nur hoch
+  blockiert, der Rest wird Issue.
 
 ## Tests und Prüfung
 - Go: go test ./..., Integrationstests mit testcontainers-go.
