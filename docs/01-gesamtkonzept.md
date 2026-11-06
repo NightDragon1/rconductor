@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.7, Stand 06.11.2026, Status freigegeben; Änderungen gegenüber 2.6 in Kapitel 16, gegenüber 2.5 in Kapitel 15, gegenüber 2.4 in Kapitel 14, gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.8, Stand 06.11.2026, Status freigegeben; Änderungen gegenüber 2.7 in Kapitel 17, gegenüber 2.6 in Kapitel 16, gegenüber 2.5 in Kapitel 15, gegenüber 2.4 in Kapitel 14, gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -95,7 +95,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | AUTH-003 | Notfall-Admin | Lokaler RCON-Admin, nie in Keycloak, immer lokal erreichbar; standardmäßig aktiv, per Env-Flag deaktivierbar | Backend | Muss | R1 | 1 |
 | AUTH-004 | Keycloak-Auth | Lokal angelegte Benutzer optional gegen Keycloak (OIDC) authentifizieren, wie bei Nextcloud/Portainer; Architektur sieht das ab R1 vor | Backend | Soll | R2 | 1 |
 | AUTH-005 | Inaktivitätssperre | Konten ohne Anmeldung über eine einstellbare Frist optional automatisch sperren | Backend | Soll | R2 | 1 |
-| AUTH-006 | Sessions | Session-Management für alle Benutzer; Zuordnung Session zu Request-ID wird geloggt | Backend | Muss | R1 | 1 |
+| AUTH-006 | Sessions | Session-Management für alle Benutzer; Zuordnung Session zu Request-ID wird geloggt; welche Änderungen Sessions beenden, regelt D-044 | Backend | Muss | R1 | 2 |
 | AUTH-007 | Initialpasswort | Beim ersten Start des Containers wird ein zufälliges Passwort für den Notfall-Admin erzeugt und im Container-Log ausgegeben; Änderung in der Oberfläche | Backend | Muss | R1 | 1 |
 | AUTH-008 | Zwei-Faktor | Optionale Zwei-Faktor-Anmeldung (TOTP); RCON-Admin kann sie für alle erzwingen, jeder Benutzer kann sie für sich aktivieren | Backend, UI | Soll | R2 | 1 |
 | AUTH-011 | Wiederherstellung Notfall-Admin | Mit RCD\_EMERGENCY\_ADMIN\_RESET=true erhält der Notfall-Admin beim Start ein neues Initialpasswort (Ausgabe wie AUTH-007) mit must\_change\_password; alle seine Sessions enden; Audit-Eintrag und Ereigniscode | Backend | Muss | R1 | 1 |
@@ -127,13 +127,14 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | SRV-004 | Erreichbarkeit | Status je Server: verbunden, Auth-Fehler, offline | Backend | Muss | R1 | 1 |
 | SRV-005 | Spielports | Festlegen, welche Ports Spielports sind, über Spielprofil oder durch RCON-Admin am Server | Backend, Profile | Soll | R1 | 1 |
 | SRV-006 | Laufzeitdaten | Spielerliste und ähnliche Laufzeitdaten werden nicht dauerhaft gespeichert, sondern per Befehl bzw. über den Agent abgerufen und im Cache des Panels gepuffert | Backend | Muss | R1 | 1 |
+| SRV-007 | Verbindungstest | RCON-Admin prüft beim Anlegen und Bearbeiten die eingegebenen RCON-Daten, ohne zu speichern; Ergebnis ok, auth\_failed oder unreachable; mit Audit und Ratenlimit (D-049) | Backend, UI | Soll | R1 | 1 |
 
 ### 2.5 Protokolle
 
 | ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
 | --- | --- | --- | --- | --- | --- | --- |
 | PROT-001 | Source RCON | Adapter für Source RCON (TCP): Minecraft, ARK, Factorio u. a. | Backend | Muss | R1 | 1 |
-| PROT-002 | Eine Verbindung je Server | Genau eine persistente Verbindung je Spieleserver mit Reconnect; Befehle in Warteschlange, Antworten per Request-ID zugeordnet | Backend | Muss | R1 | 1 |
+| PROT-002 | Eine Verbindung je Server | Genau eine persistente Verbindung je Spieleserver mit Reconnect; Befehle in Warteschlange, Antworten per Request-ID zugeordnet. Einzige Ausnahme ist der Verbindungstest mit neuen oder geänderten Daten (SRV-007): ein kurzer Aufbau nur mit Authentifizierung, ohne Befehl, danach sofort geschlossen | Backend | Muss | R1 | 2 |
 | PROT-003 | HTTP-API | Adapter für HTTPS-APIs, z. B. Satisfactory Dedicated Server API | Backend | Soll | R2 | 1 |
 | PROT-004 | Weitere Adapter | BattlEye RCon, WebRCON, Telnet nach Bedarf | Backend | Kann | R3 | 1 |
 
@@ -176,7 +177,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
 | --- | --- | --- | --- | --- | --- | --- |
 | AGT-001 | Socket-Isolation | Agent pro Host ist die einzige Komponente mit Docker-Socket-Zugriff | Agent | Muss | R1 | 1 |
-| AGT-002 | Label-Freigabe | Nur Container mit Label (z. B. rcon.manage=true) sind sichtbar | Agent | Muss | R1 | 1 |
+| AGT-002 | Label-Freigabe | Nur Container mit Label (Standard rconductor.manage=true) sind sichtbar | Agent | Muss | R1 | 2 |
 | AGT-003 | Funktionsumfang | Start, Stop, Restart, Status, CPU, RAM, Netz, Disk-I/O, Logs, ausschließlich für freigegebene Container | Agent | Muss | R1 | 1 |
 | AGT-004 | Verbotene Operationen | Kein Erstellen, Löschen, Exec oder Ändern von Containern, keine Image- oder Volume-Operationen, keine Hostdaten | Agent | Muss | R1 | 1 |
 | AGT-005 | Kopplung | Kopplung ohne externe CA über zwei Wege: Einmal-Token (immer verfügbar) und Freigabe per Fingerprint (standardmäßig aus); nur der RCON-Admin koppelt und widerruft; geführter Dialog mit fertigem Startbefehl | Agent, Backend, UI | Muss | R1 | 2 |
@@ -195,7 +196,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | --- | --- | --- | --- | --- | --- | --- |
 | UI-002 | Landingpage je Rolle | Landingpage je Rolle mit den für die Rolle relevanten Informationen | UI | Muss | R1 | 1 |
 | UI-003 | Gesundheitsübersicht | Für RCON-Admins: Restart-Schleifen, Agent-Erreichbarkeit, RCON-Fehler, aktive und gesperrte Benutzer | UI, Backend | Muss | R1 | 1 |
-| UI-004 | Server-Karten | Statusrand und -punkt, Name, Image (bei sha256 Spielprofil), CPU und RAM, letzter Restart, Spielversion (ab R2, AGT-006), Spieler online; Felder ohne Quelle ausgeblendet | UI | Muss | R1 | 2 |
+| UI-004 | Server-Karten | Statusrand und -punkt, Name, Image (bei sha256 Spielprofil), CPU und RAM, letzter Restart, Spielversion (ab R2, AGT-006), Spieler online; Felder ohne Quelle ausgeblendet, auch die Spielerzahl, wenn die Antwort nicht zum Profil passt; die ganze Karte ist klickbar | UI | Muss | R1 | 3 |
 | UI-005 | Ports und Volumes | Server-Admin sieht Spielports, optional Steam-Connect-Link; RCON-Admin alle relevanten Ports; Volumes mit Name und Größe | UI | Soll | R2 | 1 |
 | UI-006 | Karten Moderator | Nur eigene Server; Status per RCON-Erreichbarkeit, Version (ab R2, AGT-006), Spieler; keine Agent-Daten | UI | Muss | R1 | 2 |
 | UI-010 | Topologie | Live-Graph Host → Agent → Spieleserver, gruppiert nach Servergruppen | UI | Kann | R2 | 1 |
@@ -204,12 +205,14 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 
 | ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
 | --- | --- | --- | --- | --- | --- | --- |
-| UI-001 | Stil | Aufgeräumt wie Portainer, Diagramme wie Grafana, keine verschiebbaren Widgets, helles und dunkles Design; Kontrast 4,5:1 für Text, 3:1 für Symbole, Rahmen von Controls, Fokusring und Statuspunkte (WCAG 1.4.11) | UI | Muss | R1 | 2 |
+| UI-001 | Stil | Aufgeräumt wie Portainer, Diagramme wie Grafana, keine verschiebbaren Widgets, Design hell, dunkel oder automatisch nach Systemeinstellung, Standard automatisch; sichtbarer Hover- und Fokus-Zustand aller klickbaren Elemente; Kontrast 4,5:1 für Text, 3:1 für Symbole, Rahmen von Controls, Fokusring und Statuspunkte (WCAG 1.4.11) | UI | Muss | R1 | 3 |
 | UI-007 | Verwaltungslisten | Durchsuchbare Listen, Details im Seitenpanel; die Benutzerliste zusätzlich filterbar und mit Mehrfachauswahl und Massenaktionen | UI | Muss | R1 | 2 |
-| UI-008 | Schnelleingabe | Rechte und Zuweisungen eines bestehenden Benutzers als Vorlage übernehmen; Mehrfachauswahl mit Massenaktionen; neue Benutzer per Einladungslink mit Ablaufzeit statt Passwortvergabe; Inline-Bearbeitung in Listen; Rückgängig für einige Sekunden statt Bestätigungsdialog, Bestätigung nur bei destruktiven Aktionen; Tastaturkürzel für häufige Aktionen, standardmäßig deaktiviert, vom RCON-Admin global aktivierbar | UI | Soll | R1 | 1 |
+| UI-008 | Schnelleingabe | Rechte und Zuweisungen eines bestehenden Benutzers als Vorlage übernehmen; Mehrfachauswahl mit Massenaktionen; neue Benutzer per Einladungslink mit Ablaufzeit statt Passwortvergabe; Inline-Bearbeitung in Listen; expliziter Save-Knopf speichert sofort, danach Rückgängig für einige Sekunden statt Bestätigungsdialog (Ausnahmen D-048), Bestätigung nur bei destruktiven Aktionen; Nachfrage beim Verlassen mit ungespeicherten Änderungen; Tastaturkürzel für häufige Aktionen, standardmäßig deaktiviert, vom RCON-Admin global aktivierbar | UI | Soll | R1 | 2 |
 | UI-009 | Logansicht | Live-Logs für berechtigte Rollen, übertragen nur bei aktiver Ansicht; optional letzte Logzeilen auf der Karte | UI, Agent | Soll | R1 | 1 |
 | UI-011 | Navigation und Serverseite | Einklappbare Seitenleiste mit Einträgen je Rolle; Serverseite mit Kopf (Status, Aktionen) und Reitern Übersicht, Konsole oder Befehle, Logs, Verlauf; Einträge und Reiter ohne Recht werden ausgeblendet | UI | Muss | R1 | 1 |
 | UI-012 | Mobile Nutzung | Karten, Befehlsseite und Konsole auf dem Smartphone voll bedienbar, Mitteilungen ab R2; Verwaltung mobil nur lesend, ausgenommen Sperren, Entsperren und Sitzungen beenden mit Bestätigungsdialog | UI | Soll | R1 | 2 |
+| UI-013 | Passwort einblendbar | Passwortfelder von Anmeldung, Passwortwechsel und Einladung lassen sich kurz einblenden; beim Absenden und nach 10 s sind sie wieder verborgen | UI | Soll | R1 | 1 |
+| UI-014 | Erklärungen einblendbar | Die Erklärungen in den Einstellungen lassen sich ein- und ausblenden; der Zustand gilt je Benutzer im Browser | UI | Kann | R1 | 1 |
 
 ### 2.11 Audit und Statistik
 
@@ -283,7 +286,7 @@ Zuweisungskette: RCON-Admin → Server-Admin (Servergruppe oder Server) → Mode
 
 | Aspekt | Festlegung |
 | --- | --- |
-| Freigabe | Label am Container, z. B. rcon.manage=true |
+| Freigabe | Label am Container, Standard rconductor.manage=true |
 | Funktionen | Start, Stop, Restart, Status, CPU, RAM, Netz, Disk-I/O, Logs, Volume-Größen, Versionserkennung |
 | Verboten | Erstellen, Löschen, Exec, Ändern, Image- und Volume-Operationen, Hostdaten |
 | Kopplung | Agent baut die Verbindung zum Panel auf (Panel-Adresse per Env, Agent ohne offenen Port); Pairing per Einmal-Token, danach gegenseitig gepinnte Ed25519-Schlüssel über TLS 1.3 |
@@ -392,17 +395,19 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | D-034 | Kopplung auch in der All-in-One-Variante per Token | ein einheitlicher Ablauf für beide Varianten | automatische Kopplung über ein gemeinsames Volume, Freigabe per Klick |
 | D-035 | Seitenleiste links, Serverseite mit Reitern, Verwaltung als Tabelle mit Seitenpanel | vertraut aus Portainer, Rollen blenden nur Reiter und Einträge aus, Liste bleibt beim Bearbeiten sichtbar | obere Leiste, Serverliste links, eine Seite ohne Reiter, Detailseiten, Dialoge |
 | D-036 | Mobil voll für Moderation, Verwaltung nur lesend | Moderation passiert unterwegs, Verwaltung am Schreibtisch; spart Aufwand bei komplexen Formularen | alles mobil, nur Desktop |
-| D-037 | Stilrichtung laut den Ansichten in Design 6.5; dunkles Design als Standard, helles wählbar | Mockups abgenommen; Statusfarben und Monospace-Namen lesen sich auf dunklem Grund am besten | Standard nach Systemeinstellung |
+| D-037 | Stilrichtung laut den Ansichten in Design 6.5; automatisches Design nach Systemeinstellung als Standard, hell und dunkel wählbar | Mockups abgenommen; Statusfarben und Monospace-Namen lesen sich auf dunklem Grund am besten | Standard nach Systemeinstellung |
 | D-038 | Datenbankzugriff mit sqlc; SQLite über modernc.org/sqlite, Postgres über pgx | typsicher und SQL-nah; reines Go ohne CGO erlaubt statische Binaries | Bun, ent, mattn/go-sqlite3 (CGO) |
 | D-039 | OpenAPI 3.1 als einzige Quelle für Server-Stubs (oapi-codegen) und Client-Typen (openapi-typescript) | API, Backend und Oberfläche laufen nicht auseinander; Doku der externen API ab R2 fällt mit ab | Typen von Hand pflegen |
 | D-040 | Images für amd64 und arm64, signiert und mit SBOM auf ghcr.io und Docker Hub (PRJ-004) | x86-Server und Raspberry Pi; nachprüfbare Lieferkette | zusätzlich armv7, nur amd64 |
 | D-041 | Parametertypen player, text, choice, number im Spielprofil; eigene Befehlsdefinitionen (CMD-018) sollen sie übernehmen | CMD-003 braucht Parameterfelder schon in R1, die Argument-Syntax ist vertagt | nur ein freies Argumentfeld je Befehl |
 | D-042 | Abnahme teilweise über Ereigniscodes in den Container-Logs, gelesen per Portainer-MCP | nutzt vorhandenen Zugang ohne neuen Code im Panel; Claude kann Kriterien direkt prüfen | eigener MCP-Endpunkt im Panel |
 | D-043 | Session-Cookie immer HttpOnly und SameSite=Lax; Secure und Präfix \_\_Host- nur über HTTPS | Anmeldung auch ohne TLS-Proxy im LAN (D-011); Lax lässt Links von außen angemeldet ankommen, CSRF bleibt durch die Origin-Prüfung abgedeckt | Secure und SameSite=Strict immer |
-| D-044 | Jede Änderung von Rolle, Scope, Gruppenmitgliedschaft, Grants, Supporter-Freigabe oder Sperre beendet die Sessions des Benutzers; Listeninhalte wirken ohne Abmeldung | keine offene Oberfläche mit veraltetem Stand; Listenpflege meldet niemanden ab | nur Deaktivierung beendet Sessions |
+| D-044 | Jede Änderung von Rolle, Gruppenmitgliedschaft, Grants, Supporter-Freigabe oder Sperre beendet die Sessions des Benutzers; Listeninhalte und das Zuweisen oder Entfernen von Servern und Servergruppen im Scope eines Server-Admins wirken ohne Abmeldung, die Oberfläche aktualisiert sich live, entzogener Zugriff wirkt sofort auf REST und WebSocket | keine offene Oberfläche mit veraltetem Stand; Listenpflege meldet niemanden ab | nur Deaktivierung beendet Sessions |
 | D-045 | Profilbild als BLOB in der Datenbank, neu kodiert und verkleinert | ein Backup enthält alle veränderlichen Daten; Metadaten wie EXIF entfallen | Datei unter /data |
 | D-046 | Benutzer entstehen nur per Einladung, dazu der Notfall-Admin; das Token steht nur im URL-Fragment | niemand vergibt Passwörter für andere; ein Weg statt zwei; das Token erscheint in keinem Proxy- oder Panel-Log | POST /users mit Passwortvergabe |
 | D-047 | Versionen sind zweistellig (1.0, 1.1); Inkompatibles erhöht die erste Stelle (D-023), alles andere die zweite; Release-Tags wie v1.0, Image-Tags 1 und 1.0. Testversionen 0.x haben nur das Image-Tag 0.x, kein Haupt- oder latest-Tag, sind GitHub-Pre-Releases und stehen nicht im CHANGELOG | die erste Stelle trägt allein die Regel für Panel und Agent, eine dritte Stelle sagt nichts Zusätzliches | dreistellige Versionen (1.0.0) |
+| D-048 | Verwaltung speichert mit explizitem Save sofort; Rückgängig ist eine Gegenänderung binnen 5 s mit eigenem Audit-Eintrag. Kein Rückgängig bei Änderung von Host, Port oder RCON-Passwort; beendete Sessions stellt Rückgängig nicht wieder her | Änderungen sind sofort wirksam und ohne Überraschung; das RCON-Passwort ist nicht lesbar und wird nie im Panel aufgehoben | Senden erst nach 5 s (bis 2.7) |
+| D-049 | Verbindungstest mit unveränderten Daten antwortet aus dem Status der laufenden Verbindung; nur neue oder geänderte Daten lösen einen kurzen Testaufbau aus (nur Authentifizierung, kein Befehl, sofort geschlossen) | PROT-002 bleibt für bestehende Server gewahrt; das gespeicherte Passwort geht nie an eine neue Adresse | immer eine zweite Verbindung |
 
 ## 7. Releaseplan
 
@@ -436,6 +441,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 2.5 | 05.11.2026 | Freigabe durch Rob: Begründungen aus den Kandidaten eingearbeitet, Trigger der optimistischen Sperre und group\_add nachgetragen, Verweise auf Mockups und Kandidaten-Dateien entfernt (Kapitel 14). Keine Anforderung ändert sich |
 | 2.6 | 06.11.2026 | Freigabe durch Rob: D-037 und Design 6.5 ohne Verweis auf Mockups, D-047 um Testversionen 0.x ergänzt (Kapitel 15). Keine Anforderung ändert sich |
 | 2.7 | 06.11.2026 | Freigabe durch Rob: Ergebnisse der Abnahme und des Reviews des Bedrohungsmodells eingearbeitet (Kapitel 16); Revision 2 für CAT-002, AGT-013, AUD-001, NFR-009; Revision 3 für SEC-013 |
+| 2.8 | 06.11.2026 | Freigabe durch Rob: Funde aus dem Test von 0.9 eingearbeitet (Kapitel 17); Revision 2 für AUTH-006, AGT-002, PROT-002, UI-008; Revision 3 für UI-001, UI-004; SRV-007, UI-013, UI-014, D-048 und D-049 neu; D-037 und D-044 geändert |
 
 ## 10. Änderungen in Version 2.1
 
@@ -607,3 +613,20 @@ Aus der Abnahme in M5 und dem Review des Bedrohungsmodells.
 | 18 | Nachtrag: Sperre je Client über alle Namen (login.max\_client\_failures); volle Zähltabelle lässt nichts ungeschützt durch, verdrängt werden nur beendete Zähler | Design 3.7, Sicherheit T-002, T-016, Kapitel 5 |
 | 19 | Nachtrag: Bodys in Arbeit unabhängig von der Rolle begrenzt; Zähltabelle mit 100 000 Einträgen (login.max\_tracked), bei voller Tabelle Warteschlange mit Überlauf-Zähler; Verbindungen ohne Session enden nach RCD\_MAX\_ANONYMOUS\_CONNECTION\_SECONDS; Audit-Einträge gehen unter Last nicht verloren, sonst stehen sie im Log (audit.entry\_lost); Profilbilder nach Pixeln begrenzt, CMYK abgelehnt; Datenbank-Verbindungen begrenzt; GOMEMLIMIT 80 % der Speichergrenze; Schwereskala und Regel für Restrisiken | Design 2.1, 3.7, 5.2, Sicherheit Kapitel 3, 5, 6 |
 | 20 | Nachtrag: AUD-001 mit Ausnahme bei Datenbanksperre über 2 min (audit.entry\_lost im Log); RCD\_PASSWORD\_HASH\_CONCURRENCY höchstens 2 bis zu einer Messung; Restrisiken freigegeben | AUD-001, Design 5.2, Sicherheit Kapitel 5 |
+
+## 17. Änderungen in Version 2.8
+
+Aus dem Test von 0.9 auf hydra.
+
+| Nr. | Änderung | Fundstelle in 2.8 |
+| --- | --- | --- |
+| 1 | Standardlabel rconductor.manage=true statt rcon.manage=true, ohne Fallback auf den alten Namen (F-03) | AGT-002, 4.3, Design 5.2, Abnahme AGT-002 |
+| 2 | Kein verzögertes Senden mehr: expliziter Save speichert sofort, danach Rückgängig als Gegenänderung; Ausnahmen Host, Port, RCON-Passwort; Nachfrage bei ungespeicherten Änderungen (F-07) | UI-008, D-048, Design 6.1, Abnahme UI-008 |
+| 3 | Zuweisen und Entfernen von Servern und Servergruppen im Scope eines Server-Admins beendet keine Sessions mehr; WebSocket-Thema user.rights für die Aktualisierung (F-09) | D-044, AUTH-006, Design 2.1, 2.3, Abnahme AUTH-006 |
+| 4 | Verbindungstest beim Anlegen und Bearbeiten; PROT-002 mit genau einer Ausnahme; Einstellung servers.connection\_test\_per\_minute; Ereigniscode rcon.connection\_test (F-04) | SRV-007, PROT-002, D-049, Design 2.2, 3.8, 5.6, 8.3, Sicherheit T-011, Abnahme SRV-007, PROT-002 |
+| 5 | Design hell, dunkel oder automatisch, Standard automatisch (F-10) | UI-001, D-037, Design 6.1, Abnahme UI-001 |
+| 6 | Ganze Karte klickbar, Hover und Fokus sichtbar (F-12) | UI-001, UI-004, Design 6.1, Abnahme UI-001, UI-004 |
+| 7 | Passt die Antwort nicht zum Muster des Profils, ist die Spielerzahl unbekannt statt 0 (F-11) | UI-004, Design 2.3, Abnahme UI-004 |
+| 8 | Passwort kurz einblendbar (F-01) | UI-013, Abnahme UI-013 |
+| 9 | Erklärungen in den Einstellungen ein- und ausblendbar (F-18) | UI-014, Abnahme UI-014 |
+| 10 | Server-Dialog schließt nach dem Anlegen; Sperren als Schalter, Einschalten mit Dialog (F-05, F-08) | Design 6.1 |

@@ -1,6 +1,6 @@
 # Arbeitspakete R1
 
-Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept, Kapitel 16, gegenüber 2.5 Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
+Dokumentversion 2.8, freigegeben; Änderungen gegenüber 2.7 siehe Gesamtkonzept, Kapitel 17, gegenüber 2.6 Kapitel 16, gegenüber 2.5 Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. R1 entsteht in sechs Meilensteinen; nach Fundament und Rechten laufen RCON-Kern, Agent und Oberfläche parallel. Erstes Ziel ist ein Durchstich: ein Admin sendet list an einen Minecraft-Server und sieht die Antwort im Browser.
 
 ## 1. Ablauf
 
@@ -15,7 +15,7 @@ Der Durchstich entsteht in M2. M4 baut zuerst gegen Attrappen und schließt Live
 | M2 RCON-Kern | Erzwungener Passwortwechsel, Wiederherstellung des Notfall-Admins; WebSocket-Grenzen (aus M4 vorgezogen); Profil-Import mit Hot Reload; Server und Servergruppen; Verbindungsmanager mit Source-RCON-Adapter; Befehlspipeline mit Bereinigung, Token-Abgleich, Wrapper-Sperre, Ratenlimit; Ereignisbus und WebSocket; Durchstich | AUTH-010, AUTH-011, CAT-001, CAT-002, CAT-003, CAT-005, SRV-001 bis SRV-006, PROT-001, PROT-002, CMD-002, CMD-004 bis CMD-007, CMD-019, SEC-003, SEC-006, SEC-008 | M1 |
 | M3 Agent | Agent-Binary; Protokoll aus Design 1; Kopplung über Token und Fingerprint; Pinning und Widerruf; Docker-Operationen, Messwerte, Logs; Versionsregel; Cache mit Altersangabe; Neustart ohne Agent | AGT-001 bis AGT-005, AGT-008, AGT-009, AGT-011 bis AGT-013, NFR-005, SEC-007, SEC-010 | M1 |
 | M4 Oberfläche | Grundgerüst mit Navigation, hell und dunkel, Englisch; Landingpages und Karten; Serverseite mit Konsole; Befehlsseite; Verwaltung mit Schnelleingabe; Handy-Ansicht; Sicherheitsheader | UI-001 bis UI-004, UI-006 bis UI-009, UI-011, UI-012, CMD-001, CMD-003, CMD-012 bis CMD-015, NFR-007, SEC-009 | M1; Live-Teile mit M2 und M3 |
-| M5 Auslieferung | Beide Compose-Varianten, README mit Pfaden und Betrieb, Dokumentation, E2E-Testlauf aller Abnahmekriterien, Review des Bedrohungsmodells, Versionsschema nach D-047 mit Anpassung der Versionsprüfung (AGT-013), GitHub-Release und Docker Hub, Release 1.0 | NFR-003, NFR-004, NFR-014, SEC-001, SEC-002, NFR-009, DOC-001 bis DOC-005, PRJ-003, PRJ-004 | M2, M3, M4 |
+| M5 Auslieferung | Beide Compose-Varianten, README mit Pfaden und Betrieb, Dokumentation, E2E-Testlauf aller Abnahmekriterien, Review des Bedrohungsmodells, Versionsschema nach D-047 mit Anpassung der Versionsprüfung (AGT-013), GitHub-Release und Docker Hub, Release 1.0 | NFR-003, NFR-004, NFR-014, SEC-001, SEC-002, NFR-009, DOC-001 bis DOC-005, PRJ-003, PRJ-004, SRV-007, UI-013, UI-014 | M2, M3, M4 |
 
 ## 3. Teilabnahmen
 
