@@ -112,7 +112,7 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 		HashConcurrency:      r.integer("RCD_PASSWORD_HASH_CONCURRENCY", 2, 1, 64),
 		MaxConnections:       r.integer("RCD_MAX_CONNECTIONS", 512, 16, 65536),
 		MaxClientConnections: r.integer("RCD_MAX_CLIENT_CONNECTIONS", 128, 1, 65536),
-		MaxAnonymousAge:      time.Duration(r.integer("RCD_MAX_ANONYMOUS_CONNECTION_SECONDS", 60, 10, 3600)) * time.Second,
+		MaxAnonymousAge:      time.Duration(r.integer("RCD_MAX_ANONYMOUS_CONNECTION_SECONDS", 30, 10, 3600)) * time.Second,
 		Log:                  r.log(),
 	}
 	if c.AgentPublicAddr != "" {

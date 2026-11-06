@@ -76,6 +76,7 @@ func (s *apiServer) limitBodies(next http.Handler) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), bodyWait)
 		defer cancel()
 		if err := budget.Acquire(ctx, n); err != nil {
+			w.Header().Set("Retry-After", "5")
 			WriteProblem(w, http.StatusServiceUnavailable, api.ReasonCodeBusy, "the panel is busy, try again")
 			return false
 		}

@@ -193,8 +193,8 @@ func TestBudgetAnswersBusy(t *testing.T) {
 	r := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/settings", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("no budget = %d", rec.Code)
+	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") == "" {
+		t.Errorf("no budget = %d, Retry-After %q", rec.Code, rec.Header().Get("Retry-After"))
 	}
 }
 
