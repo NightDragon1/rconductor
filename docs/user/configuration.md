@@ -90,5 +90,6 @@ are written like `24h`, `15m`, `30s`.
 | `profiles.poll_interval` | duration | 30s | 1s to 1h | how often game profile files are compared, in addition to file events |
 | `ws.max_sockets_per_session` | number | 20 | 1 to 100 | WebSockets per session; beyond it the oldest closes |
 | `ws.max_subscriptions_per_socket` | number | 16 | 1 to 64 | subscriptions per WebSocket |
+| `servers.connection_test_per_minute` | number | 10 | 1 to 120 | connection tests per user and minute |
 | `agents.fingerprint_pairing` | boolean | off | on, off | pairing by fingerprint; closes itself after 30 minutes |
 | `ui.shortcuts_enabled` | boolean | off | on, off | keyboard shortcuts for everyone |

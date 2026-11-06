@@ -93,6 +93,32 @@ func (s *apiServer) CreateServer(ctx context.Context, req api.CreateServerReques
 	return api.CreateServer201JSONResponse(s.withRuntime(ctx, sv)), nil
 }
 
+func (s *apiServer) TestServerConnection(ctx context.Context, req api.TestServerConnectionRequestObject) (api.TestServerConnectionResponseObject, error) {
+	if req.Body == nil {
+		return nil, bodyRequired()
+	}
+	in := servers.ConnectionData{Host: req.Body.Host, Port: req.Body.Port}
+	if id := req.Body.ServerId; id != nil {
+		in.ServerID = id.String()
+	}
+	if id := req.Body.ProfileId; id != nil {
+		v := id.String()
+		in.ProfileID = &v
+	}
+	if pw := req.Body.Password; pw != nil {
+		v := logging.Secret(*pw)
+		in.Password = &v
+	}
+	result, err := s.servers.TestConnection(ctx, adminRequest(ctx), in)
+	if errors.Is(err, servers.ErrTestRateLimited) {
+		return nil, &problem{status: http.StatusTooManyRequests, reason: api.ReasonCodeRateLimited, retryAfter: 6}
+	}
+	if err != nil {
+		return nil, adminError(err)
+	}
+	return api.TestServerConnection200JSONResponse{Result: api.ConnectionTestResultResult(result)}, nil
+}
+
 func (s *apiServer) GetServer(ctx context.Context, req api.GetServerRequestObject) (api.GetServerResponseObject, error) {
 	sv, err := s.servers.Get(ctx, adminRequest(ctx), req.Id.String())
 	if err != nil {

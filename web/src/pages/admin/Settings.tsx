@@ -30,6 +30,7 @@ const keyTexts = [
   'login_max_failures',
   'login_max_tracked',
   'profiles_poll_interval',
+  'servers_connection_test_per_minute',
   'session_idle_timeout',
   'session_max_lifetime',
   'supporters_enabled',

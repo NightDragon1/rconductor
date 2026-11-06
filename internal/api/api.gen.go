@@ -88,6 +88,27 @@ func (e AuditEntryResult) Valid() bool {
 	}
 }
 
+// Defines values for ConnectionTestResultResult.
+const (
+	ConnectionTestResultResultAuthFailed  ConnectionTestResultResult = "auth_failed"
+	ConnectionTestResultResultOk          ConnectionTestResultResult = "ok"
+	ConnectionTestResultResultUnreachable ConnectionTestResultResult = "unreachable"
+)
+
+// Valid indicates whether the value is a known member of the ConnectionTestResultResult enum.
+func (e ConnectionTestResultResult) Valid() bool {
+	switch e {
+	case ConnectionTestResultResultAuthFailed:
+		return true
+	case ConnectionTestResultResultOk:
+		return true
+	case ConnectionTestResultResultUnreachable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GamePortProto.
 const (
 	Tcp GamePortProto = "tcp"
@@ -276,19 +297,19 @@ func (e ServerCredentials) Valid() bool {
 
 // Defines values for ServerStatus.
 const (
-	AuthFailed ServerStatus = "auth_failed"
-	Connected  ServerStatus = "connected"
-	Offline    ServerStatus = "offline"
+	ServerStatusAuthFailed ServerStatus = "auth_failed"
+	ServerStatusConnected  ServerStatus = "connected"
+	ServerStatusOffline    ServerStatus = "offline"
 )
 
 // Valid indicates whether the value is a known member of the ServerStatus enum.
 func (e ServerStatus) Valid() bool {
 	switch e {
-	case AuthFailed:
+	case ServerStatusAuthFailed:
 		return true
-	case Connected:
+	case ServerStatusConnected:
 		return true
-	case Offline:
+	case ServerStatusOffline:
 		return true
 	default:
 		return false
@@ -571,6 +592,25 @@ type CommandResult struct {
 	Truncated bool      `json:"truncated"`
 	Ts        time.Time `json:"ts"`
 }
+
+// ConnectionTest defines model for ConnectionTest.
+type ConnectionTest struct {
+	Host      *string             `json:"host,omitempty"`
+	Password  *string             `json:"password,omitempty"`
+	Port      *int                `json:"port,omitempty"`
+	ProfileId *openapi_types.UUID `json:"profile_id,omitempty"`
+
+	// ServerId The server being edited; missing when a new one is created.
+	ServerId *openapi_types.UUID `json:"server_id,omitempty"`
+}
+
+// ConnectionTestResult defines model for ConnectionTestResult.
+type ConnectionTestResult struct {
+	Result ConnectionTestResultResult `json:"result"`
+}
+
+// ConnectionTestResultResult defines model for ConnectionTestResult.Result.
+type ConnectionTestResultResult string
 
 // ContainerRuntime defines model for ContainerRuntime.
 type ContainerRuntime struct {
@@ -1196,6 +1236,9 @@ type UpdateServerGroupJSONRequestBody = ServerGroupInput
 // CreateServerJSONRequestBody defines body for CreateServer for application/json ContentType.
 type CreateServerJSONRequestBody = ServerInput
 
+// TestServerConnectionJSONRequestBody defines body for TestServerConnection for application/json ContentType.
+type TestServerConnectionJSONRequestBody = ConnectionTest
+
 // UpdateServerJSONRequestBody defines body for UpdateServer for application/json ContentType.
 type UpdateServerJSONRequestBody = ServerInput
 
@@ -1324,6 +1367,9 @@ type ServerInterface interface {
 	// CreateServer Add a game server; RCON admin only (SRV-001).
 	// (POST /servers)
 	CreateServer(w http.ResponseWriter, r *http.Request)
+	// TestServerConnection Test RCON data without saving; RCON admin only (SRV-007).
+	// (POST /servers/test-connection)
+	TestServerConnection(w http.ResponseWriter, r *http.Request)
 	// DeleteServer Delete a server (soft delete); RCON admin only.
 	// (DELETE /servers/{id})
 	DeleteServer(w http.ResponseWriter, r *http.Request, id ServerID)
@@ -2118,6 +2164,20 @@ func (siw *ServerInterfaceWrapper) CreateServer(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateServer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestServerConnection operation middleware
+func (siw *ServerInterfaceWrapper) TestServerConnection(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestServerConnection(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3009,6 +3069,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/profiles", wrapper.ListProfiles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers", wrapper.ListServers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers", wrapper.CreateServer)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers/test-connection", wrapper.TestServerConnection)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/servers/{id}", wrapper.DeleteServer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}", wrapper.GetServer)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/servers/{id}", wrapper.UpdateServer)
@@ -5324,6 +5385,127 @@ func (response CreateServer422ApplicationProblemPlusJSONResponse) VisitCreateSer
 	return err
 }
 
+type TestServerConnectionRequestObject struct {
+	Body *TestServerConnectionJSONRequestBody
+}
+
+type TestServerConnectionResponseObject interface {
+	VisitTestServerConnectionResponse(w http.ResponseWriter) error
+}
+
+type TestServerConnection200JSONResponse ConnectionTestResult
+
+func (response TestServerConnection200JSONResponse) VisitTestServerConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestServerConnection400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response TestServerConnection400ApplicationProblemPlusJSONResponse) VisitTestServerConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestServerConnection401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response TestServerConnection401ApplicationProblemPlusJSONResponse) VisitTestServerConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestServerConnection403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response TestServerConnection403ApplicationProblemPlusJSONResponse) VisitTestServerConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestServerConnection404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response TestServerConnection404ApplicationProblemPlusJSONResponse) VisitTestServerConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestServerConnection422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response TestServerConnection422ApplicationProblemPlusJSONResponse) VisitTestServerConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestServerConnection429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response TestServerConnection429ApplicationProblemPlusJSONResponse) VisitTestServerConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteServerRequestObject struct {
 	Id ServerID `json:"id"`
 }
@@ -7564,6 +7746,9 @@ type StrictServerInterface interface {
 	// CreateServer Add a game server; RCON admin only (SRV-001).
 	// (POST /servers)
 	CreateServer(ctx context.Context, request CreateServerRequestObject) (CreateServerResponseObject, error)
+	// TestServerConnection Test RCON data without saving; RCON admin only (SRV-007).
+	// (POST /servers/test-connection)
+	TestServerConnection(ctx context.Context, request TestServerConnectionRequestObject) (TestServerConnectionResponseObject, error)
 	// DeleteServer Delete a server (soft delete); RCON admin only.
 	// (DELETE /servers/{id})
 	DeleteServer(ctx context.Context, request DeleteServerRequestObject) (DeleteServerResponseObject, error)
@@ -8599,6 +8784,37 @@ func (sh *strictHandler) CreateServer(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateServerResponseObject); ok {
 		if err := validResponse.VisitCreateServerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestServerConnection operation middleware
+func (sh *strictHandler) TestServerConnection(w http.ResponseWriter, r *http.Request) {
+	var request TestServerConnectionRequestObject
+
+	var body TestServerConnectionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestServerConnection(ctx, request.(TestServerConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestServerConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestServerConnectionResponseObject); ok {
+		if err := validResponse.VisitTestServerConnectionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -11,6 +11,9 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -304,4 +307,178 @@ func (f *fixture) version(id string) *int64 {
 		f.t.Fatal(err)
 	}
 	return &v
+}
+
+// connectionFixture is a running manager with a server on a test RCON
+// server, for the connection test (SRV-007).
+func connectionFixture(t *testing.T) (*fixture, *rcontest.Server, ConnectionData) {
+	t.Helper()
+	f := newFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	srv, err := rcontest.Start(rconPassword, rcontest.Minecraft, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	m := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}}, f.svc, f.svc.log, connmgr.Options{ProbeInterval: 50 * time.Millisecond, MaxBackoff: 100 * time.Millisecond})
+	f.svc.SetConnections(m)
+	if err := m.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Wait)
+	t.Cleanup(cancel)
+	host, port, _ := net.SplitHostPort(srv.Addr)
+	p, _ := strconv.Atoi(port)
+	return f, srv, ConnectionData{ProfileID: &[]string{f.ids["profile"]}[0], Host: &host, Port: &p}
+}
+
+func secretOf(s string) *logging.Secret {
+	v := logging.Secret(s)
+	return &v
+}
+
+// TestConnectionNewData covers SRV-007: new data get a short connection,
+// nothing is stored, only the RCON admin may test, and the password is in
+// neither log nor audit.
+func TestConnectionNewData(t *testing.T) {
+	f, srv, in := connectionFixture(t)
+	ctx := context.Background()
+	test := func(pw string, want string) {
+		t.Helper()
+		in.Password = secretOf(pw)
+		if got, err := f.svc.TestConnection(ctx, f.as("admin"), in); err != nil || got != want {
+			t.Errorf("password %q: %q %v, want %q", pw, got, err, want)
+		}
+	}
+	test(rconPassword, ConnectionOK)
+	test("wrong", ConnectionAuthFailed)
+	if srv.Commands() != 0 {
+		t.Errorf("%d commands sent", srv.Commands())
+	}
+	closed := "127.0.0.1"
+	port := 1
+	in.Host, in.Port = &closed, &port
+	test(rconPassword, ConnectionUnreachable)
+
+	var n int
+	_ = f.st.DB.QueryRowContext(ctx, `SELECT count(*) FROM servers`).Scan(&n)
+	if n != 0 {
+		t.Errorf("%d servers stored", n)
+	}
+	if _, err := f.svc.TestConnection(ctx, f.as("sa"), in); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("server admin: %v", err)
+	}
+	if strings.Contains(f.logs.String(), rconPassword) {
+		t.Error("password in the log")
+	}
+	var entries int
+	_ = f.st.DB.QueryRowContext(ctx, `SELECT count(*) FROM audit_log WHERE action = 'server.connection_test' AND result = 'ok' AND payload LIKE '%result%'`).Scan(&entries)
+	if entries != 3 {
+		t.Errorf("%d audit entries", entries)
+	}
+	_ = f.st.DB.QueryRowContext(ctx, `SELECT count(*) FROM audit_log WHERE payload LIKE ?`, "%"+rconPassword+"%").Scan(&entries)
+	if entries != 0 {
+		t.Error("password in the audit")
+	}
+	if !strings.Contains(f.logs.String(), `"event":"rcon.connection_test"`) {
+		t.Error("no event")
+	}
+	in.Password = nil
+	var inv *users.InvalidError
+	if _, err := f.svc.TestConnection(ctx, f.as("admin"), in); !errors.As(err, &inv) {
+		t.Errorf("no password: %v", err)
+	}
+}
+
+// TestConnectionRunning covers PROT-002 rev. 2 and D-049: unchanged data
+// connect no second time, also with the password typed in again; changed
+// data do, and the stored password never goes to a new address.
+func TestConnectionRunning(t *testing.T) {
+	f, srv, in := connectionFixture(t)
+	ctx := context.Background()
+	name := "local"
+	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileID: in.ProfileID, Host: in.Host, Port: in.Port, Password: secretOf(rconPassword)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if st, _ := f.svc.conns.Status(sv.ID); st == connmgr.Connected {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("not connected")
+		}
+	}
+	before := srv.Connections()
+	for _, pw := range []*logging.Secret{nil, secretOf(rconPassword)} {
+		got, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ServerID: sv.ID, Password: pw, Host: in.Host, Port: in.Port})
+		if err != nil || got != ConnectionOK {
+			t.Errorf("unchanged: %q %v", got, err)
+		}
+	}
+	if n := srv.Connections(); n != before {
+		t.Errorf("%d connections after unchanged data, had %d", n, before)
+	}
+
+	got, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ServerID: sv.ID, Password: secretOf("wrong")})
+	if err != nil || got != ConnectionAuthFailed {
+		t.Errorf("changed password: %q %v", got, err)
+	}
+	if n := srv.Connections(); n != before+1 {
+		t.Errorf("%d connections after changed data, had %d", n, before)
+	}
+
+	// A listener that records what arrives stands for the new address.
+	other, err := rcontest.Start(rconPassword, rcontest.Minecraft, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	host, port, _ := net.SplitHostPort(other.Addr)
+	p, _ := strconv.Atoi(port)
+	var inv *users.InvalidError
+	if _, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ServerID: sv.ID, Host: &host, Port: &p}); !errors.As(err, &inv) {
+		t.Errorf("new address without password: %v", err)
+	}
+	if other.Connections() != 0 {
+		t.Error("the stored password went to a new address")
+	}
+}
+
+// TestConnectionLimit: the limit counts per user and starts again after a
+// minute; a refused test is audited and reaches nothing.
+func TestConnectionLimit(t *testing.T) {
+	var l testLimiter
+	now := time.Now()
+	for range 3 {
+		if !l.take("a", 3, now) {
+			t.Fatal("refused too early")
+		}
+	}
+	if l.take("a", 3, now.Add(59*time.Second)) {
+		t.Error("over the limit")
+	}
+	if !l.take("b", 3, now) {
+		t.Error("the limit of another user counted")
+	}
+	if !l.take("a", 3, now.Add(time.Minute)) {
+		t.Error("no new window")
+	}
+
+	f, srv, in := connectionFixture(t)
+	ctx := context.Background()
+	in.Password = secretOf(rconPassword)
+	var wg sync.WaitGroup
+	var limited atomic.Int64
+	for range 2 * users.DefaultConnectionTests {
+		wg.Go(func() {
+			if _, err := f.svc.TestConnection(ctx, f.as("admin"), in); errors.Is(err, ErrTestRateLimited) {
+				limited.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	if limited.Load() != users.DefaultConnectionTests || srv.Connections() != users.DefaultConnectionTests {
+		t.Errorf("limited %d, connections %d", limited.Load(), srv.Connections())
+	}
 }
