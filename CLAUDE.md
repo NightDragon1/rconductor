@@ -28,12 +28,22 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   Sub-Agent ohne Vorkontext (Stichprobe der Abnahmen und Sicherheit).
 - Widerspricht eine Anforderung einer anderen oder dem Design: nicht selbst
   entscheiden, sondern stoppen und mir den Widerspruch mit Fundstellen zeigen.
-- docs/ nicht verändern. Vorschläge für Änderungen nur als Hinweis an mich.
+- docs/ nicht verändern, außer auf meinen ausdrücklichen Auftrag. Vorschläge für
+  Änderungen nur als Hinweis an mich.
 - Kleine Schritte: lieber mehrere kleine Commits als ein großer.
+- PRs nach grüner CI selbst mergen, außer Änderungen an CLAUDE.md, CONTRIBUTING.md,
+  Release-Workflow (auch die von ihm aufgerufenen Skripte) und Rulesets: die merge ich.
 - Renovate-PRs: Patch, Minor und Digest nach grüner CI selbst mergen, Major vorher melden.
 - Bei Eingriffen in die Git-Historie Renovate pausieren (renovate.json "enabled": false),
   danach wieder aktivieren.
-- Releases: Regeln in CONTRIBUTING.md, Abschnitt Release.
+- Releases: Regeln in CONTRIBUTING.md, Abschnitt Release. Ein echtes Release nur nach
+  meinem OK; die Freigabe im Environment release mache ich.
+- Keine Sub-Agents für Release-Schritte und für Eingriffe in die Git-Historie.
+- Kein Force-Push. Falsche Nachricht in einem gepushten Commit: Kommentar am
+  betroffenen Issue, die Historie bleibt.
+- Nichts systemweit installieren. Die Minecraft-EULA nie stellvertretend akzeptieren.
+- Status prüfen, nicht annehmen: CI-Läufe, Merges und Issues vor jeder Meldung
+  abfragen. Nicht Abgefragtes als ungeprüft melden, nie als "offen".
 
 ## Technik (Details in docs/04-technologie.md)
 - Panel und Agent: Go, aktuelle stabile Version, CGO aus, statische Binaries,
@@ -69,6 +79,34 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - Alle Daten von Spieleservern und Agents gelten als Fremddaten (SEC-006).
 - Keine Abhängigkeit mit AGPL-inkompatibler Lizenz. Neue Abhängigkeiten nur
   mit kurzer Begründung im Plan.
+
+## Schwere von Befunden
+- Verfügbarkeit nach Aufwand des Angreifers:
+  - hoch: Ausfall durch einen einzelnen Client mit wenigen Anfragen ohne Anmeldung
+    oder mit der niedrigsten Rolle.
+  - mittel: Ausfall durch angemeldete Rolle (Insider).
+  - niedrig: Ausfall/Verzögerung nur mit vielen Adressen (verteilter Angriff).
+- Vertraulichkeit, Integrität, Rechteausweitung, Umgehung von Sperre/Audit:
+  - hoch: ohne Anmeldung oder mit niedrigster Rolle erreichbar UND Datenabfluss
+    zwischen Benutzern, Rechteausweitung oder Umgehung von Sperre/Audit.
+  - mittel: Sicherheitsschutz geschwächt, aber begrenzt; oder nur mit erhöhter Rolle
+    erreichbar.
+  - niedrig: Randfall, Härtung.
+- Funktionsfehler ohne Sicherheitsbezug sind nie hoch/mittel im Sinne einer
+  Release-Schwelle; sie blockieren 1.0, nicht 0.x.
+- Restrisiko: Messung, oder Begründung, warum nicht messbar; in beiden Fällen nur
+  nach meiner ausdrücklichen Freigabe. Widerspricht es einer Anforderung, braucht
+  es eine Revision.
+- Blinde Prüfungen haben je Runde einen festen Umfang. Funde außerhalb: nur hoch
+  blockiert, der Rest wird Issue.
+- Höchstens 2 blinde Runden je Tor. Danach blockiert nur noch hoch; mittel wird Issue
+  mit Ziel 1.0.
+- Prüftiefe für Features: ohne Sicherheitsfläche nur Tests/CI; mit Auth, Eingabe-
+  Parsing, Agent oder RCON-Ausführung blinde Prüfung am nächsten Tor, nicht je Feature.
+- PoCs aus blinden Prüfungen werden immer als Regressionstests übernommen, nie nur im
+  Scratchpad gelassen: Name mit Befund-ID, im jeweiligen Paket; jeder Test muss auf
+  dem Code vor dem Fix fehlschlagen, sonst im Test vermerken. Restrisiken mit Messung
+  verweisen auf Test oder Skript.
 
 ## Tests und Prüfung
 - Go: go test ./..., Integrationstests mit testcontainers-go.
@@ -107,7 +145,7 @@ STOPP: Laufende Arbeit sofort beenden, nichts Neues anfangen.
    Sonst: Branch wip/<datum>, --no-verify, Nachricht "wip: <was lief>", pushen.
 2. Nicht auf CI warten, keine Tests mehr starten.
 3. docs/handover.md lokal überschreiben (nicht committen): Branch/Commit, erledigt,
-   unterbrochene Aufgabe, offene CI-Läufe, offene Fragen.
+   unterbrochene Aufgabe, offene CI-Läufe, offene Fragen, "Offene Aufträge" im Wortlaut.
 4. Kurze Meldung. Danach nichts.
 
 START: docs/handover.md und Git-Stand lesen. Offene CI-Läufe prüfen. wip/-Branch
