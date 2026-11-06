@@ -26,6 +26,7 @@ const keyTexts = [
   'backup_keep_pre_migration',
   'invite_lifetime',
   'login_lockout_duration',
+  'login_max_client_failures',
   'login_max_failures',
   'profiles_poll_interval',
   'session_idle_timeout',

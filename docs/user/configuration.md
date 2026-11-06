@@ -70,6 +70,7 @@ are written like `24h`, `15m`, `30s`.
 | `session.idle_timeout` | duration | 12h | 1m to 30 days | a session ends after this time without use |
 | `session.max_lifetime` | duration | 7 days | 1m to 90 days | a session ends after this time at the latest |
 | `login.max_failures` | number | 5 | 1 to 100 | failed sign-ins before a lockout |
+| `login.max_client_failures` | number | 50 | 1 to 1000 | failed sign-ins from one address over all names within the lockout duration before that address is locked; everyone behind one address shares this count, so raise it for a large shared address |
 | `login.lockout_duration` | duration | 15m | 1m to 24h | length of a lockout |
 | `invite.lifetime` | duration | 72h | 1m to 30 days | validity of an invitation link |
 | `supporters.enabled` | boolean | off | on, off | supporters at all; switching off ends the sessions of all supporters |

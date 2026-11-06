@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -273,6 +274,33 @@ func TestOriginCheck(t *testing.T) {
 	}
 	if rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/auth/login", body: loginBody("Mod", testPassword), origin: "https://rcon.example.net"}); rec.Code != http.StatusOK {
 		t.Errorf("origin of the public URL = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestClientLimitBehindAProxy covers Design 3.7: behind a trusted proxy the
+// client counter belongs to the address of the visitor, not to the proxy, and
+// the visitor cannot pick a new one with a forged header.
+func TestClientLimitBehindAProxy(t *testing.T) {
+	f := newAPIFixture(t, Proxies{Trusted: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}})
+	login := func(name, pw, forwarded string) int {
+		return f.do(t, call{
+			method: http.MethodPost, path: "/api/v1/auth/login", body: loginBody(name, pw), origin: "http://panel.lan",
+			remote: "10.0.0.2:4000", headers: map[string]string{"X-Forwarded-For": forwarded},
+		}).Code
+	}
+	for i := range auth.DefaultMaxClientFailures {
+		if code := login(fmt.Sprintf("made-up-%d", i), "wrong password!!", "192.0.2.50"); code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d = %d", i, code)
+		}
+	}
+	if code := login("Mod", testPassword, "192.0.2.50"); code != http.StatusTooManyRequests {
+		t.Errorf("locked visitor = %d", code)
+	}
+	if code := login("Mod", testPassword, "198.51.100.9, 192.0.2.50"); code != http.StatusTooManyRequests {
+		t.Errorf("locked visitor with a forged address on the left = %d", code)
+	}
+	if code := login("Mod", testPassword, "192.0.2.51"); code != http.StatusOK {
+		t.Errorf("other visitor behind the proxy = %d", code)
 	}
 }
 

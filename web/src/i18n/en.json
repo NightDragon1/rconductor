@@ -614,6 +614,10 @@
         "label": "Failed sign-ins before lock",
         "help": "Wrong passwords per account and address before a lock."
       },
+      "login_max_client_failures": {
+        "label": "Failed sign-ins per address",
+        "help": "Failures from one address, over all names, before it is locked. People behind one address share this count."
+      },
       "login_lockout_duration": {
         "label": "Lock after failed sign-ins",
         "help": "How long sign-in stays locked after too many failures."
