@@ -88,8 +88,9 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - niedrig: Randfall, Härtung, Funktionsfehler ohne Sicherheitsbezug.
 - Funktionsfehler ohne Sicherheitsbezug sind nie hoch/mittel im Sinne einer
   Release-Schwelle; sie blockieren 1.0, nicht 0.x.
-- Restrisiko: nur mit Messung und nur nach meiner ausdrücklichen Freigabe.
-  Widerspricht es einer Anforderung, braucht es eine Revision.
+- Restrisiko: Messung, oder Begründung, warum nicht messbar; in beiden Fällen nur
+  nach meiner ausdrücklichen Freigabe. Widerspricht es einer Anforderung, braucht
+  es eine Revision.
 - Blinde Prüfungen haben je Runde einen festen Umfang. Funde außerhalb: nur hoch
   blockiert, der Rest wird Issue.
 
