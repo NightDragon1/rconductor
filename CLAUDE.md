@@ -81,11 +81,17 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   mit kurzer Begründung im Plan.
 
 ## Schwere von Befunden
-- hoch: ohne Anmeldung oder mit niedrigster Rolle erreichbar UND Ausfall des Panels,
-  Datenabfluss zwischen Benutzern, Rechteausweitung oder Umgehung von Sperre/Audit.
-- mittel: Sicherheitsschutz geschwächt, aber begrenzt; oder nur mit erhöhter Rolle
-  erreichbar.
-- niedrig: Randfall, Härtung, Funktionsfehler ohne Sicherheitsbezug.
+- Verfügbarkeit nach Aufwand des Angreifers:
+  - hoch: Ausfall durch einen einzelnen Client mit wenigen Anfragen ohne Anmeldung
+    oder mit der niedrigsten Rolle.
+  - mittel: Ausfall durch angemeldete Rolle (Insider).
+  - niedrig: Ausfall/Verzögerung nur mit vielen Adressen (verteilter Angriff).
+- Vertraulichkeit, Integrität, Rechteausweitung, Umgehung von Sperre/Audit:
+  - hoch: ohne Anmeldung oder mit niedrigster Rolle erreichbar UND Datenabfluss
+    zwischen Benutzern, Rechteausweitung oder Umgehung von Sperre/Audit.
+  - mittel: Sicherheitsschutz geschwächt, aber begrenzt; oder nur mit erhöhter Rolle
+    erreichbar.
+  - niedrig: Randfall, Härtung.
 - Funktionsfehler ohne Sicherheitsbezug sind nie hoch/mittel im Sinne einer
   Release-Schwelle; sie blockieren 1.0, nicht 0.x.
 - Restrisiko: Messung, oder Begründung, warum nicht messbar; in beiden Fällen nur
@@ -93,6 +99,10 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   es eine Revision.
 - Blinde Prüfungen haben je Runde einen festen Umfang. Funde außerhalb: nur hoch
   blockiert, der Rest wird Issue.
+- Höchstens 2 blinde Runden je Tor. Danach blockiert nur noch hoch; mittel wird Issue
+  mit Ziel 1.0.
+- Prüftiefe für Features: ohne Sicherheitsfläche nur Tests/CI; mit Auth, Eingabe-
+  Parsing, Agent oder RCON-Ausführung blinde Prüfung am nächsten Tor, nicht je Feature.
 - PoCs aus blinden Prüfungen werden immer als Regressionstests übernommen, nie nur im
   Scratchpad gelassen: Name mit Befund-ID, im jeweiligen Paket; jeder Test muss auf
   dem Code vor dem Fix fehlschlagen, sonst im Test vermerken. Restrisiken mit Messung
