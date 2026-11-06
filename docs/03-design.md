@@ -113,7 +113,7 @@ Das Panel markiert den Agent als widerrufen, löst seine Server von ihm (agent\_
 | Reservierte Pfade | /api (jede Version), /healthz und /metrics werden nie von der Oberfläche beantwortet; /healthz und /metrics werden mit NFR-006 (R2) befüllt. Ohne die Reservierung beantwortete die Auslieferung sie mit index.html, und ein Healthcheck meldete fälschlich „gesund“ |
 | HAProxy | Normales HTTP/1.1, kein HTTP/2 nötig; für den WebSocket genügt ein ausreichendes timeout tunnel |
 | Fehler | Einheitlich als Problem Details nach RFC 9457 |
-| Größe | Request-Bodys sind auf 256 KiB begrenzt, ein Profilbild auf 2 MiB, darüber 413; Passwörter über 512 Byte gelten bei der Anmeldung als falsch; der Login-Schutz merkt sich höchstens 256 Byte eines Pseudonyms |
+| Größe | Request-Bodys sind auf 256 KiB begrenzt, ein Profilbild auf 2 MiB, darüber 413. Die größten echten Anfragen bleiben darunter: 500 Befehle mit 256 Zeichen sind 142 kB, Zuweisungen mit je 500 Einträgen 208 kB, Einstellungen 1 kB; Spielprofile sind Dateien und kommen nicht über die API; Passwörter über 512 Byte gelten bei der Anmeldung als falsch; der Login-Schutz merkt sich höchstens 256 Byte eines Pseudonyms |
 | Gleichzeitige Änderungen | Benutzergruppen, Befehlslisten, Server und Servergruppen tragen ein Feld version, /settings eine gemeinsame Version als ETag. Schreiben nennt die gelesene Version in If-Match (Pflicht, sonst 428); die Prüfung ist atomar in der Datenbank in derselben Transaktion wie das Schreiben, bei Abweichung 409 und nichts wird geschrieben. Rolle und Scope werden vor der Version geprüft (3.1). Die Oberfläche zeigt „Changed by someone else – reload“ und sendet den Entwurf nicht |
 | Listen | Cursorbasierte Paginierung für Audit und Verlauf |
 | Externe API | R1 nur für die eigene Oberfläche. Ab R2 dokumentiert mit OpenAPI 3.1 und API-Tokens je Benutzer (Bearer), gleicher Rechteumfang wie der Benutzer, eigene Ablaufzeit, widerrufbar |
@@ -356,6 +356,7 @@ Ein täglicher Job entfernt Audit-Einträge nach Ablauf der Frist (Standard 90 T
 | RCD\_EMERGENCY\_ADMIN | true | Notfall-Admin aktiv |
 | RCD\_EMERGENCY\_ADMIN\_RESET | false | true: beim Start neues Initialpasswort für den Notfall-Admin (AUTH-011); danach wieder entfernen |
 | RCD\_PASSWORD\_HASH\_CONCURRENCY | 2 | Gleichzeitige Passwortberechnungen (1 bis 64), je 64 MiB |
+| RCD\_MAX\_CONNECTIONS | 512 | Offene Verbindungen am Web-Port (16 bis 65536), WebSockets eingeschlossen; weitere warten, bis eine endet (Sicherheit T-025) |
 | RCD\_LOG\_LEVEL | info | debug, info, warn, error |
 | RCD\_LOG\_FORMAT | text | text oder json |
 

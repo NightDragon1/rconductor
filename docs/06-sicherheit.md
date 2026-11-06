@@ -27,7 +27,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 | ID | STRIDE | Bedrohung | Maßnahme | Status |
 | --- | --- | --- | --- | --- |
 | T-001 | Spoofing | Diebstahl oder Fixierung einer Session | Serverseitige Sessions, Cookie HttpOnly und SameSite=Lax, über HTTPS Secure mit Präfix \_\_Host-, neue Session-ID nach Anmeldung (Design 2.1, D-043) | abgedeckt; ohne TLS-Proxy Restrisiko im LAN (SEC-001) |
-| T-002 | Spoofing | Passwort-Raten | Argon2id, Login-Schutz, auch bei parallelen Versuchen und je IPv6-/64 (AUTH-001, SEC-004, Design 3.7) | abgedeckt |
+| T-002 | Spoofing | Passwort-Raten | Argon2id, Login-Schutz, auch bei parallelen Versuchen und je IPv6-/64; Anmeldungen des Besitzers setzen die Zähler anderer Clients nicht zurück (AUTH-001, SEC-004, Design 3.7) | abgedeckt |
 | T-003 | Spoofing | Fremder Agent gibt sich als gekoppelter Agent aus | Gegenseitig gepinnte Ed25519-Schlüssel, Widerruf (AGT-012) | abgedeckt |
 | T-004 | Spoofing | Angreifer fängt den ersten Kontakt bei Weg B ab (Trust on First Use) | Weg B standardmäßig aus, Fingerprint-Abgleich (D-024) | Restrisiko bei aktivem Weg B |
 | T-005 | Tampering | Befehlsinjektion über Zeilenumbrüche oder Steuerzeichen | Bereinigung vor dem Senden (CMD-006) | abgedeckt |
@@ -49,7 +49,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 | T-021 | Elevation of Privilege | Kompromittiertes Panel übernimmt den Host über den Agent | Agent erlaubt nur die Operationen aus Design 1.5 und nur gelabelte Container (AGT-002, AGT-004) | abgedeckt |
 | T-022 | Elevation of Privilege | Kompromittierter Agent übernimmt den Host | Agent minimal, distroless, als Nicht-Root ohne offenen Port; zusätzlicher Socket-Proxy vor dem Docker-Socket als Empfehlung (SEC-010), der nur Auflisten, Inspizieren, Ereignisse, Logs, Statistiken, start, stop und restart durchlässt. Zugriff auf den Docker-Socket bleibt root-äquivalent. Beim empfohlenen Proxy erlaubt ALLOW\_RESTARTS auch kill; der Agent ruft es nie auf, ein kompromittierter Agent könnte es, gleichwertig zu stop | Restrisiko, gemindert |
 | T-023 | Elevation of Privilege | Kompromittierter Agent greift das Panel an | Agent-Daten gelten als Fremddaten (SEC-006, SEC-007); Agent erhält nur Aufträge, keine Daten anderer Hosts | abgedeckt |
-| T-025 | Denial of Service | Speicher wird ohne Anmeldung erschöpft: über Argon2id (64 MiB je Berechnung) oder große Request-Bodys | Begrenzung gleichzeitiger Berechnungen, Login-Schutz, Einladungs-Token vor der Passwortarbeit geprüft (Design 3.7), Bodys höchstens 256 KiB, Profilbild 2 MiB, gemerkte Pseudonyme begrenzt (Design 2.1); Speichergrenze im Compose | abgedeckt |
+| T-025 | Denial of Service | Speicher wird ohne Anmeldung erschöpft: über Argon2id (64 MiB je Berechnung) oder große Request-Bodys | Begrenzung gleichzeitiger Berechnungen, Login-Schutz, Einladungs-Token vor der Passwortarbeit geprüft (Design 3.7), Bodys höchstens 256 KiB, Profilbild 2 MiB, gemerkte Pseudonyme begrenzt (Design 2.1), offene Verbindungen am Web-Port begrenzt (RCD\_MAX\_CONNECTIONS, Design 5.2); Speichergrenze im Compose | abgedeckt |
 | T-026 | Tampering | Manipulierte Abhängigkeit oder Image in der Lieferkette | Signierte Images mit SBOM, govulncheck, gepinnte Actions und Basis-Images (SEC-013) | abgedeckt |
 | T-024 | Information Disclosure | Geheimnisse in den Logs von Panel und Agent, die über Portainer, Log-Sammler oder MCP von Dritten gelesen werden | Schwärzung auf allen Log-Levels, Sessions nur als Hash, Abnahme über Logs nur gegen Testinstanzen (SEC-012, Design 8.1) | abgedeckt |
 
@@ -71,3 +71,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 - RCON selbst ist unverschlüsselt; Schutz nur über Netztrennung.
 - Wer Zugriff auf Datenbank und /secrets des Panels hat, kann alles lesen und das Audit-Log ändern.
 - Bei aktivem Weg B hängt die Sicherheit am Fingerprint-Abgleich durch Menschen.
+- Audit-Zeilen für erfundene Namen: Ohne Anmeldung erzeugt jeder Fehlversuch mit einem neuen Namen einen Audit-Eintrag, auch unbekannte Namen zählen wie bekannte (Design 3.7). Gebremst wird das nur durch die begrenzte Passwortberechnung, nicht durch eine Sperre; das Audit-Log kann so wachsen, bis die Aufbewahrung greift.
+- Das Verbindungslimit schützt den Speicher, nicht die Erreichbarkeit: Wer ohne Anmeldung alle Verbindungen belegt, lässt neue Besucher warten, bis Zeitgrenzen sie freigeben (10 s ohne Kopf, 120 s im Leerlauf). Bestehende WebSockets laufen weiter. Eine Begrenzung je Adresse gehört an den Reverse Proxy, weil das Panel dahinter nur dessen Adresse sieht.
+- Bei vielen gleichzeitigen richtigen Anmeldungen desselben Kontos vom selben Client kann 429 kommen: Laufende Versuche zählen vor ihrem Ergebnis (Design 3.7). Der nächste Versuch nach dem Ende der laufenden gelingt.
+- Besitzer und Angreifer hinter derselben Adresse oder demselben IPv6-/64 gelten als ein Client; die Anmeldung des Besitzers löscht dann auch die Fehlversuche des Angreifers.

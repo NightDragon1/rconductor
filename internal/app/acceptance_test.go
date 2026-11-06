@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
+	"github.com/NightDragon1/rconductor/internal/web"
 )
 
 // The tests here close the gaps of the acceptance run in M5: each proves a
@@ -636,4 +638,69 @@ func TestAuditRetentionFloor(t *testing.T) {
 		t.Errorf("29 days = %d", status)
 	}
 	f.as(rA).must(http.MethodPatch, "/settings", map[string]int{"audit.retention_days": 30}, nil, http.StatusOK)
+}
+
+// TestLargestRequestsFit is the evidence for the body limit (T-025): the
+// largest request a real installation sends, by route, stays under it. Lists
+// without a limit of their own use far more entries than one panel has.
+func TestLargestRequestsFit(t *testing.T) {
+	f := newRightsFixture(t)
+	const uuid = "00000000-0000-4000-8000-000000000000"
+	repeat := func(n int, item any) []any {
+		list := make([]any, n)
+		for i := range list {
+			list[i] = item
+		}
+		return list
+	}
+	text := func(n int) string { return strings.Repeat("x", n) }
+	entries := make([]any, 500)
+	for i := range entries {
+		entries[i] = map[string]any{"path": fmt.Sprintf("%s%03d", text(253), i), "passable": false}
+	}
+	ids := repeat(1000, uuid)
+	var settings map[string]any
+	status, body := f.rawBody(rA, http.MethodGet, "/settings", nil)
+	if status != http.StatusOK || json.Unmarshal(body, &settings) != nil {
+		t.Fatalf("settings = %d", status)
+	}
+	contacts := map[string]string{}
+	for i := range 8 {
+		contacts[fmt.Sprintf("contact-%d", i)] = text(256)
+	}
+	ports := repeat(100, map[string]any{"port": 65535, "proto": "tcp", "name": text(64)})
+	grant := map[string]any{"group_id": uuid, "server_id": uuid, "server_group_id": uuid}
+	for _, c := range []struct {
+		name, method, path string
+		body               any
+	}{
+		{"login", http.MethodPost, "/auth/login", map[string]any{"pseudonym": text(64), "password": text(1024)}},
+		{"server", http.MethodPost, "/servers", map[string]any{"name": text(64), "host": text(253), "port": 65535, "password": text(512), "game_ports": ports, "agent_id": text(36), "container_name": text(255), "profile_id": uuid}},
+		{"command", http.MethodPost, "/servers/" + f.server + "/commands", map[string]any{"command": strings.Repeat("\u0001", 10000)}},
+		{"server group", http.MethodPost, "/server-groups", map[string]any{"name": text(64), "server_ids": ids}},
+		{"assignments", http.MethodPut, "/users/" + f.ids[rMN] + "/assignments", map[string]any{"admin_scopes": repeat(500, map[string]any{"server_id": uuid, "server_group_id": uuid}), "groups": repeat(500, uuid), "grants": repeat(500, grant), "supporter_grants": repeat(500, map[string]any{"moderator_id": uuid, "server_id": uuid})}},
+		{"user group", http.MethodPatch, "/user-groups/" + f.group, map[string]any{"name": text(64), "members": ids, "grants": repeat(1000, map[string]any{"server_id": uuid, "server_group_id": uuid})}},
+		{"command list", http.MethodPatch, "/command-lists/" + f.list, map[string]any{"name": text(64), "entries": entries}},
+		{"redeem", http.MethodPost, "/invites/redeem", map[string]any{"token": text(128), "pseudonym": text(32), "password": text(1024)}},
+		{"profile", http.MethodPatch, "/me", map[string]any{"pseudonym": text(32), "real_name": text(64), "contacts": contacts}},
+		{"favorites", http.MethodPut, "/me/favorites", map[string]any{"server_ids": repeat(50, uuid)}},
+		{"password", http.MethodPost, "/me/password", map[string]any{"current_password": text(1024), "new_password": text(1024)}},
+		{"settings", http.MethodPatch, "/settings", settings},
+	} {
+		raw, err := json.Marshal(c.body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("%-13s %7d bytes, %3d %% of the limit", c.name, len(raw), len(raw)*100/web.MaxBody)
+		if len(raw) >= web.MaxBody {
+			t.Errorf("%s: %d bytes are over the limit", c.name, len(raw))
+		}
+		if status, _ := f.raw(rA, c.method, c.path, c.body); status == http.StatusRequestEntityTooLarge {
+			t.Errorf("%s: refused as too large", c.name)
+		}
+	}
+	// The list really arrives, it is not only under the limit.
+	if status, reason := f.raw(rA, http.MethodPost, "/command-lists", map[string]any{"name": f.unique("big"), "entries": entries}); status != http.StatusCreated {
+		t.Errorf("command list = %d %s", status, reason)
+	}
 }

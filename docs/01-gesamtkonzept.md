@@ -601,3 +601,6 @@ Aus der Abnahme in M5 und dem Review des Bedrohungsmodells.
 | 12 | Grenzen für Anfragen und Login-Schutz | Design 2.1, 3.7, Sicherheit T-002, T-016, T-025 |
 | 13 | Bedrohungsmodell: Status aktualisiert, T-019 im Panel, T-025 erweitert | Sicherheit |
 | 14 | Compose-Beispiele mit cap\_drop, no-new-privileges und Limits | Design 5.4, 5.5 |
+| 15 | Nachtrag: Eine erfolgreiche Anmeldung löscht nur die Zähler des eigenen Clients | Design 3.7, Sicherheit T-002 |
+| 16 | Nachtrag: Offene Verbindungen am Web-Port begrenzt (RCD\_MAX\_CONNECTIONS, Standard 512) | Design 5.2, Sicherheit T-025 |
+| 17 | Nachtrag: Größte echte Anfragen je Route belegt; Restrisiken für erfundene Namen, Verbindungslimit, 429 und gemeinsame Adressen | Design 2.1, Sicherheit Kapitel 5 |
