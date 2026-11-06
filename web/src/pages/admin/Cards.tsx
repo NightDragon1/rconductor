@@ -27,7 +27,7 @@ export function Cards({
   );
 }
 
-// Card shows one entry; its title opens the details where there are any.
+// Card shows one entry; where there are details, the whole card opens them.
 export function Card({
   title,
   mono = false,
@@ -45,12 +45,17 @@ export function Card({
   return (
     <li
       className={cn(
-        'flex flex-col gap-1 rounded-lg border border-border bg-surface p-3',
+        'relative flex flex-col gap-1 rounded-lg border border-border bg-surface p-3',
+        onOpen && 'hover:border-control hover:bg-surface-raised',
         selected && 'bg-surface-raised',
       )}
     >
       {onOpen ? (
-        <button type="button" className={cn('min-h-11 text-left', heading)} onClick={onOpen}>
+        <button
+          type="button"
+          className={cn('min-h-11 text-left after:absolute after:inset-0', heading)}
+          onClick={onOpen}
+        >
           {title}
         </button>
       ) : (

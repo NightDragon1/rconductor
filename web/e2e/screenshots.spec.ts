@@ -26,7 +26,7 @@ async function shoot(page: Page, name: string, grow = true, full = true) {
     for (const theme of ['dark', 'light']) {
       await page.evaluate((t) => {
         document.documentElement.dataset.theme = t;
-        localStorage.setItem('rcd.theme', t);
+        localStorage.setItem('rcd.design', t);
       }, theme);
       await page.waitForTimeout(400);
       await page.screenshot({ path: `${dir}/${name}-${theme}.png`, fullPage: full });
@@ -41,7 +41,7 @@ async function shoot(page: Page, name: string, grow = true, full = true) {
   for (const theme of ['dark', 'light']) {
     await page.evaluate((t) => {
       document.documentElement.dataset.theme = t;
-      localStorage.setItem('rcd.theme', t);
+      localStorage.setItem('rcd.design', t);
     }, theme);
     // Colours fade over 150 ms after a switch.
     await page.waitForTimeout(400);

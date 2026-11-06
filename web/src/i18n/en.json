@@ -16,6 +16,8 @@
     "busy": "The panel is busy. Please try again in a moment."
   },
   "password": {
+    "show": "Show password",
+    "hide": "Hide password",
     "title": "Choose a new password",
     "explain": "You signed in with a temporary password. Choose your own password to continue.",
     "current": "Current password",
@@ -28,7 +30,12 @@
   },
   "nav": {
     "logout": "Sign out",
-    "theme": "Switch between dark and light design",
+    "theme": "Design: {{design}}. Change it",
+    "design": {
+      "auto": "like the system",
+      "light": "light",
+      "dark": "dark"
+    },
     "label": "Main navigation",
     "menu": "Menu",
     "collapse": "Collapse",
@@ -575,6 +582,7 @@
     "searchLabel": "Search agents"
   },
   "settings": {
+    "showHelp": "Show explanations",
     "explain": "Global settings of the panel (Design 5.6). Changes wait a few seconds for Undo.",
     "save_one": "Save {{count}} change",
     "save_other": "Save {{count}} changes",
