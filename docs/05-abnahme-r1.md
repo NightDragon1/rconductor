@@ -137,7 +137,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 | UI-009 | Logs werden nur bei offener Ansicht übertragen; nach Verlassen der Seite endet logs.follow | Integration |
 | UI-011 | Navigation und Reiter zeigen je Rolle nur erlaubte Einträge laut Design 6.2 und 6.3 | E2E |
 | UI-012 | Bei 390 px Breite sind Befehlsseite, Karten und Konsole ohne horizontales Scrollen bedienbar; Tippflächen sind mindestens 44 px; Verwaltung ist nur lesbar, ausgenommen Sperren, Entsperren und Sitzungen beenden mit Bestätigungsdialog | E2E |
-| AUD-001 | Befehle, Ablehnungen, Agent-Aktionen, Verwaltungsänderungen und Anmeldungen erzeugen Einträge mit Ergebnis, ein Befehl cmd.sent und cmd.result, eine Sperre einen für alle abgewiesenen Versuche | Integration |
+| AUD-001 | Befehle, Ablehnungen, Agent-Aktionen, Verwaltungsänderungen und Anmeldungen erzeugen Einträge mit Ergebnis, ein Befehl cmd.sent und cmd.result, eine Sperre einen für alle abgewiesenen Versuche; bei Datenbanksperre über 2 min steht der Eintrag vollständig als audit.entry\_lost im Log | Integration |
 | AUD-003 | Einträge älter als die Frist (Standard 90 Tage) sind nach dem nächsten Aufräumlauf entfernt; nur der RCON-Admin kann die Frist ändern | Integration |
 | AUD-004 | Ein Server-Admin sieht nur Einträge seines Scopes; der Versuch, die Frist zu ändern, wird abgelehnt | Integration |
 
