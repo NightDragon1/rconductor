@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
 import { formatDuration, isGoDuration, parseDuration } from '@/lib/duration';
 import { usePhone } from '@/lib/phone';
-import { useUndo } from '@/lib/undo';
+import { useUndo, useUnsaved } from '@/lib/undo';
 import { PhoneNote } from './PhoneNote';
 
 type Values = Record<string, unknown>;
@@ -84,7 +84,7 @@ export function SettingsPage() {
   const { t } = useTranslation();
   const phone = usePhone();
   const qc = useQueryClient();
-  const { schedule } = useUndo();
+  const { saved } = useUndo();
   const settings = useQuery({
     queryKey: settingsKey,
     queryFn: async () => {
@@ -110,48 +110,46 @@ export function SettingsPage() {
       ? formatDuration(a) === formatDuration(b)
       : JSON.stringify(a) === JSON.stringify(b);
   const changed = Object.keys(values).filter((k) => base && !same(values[k], base.values[k]));
+  useUnsaved(changed.length > 0);
   const off = conflict || phone;
   const invalid = Object.entries(texts).some(([, x]) => parseDuration(x) === null);
 
-  const send = () => {
-    if (!base) return;
-    const body = Object.fromEntries(changed.map((k) => [k, values[k]]));
-    const etag = base.etag;
-    schedule(
-      t('settings.undo', { count: changed.length }),
-      async (keepalive) => {
-        const r = await outcome('settings', async () =>
-          must(
-            await api.PATCH('/settings', {
-              params: { header: { 'If-Match': etag } },
-              body,
-              keepalive,
-            }),
-          ),
-        );
-        if (r.reason === 'conflict') {
-          setConflict(true);
-          setMessage({ ok: false, text: t('admin.conflict') });
-          return;
-        }
-        setMessage(
-          r.ok
-            ? { ok: true, text: t('admin.saved') }
-            : { ok: false, text: reasonText(t, r.reason) },
-        );
-        if (r.ok) reset();
-        void qc.invalidateQueries({ queryKey: settingsKey });
-        // ui.* and supporters.* reach the session (shortcuts, navigation).
-        void qc.invalidateQueries({ queryKey: sessionKey });
-      },
-      { key: 'settings', onUndo: () => reset() },
+  // A change goes out at once; Undo sends the old values (D-048).
+  const write = async (body: Values, etag: string) => {
+    let next = '';
+    const r = await outcome('settings', async () => {
+      const res = await api.PATCH('/settings', { params: { header: { 'If-Match': etag } }, body });
+      must(res);
+      next = res.response.headers.get('ETag') ?? '';
+    });
+    if (r.reason === 'conflict') {
+      setConflict(true);
+      setMessage({ ok: false, text: t('admin.conflict') });
+      return null;
+    }
+    setMessage(
+      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
     );
+    if (r.ok) reset();
+    void qc.invalidateQueries({ queryKey: settingsKey });
+    // ui.* and supporters.* reach the session (shortcuts, navigation).
+    void qc.invalidateQueries({ queryKey: sessionKey });
+    return r.ok ? next : null;
+  };
+  const send = async () => {
+    if (!base) return;
+    const pick = (from: Values) => Object.fromEntries(changed.map((k) => [k, from[k]]));
+    const old = pick(base.values);
+    const etag = await write(pick(values), base.etag);
+    if (etag !== null) {
+      saved(t('settings.undo', { count: changed.length }), () => void write(old, etag));
+    }
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (changed.includes('supporters.enabled') && values['supporters.enabled'] === false)
       setConfirmOff(true);
-    else send();
+    else void send();
   };
   const set = (key: string, v: unknown) => {
     setMessage(null);
@@ -286,7 +284,7 @@ export function SettingsPage() {
         onClose={() => setConfirmOff(false)}
         onConfirm={() => {
           setConfirmOff(false);
-          send();
+          void send();
         }}
       />
     </form>

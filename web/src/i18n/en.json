@@ -301,12 +301,19 @@
   },
   "undo": {
     "undo": "Undo",
-    "seconds": "{{s}} s"
+    "seconds": "{{s}} s",
+    "saved": "Saved: {{what}}",
+    "leaveTitle": "Leave without saving?",
+    "leaveText": "Your changes here are not saved yet and will be lost.",
+    "leave": "Discard changes"
   },
   "admin": {
+    "save": "Save",
     "phoneReadOnly": "Read-only on a phone. Use a larger screen to make changes.",
     "phoneReadOnlyUsers": "Read-only on a phone, apart from locking, unlocking and ending sessions. Use a larger screen for other changes.",
+    "locked": "Locked",
     "lockTitle": "Lock {{name}}?",
+    "lockManyTitle": "Lock {{count}} users?",
     "lockText": "This user can no longer sign in and open sessions end.",
     "unlockTitle": "Unlock {{name}}?",
     "unlockText": "This user can sign in again.",
@@ -395,13 +402,9 @@
     "changeRole": "Change role",
     "saved": "Saved.",
     "undo": {
-      "locked": "{{name}} locked",
       "unlocked": "{{name}} unlocked",
-      "groupAdded": "Group added to {{name}}",
-      "groupRemoved": "Group removed from {{name}}",
-      "scopeChanged": "Scope of {{name}} changed",
-      "release": "Supporter release of {{name}} changed",
-      "grantChanged": "Servers of {{name}} changed",
+      "changed": "assignments of {{name}}",
+      "sessionsEnded": "assignments of {{name}}. The sessions of this user ended; Undo brings back the rights, not the sessions",
       "bulk": "{{action}}: {{count}} users"
     },
     "invite": {
