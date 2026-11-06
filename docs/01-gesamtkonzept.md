@@ -215,7 +215,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 
 | ID | Kurztitel | Beschreibung | Komponente | Prio | Target | Rev |
 | --- | --- | --- | --- | --- | --- | --- |
-| AUD-001 | Audit-Log | Wer, wann, Server, Befehl, Ergebnis, abgelehnt ja/nein; auch Agent-Aktionen und Verwaltungsänderungen; ein Befehl erzeugt die Einträge cmd.sent und cmd.result (Design 3.3) | Backend, DB | Muss | R1 | 2 |
+| AUD-001 | Audit-Log | Wer, wann, Server, Befehl, Ergebnis, abgelehnt ja/nein; auch Agent-Aktionen und Verwaltungsänderungen; ein Befehl erzeugt die Einträge cmd.sent und cmd.result (Design 3.3). Ausnahme: Bleibt die Datenbank länger als 2 min gesperrt, steht ein Eintrag außerhalb einer Transaktion gekennzeichnet und vollständig als audit.entry\_lost im Log | Backend, DB | Muss | R1 | 2 |
 | AUD-002 | Statistiken | Interne Statistiken aus den klassifizierten Befehlen | Backend, UI | Kann | R2 | 1 |
 | AUD-003 | Aufbewahrung | Einträge werden standardmäßig 90 Tage aufbewahrt und danach automatisch gelöscht; nur der RCON-Admin kann die Frist ändern | Backend | Muss | R1 | 1 |
 | AUD-004 | Einsicht | RCON-Admin sieht das gesamte Audit-Log; Server-Admins sehen nur Einträge ihres Scopes und können die Frist nicht ändern | Backend, UI | Muss | R1 | 1 |
@@ -606,3 +606,4 @@ Aus der Abnahme in M5 und dem Review des Bedrohungsmodells.
 | 17 | Nachtrag: Größte echte Anfragen je Route belegt; Restrisiken für erfundene Namen, Verbindungslimit, 429 und gemeinsame Adressen | Design 2.1, Sicherheit Kapitel 5 |
 | 18 | Nachtrag: Sperre je Client über alle Namen (login.max\_client\_failures); volle Zähltabelle lässt nichts ungeschützt durch, verdrängt werden nur beendete Zähler | Design 3.7, Sicherheit T-002, T-016, Kapitel 5 |
 | 19 | Nachtrag: Bodys in Arbeit unabhängig von der Rolle begrenzt; Zähltabelle mit 100 000 Einträgen (login.max\_tracked), bei voller Tabelle Warteschlange mit Überlauf-Zähler; Verbindungen ohne Session enden nach RCD\_MAX\_ANONYMOUS\_CONNECTION\_SECONDS; Audit-Einträge gehen unter Last nicht verloren, sonst stehen sie im Log (audit.entry\_lost); Profilbilder nach Pixeln begrenzt, CMYK abgelehnt; Datenbank-Verbindungen begrenzt; GOMEMLIMIT 80 % der Speichergrenze; Schwereskala und Regel für Restrisiken | Design 2.1, 3.7, 5.2, Sicherheit Kapitel 3, 5, 6 |
+| 20 | Nachtrag: AUD-001 mit Ausnahme bei Datenbanksperre über 2 min (audit.entry\_lost im Log); RCD\_PASSWORD\_HASH\_CONCURRENCY höchstens 2 bis zu einer Messung; Restrisiken freigegeben | AUD-001, Design 5.2, Sicherheit Kapitel 5 |

@@ -71,7 +71,7 @@ func TestLoadPanelValues(t *testing.T) {
 		"RCD_LOG_LEVEL":         "DEBUG",
 		"RCD_LOG_FORMAT":        "json",
 
-		"RCD_PASSWORD_HASH_CONCURRENCY": "4",
+		"RCD_PASSWORD_HASH_CONCURRENCY": "1",
 		"RCD_MAX_CONNECTIONS":           "2000",
 	}), filesOf(nil))
 	if err != nil {
@@ -99,8 +99,8 @@ func TestLoadPanelValues(t *testing.T) {
 	if c.Log.Level != slog.LevelDebug || c.Log.Format != "json" {
 		t.Errorf("log = %+v", c.Log)
 	}
-	if c.HashConcurrency != 4 {
-		t.Errorf("hash concurrency = %d, want 4", c.HashConcurrency)
+	if c.HashConcurrency != 1 {
+		t.Errorf("hash concurrency = %d, want 1", c.HashConcurrency)
 	}
 	if c.MaxConnections != 2000 {
 		t.Errorf("max connections = %d, want 2000", c.MaxConnections)
@@ -174,6 +174,17 @@ func TestInvalidValuesReportedTogether(t *testing.T) {
 	} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error does not mention %s: %v", key, err)
+		}
+	}
+}
+
+// TestHashConcurrencyStaysMeasured covers the condition of R-07: the memory
+// limit is measured with 2 computations at once, more is refused.
+func TestHashConcurrencyStaysMeasured(t *testing.T) {
+	for value, ok := range map[string]bool{"0": false, "1": true, "2": true, "3": false, "64": false} {
+		_, err := LoadPanel(envOf(map[string]string{"RCD_PASSWORD_HASH_CONCURRENCY": value}), filesOf(nil))
+		if (err == nil) != ok {
+			t.Errorf("value %s: %v", value, err)
 		}
 	}
 }

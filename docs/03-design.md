@@ -357,7 +357,7 @@ Ein täglicher Job entfernt Audit-Einträge nach Ablauf der Frist (Standard 90 T
 | RCD\_MASTER\_KEY\_FILE | leer | Master-Key aus einer anderen Datei, z. B. Docker-Secret; fehlt sie, startet das Panel nicht. Leer: /secrets, beim ersten Start erzeugt |
 | RCD\_EMERGENCY\_ADMIN | true | Notfall-Admin aktiv |
 | RCD\_EMERGENCY\_ADMIN\_RESET | false | true: beim Start neues Initialpasswort für den Notfall-Admin (AUTH-011); danach wieder entfernen |
-| RCD\_PASSWORD\_HASH\_CONCURRENCY | 2 | Gleichzeitige Passwortberechnungen (1 bis 64), je 64 MiB |
+| RCD\_PASSWORD\_HASH\_CONCURRENCY | 2 | Gleichzeitige Passwortberechnungen (1 bis 2), je 64 MiB; höhere Werte erst nach einer Messung (Sicherheit R-07) |
 | RCD\_MAX\_CONNECTIONS | 512 | Offene Verbindungen am Web-Port (16 bis 65536), WebSockets eingeschlossen; weitere warten, bis eine endet (Sicherheit T-025) |
 | RCD\_MAX\_CLIENT\_CONNECTIONS | 128 | Offene Verbindungen einer Client-Adresse am Web-Port (1 bis 65536), ein IPv6-/64 zählt als eine; weitere werden sofort geschlossen; Adressen aus RCD\_TRUSTED\_PROXIES ausgenommen (Sicherheit T-025) |
 | GOMEMLIMIT | 80 % von mem\_limit | Speicherziel der Go-Laufzeit; leer: 80 % der Speichergrenze der cgroup, ohne Grenze keins; off schaltet es ab (Sicherheit T-025) |

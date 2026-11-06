@@ -39,7 +39,7 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_MASTER_KEY_FILE` | path | empty | file | read the master key from here instead of `/secrets/master.key`; it is never replaced |
 | `RCD_EMERGENCY_ADMIN` | boolean | `true` | boolean | emergency admin enabled |
 | `RCD_EMERGENCY_ADMIN_RESET` | boolean | `false` | boolean | on start, a new initial password for the emergency admin, its sessions end and a lock is lifted; remove it afterwards |
-| `RCD_PASSWORD_HASH_CONCURRENCY` | number | `2` | 1 to 64 | password hashes computed at once, each takes 64 MiB of RAM |
+| `RCD_PASSWORD_HASH_CONCURRENCY` | number | `2` | 1 to 2 | password hashes computed at once, each takes 64 MiB of RAM |
 | `RCD_MAX_CONNECTIONS` | number | `512` | 16 to 65536 | open connections of the web port, WebSockets included; further ones wait until one ends |
 | `RCD_MAX_CLIENT_CONNECTIONS` | number | `128` | 1 to 65536 | open connections of one client address, an IPv6 /64 counts as one; further ones are closed; trusted proxies have no limit of their own |
 | `RCD_MAX_ANONYMOUS_CONNECTION_SECONDS` | number | `30` | 10 to 3600 | a connection without a valid session ends after this time, once its running request is done; behind a trusted proxy the proxy address is exempt |

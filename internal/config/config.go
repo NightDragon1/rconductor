@@ -52,7 +52,9 @@ type Panel struct {
 	EmergencyAdmin  bool
 	// EmergencyAdminReset issues a new initial password at start (AUTH-011).
 	EmergencyAdminReset bool
-	// HashConcurrency limits parallel Argon2id computations (64 MiB each).
+	// HashConcurrency limits parallel Argon2id computations (64 MiB each). The
+	// memory limit is measured with 2 (Sicherheit R-07), more is refused until
+	// a measurement backs it.
 	HashConcurrency int
 	// MaxConnections limits the open connections of the web port (T-025).
 	MaxConnections int
@@ -109,7 +111,7 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 		MasterKeyFile:        r.str("RCD_MASTER_KEY_FILE", ""),
 		EmergencyAdmin:       r.boolean("RCD_EMERGENCY_ADMIN", true),
 		EmergencyAdminReset:  r.boolean("RCD_EMERGENCY_ADMIN_RESET", false),
-		HashConcurrency:      r.integer("RCD_PASSWORD_HASH_CONCURRENCY", 2, 1, 64),
+		HashConcurrency:      r.integer("RCD_PASSWORD_HASH_CONCURRENCY", 2, 1, 2),
 		MaxConnections:       r.integer("RCD_MAX_CONNECTIONS", 512, 16, 65536),
 		MaxClientConnections: r.integer("RCD_MAX_CLIENT_CONNECTIONS", 128, 1, 65536),
 		MaxAnonymousAge:      time.Duration(r.integer("RCD_MAX_ANONYMOUS_CONNECTION_SECONDS", 30, 10, 3600)) * time.Second,
