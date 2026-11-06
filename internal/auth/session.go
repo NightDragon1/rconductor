@@ -139,6 +139,7 @@ func EnsureDefaults(ctx context.Context, st *store.Store) error {
 		SettingMaxFailures:       DefaultMaxFailures,
 		SettingMaxClientFailures: DefaultMaxClientFailures,
 		SettingLockout:           DefaultLockout.String(),
+		SettingMaxTracked:        DefaultMaxTracked,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
@@ -165,8 +166,8 @@ func (s *Service) policy(ctx context.Context) (idle, maxLife time.Duration) {
 
 // loginPolicy reads the login protection settings.
 func (s *Service) loginPolicy(ctx context.Context) loginLimits {
-	lim := loginLimits{maxFailures: DefaultMaxFailures, maxClientFailures: DefaultMaxClientFailures, lockout: DefaultLockout}
-	for key, dst := range map[string]*int{SettingMaxFailures: &lim.maxFailures, SettingMaxClientFailures: &lim.maxClientFailures} {
+	lim := loginLimits{maxFailures: DefaultMaxFailures, maxClientFailures: DefaultMaxClientFailures, lockout: DefaultLockout, maxTracked: DefaultMaxTracked}
+	for key, dst := range map[string]*int{SettingMaxFailures: &lim.maxFailures, SettingMaxClientFailures: &lim.maxClientFailures, SettingMaxTracked: &lim.maxTracked} {
 		var n int
 		if err := s.st.GlobalSetting(ctx, key, &n); err != nil {
 			continue
@@ -224,13 +225,24 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 	}
 	// Attempts in parallel count before their result is known (T-002).
 	tk, ok := s.throttle.reserve(key, c.IP, s.now(), lim)
+	if s.throttle.reportFull(s.now()) {
+		s.lockedOut(ctx, c, "", "", "table", fullReportGap)
+	}
 	if !ok {
-		if s.throttle.reportFull(s.now()) {
-			s.lockedOut(ctx, c, "", "", "table", time.Minute)
-		}
 		return "", Principal{}, &LockedError{RetryAfter: time.Second}
 	}
 	defer s.throttle.release(key, c.IP, tk)
+	if tk.place != nil {
+		// The wait comes first: the delay counts what went before in line.
+		d, turn, err := s.throttle.wait(ctx, tk.place, key, s.sleep, s.now, lim.lockout)
+		if err != nil {
+			return "", Principal{}, err
+		}
+		if !turn {
+			return "", Principal{}, &LockedError{RetryAfter: time.Second}
+		}
+		delay = max(delay, d)
+	}
 	// A longer password cannot be right; it costs no more work than any other.
 	if len(pw) > 4*password.MaxLength {
 		pw = ""
@@ -355,8 +367,7 @@ func (s *Service) loginDenied(ctx context.Context, c Client, userID, pseudonym, 
 }
 
 // lockedOut records a lockout that began: of one account for this client, of
-// this client for all names, or of everybody not yet counted, while the table
-// of the counters is full.
+// this client for all names, or the start of the overflow line of a full table.
 func (s *Service) lockedOut(ctx context.Context, c Client, userID, pseudonym, scope string, lockout time.Duration) {
 	attrs := []any{
 		logging.Event(logging.AuthLockout), slog.String(logging.KeyRequestID, c.RequestID),

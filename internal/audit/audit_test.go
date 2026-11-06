@@ -3,15 +3,20 @@
 package audit
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"io"
+	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/store"
+	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
 func migrated(t *testing.T) *store.Store {
@@ -81,5 +86,35 @@ func TestInvalidResultRejected(t *testing.T) {
 	s := migrated(t)
 	if _, err := Write(context.Background(), s.DB, Entry{Kind: KindAuth, Action: "x", Result: "maybe"}); err == nil {
 		t.Error("invalid result accepted")
+	}
+}
+
+// TestEntryOutlastsALockedDatabase covers V-3 at its limit: if the database
+// stays locked past writeWait the entry is not gone, it stands in the log in
+// full.
+func TestEntryOutlastsALockedDatabase(t *testing.T) {
+	defer func(d time.Duration) { writeWait = d }(writeWait)
+	writeWait = 200 * time.Millisecond
+	defer SetLostLog(nil)
+	var logs bytes.Buffer
+	SetLostLog(slog.New(slog.NewJSONHandler(&logs, nil)))
+	st := storetest.New(t)
+	ctx := context.Background()
+	tx, err := st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `UPDATE settings SET key = key`); err != nil {
+		t.Fatal(err)
+	}
+	_, err = Write(ctx, st.DB, Entry{Kind: KindAuth, Action: "login", ActorID: "u1", Payload: map[string]string{"ip": "192.0.2.1"}, Result: ResultDenied, Reason: "rate_limited"})
+	if err == nil {
+		t.Fatal("write went through a locked database")
+	}
+	for _, want := range []string{`"event":"audit.entry_lost"`, `"action":"login"`, `"actor_id":"u1"`, `192.0.2.1`, `"reason":"rate_limited"`} {
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("%s missing in %s", want, logs.String())
+		}
 	}
 }

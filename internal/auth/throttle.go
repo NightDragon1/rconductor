@@ -3,7 +3,10 @@
 package auth
 
 import (
+	"context"
+	"hash/maphash"
 	"net/netip"
+	"slices"
 	"sync"
 	"time"
 
@@ -16,10 +19,12 @@ const (
 	SettingMaxFailures       = "login.max_failures"
 	SettingMaxClientFailures = "login.max_client_failures"
 	SettingLockout           = "login.lockout_duration"
+	SettingMaxTracked        = "login.max_tracked"
 
 	DefaultMaxFailures       = 5
 	DefaultMaxClientFailures = 50
 	DefaultLockout           = 15 * time.Minute
+	DefaultMaxTracked        = 100000
 )
 
 // loginLimits are the settings of the login protection.
@@ -27,11 +32,9 @@ type loginLimits struct {
 	maxFailures       int
 	maxClientFailures int
 	lockout           time.Duration
+	// maxTracked, if set, replaces the capacity of the table.
+	maxTracked int
 }
-
-// maxTracked bounds the memory of the login protection against floods of
-// made-up pseudonyms.
-const maxTracked = 10000
 
 // purgeGap spaces the scans for ended counters of a full table: an attempt
 // that finds no room must not cost a walk over all counters each time.
@@ -39,6 +42,16 @@ const purgeGap = time.Second
 
 // fullReportGap spaces the reports of a full table.
 const fullReportGap = time.Minute
+
+// Attempts without room for their counters wait in one line: one every
+// overflowGap, at most overflowLine at a time, one per client. The clients with
+// the fewest failures go first and push out those with more, so an attacker who
+// keeps trying falls behind anyone who just wants to sign in. Login stays
+// possible on a full table, slowly, and the wait stays below a request timeout.
+const (
+	overflowGap  = 250 * time.Millisecond
+	overflowLine = 30
+)
 
 // delayFor returns the wait before checking a password after n consecutive
 // failures of the account: 1 s from the third on, then 2 s, then 4 s.
@@ -106,12 +119,26 @@ type throttle struct {
 	// reports of that.
 	full           bool
 	nextFullReport time.Time
+	// overflow counts what the table has no room for, line holds the clients
+	// waiting there and turnTaken is set while one of them has its turn.
+	overflow  *sketch
+	line      []*waiter
+	turnTaken bool
+}
+
+// waiter is a place in the overflow line.
+type waiter struct {
+	client   netip.Addr
+	failures int
+	// answer gets true for the turn, false for being pushed out.
+	answer chan bool
 }
 
 func newThrottle() *throttle {
 	return &throttle{
-		capacity: maxTracked, accounts: map[string]*counter{}, pairs: map[pairKey]*counter{}, clients: map[netip.Addr]*counter{},
+		capacity: DefaultMaxTracked, accounts: map[string]*counter{}, pairs: map[pairKey]*counter{}, clients: map[netip.Addr]*counter{},
 		running: map[pairKey]int{}, clientRunning: map[netip.Addr]int{},
+		overflow: newSketch(),
 	}
 }
 
@@ -159,15 +186,21 @@ func (t *throttle) check(account string, ip netip.Addr, now time.Time, window ti
 type ticket struct {
 	// places is the room held for the counters of the attempt.
 	places int
+	// place is set if there was no room: the attempt waits there for its
+	// turn and is counted in the sketch.
+	place *waiter
 }
 
 // reserve counts an attempt as running. It refuses when the failures so far
 // and the running attempts reach a limit. An attempt needs a place for each
-// counter it may start. If the table has none it is refused: an attempt that
-// could not be counted must not run at all (Design 3.7).
+// counter it may start. If the table has none it goes to the overflow line
+// (Design 3.7), where it is counted too: no attempt runs uncounted.
 func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, lim loginLimits) (ticket, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if lim.maxTracked > 0 {
+		t.capacity = lim.maxTracked
+	}
 	client := netlimit.ClientKey(ip)
 	key := pairKey{account, client}
 	failures := 0
@@ -199,12 +232,107 @@ func (t *throttle) reserve(account string, ip netip.Addr, now time.Time, lim log
 	tk := ticket{places: t.missing(account, key, now, lim.lockout)}
 	if t.crowded(tk.places, now, lim.lockout) {
 		t.full = true
-		return ticket{}, false
+		place := t.joinLine(key, now, lim)
+		if place == nil {
+			return ticket{}, false
+		}
+		tk = ticket{place: place}
 	}
 	t.held += tk.places
 	t.running[key]++
 	t.clientRunning[client]++
 	return tk, true
+}
+
+// joinLine takes a client into the overflow line, or returns nil. On the
+// sketch a client has the attempts of one account, over all names: there are
+// many clients on a full table, and the line has few places. In a full line
+// a client takes the place of the one with the most failures, if that is more
+// than its own.
+func (t *throttle) joinLine(key pairKey, now time.Time, lim loginLimits) *waiter {
+	failures := t.overflow.count(clientName(key.ip), now, lim.lockout)
+	if failures >= lim.maxFailures || t.overflow.count(pairName(key), now, lim.lockout) >= lim.maxFailures {
+		return nil
+	}
+	worst := -1
+	for i, w := range t.line {
+		if w.client == key.ip {
+			return nil
+		}
+		if worst < 0 || w.failures >= t.line[worst].failures {
+			worst = i
+		}
+	}
+	if len(t.line) >= overflowLine {
+		if t.line[worst].failures <= failures {
+			return nil
+		}
+		t.line[worst].answer <- false
+		t.line = slices.Delete(t.line, worst, worst+1)
+	}
+	w := &waiter{client: key.ip, failures: failures, answer: make(chan bool, 1)}
+	t.line = append(t.line, w)
+	t.nextTurn()
+	return w
+}
+
+// nextTurn gives the turn to the first with the fewest failures.
+func (t *throttle) nextTurn() {
+	if t.turnTaken || len(t.line) == 0 {
+		return
+	}
+	first := 0
+	for i, w := range t.line {
+		if w.failures < t.line[first].failures {
+			first = i
+		}
+	}
+	t.line[first].answer <- true
+	t.line = slices.Delete(t.line, first, first+1)
+	t.turnTaken = true
+}
+
+// leaveLine ends a wait that ended early.
+func (t *throttle) leaveLine(w *waiter) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if i := slices.Index(t.line, w); i >= 0 {
+		t.line = slices.Delete(t.line, i, i+1)
+		return
+	}
+	// Not in line any more: it may just have got the turn.
+	select {
+	case turn := <-w.answer:
+		if turn {
+			t.turnTaken = false
+			t.nextTurn()
+		}
+	default:
+	}
+}
+
+// wait lets the attempts of the overflow line go one by one. It reports
+// whether the attempt got its turn, and the delay that the failures of the
+// account on the sketch ask for.
+func (t *throttle) wait(ctx context.Context, w *waiter, account string, sleep func(context.Context, time.Duration) error, now func() time.Time, window time.Duration) (time.Duration, bool, error) {
+	select {
+	case turn := <-w.answer:
+		if !turn {
+			return 0, false, nil
+		}
+	case <-ctx.Done():
+		t.leaveLine(w)
+		return 0, false, ctx.Err()
+	}
+	err := sleep(ctx, overflowGap)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.turnTaken = false
+	t.nextTurn()
+	if err != nil {
+		return 0, false, err
+	}
+	return delayFor(t.overflow.count(accountName(account), now(), window)), true, nil
 }
 
 // reportFull reports whether attempts were refused for lack of room since the
@@ -274,7 +402,12 @@ func (t *throttle) fail(account string, ip netip.Addr, now time.Time, lim loginL
 		return c
 	}
 	client := netlimit.ClientKey(ip)
-	if c, ok := t.clients[client]; ok || fits() {
+	key := pairKey{account, client}
+	// What the table has no room for goes to the sketch: an attempt that ran
+	// is always counted, also if a counter ended and its place went meanwhile.
+	if c, ok := t.clients[client]; !ok && !fits() {
+		t.overflow.add(clientName(client), now, lim.lockout)
+	} else {
 		if c == nil || (now.Sub(c.first) >= lim.lockout && !now.Before(c.lockedUntil)) {
 			c = &counter{first: now}
 		}
@@ -290,9 +423,11 @@ func (t *throttle) fail(account string, ip netip.Addr, now time.Time, lim loginL
 	}
 	if _, ok := t.accounts[account]; ok || fits() {
 		t.accounts[account] = bump(t.accounts[account])
+	} else {
+		t.overflow.add(accountName(account), now, lim.lockout)
 	}
-	key := pairKey{account, client}
 	if _, ok := t.pairs[key]; !ok && !fits() {
+		t.overflow.add(pairName(key), now, lim.lockout)
 		return false, clientLocked
 	}
 	p := bump(t.pairs[key])
@@ -368,4 +503,45 @@ func purge[K comparable](counters map[K]*counter, now time.Time, window time.Dur
 			delete(counters, k)
 		}
 	}
+}
+
+// sketchSlots gives the sketch 1 MiB. Far fewer attempts than slots get through
+// the overflow line in a window.
+const sketchSlots = 1 << 16
+
+// sketch counts failures per window in a fixed amount of memory, for what the
+// table has no room for. Two names can share a slot: that only counts more,
+// never less, and without the seed nobody can aim for it.
+type sketch struct {
+	seed  maphash.Seed
+	slots []sketchSlot
+}
+
+type sketchSlot struct {
+	failures int
+	first    time.Time
+}
+
+func newSketch() *sketch {
+	return &sketch{seed: maphash.MakeSeed(), slots: make([]sketchSlot, sketchSlots)}
+}
+
+func accountName(account string) string { return "a\x00" + account }
+func pairName(k pairKey) string         { return "p\x00" + k.ip.String() + "\x00" + k.account }
+func clientName(ip netip.Addr) string   { return "c\x00" + ip.String() }
+
+func (s *sketch) slot(name string, now time.Time, window time.Duration) *sketchSlot {
+	slot := &s.slots[maphash.String(s.seed, name)%sketchSlots]
+	if now.Sub(slot.first) >= window {
+		*slot = sketchSlot{first: now}
+	}
+	return slot
+}
+
+func (s *sketch) count(name string, now time.Time, window time.Duration) int {
+	return s.slot(name, now, window).failures
+}
+
+func (s *sketch) add(name string, now time.Time, window time.Duration) {
+	s.slot(name, now, window).failures++
 }

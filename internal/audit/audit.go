@@ -11,8 +11,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"sync/atomic"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 )
@@ -61,13 +64,36 @@ type Entry struct {
 // writeWait is how long an entry outside a transaction tries to get written.
 // It is far above the busy timeout of the database: nobody is left to tell
 // about a failure, and under load many writers wait for each other (V-3).
-var writeWait = 2 * time.Minute
+var writeWait = 2 * time.Minute // a variable for the tests
 
 const busyPause = 50 * time.Millisecond
 
 // writers lets one entry at a time ask the database, so that they queue here
 // instead of competing for the lock inside SQLite, which is not fair.
 var writers = make(chan struct{}, 1)
+
+// lostLog receives an entry the database did not take in time.
+var lostLog atomic.Pointer[slog.Logger]
+
+// SetLostLog names the log of last resort: an entry the database does not
+// take within writeWait goes there in full, as audit.entry_lost, so that it
+// is not gone. Payloads hold no secrets (SEC-012).
+func SetLostLog(log *slog.Logger) { lostLog.Store(log) }
+
+func logLost(params sqlitedb.InsertAuditParams, cause error) {
+	log := lostLog.Load()
+	if log == nil {
+		return
+	}
+	log.Error("audit entry not written, kept here", logging.Event(logging.AuditLost),
+		slog.String("id", params.ID), slog.String("ts", params.Ts), slog.String("kind", params.Kind),
+		slog.String("actor_id", params.ActorID.String), slog.String("actor_role", params.ActorRole.String),
+		slog.String("session_id", params.SessionID.String), slog.String("server_id", params.ServerID.String),
+		slog.String("target_type", params.TargetType.String), slog.String("target_id", params.TargetID.String),
+		slog.String("action", params.Action), slog.String("payload", params.Payload),
+		slog.String("result", params.Result), slog.String("reason", params.ReasonCode.String),
+		slog.Any("err", cause))
+}
 
 // Write stores e through db, which may be a transaction so that a change
 // and its audit entry commit together. It returns the entry ID. Outside a
@@ -107,7 +133,9 @@ func Write(ctx context.Context, db sqlitedb.DBTX, e Entry) (string, error) {
 	}
 	var err error
 	if _, direct := db.(*sql.DB); direct {
-		err = insertRetrying(ctx, db, params)
+		if err = insertRetrying(ctx, db, params); err != nil {
+			logLost(params, err)
+		}
 	} else {
 		err = sqlitedb.New(db).InsertAudit(ctx, params)
 	}

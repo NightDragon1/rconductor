@@ -18,6 +18,7 @@ const (
 	BackupDone      Code = "backup.done"
 	BackupFailed    Code = "backup.failed"
 	AuditPurge      Code = "audit.purge"
+	AuditLost       Code = "audit.entry_lost"
 )
 
 // Authentication.
@@ -97,7 +98,7 @@ const (
 // AllCodes lists every defined code, in the order of Design 8.3.
 var AllCodes = []Code{
 	AppStart, AppReady, DBMigrateStart, DBMigrateDone, DBMigrateLockWt,
-	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge,
+	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge, AuditLost,
 	AuthLoginOK, AuthLoginFailed, AuthLockout, AuthLogout, AuthSessionRevoked,
 	AuthInitialPassword, AuthInviteUsed, AuthEmergencyReset,
 	PermDenied, PermRecomputed,

@@ -19,6 +19,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agenthub"
 	agentadmin "github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/agentview"
+	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
@@ -65,6 +66,7 @@ type PanelOptions struct {
 func RunPanel(ctx context.Context, cfg config.Panel, out io.Writer, opts PanelOptions) error {
 	logs := logging.New(out, "panel", cfg.Log)
 	root := logs.Root()
+	audit.SetLostLog(root)
 	root.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version))
 
 	err := runPanel(ctx, cfg, logs, opts)

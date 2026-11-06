@@ -87,6 +87,7 @@ var settingRules = map[string]rule{
 	"session.max_lifetime":        durationRule(time.Minute, 90*24*time.Hour),
 	"login.max_failures":          intRule(1, 100),
 	"login.max_client_failures":   intRule(1, 1000),
+	"login.max_tracked":           intRule(1000, 1000000),
 	"login.lockout_duration":      durationRule(time.Minute, 24*time.Hour),
 	SettingInviteLifetime:         durationRule(time.Minute, 30*24*time.Hour),
 	perm.SettingSupportersEnabled: boolRule,

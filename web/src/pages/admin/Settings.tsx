@@ -28,6 +28,7 @@ const keyTexts = [
   'login_lockout_duration',
   'login_max_client_failures',
   'login_max_failures',
+  'login_max_tracked',
   'profiles_poll_interval',
   'session_idle_timeout',
   'session_max_lifetime',

@@ -27,7 +27,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 | ID | STRIDE | Bedrohung | Maßnahme | Status |
 | --- | --- | --- | --- | --- |
 | T-001 | Spoofing | Diebstahl oder Fixierung einer Session | Serverseitige Sessions, Cookie HttpOnly und SameSite=Lax, über HTTPS Secure mit Präfix \_\_Host-, neue Session-ID nach Anmeldung (Design 2.1, D-043) | abgedeckt; ohne TLS-Proxy Restrisiko im LAN (SEC-001) |
-| T-002 | Spoofing | Passwort-Raten | Argon2id, Login-Schutz, auch bei parallelen Versuchen und je IPv6-/64; Anmeldungen des Besitzers setzen die Zähler anderer Clients nicht zurück, ein Client ist über alle Namen begrenzt, laufende Zähler werden nie verdrängt, eine volle Tabelle lehnt ab, was sie nicht zählen kann (AUTH-001, SEC-004, Design 3.7) | abgedeckt für eine Adresse; R-11, R-12 |
+| T-002 | Spoofing | Passwort-Raten | Argon2id, Login-Schutz, auch bei parallelen Versuchen und je IPv6-/64; Anmeldungen des Besitzers setzen die Zähler anderer Clients nicht zurück, ein Client ist über alle Namen begrenzt, laufende Zähler werden nie verdrängt, eine volle Tabelle zählt in einem Überlauf-Zähler fester Größe und lässt die Anmeldung langsam offen (AUTH-001, SEC-004, Design 3.7) | abgedeckt für eine Adresse; R-11, R-12 |
 | T-003 | Spoofing | Fremder Agent gibt sich als gekoppelter Agent aus | Gegenseitig gepinnte Ed25519-Schlüssel, Widerruf (AGT-012) | abgedeckt |
 | T-004 | Spoofing | Angreifer fängt den ersten Kontakt bei Weg B ab (Trust on First Use) | Weg B standardmäßig aus, Fingerprint-Abgleich (D-024) | Restrisiko bei aktivem Weg B |
 | T-005 | Tampering | Befehlsinjektion über Zeilenumbrüche oder Steuerzeichen | Bereinigung vor dem Senden (CMD-006) | abgedeckt |
@@ -41,7 +41,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 | T-013 | Information Disclosure | Server außerhalb des Scopes werden sichtbar | 404 statt 403 (Design 3.1) | abgedeckt |
 | T-014 | Information Disclosure | Geheimnisse in Container-Logs | Logs nur für RCON- und Server-Admin, nur bei offener Ansicht (UI-009, AGT-008) | abgedeckt |
 | T-015 | Information Disclosure | Kopplungs-Token oder Initialpasswort in docker inspect bzw. Container-Log | Token einmalig und 24 h gültig, \_FILE-Variante (D-033); Initialpasswort nach Änderung ungültig (AUTH-007) | abgedeckt |
-| T-016 | Denial of Service | Befehlsflut gegen einen Spieleserver | Ratenlimit (CMD-019), Warteschlange je Server (PROT-002); ein gesperrter Client füllt das Audit-Log nicht, je Client und Sperrfenster sind die Audit-Einträge begrenzt; Einträge gehen unter Last nicht verloren | abgedeckt; R-05 |
+| T-016 | Denial of Service | Befehlsflut gegen einen Spieleserver | Ratenlimit (CMD-019), Warteschlange je Server (PROT-002); ein gesperrter Client füllt das Audit-Log nicht, je Client und Sperrfenster sind die Audit-Einträge begrenzt; Einträge gehen unter Last nicht verloren | abgedeckt; R-05, R-14 |
 | T-017 | Denial of Service | Übergroße Nachrichten oder Verbindungsflut am Agent-Port | Größenlimits und Handshake-Rate am Agent-Port, je IPv6-/64 gezählt, Verbindungen insgesamt und je Client begrenzt, begrenzte wartende Kopplungen, ohne Agent-Session endet die Verbindung mit der ersten Antwort (SEC-007) | abgedeckt |
 | T-018 | Denial of Service | Viele WebSockets oder Abos je Session | Begrenzung der Sockets je Session und der Abos je Socket (SEC-008) | abgedeckt |
 | T-019 | Denial of Service | Regex mit hoher Laufzeit im Panel | RE2, Zeilenlimit, Timeout (SEC-003) | abgedeckt |
@@ -67,7 +67,7 @@ Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept
 
 ## 5. Restrisiken
 
-Ein Restrisiko gilt erst mit Messung und nach ausdrücklicher Freigabe durch den Projektinhaber (Kapitel 6). Die Freigabe steht bei allen Einträgen noch aus.
+Ein Restrisiko gilt erst mit Messung oder der Begründung, warum es nicht messbar ist, und nach ausdrücklicher Freigabe durch den Projektinhaber (Kapitel 6). Die Freigabe steht bei allen Einträgen noch aus.
 
 | ID | Risiko | Messung | Widerspruch zu einer Anforderung | Freigabe |
 | --- | --- | --- | --- | --- |
@@ -82,8 +82,9 @@ Ein Restrisiko gilt erst mit Messung und nach ausdrücklicher Freigabe durch den
 | R-09 | Besitzer und Angreifer hinter derselben Adresse oder demselben IPv6-/64 gelten als ein Client; die Anmeldung des Besitzers löscht dann auch die Fehlversuche des Angreifers für dieses Konto. Der Zähler über alle Namen bleibt. | Test des Zählers über alle Namen; Grundfall folgt aus dem Aufbau | Nein | offen |
 | R-10 | Die Sperre je Client trifft alle hinter derselben Adresse: Hinter NAT, im gemeinsamen IPv6-/64 oder hinter einem Proxy ohne Eintrag in den vertrauenswürdigen Proxys teilen sich alle die login.max\_client\_failures Fehlversuche. Erreicht einer die Grenze, kann sich dort für die Sperrdauer niemand neu anmelden; bestehende Sessions bleiben. Für große gemeinsame Adressen ist der Wert anzuheben. | Test | Nein | offen |
 | R-11 | Viele Adressen zusammen umgehen die Grenze je Client: Jede Adresse hat ihre eigenen Versuche, je Konto bleiben es login.max\_failures je Adresse. | Rechnung: 100 Adressen ergeben 500 Versuche je Konto und Fenster | Nein | offen |
-| R-12 | Eine volle Zähltabelle schützt das Passwort auf Kosten der Erreichbarkeit: Rund 100 Adressen mit laufenden Zählern füllen die 10 000 Einträge. Danach erhalten alle noch nicht gezählten Clients bis zum Ende dieser Zähler 429, auch mit richtigem Passwort; bestehende Sessions bleiben. | Test der Ablehnung; im Lasttest war die Tabelle nach rund 130 s voll (60 000 Adressen) | Prüfen: Anmeldung zeitweise nicht möglich | offen |
+| R-12 | Bei voller Zähltabelle warten noch nicht gezählte Clients in einer gemeinsamen Schlange (Design 3.7), statt sofort angemeldet zu werden. Die Tabelle fassen 100 000 Einträge, je Adresse bis zu 101: Sie füllt sich erst ab rund 1000 Adressen und nur, wenn mindestens 111 Einträge je Sekunde über ein ganzes Sperrfenster entstehen. | Speicher: 19 MiB bei 100 000 Einträgen, 26 MiB mit Namen von 256 Byte, dazu 1 MiB für den Überlauf-Zähler. Wartezeit des Besitzers bis zur Anmeldung, Angreifer versuchen es je Adresse einmal je Sekunde, Echtzeit: 100 Adressen 7 s, 300 Adressen 47 s, 1000 Adressen 84 s, danach 0 bis 31 s, weil Angreifer mit Fehlversuchen zurückfallen. Angreifer je Adresse höchstens 5 Versuche je Fenster. Bei RCD\_PASSWORD\_HASH\_CONCURRENCY 2 wurden 23 Fehlversuche je Sekunde gemessen, das füllt die Tabelle nicht | Nein | offen |
 | R-13 | Ohne TLS-Proxy laufen Sessions im LAN ungeschützt (T-001). | Nicht messbar, folgt aus dem Aufbau | Nein | offen |
+| R-14 | Bleibt die Datenbank länger als 2 min gesperrt, steht ein Audit-Eintrag außerhalb einer Transaktion nicht in der Tabelle, sondern vollständig im Log (audit.entry\_lost). | Test: 500 von 500 Einträgen bei 6 s Sperre, 20 von 20 bei aufgelegtem Client; Sperre über die Frist: Eintrag vollständig im Log | Prüfen: nicht im Audit-Log selbst | offen |
 
 ## 6. Schwere und Restrisiken
 
@@ -95,4 +96,4 @@ Ein Restrisiko gilt erst mit Messung und nach ausdrücklicher Freigabe durch den
 
 Funktionsfehler ohne Sicherheitsbezug sind nie hoch oder mittel im Sinne einer Release-Schwelle; sie blockieren 1.0, nicht 0.x.
 
-Ein Restrisiko braucht eine Messung und die ausdrückliche Freigabe des Projektinhabers. Widerspricht es einer Anforderung, braucht es eine Revision.
+Ein Restrisiko braucht eine Messung oder die Begründung, warum es nicht messbar ist; in beiden Fällen gilt es nur nach ausdrücklicher Freigabe des Projektinhabers. Widerspricht es einer Anforderung, braucht es eine Revision.
