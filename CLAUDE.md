@@ -3,7 +3,8 @@
 ## Projekt
 ShadowGhost.NET Game RCONductor (kurz RCONductor): selbst gehostetes Webpanel
 für RCON-fähige Spieleserver. Lizenz GNU AGPL-3.0.
-Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
+Das freigegebene Konzept liegt in docs/ und ist verbindlich; die gültige Revision steht
+in docs/01-gesamtkonzept.md.
 
 ## Verbindliche Dokumente
 - docs/01-gesamtkonzept.md  Anforderungen mit IDs, Rollen, Entscheidungen D-xxx, Releaseplan
@@ -28,7 +29,7 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   Sub-Agent ohne Vorkontext (Stichprobe der Abnahmen und Sicherheit).
 - Widerspricht eine Anforderung einer anderen oder dem Design: nicht selbst
   entscheiden, sondern stoppen und mir den Widerspruch mit Fundstellen zeigen.
-- docs/ nicht verändern. Vorschläge für Änderungen nur als Hinweis an mich.
+- docs/ nur über Revisionen, auf meinen Auftrag. Vorschläge für Änderungen als Hinweis an mich.
 - Kleine Schritte: lieber mehrere kleine Commits als ein großer.
 - Renovate-PRs: Patch, Minor und Digest nach grüner CI selbst mergen, Major vorher melden.
 - Bei Eingriffen in die Git-Historie Renovate pausieren (renovate.json "enabled": false),
@@ -58,7 +59,7 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
 - profiles/              mitgelieferte Spielprofile
 - deploy/compose/        Compose-Dateien (ab M5)
 - scripts/               Hilfsskripte für Projektpflege (z. B. gh_plan.py für Milestones und Issues)
-- docs/                  Konzept, nicht verändern
+- docs/                  Konzept, nur über Revisionen
 
 ## Sicherheit (nicht verhandelbar)
 - Rechte werden ausschließlich im Backend geprüft und durchgesetzt; Standard ist Ablehnung.
@@ -107,7 +108,7 @@ STOPP: Laufende Arbeit sofort beenden, nichts Neues anfangen.
    Sonst: Branch wip/<datum>, --no-verify, Nachricht "wip: <was lief>", pushen.
 2. Nicht auf CI warten, keine Tests mehr starten.
 3. docs/handover.md lokal überschreiben (nicht committen): Branch/Commit, erledigt,
-   unterbrochene Aufgabe, offene CI-Läufe, offene Fragen.
+   unterbrochene Aufgabe, offene CI-Läufe, offene Fragen, offene Aufträge im Wortlaut.
 4. Kurze Meldung. Danach nichts.
 
 START: docs/handover.md und Git-Stand lesen. Offene CI-Läufe prüfen. wip/-Branch
