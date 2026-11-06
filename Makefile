@@ -60,7 +60,7 @@ test-e2e:
 measure-login:
 	go test -tags measure -count=1 -v -timeout 30m -run TestMeasure ./internal/auth
 
-# MODE=body or hold, see scripts/measure-panel.sh.
+# MODE=body, picture, read, all or hold, see scripts/measure-panel.sh.
 measure-panel:
 	scripts/measure-panel.sh $(MODE) $(SECONDS)
 

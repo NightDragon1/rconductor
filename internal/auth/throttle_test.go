@@ -436,7 +436,7 @@ func TestR4B5ReportDoesNotHoldTheLine(t *testing.T) {
 func TestSketchNeedsTwoCollisions(t *testing.T) {
 	now := time.Now()
 	k := newSketch()
-	k.rows[0].slot("owner", now, time.Hour).failures = 50
+	*k.rows[0].slot("owner") = sketchSlot{failures: 50, epoch: epochOf(now, time.Hour)}
 	if n := k.count("owner", now, time.Hour); n != 0 {
 		t.Errorf("one collision counts %d", n)
 	}

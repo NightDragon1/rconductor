@@ -147,6 +147,8 @@ func (l *Listener) Accept() (net.Conn, error) {
 func (l *Listener) limited(c net.Conn, client netip.Addr) *conn {
 	lc := &conn{Conn: c, l: l, client: client, counted: true}
 	if l.opts.MaxAge > 0 {
+		lc.mu.Lock()
+		defer lc.mu.Unlock()
 		lc.age = time.AfterFunc(l.opts.MaxAge, lc.expire)
 	}
 	return lc

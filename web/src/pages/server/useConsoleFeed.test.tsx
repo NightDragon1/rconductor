@@ -155,6 +155,23 @@ describe('useConsoleFeed (CMD-001)', () => {
     expect(result.current.a.cmds).toEqual([]);
   });
 
+  it('round 5 B5-1: keeps a late live event from the next user', async () => {
+    bufferOwner('alice');
+    vi.spyOn(api, 'GET').mockResolvedValue(page as never);
+    const { result } = feed();
+    await waitFor(() => expect(topics.has('server.a.console')).toBe(true));
+    const listener = topics.get('server.a.console');
+
+    act(() => bufferOwner('bob'));
+    act(() =>
+      listener?.({
+        type: 'event',
+        data: { request_id: 'a1', ts: '2026-11-06T10:00:00Z', command: 'secret', result: 'ok' },
+      } as never),
+    );
+    expect(result.current.a.cmds).toEqual([]);
+  });
+
   it('leaves no gap after more commands than a page while away', async () => {
     const entry = (n: number) => ({
       request_id: `r${n}`,

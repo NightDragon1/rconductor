@@ -23,13 +23,14 @@ const (
 )
 
 // A small file can decode to much: 4096 × 4096 pixels of 16 bits and alpha take
-// 128 MiB from 130 KiB of PNG, and any role may upload one (T-025). So what is
-// being decoded is bounded by its pixels, not by the size of the file. A
-// progressive JPEG needs the most per pixel.
+// 128 MiB from 130 KiB of PNG, a progressive JPEG 434 MiB, and any role may upload
+// one (T-025). So what is
+// being decoded is bounded by its pixels, not by the size of the file, and one
+// of the largest pictures runs at a time. A JPEG with four components, CMYK,
+// needs more still and is refused, no browser shows those well anyway.
 const (
-	avatarDecodeBudget  = 128 << 20
-	avatarBytesPerPixel = 8
-	jpegBytesPerPixel   = 16
+	avatarDecodeBudget  = 512 << 20
+	avatarBytesPerPixel = 32
 	avatarDecodeWait    = 5 * time.Second
 )
 
@@ -52,11 +53,10 @@ func processAvatar(ctx context.Context, data []byte) ([]byte, string, error) {
 	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width > maxAvatarPixels || cfg.Height > maxAvatarPixels {
 		return nil, "", &InvalidError{Detail: "a profile picture has at most 4096 × 4096 pixels"}
 	}
-	perPixel := int64(avatarBytesPerPixel)
-	if format == "jpeg" {
-		perPixel = jpegBytesPerPixel
+	if cfg.ColorModel == color.CMYKModel {
+		return nil, "", &InvalidError{Detail: "a profile picture is in RGB or grayscale"}
 	}
-	weight := min(int64(cfg.Width)*int64(cfg.Height)*perPixel, avatarDecodeBudget)
+	weight := int64(cfg.Width) * int64(cfg.Height) * avatarBytesPerPixel
 	wait, cancel := context.WithTimeout(ctx, avatarDecodeWait)
 	defer cancel()
 	if err := avatarDecoding.Acquire(wait, weight); err != nil {

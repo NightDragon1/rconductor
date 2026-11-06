@@ -49,12 +49,13 @@ const latestRefill = new Map<string, number>();
 // on: subscribed means followed, so only while someone views the logs
 // (UI-009, G2).
 export function useLogsFeed(id: string, on: boolean) {
+  const [write] = useState(bufferWriter);
   useTopic(id && on ? `server.${id}.logs` : undefined, (m) => {
     const d = m.data as { lines?: unknown; current?: unknown } | undefined;
     if (m.type === 'event' && Array.isArray(d?.lines)) {
       const lines = d.lines.filter((l): l is string => typeof l === 'string');
       const ts = new Date().toISOString();
-      updateBuffer(id, (b) => addLogLines(b, d.current === true ? newLines(b, lines) : lines, ts));
+      write(id, (b) => addLogLines(b, d.current === true ? newLines(b, lines) : lines, ts));
     }
   });
 }
@@ -68,6 +69,9 @@ export function useConsoleFeed(id: string, logs: boolean) {
   const me = session?.user.id;
   const buf = useBuffer(id);
   const [confirmed, setConfirmed] = useState(0);
+  // Taken at mount: a socket can still deliver between a change of user and
+  // its end, and that must not reach the buffers of the next user.
+  const [live] = useState(bufferWriter);
 
   const loadPage = async (cursor?: string) => {
     const epoch = buf.epoch;
@@ -123,7 +127,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
   useTopic(id ? `server.${id}.console` : undefined, (m) => {
     if (m.type === 'subscribed') setConfirmed((n) => n + 1);
     if (m.type === 'event' && m.data && typeof m.data === 'object') {
-      updateBuffer(id, (b) => addCommands(b, [fromWire(m.data as Wire)]));
+      live(id, (b) => addCommands(b, [fromWire(m.data as Wire)]));
     }
   });
   useLogsFeed(id, logs);

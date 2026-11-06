@@ -523,9 +523,12 @@ type sketchRow struct {
 	slots []sketchSlot
 }
 
+// A slot counts for one window of a clock all slots share, so that the two
+// slots of a name age together. Reading changes nothing: a slot that others
+// touched earlier must not end the count of this name.
 type sketchSlot struct {
 	failures int
-	first    time.Time
+	epoch    int64
 }
 
 func newSketch() *sketch {
@@ -540,20 +543,37 @@ func accountName(account string) string { return "a\x00" + account }
 func pairName(k pairKey) string         { return "p\x00" + k.ip.String() + "\x00" + k.account }
 func clientName(ip netip.Addr) string   { return "c\x00" + ip.String() }
 
-func (r *sketchRow) slot(name string, now time.Time, window time.Duration) *sketchSlot {
-	slot := &r.slots[maphash.String(r.seed, name)%sketchSlots]
-	if now.Sub(slot.first) >= window {
-		*slot = sketchSlot{first: now}
-	}
-	return slot
+func (r *sketchRow) slot(name string) *sketchSlot {
+	return &r.slots[maphash.String(r.seed, name)%sketchSlots]
 }
 
+func epochOf(now time.Time, window time.Duration) int64 { return now.UnixNano() / int64(window) }
+
+// count is what the name failed in this window and the one before: a clock
+// window alone would let a client start over at its end.
 func (s *sketch) count(name string, now time.Time, window time.Duration) int {
-	return min(s.rows[0].slot(name, now, window).failures, s.rows[1].slot(name, now, window).failures)
+	epoch := epochOf(now, window)
+	lowest := 0
+	for i := range s.rows {
+		n := 0
+		if slot := s.rows[i].slot(name); slot.epoch >= epoch-1 {
+			n = slot.failures
+		}
+		if i == 0 || n < lowest {
+			lowest = n
+		}
+	}
+	return lowest
 }
 
 func (s *sketch) add(name string, now time.Time, window time.Duration) {
+	epoch := epochOf(now, window)
 	for i := range s.rows {
-		s.rows[i].slot(name, now, window).failures++
+		slot := s.rows[i].slot(name)
+		if slot.epoch < epoch-1 {
+			*slot = sketchSlot{epoch: epoch}
+		}
+		slot.epoch = epoch
+		slot.failures++
 	}
 }

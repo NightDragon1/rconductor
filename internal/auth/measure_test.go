@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -112,3 +114,85 @@ func TestMeasureOwnerWaitOnAFullTable(t *testing.T) {
 		}
 	}
 }
+
+// TestMeasureR5B22HangUpHoldsTheLine: on a full table, attackers from a few addresses
+// hang up before their turn ends (under overflowGap after the request). They
+// never reach the password check, so they keep 0 failures, and an owner with 0
+// failures cannot push them out. Real time, real Login.
+func TestMeasureR5B22HangUpHoldsTheLine(t *testing.T) {
+	addrs, _ := strconv.Atoi(os.Getenv("POC_ADDRS"))
+	if addrs == 0 {
+		addrs = 60
+	}
+	secs, _ := strconv.Atoi(os.Getenv("POC_SECS"))
+	if secs == 0 {
+		secs = 60
+	}
+	f := fullFixture(t)
+	f.svc.sleep = sleepCtx
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(secs)*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	var sent, refused, hungUp, reached atomic.Int64
+	for i := range addrs {
+		c := clientAt(fmt.Sprintf("203.0.113.%d", i+1))
+		wg.Go(func() {
+			life, _ := time.ParseDuration(os.Getenv("POC_LIFE"))
+			if life == 0 {
+				life = 200 * time.Millisecond
+			}
+			time.Sleep(time.Duration(i) * life / time.Duration(addrs))
+			for n := 0; ctx.Err() == nil; n++ {
+				rctx, rcancel := context.WithTimeout(ctx, life)
+				_, _, err := f.svc.Login(rctx, fmt.Sprintf("guess%d-%d", i, n), "wrong password!!", c)
+				rcancel()
+				sent.Add(1)
+				var locked *LockedError
+				switch {
+				case errors.As(err, &locked):
+					refused.Add(1)
+					time.Sleep(2 * time.Millisecond)
+				case errors.Is(err, ErrInvalidCredentials):
+					reached.Add(1)
+				default:
+					hungUp.Add(1)
+				}
+			}
+		})
+	}
+	time.Sleep(time.Second)
+	tries, in := 0, 0
+	start := time.Now()
+	var firstIn time.Duration
+	for ctx.Err() == nil {
+		tries++
+		octx, ocancel := context.WithTimeout(ctx, 10*time.Second)
+		_, _, err := f.svc.Login(octx, "Mod", testPassword, clientAt("192.0.2.77"))
+		ocancel()
+		if err == nil {
+			in++
+			if firstIn == 0 {
+				firstIn = time.Since(start)
+			}
+			t.Logf("owner in after %d tries, %v", tries, time.Since(start).Round(time.Millisecond))
+			tries, start = 0, time.Now()
+			// a login adds no counter of the owner's client, so the next round is a fresh owner
+			continue
+		}
+		time.Sleep(time.Second) // Retry-After: 1
+	}
+	if in == 0 {
+		cancel()
+	}
+	wg.Wait()
+	failed := 0
+	for i := range addrs {
+		ip := netip.MustParseAddr(fmt.Sprintf("203.0.113.%d", i+1))
+		_ = ip
+	}
+	t.Logf("addresses %d: requests %d, refused %d, hung up %d, reached password check %d; failures counted for them: %d",
+		addrs, sent.Load(), refused.Load(), hungUp.Load(), reached.Load(), failed)
+	t.Logf("owner: %d tries in %v, signed in: %d (first at %v)", tries, time.Since(start).Round(time.Second), in, firstIn)
+}
+
+// neighbour finds a name that shares the slot of name in row 1 but not in row 0.

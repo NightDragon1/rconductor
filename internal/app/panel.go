@@ -29,6 +29,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	eventbus "github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/memlimit"
 	"github.com/NightDragon1/rconductor/internal/netlimit"
 	"github.com/NightDragon1/rconductor/internal/ops/backup"
 	"github.com/NightDragon1/rconductor/internal/ops/cleanup"
@@ -67,6 +68,7 @@ func RunPanel(ctx context.Context, cfg config.Panel, out io.Writer, opts PanelOp
 	logs := logging.New(out, "panel", cfg.Log)
 	root := logs.Root()
 	audit.SetLostLog(root)
+	memlimit.Apply(root)
 	root.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version))
 
 	err := runPanel(ctx, cfg, logs, opts)

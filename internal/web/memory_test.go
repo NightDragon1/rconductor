@@ -313,3 +313,39 @@ func TestR4PathEndingsGiveNoWayAroundTheBudget(t *testing.T) {
 		}
 	}
 }
+
+// TestR5B12PictureReadsStayWithinThePool: each read took a connection of its
+// own, and 512 of them took 1.4 GiB outside the Go heap.
+func TestR5B12PictureReadsStayWithinThePool(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	session := f.login(t, "Mod")
+	stop := make(chan struct{})
+	var peak atomic.Int32
+	var watch sync.WaitGroup
+	watch.Go(func() {
+		for {
+			select {
+			case <-stop:
+				return
+			case <-time.After(time.Millisecond):
+			}
+			if n := int32(f.st.DB.Stats().OpenConnections); n > peak.Load() { //nolint:gosec // few connections
+				peak.Store(n)
+			}
+		}
+	})
+	var wg sync.WaitGroup
+	for range 512 {
+		wg.Go(func() {
+			r := httptest.NewRequest(http.MethodGet, "http://panel.lan/api/v1/users/"+f.userID+"/avatar", nil)
+			r.AddCookie(session)
+			f.h.ServeHTTP(httptest.NewRecorder(), r)
+		})
+	}
+	wg.Wait()
+	close(stop)
+	watch.Wait()
+	if n := peak.Load(); n == 0 || n > 32 {
+		t.Errorf("%d database connections at once, want 1 to 32", n)
+	}
+}

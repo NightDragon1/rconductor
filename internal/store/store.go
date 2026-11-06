@@ -31,6 +31,9 @@ const pragmas = "?_pragma=journal_mode(WAL)" +
 	"&_pragma=synchronous(NORMAL)" +
 	"&_txlock=immediate"
 
+// maxConns bounds the connections to the database.
+const maxConns = 32
+
 // Store is the open database of the panel.
 type Store struct {
 	DB *sql.DB
@@ -50,6 +53,10 @@ func Open(ctx context.Context, dataDir string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
+	// Each connection keeps a cache outside the Go heap, about 2.8 MiB: 512
+	// at once took 1.4 GiB, more than the container has (T-025). SQLite has
+	// one writer anyway, so more connections only wait inside it.
+	db.SetMaxOpenConns(maxConns)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("open database: %w", err)
