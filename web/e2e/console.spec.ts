@@ -123,9 +123,11 @@ test('tracks and filter; others live (CMD-014)', async ({ page, state, browser }
 test('an answer stays with its server across a switch (CMD-001)', async ({ page, state }) => {
   await openConsole(page, state, 'creative');
   const star = page.getByRole('button', { name: 'Add to favorites' });
+  await page.waitForLoadState('networkidle');
   if (await star.count()) await star.click();
   await page.goto(`servers/${state.servers.survival}/console`);
   const star2 = page.getByRole('button', { name: 'Add to favorites' });
+  await page.waitForLoadState('networkidle');
   if (await star2.count()) await star2.click();
   const bar = page.getByRole('navigation', { name: 'Favorites' });
 
@@ -168,10 +170,12 @@ test('completion with Tab and own commands on arrow up (CMD-015)', async ({ page
 test('favorites switch servers without a reload (CMD-001)', async ({ page, state }) => {
   await openConsole(page, state, 'creative');
   const star = page.getByRole('button', { name: 'Add to favorites' });
+  await page.waitForLoadState('networkidle');
   if (await star.count()) await star.click();
   await expect(page.getByRole('button', { name: 'Remove from favorites' })).toBeVisible();
   await page.goto(`servers/${state.servers.survival}/console`);
   const star2 = page.getByRole('button', { name: 'Add to favorites' });
+  await page.waitForLoadState('networkidle');
   if (await star2.count()) await star2.click();
   await send(page, 'say on survival');
   await page.evaluate(() => {
