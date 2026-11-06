@@ -123,7 +123,7 @@ func TestAgentThroughTheStack(t *testing.T) {
 	admin.must(http.MethodPost, "/agents/tokens", nil, &tok, http.StatusCreated)
 	backend := &hostBackend{}
 	cfg := config.Agent{PairingToken: tok.Token, PanelAddr: s.agentAddr, SecretsDir: t.TempDir(), Name: "host-1",
-		LabelKey: "rcon.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
+		LabelKey: "rconductor.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
 	var agentLogs syncBuffer
 	a, err := agent.New(cfg, logging.New(&agentLogs, "agent", cfg.Log).Root(), backend)
 	if err != nil {

@@ -62,7 +62,7 @@ func TestNoSecretsInTheLogs(t *testing.T) {
 	secrets = append(secrets, tok.Token)
 	cfg := config.Agent{
 		PairingToken: tok.Token, PanelAddr: s.agentAddr, SecretsDir: t.TempDir(), Name: "host-1",
-		LabelKey: "rcon.manage", LabelValue: "true", Log: config.Log{Level: -4, Format: "json"},
+		LabelKey: "rconductor.manage", LabelValue: "true", Log: config.Log{Level: -4, Format: "json"},
 	}
 	var agentLogs syncBuffer
 	a, err := agent.New(cfg, logging.New(&agentLogs, "agent", cfg.Log).Root(), &hostBackend{})

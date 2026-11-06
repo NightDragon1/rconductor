@@ -183,7 +183,7 @@ func startAgent(ctx context.Context, admin *client, agentAddr, name, root string
 		return "", err
 	}
 	cfg := config.Agent{PairingToken: tok.Token, PanelAddr: agentAddr, SecretsDir: dir, Name: name,
-		LabelKey: "rcon.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
+		LabelKey: "rconductor.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
 	a, err := agent.New(cfg, slog.New(slog.NewJSONHandler(io.Discard, nil)), backend)
 	if err != nil {
 		return "", err
@@ -389,7 +389,7 @@ func pendingAgent(ctx context.Context, admin *client, agentAddr, root string) er
 		return err
 	}
 	cfg := config.Agent{PanelAddr: agentAddr, SecretsDir: dir, Name: "host-3",
-		LabelKey: "rcon.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
+		LabelKey: "rconductor.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
 	a, err := agent.New(cfg, slog.New(slog.NewJSONHandler(io.Discard, nil)), idleHost{&fakeHost{}})
 	if err != nil {
 		return err

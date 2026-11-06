@@ -27,7 +27,7 @@ access instead, and it does little with it:
 
 - It opens no port. It connects out to the panel.
 - It accepts only a fixed list of orders, and only for containers with the label
-  `rcon.manage=true`.
+  `rconductor.manage=true`.
 - It cannot create, remove or change containers, run commands in them or touch
   images and volumes.
 - Panel and agent know each other by pinned keys, not by passwords.

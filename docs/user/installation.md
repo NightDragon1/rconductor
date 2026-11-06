@@ -21,9 +21,13 @@ tag `1` gives you that. Versions have two parts: `1.0`, `1.1`. The first number
 rises when something is incompatible. See [Updating](#updating).
 
 Values come from the environment or an `.env` file next to the Compose file:
-`DOCKER_GID` (group of the Docker socket), `RCD_PAIRING_TOKEN`, `RCD_VERSION`
+`DOCKER_GID`, `RCD_PAIRING_TOKEN`, `RCD_VERSION`
 (image tag, default `1`), `RCD_IMAGE_REPO` (registry, default
 `docker.io/nightdragon1`), and for ports `RCD_WEB_PORT` and `RCD_AGENT_PORT`.
+
+`DOCKER_GID` is the group that owns the Docker socket on the host. The agent
+runs as a non-root user and reaches the socket through this group. Read the
+number with `stat -c %g /var/run/docker.sock`.
 
 To check the signature of an image:
 
@@ -107,7 +111,7 @@ how to restore a backup.
 
 One agent runs on each game host. It is the only part with access to the
 Docker socket, connects out to the panel's agent port (it opens no port
-itself) and manages only containers with the label `rcon.manage=true`:
+itself) and manages only containers with the label `rconductor.manage=true`:
 start, stop, restart, status, metrics and logs. It cannot create, remove
 or change containers, run commands in them or touch images and volumes.
 
@@ -150,7 +154,7 @@ socket narrows the API further (see below).
 | `RCD_PAIRING_TOKEN` / `_FILE` | empty | pairing token (way A) |
 | `RCD_PANEL_ADDR` | empty | panel agent port, `host:port`; for way B or to override the token's address |
 | `RCD_AGENT_NAME` | host name | name shown in the panel |
-| `RCD_LABEL` | `rcon.manage=true` | label that allows a container |
+| `RCD_LABEL` | `rconductor.manage=true` | label that allows a container |
 | `RCD_DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker API, also a socket proxy such as `tcp://socket-proxy:2375` |
 | `RCD_SECRETS_DIR` | `/secrets` | agent key (`agent.key`) and pairing (`panel.json`) |
 | `RCD_LOG_LEVEL`, `RCD_LOG_FORMAT` | `info`, `text` | as for the panel |

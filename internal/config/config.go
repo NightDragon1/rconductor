@@ -136,7 +136,7 @@ func LoadAgent(env Lookup, readFile ReadFile) (Agent, error) {
 		SecretsDir:   r.str("RCD_SECRETS_DIR", "/secrets"),
 		Log:          r.log(),
 	}
-	label := r.str("RCD_LABEL", "rcon.manage=true")
+	label := r.str("RCD_LABEL", "rconductor.manage=true")
 	key, value, ok := strings.Cut(label, "=")
 	if !ok || strings.TrimSpace(key) == "" || strings.TrimSpace(value) == "" {
 		r.fail("RCD_LABEL", "must be key=value")

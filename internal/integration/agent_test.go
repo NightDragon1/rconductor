@@ -54,7 +54,7 @@ import (
 const (
 	alpineImage      = "alpine@sha256:2e0b81d60597f449baa56dc25d355367869d2dca4cd57e866f1e2b52af3eb55f"
 	socketProxyImage = "lscr.io/linuxserver/socket-proxy@sha256:4e5e59efd3338205561c54262581992036e5a36ccca97d487b1d4ec41f9adc58"
-	label            = "rcon.manage"
+	label            = "rconductor.manage"
 )
 
 func agentImage() string {
