@@ -18,6 +18,7 @@ export interface CmdBlock {
   reason?: string;
   detail?: string; // what was wrong, e.g. the parameter (422)
   retryAfter?: number; // seconds, for rate_limited
+  local?: boolean; // known only to this tab: the panel refused it before the history
 }
 
 // LogBlock holds the log lines of one delivery (CMD-014, UI-009).
@@ -56,10 +57,8 @@ export function addCommands(buf: ConsoleBuffer, entries: CmdBlock[]): ConsoleBuf
   for (const e of entries) {
     const old = map.get(e.id);
     // not_answered is the history of a command still running: it never
-    // replaces an answer that is here already.
-    if (old && e.reason === 'not_answered' && (old.response !== undefined || old.result === 'ok')) {
-      continue;
-    }
+    // replaces a result that is here already.
+    if (old && e.reason === 'not_answered' && old.reason !== 'not_answered') continue;
     const reason = e.result === 'ok' ? undefined : (e.reason ?? old?.reason);
     map.set(e.id, old ? { ...old, ...e, reason, response: e.response ?? old.response } : e);
   }

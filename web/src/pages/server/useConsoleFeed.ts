@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { api, ApiError, must } from '@/api/client';
 import { useSession } from '@/api/session';
 import {
@@ -39,6 +40,9 @@ const fromWire = (e: Wire): CmdBlock => ({
   reason: e.reason,
 });
 
+// latestRefill numbers the refills of each server.
+const latestRefill = new Map<string, number>();
+
 // useLogsFeed puts the live log lines of a server into its buffer while
 // on: subscribed means followed, so only while someone views the logs
 // (UI-009, G2).
@@ -60,9 +64,12 @@ export function useConsoleFeed(id: string, logs: boolean) {
   const { data: session } = useSession();
   const me = session?.user.id;
   const buf = useBuffer(id);
+  const [confirmed, setConfirmed] = useState(0);
 
   const loadPage = async (cursor?: string) => {
     const epoch = buf.epoch;
+    const refill = cursor ? 0 : (latestRefill.get(id) ?? 0) + 1;
+    if (refill) latestRefill.set(id, refill);
     const page = must(
       await api.GET('/servers/{id}/history', {
         params: { path: { id }, query: { limit: 50, cursor } },
@@ -75,6 +82,8 @@ export function useConsoleFeed(id: string, logs: boolean) {
       );
       return null;
     }
+    // Only the refill asked for last counts: an earlier one knows less.
+    if (latestRefill.get(id) !== refill) return null;
     // A refill starts over from the newest page, so older pages stay
     // reachable without a gap, whatever arrived meanwhile. Kept are live
     // commands newer than the page and refusals only this tab knows.
@@ -84,9 +93,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
       ...addCommands(
         {
           ...b,
-          cmds: b.cmds.filter(
-            (c) => ids.has(c.id) || c.id.startsWith('local-') || Date.parse(c.ts) > newest,
-          ),
+          cmds: b.cmds.filter((c) => ids.has(c.id) || c.local || Date.parse(c.ts) > newest),
         },
         items,
       ),
@@ -97,9 +104,11 @@ export function useConsoleFeed(id: string, logs: boolean) {
     return null;
   };
   // A query, so that it also runs after a reconnect of the socket (Design
-  // 2.3) and retries: no live event reached this buffer meanwhile.
+  // 2.3) and retries: no live event reached this buffer meanwhile. Each
+  // confirmed subscription fetches again: only from then on live events come,
+  // so nothing can fall between the page and the first event.
   useQuery({
-    queryKey: ['console-history', id],
+    queryKey: ['console-history', id, confirmed],
     queryFn: () => loadPage(),
     enabled: !!id,
     staleTime: 0,
@@ -108,6 +117,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
   });
 
   useTopic(id ? `server.${id}.console` : undefined, (m) => {
+    if (m.type === 'subscribed') setConfirmed((n) => n + 1);
     if (m.type === 'event' && m.data && typeof m.data === 'object') {
       updateBuffer(id, (b) => addCommands(b, [fromWire(m.data as Wire)]));
     }
@@ -160,6 +170,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
             ...own,
             command,
             result,
+            local: true,
             reason: err?.problem?.reason ?? undefined,
             detail: err?.problem?.detail ?? undefined,
             retryAfter: err?.retryAfter,

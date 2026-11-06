@@ -9,6 +9,13 @@ import { useConsoleFeed } from './useConsoleFeed';
 
 vi.mock('@/api/session', () => ({ useSession: () => ({ data: undefined }) }));
 
+const topics = vi.hoisted(() => new Map<string, (m: { type: string }) => void>());
+vi.mock('@/lib/live-context', () => ({
+  useTopic: (topic: string | undefined, listener: (m: { type: string }) => void) => {
+    if (topic) topics.set(topic, listener);
+  },
+}));
+
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -146,6 +153,53 @@ describe('useConsoleFeed (CMD-001)', () => {
     });
     expect(result.current.a.cursor).toBe('new');
     expect(result.current.a.cmds.map((c) => c.id)).toEqual(['r100']);
+  });
+
+  it('fetches again once the subscription is confirmed', async () => {
+    const get = vi.spyOn(api, 'GET').mockResolvedValue(page as never);
+    feed();
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    act(() => topics.get('server.a.console')?.({ type: 'subscribed' }));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+  });
+
+  it('applies only the refill asked for last', async () => {
+    const get = vi.spyOn(api, 'GET').mockResolvedValue(answer([entry(1)], 'c1'));
+    const { result } = feed();
+    await waitFor(() => expect(result.current.a.cursor).toBe('c1'));
+    let early: (v: unknown) => void = () => undefined;
+    get.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          early = resolve as (v: unknown) => void;
+        }) as never,
+    );
+    act(() => topics.get('server.a.console')?.({ type: 'subscribed' }));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    get.mockResolvedValue(answer([entry(200)], 'c200'));
+    act(() => topics.get('server.a.console')?.({ type: 'subscribed' }));
+    await waitFor(() => expect(result.current.a.cursor).toBe('c200'));
+    await act(async () => {
+      early(answer([entry(100)], 'c100'));
+      await Promise.resolve();
+    });
+    expect(result.current.a.cursor).toBe('c200');
+  });
+
+  it('keeps a refusal only this tab knows', async () => {
+    const get = vi.spyOn(api, 'GET').mockResolvedValue(page as never);
+    const { result } = feed();
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    updateBuffer('a', (b) => addCommands(b, [{ ...fromEntry(5), result: 'error', local: true }]));
+    get.mockResolvedValue(answer([entry(100)], ''));
+    await act(() => client.invalidateQueries());
+    await waitFor(() => expect(result.current.a.cmds.map((c) => c.id)).toEqual(['r5', 'r100']));
+  });
+
+  it('does not replace a timeout by an older history entry', () => {
+    const done = { ...fromEntry(1), result: 'timeout' as const };
+    const late = { ...fromEntry(1), result: 'error' as const, reason: 'not_answered' };
+    expect(addCommands({ ...emptyBuffer, cmds: [done] }, [late]).cmds[0]?.result).toBe('timeout');
   });
 
   it('knows a running command after a remount', async () => {
