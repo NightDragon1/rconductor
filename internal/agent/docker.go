@@ -54,6 +54,7 @@ type Docker struct {
 	labelValue string
 	limiter    *orderLimiter
 	metrics    time.Duration
+	maxFollows int
 
 	mu      sync.Mutex
 	follows map[string]context.CancelFunc
@@ -69,9 +70,22 @@ func NewDocker(cfg config.Agent, log *slog.Logger) (*Docker, error) {
 }
 
 func newDocker(api dockerAPI, cfg config.Agent, log *slog.Logger) *Docker {
+	orders, burst, metrics, follows := 10, 3, MetricsInterval, maxFollows
+	if cfg.OrdersPerMinute > 0 {
+		orders = cfg.OrdersPerMinute
+	}
+	if cfg.OrdersBurst > 0 {
+		burst = cfg.OrdersBurst
+	}
+	if cfg.MetricsInterval > 0 {
+		metrics = cfg.MetricsInterval
+	}
+	if cfg.MaxFollows > 0 {
+		follows = cfg.MaxFollows
+	}
 	return &Docker{
-		api: api, log: log, labelKey: cfg.LabelKey, labelValue: cfg.LabelValue,
-		limiter: newOrderLimiter(10, 3), metrics: MetricsInterval, follows: map[string]context.CancelFunc{},
+		api: api, log: log, labelKey: cfg.LabelKey, labelValue: cfg.LabelValue, maxFollows: follows,
+		limiter: newOrderLimiter(orders, burst), metrics: metrics, follows: map[string]context.CancelFunc{},
 	}
 }
 
@@ -503,7 +517,7 @@ func (d *Docker) follow(ctx context.Context, s container.Summary, name, ref stri
 		d.mu.Unlock()
 		return agentproto.CodeOK, "" // already following
 	}
-	if len(d.follows) >= maxFollows {
+	if len(d.follows) >= d.maxFollows {
 		d.mu.Unlock()
 		return agentproto.CodeRateLimited, "too many followed logs"
 	}

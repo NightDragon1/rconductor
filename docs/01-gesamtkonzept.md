@@ -630,3 +630,4 @@ Aus dem Test von 0.9 auf hydra.
 | 8 | Passwort kurz einblendbar (F-01) | UI-013, Abnahme UI-013 |
 | 9 | Erklärungen in den Einstellungen ein- und ausblendbar (F-18) | UI-014, Abnahme UI-014 |
 | 10 | Server-Dialog schließt nach dem Anlegen; Sperren als Schalter, Einschalten mit Dialog (F-05, F-08) | Design 6.1 |
+| 11 | Nachtrag: Betriebsgrenzen und Zeiten als Einstellung mit Standard und Mindestwert; Standardwerte unverändert (Inventar der Grenzen) | Design 5.2, 5.6 |

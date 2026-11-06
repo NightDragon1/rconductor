@@ -635,6 +635,14 @@
         "label": "Failed sign-ins per address",
         "help": "Failures from one address, over all names, before it is locked. People behind one address share this count."
       },
+      "login_overflow_gap": {
+        "label": "Waiting line: time per turn",
+        "help": "With a full table sign-ins go one by one; this is the time between two of them."
+      },
+      "login_overflow_line": {
+        "label": "Waiting line: places",
+        "help": "How many sign-ins may wait at once when the table is full."
+      },
       "login_max_tracked": {
         "label": "Sign-in counters in memory",
         "help": "When they run out, sign-ins not yet counted wait in one line."
