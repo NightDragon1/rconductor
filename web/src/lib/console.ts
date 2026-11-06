@@ -18,6 +18,7 @@ export interface CmdBlock {
   reason?: string;
   detail?: string; // what was wrong, e.g. the parameter (422)
   retryAfter?: number; // seconds, for rate_limited
+  local?: boolean; // known only to this tab: the panel refused it before the history
 }
 
 // LogBlock holds the log lines of one delivery (CMD-014, UI-009).
@@ -40,6 +41,8 @@ export interface ConsoleBuffer {
   logs: LogBlock[];
   loaded: boolean; // the first page of the history is in
   cursor?: string; // next older page of the history
+  epoch?: number; // counts refills: an older page from before one is void
+  running?: number; // commands to this server without an answer yet
 }
 
 export const emptyBuffer: ConsoleBuffer = { cmds: [], logs: [], loaded: false };
@@ -53,7 +56,11 @@ export function addCommands(buf: ConsoleBuffer, entries: CmdBlock[]): ConsoleBuf
   const map = new Map(buf.cmds.map((c) => [c.id, c]));
   for (const e of entries) {
     const old = map.get(e.id);
-    map.set(e.id, old ? { ...old, ...e, response: e.response ?? old.response } : e);
+    // not_answered is the history of a command still running: it never
+    // replaces a result that is here already.
+    if (old && e.reason === 'not_answered' && old.reason !== 'not_answered') continue;
+    const reason = e.result === 'ok' ? undefined : (e.reason ?? old?.reason);
+    map.set(e.id, old ? { ...old, ...e, reason, response: e.response ?? old.response } : e);
   }
   const cmds = [...map.values()].sort(byTime).slice(-MAX_COMMANDS);
   return { ...buf, cmds };

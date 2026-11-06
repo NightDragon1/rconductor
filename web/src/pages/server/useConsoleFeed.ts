@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMutation } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { api, ApiError, must } from '@/api/client';
 import { useSession } from '@/api/session';
 import {
@@ -40,6 +40,9 @@ const fromWire = (e: Wire): CmdBlock => ({
   reason: e.reason,
 });
 
+// latestRefill numbers the refills of each server.
+const latestRefill = new Map<string, number>();
+
 // useLogsFeed puts the live log lines of a server into its buffer while
 // on: subscribed means followed, so only while someone views the logs
 // (UI-009, G2).
@@ -61,46 +64,84 @@ export function useConsoleFeed(id: string, logs: boolean) {
   const { data: session } = useSession();
   const me = session?.user.id;
   const buf = useBuffer(id);
+  const [confirmed, setConfirmed] = useState(0);
 
   const loadPage = async (cursor?: string) => {
+    const epoch = buf.epoch;
+    const refill = cursor ? 0 : (latestRefill.get(id) ?? 0) + 1;
+    if (refill) latestRefill.set(id, refill);
     const page = must(
       await api.GET('/servers/{id}/history', {
         params: { path: { id }, query: { limit: 50, cursor } },
       }),
     );
+    const items = page.items.map((e) => fromWire(e as Wire));
+    if (cursor) {
+      updateBuffer(id, (b) =>
+        b.epoch === epoch ? { ...addCommands(b, items), cursor: page.next_cursor || undefined } : b,
+      );
+      return null;
+    }
+    // Only the refill asked for last counts: an earlier one knows less.
+    if (latestRefill.get(id) !== refill) return null;
+    // A refill starts over from the newest page, so older pages stay
+    // reachable without a gap, whatever arrived meanwhile. Kept are live
+    // commands newer than the page and refusals only this tab knows.
+    const ids = new Set(items.map((e) => e.id));
+    const newest = Math.max(-Infinity, ...items.map((e) => Date.parse(e.ts)));
     updateBuffer(id, (b) => ({
       ...addCommands(
-        b,
-        page.items.map((e) => fromWire(e as Wire)),
+        {
+          ...b,
+          cmds: b.cmds.filter((c) => ids.has(c.id) || c.local || Date.parse(c.ts) > newest),
+        },
+        items,
       ),
       loaded: true,
       cursor: page.next_cursor || undefined,
+      epoch: (b.epoch ?? 0) + 1,
     }));
+    return null;
   };
-  useEffect(() => {
-    if (id && !buf.loaded) void loadPage().catch(() => undefined);
-    // Only when the server changes; loadPage reads the current id.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, buf.loaded]);
+  // A query, so that it also runs after a reconnect of the socket (Design
+  // 2.3) and retries: no live event reached this buffer meanwhile. Each
+  // confirmed subscription fetches again: only from then on live events come,
+  // so nothing can fall between the page and the first event.
+  useQuery({
+    queryKey: ['console-history', id, confirmed],
+    queryFn: () => loadPage(),
+    enabled: !!id,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
 
   useTopic(id ? `server.${id}.console` : undefined, (m) => {
+    if (m.type === 'subscribed') setConfirmed((n) => n + 1);
     if (m.type === 'event' && m.data && typeof m.data === 'object') {
       updateBuffer(id, (b) => addCommands(b, [fromWire(m.data as Wire)]));
     }
   });
   useLogsFeed(id, logs);
 
+  // In the buffer, so a tab that remounts still knows what is under way.
+  const count = (server: string, by: number) =>
+    updateBuffer(server, (b) => ({ ...b, running: Math.max(0, (b.running ?? 0) + by) }));
   const own = { userId: me, pseudonym: session?.user.pseudonym, role: session?.user.role };
-  const send = useMutation({
-    mutationFn: async (command: string) =>
+  // The server travels with the command: the answer belongs to the server
+  // it was sent to, also when the user has switched meanwhile (CMD-001).
+  const mutation = useMutation({
+    mutationFn: async ({ server, command }: { server: string; command: string }) =>
       must(
         await api.POST('/servers/{id}/commands', {
-          params: { path: { id } },
+          params: { path: { id: server } },
           body: { command },
         }),
       ),
-    onSuccess: (r) =>
-      updateBuffer(id, (b) =>
+    onMutate: ({ server }) => count(server, 1),
+    onSettled: (_r, _e, { server }) => count(server, -1),
+    onSuccess: (r, { server }) =>
+      updateBuffer(server, (b) =>
         addCommands(b, [
           {
             kind: 'cmd',
@@ -114,13 +155,13 @@ export function useConsoleFeed(id: string, logs: boolean) {
           },
         ]),
       ),
-    onError: (e, command) => {
+    onError: (e, { server, command }) => {
       const err = e instanceof ApiError ? e : undefined;
       const status = err?.status ?? 0;
       // Refusals of the pipeline are denied, the rest failed (Design 3.5).
       const result: Result =
         status === 504 ? 'timeout' : [403, 422, 429].includes(status) ? 'denied' : 'error';
-      updateBuffer(id, (b) =>
+      updateBuffer(server, (b) =>
         addCommands(b, [
           {
             kind: 'cmd',
@@ -129,6 +170,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
             ...own,
             command,
             result,
+            local: true,
             reason: err?.problem?.reason ?? undefined,
             detail: err?.problem?.detail ?? undefined,
             retryAfter: err?.retryAfter,
@@ -138,6 +180,11 @@ export function useConsoleFeed(id: string, logs: boolean) {
     },
   });
 
+  const send = {
+    mutate: (command: string) => mutation.mutate({ server: id, command }),
+    // Only a command to this server blocks its input.
+    isPending: (buf.running ?? 0) > 0,
+  };
   const loadOlder = () => (buf.cursor ? loadPage(buf.cursor) : Promise.resolve());
   return { buf, me, send, loadOlder };
 }

@@ -150,7 +150,7 @@ function FavoritesBar({ current }: { current: string }) {
           aria-current={s.id === current ? 'page' : undefined}
           className={cn(
             'tap rounded-md border px-2.5 py-1 font-mono text-sm',
-            s.id === current ? 'border-accent text-text' : 'border-border text-muted',
+            s.id === current ? 'border-accent text-text' : 'border-control text-muted',
           )}
         >
           <bdi>{s.name}</bdi>
@@ -172,9 +172,16 @@ export function ConsoleTab() {
   const hasAgent = !!server?.agent_id;
   const allowed = useAllowedCommands(id, !!id);
   const [tracks, setTracks] = useState<Tracks>({ own: true, others: true, logs: true });
-  const [filter, setFilter] = useState('');
-  const [input, setInput] = useState('');
-  const [walk, setWalk] = useState(-1);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const filter = filters[id] ?? '';
+  const setFilter = (text: string) => setFilters((f) => ({ ...f, [id]: text }));
+  // A draft belongs to its server: a switch must not carry it to another.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const input = drafts[id] ?? '';
+  const setInput = (text: string) => setDrafts((d) => ({ ...d, [id]: text }));
+  const [walks, setWalks] = useState<Record<string, number>>({});
+  const walk = walks[id] ?? -1;
+  const setWalk = (i: number) => setWalks((w) => ({ ...w, [id]: i }));
   const [focus, setFocus] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [older, setOlder] = useState(false);
@@ -244,7 +251,7 @@ export function ConsoleTab() {
       onClick={() => setTracks((x) => ({ ...x, [key]: !x[key] }))}
       className={cn(
         'flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm max-md:min-h-11',
-        tracks[key] ? 'border-accent text-text' : 'border-border text-muted',
+        tracks[key] ? 'border-accent text-text' : 'border-control text-muted',
       )}
     >
       <span className={cn('size-2 rounded-full', dot)} aria-hidden />

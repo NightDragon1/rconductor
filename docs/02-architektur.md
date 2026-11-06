@@ -1,6 +1,6 @@
 # Architektur
 
-Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept, Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Die Technikentscheidungen D-001 und D-002 sind im Tab Technologie gegen diese Architektur geprüft: Go bestätigt, React statt SvelteKit.
+Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept, Kapitel 16, gegenüber 2.5 Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Die Technikentscheidungen D-001 und D-002 sind im Tab Technologie gegen diese Architektur geprüft: Go bestätigt, React statt SvelteKit.
 
 Das System besteht aus einem zentralen Panel, das als einziger Baustein Zustand hält, schlanken Agents je Spiele-Host und den Spieleservern, die nur über ihr Protokoll angesprochen werden.
 
@@ -81,7 +81,7 @@ Die getrennte Variante ist der empfohlene Weg: Der Host-Betreiber rollt den Agen
 
 - Das Panel ist die einzige Quelle der Wahrheit; Agents halten außer ihrem Schlüssel keinen Zustand.
 - Rechte werden ausschließlich im Backend geprüft, nie nur in der Oberfläche.
-- Erweiterungspunkte sind Schnittstellen: Protokolladapter, Agent-Backends, Auth-Anbieter, Datenbanktreiber, Sprachen (NFR-009).
+- Erweiterungspunkte sind Schnittstellen: Protokolladapter und Agent-Backends in R1, Auth-Anbieter und Datenbanktreiber in R2, dazu Sprachen als Dateien (NFR-009).
 - Ein-Instanz-Betrieb, keine Hochverfügbarkeit; Agents verbinden sich nach einem Neustart des Panels selbstständig wieder.
 - Modular im Inneren, damit einzelne Module später bei Bedarf ausgelagert werden können.
 

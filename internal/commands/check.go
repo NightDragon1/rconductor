@@ -36,6 +36,19 @@ type Syntax struct {
 	// nil without one.
 	Player        *regexp.Regexp
 	PlayerPattern string
+	// Separators start another command in the game's console (T-006).
+	Separators []string
+}
+
+// HasSeparator reports whether the command holds a command separator of the
+// game profile.
+func HasSeparator(cmd string, syn Syntax) bool {
+	for _, sep := range syn.Separators {
+		if sep != "" && strings.Contains(cmd, sep) {
+			return true
+		}
+	}
+	return false
 }
 
 // ErrInvalid means the command is empty or too long after cleaning.

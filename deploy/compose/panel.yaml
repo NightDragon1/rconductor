@@ -7,6 +7,10 @@ services:
     image: ghcr.io/nightdragon1/rconductor-panel:${RCD_VERSION:-1}
     restart: unless-stopped
     read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
     ports:
       - "${RCD_WEB_PORT:-8080}:8080"
       - "${RCD_AGENT_PORT:-8443}:8443"

@@ -88,6 +88,10 @@ type Syntax struct {
 	// PlayerPattern is an RE2 pattern a player parameter must match as a
 	// whole, e.g. ^[A-Za-z0-9_]{1,16}$ (revision 2.4 candidate 19).
 	PlayerPattern string `yaml:"player_pattern" json:"player_pattern,omitempty"`
+	// Separators end one command and start another in the game's console,
+	// e.g. ";" on Source engine servers. A list entry could not see what
+	// follows one, so they are refused for moderators and supporters.
+	Separators []string `yaml:"separators" json:"separators,omitempty"`
 }
 
 // Players tells how to read the player list.
@@ -249,8 +253,8 @@ func (p *Profile) check() []string {
 			bad("catalog[%d].path %q is listed twice", i, path)
 		}
 		seen[path] = true
-		if len(c.Description) > maxDescription {
-			bad("catalog[%d].description has at most %d characters", i, maxDescription)
+		if c.Description == "" || len(c.Description) > maxDescription {
+			bad("catalog[%d].description is required, at most %d characters", i, maxDescription)
 		}
 		probs = append(probs, checkParams(i, c.Params)...)
 	}

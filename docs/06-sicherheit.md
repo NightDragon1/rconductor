@@ -1,6 +1,6 @@
 # Bedrohungsmodell
 
-Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept, Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. STRIDE über die Bausteine und Verbindungen aus dem Tab Architektur. Größtes Einzelrisiko ist der Agent: Wer den Docker-Socket kontrolliert, hat praktisch Root auf dem Spiele-Host. Die meisten Bedrohungen sind durch bestehende Anforderungen abgedeckt; sechs neue Maßnahmen (SEC-006 bis SEC-011) schließen die Lücken; mit Version 2.1 kommt SEC-013 (Lieferkette) hinzu.
+Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept, Kapitel 16, gegenüber 2.5 Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. STRIDE über die Bausteine und Verbindungen aus dem Tab Architektur. Größtes Einzelrisiko ist der Agent: Wer den Docker-Socket kontrolliert, hat praktisch Root auf dem Spiele-Host. Die meisten Bedrohungen sind durch bestehende Anforderungen abgedeckt; sechs neue Maßnahmen (SEC-006 bis SEC-011) schließen die Lücken; mit Version 2.1 kommt SEC-013 (Lieferkette) hinzu.
 
 ## 1. Schutzgüter
 
@@ -27,31 +27,31 @@ Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept
 | ID | STRIDE | Bedrohung | Maßnahme | Status |
 | --- | --- | --- | --- | --- |
 | T-001 | Spoofing | Diebstahl oder Fixierung einer Session | Serverseitige Sessions, Cookie HttpOnly und SameSite=Lax, über HTTPS Secure mit Präfix \_\_Host-, neue Session-ID nach Anmeldung (Design 2.1, D-043) | abgedeckt; ohne TLS-Proxy Restrisiko im LAN (SEC-001) |
-| T-002 | Spoofing | Passwort-Raten | Argon2id, Login-Schutz (AUTH-001, SEC-004) | abgedeckt |
+| T-002 | Spoofing | Passwort-Raten | Argon2id, Login-Schutz, auch bei parallelen Versuchen und je IPv6-/64 (AUTH-001, SEC-004, Design 3.7) | abgedeckt |
 | T-003 | Spoofing | Fremder Agent gibt sich als gekoppelter Agent aus | Gegenseitig gepinnte Ed25519-Schlüssel, Widerruf (AGT-012) | abgedeckt |
 | T-004 | Spoofing | Angreifer fängt den ersten Kontakt bei Weg B ab (Trust on First Use) | Weg B standardmäßig aus, Fingerprint-Abgleich (D-024) | Restrisiko bei aktivem Weg B |
 | T-005 | Tampering | Befehlsinjektion über Zeilenumbrüche oder Steuerzeichen | Bereinigung vor dem Senden (CMD-006) | abgedeckt |
-| T-006 | Tampering | Umgehung der Befehlsliste über Wrapper oder Präfix-Tricks | Token-Pfad-Abgleich, Wrapper immer gesperrt (CMD-004, D-026); für Moderator und Supporter zusätzlich die Prüfung der Katalogparameter mit Sperre von Selektoren wie @a (Design 3.3, Schritt 7b) | abgedeckt |
+| T-006 | Tampering | Umgehung der Befehlsliste über Wrapper oder Präfix-Tricks | Token-Pfad-Abgleich, Wrapper immer gesperrt (CMD-004, D-026); für Moderator und Supporter zusätzlich die Prüfung der Katalogparameter mit Sperre von Selektoren wie @a und die Ablehnung von Befehlstrennern des Spielprofils (Design 3.3, Schritt 7b). Eigene Profile müssen syntax.separators selbst setzen | abgedeckt |
 | T-007 | Tampering | Cross-Site Request Forgery | SameSite=Lax, Origin-Prüfung bei allen schreibenden Anfragen und beim WebSocket (Design 2.1) | abgedeckt |
-| T-008 | Tampering | Schadcode über Spielernamen, Chat, RCON-Antworten oder Agent-Daten in der Oberfläche (gespeichertes XSS) | Alle Fremddaten escaped darstellen, Farbcodes in R1 entfernen, Bidi-Zeichen im Freitext als Platzhalter (SEC-006); Content-Security-Policy (SEC-009) | neu |
-| T-009 | Tampering | Verändern des Audit-Logs durch jemanden mit Datenbankzugriff | Nur durch Zugriff auf Host oder Volume möglich; manipulationssichere Verkettung im Backlog (SEC-011) | Restrisiko |
+| T-008 | Tampering | Schadcode über Spielernamen, Chat, RCON-Antworten oder Agent-Daten in der Oberfläche (gespeichertes XSS) | Alle Fremddaten escaped darstellen, Farbcodes in R1 entfernen, Bidi-Zeichen im Freitext als Platzhalter (SEC-006); Content-Security-Policy (SEC-009) | abgedeckt |
+| T-009 | Tampering | Verändern des Audit-Logs durch jemanden mit Datenbankzugriff | Nur durch Zugriff auf Host oder Volume möglich; über die Oberfläche höchstens Verkürzung der Aufbewahrung auf 30 Tage; manipulationssichere Verkettung im Backlog (SEC-011) | Restrisiko |
 | T-010 | Repudiation | Benutzer bestreitet einen Befehl | Audit mit Request-ID, Session, Rolle, auch für Ablehnungen (AUD-001, CMD-007) | abgedeckt |
-| T-011 | Information Disclosure | Auslesen von RCON-Passwörtern aus Datenbank oder Backup | AES-256-GCM, Master-Key getrennt, nicht im Backup (SRV-002, SEC-005) | abgedeckt |
+| T-011 | Information Disclosure | Auslesen von RCON-Passwörtern aus Datenbank oder Backup | AES-256-GCM, Master-Key getrennt, nicht im Backup (SRV-002, SEC-005); neue Adresse nur mit erneuter Passworteingabe | abgedeckt |
 | T-012 | Information Disclosure | Mitlesen des RCON-Passworts im Netz (RCON ist unverschlüsselt) | RCON nur im internen Netz (SEC-001) | Restrisiko |
 | T-013 | Information Disclosure | Server außerhalb des Scopes werden sichtbar | 404 statt 403 (Design 3.1) | abgedeckt |
 | T-014 | Information Disclosure | Geheimnisse in Container-Logs | Logs nur für RCON- und Server-Admin, nur bei offener Ansicht (UI-009, AGT-008) | abgedeckt |
 | T-015 | Information Disclosure | Kopplungs-Token oder Initialpasswort in docker inspect bzw. Container-Log | Token einmalig und 24 h gültig, \_FILE-Variante (D-033); Initialpasswort nach Änderung ungültig (AUTH-007) | abgedeckt |
-| T-016 | Denial of Service | Befehlsflut gegen einen Spieleserver | Ratenlimit (CMD-019), Warteschlange je Server (PROT-002) | abgedeckt |
-| T-017 | Denial of Service | Übergroße Nachrichten oder Verbindungsflut am Agent-Port | Größenlimits und Handshake-Rate am Agent-Port, begrenzte wartende Kopplungen (SEC-007) | neu |
-| T-018 | Denial of Service | Viele WebSockets oder Abos je Session | Begrenzung der Sockets je Session und der Abos je Socket (SEC-008) | neu |
-| T-019 | Denial of Service | Regex mit hoher Laufzeit im Agent | RE2, Zeilenlimit, Timeout (SEC-003) | abgedeckt |
+| T-016 | Denial of Service | Befehlsflut gegen einen Spieleserver | Ratenlimit (CMD-019), Warteschlange je Server (PROT-002); ein gesperrter Client füllt das Audit-Log nicht | abgedeckt |
+| T-017 | Denial of Service | Übergroße Nachrichten oder Verbindungsflut am Agent-Port | Größenlimits und Handshake-Rate am Agent-Port, begrenzte wartende Kopplungen, Leerlauf ohne Session beendet die Verbindung (SEC-007) | abgedeckt |
+| T-018 | Denial of Service | Viele WebSockets oder Abos je Session | Begrenzung der Sockets je Session und der Abos je Socket (SEC-008) | abgedeckt |
+| T-019 | Denial of Service | Regex mit hoher Laufzeit im Panel | RE2, Zeilenlimit, Timeout (SEC-003) | abgedeckt |
 | T-020 | Elevation of Privilege | Rolle oder Scope über die API erweitern | Rechteprüfung nur im Backend, Zuweisungen nur als Teilmenge (ROLE-008, Design 3.6) | abgedeckt |
 | T-021 | Elevation of Privilege | Kompromittiertes Panel übernimmt den Host über den Agent | Agent erlaubt nur die Operationen aus Design 1.5 und nur gelabelte Container (AGT-002, AGT-004) | abgedeckt |
 | T-022 | Elevation of Privilege | Kompromittierter Agent übernimmt den Host | Agent minimal, distroless, als Nicht-Root ohne offenen Port; zusätzlicher Socket-Proxy vor dem Docker-Socket als Empfehlung (SEC-010), der nur Auflisten, Inspizieren, Ereignisse, Logs, Statistiken, start, stop und restart durchlässt. Zugriff auf den Docker-Socket bleibt root-äquivalent. Beim empfohlenen Proxy erlaubt ALLOW\_RESTARTS auch kill; der Agent ruft es nie auf, ein kompromittierter Agent könnte es, gleichwertig zu stop | Restrisiko, gemindert |
-| T-023 | Elevation of Privilege | Kompromittierter Agent greift das Panel an | Agent-Daten gelten als Fremddaten (SEC-006, SEC-007); Agent erhält nur Aufträge, keine Daten anderer Hosts | neu |
-| T-025 | Denial of Service | Login-Flut erschöpft den Speicher über Argon2id (64 MiB je Berechnung) | Begrenzung gleichzeitiger Berechnungen, Login-Schutz, Einladungs-Token vor der Passwortarbeit geprüft (Design 3.7) | neu |
-| T-026 | Tampering | Manipulierte Abhängigkeit oder Image in der Lieferkette | Signierte Images mit SBOM, govulncheck, gepinnte Actions und Basis-Images (SEC-013) | neu |
-| T-024 | Information Disclosure | Geheimnisse in den Logs von Panel und Agent, die über Portainer, Log-Sammler oder MCP von Dritten gelesen werden | Schwärzung auf allen Log-Levels, Sessions nur als Hash, Abnahme über Logs nur gegen Testinstanzen (SEC-012, Design 8.1) | neu |
+| T-023 | Elevation of Privilege | Kompromittierter Agent greift das Panel an | Agent-Daten gelten als Fremddaten (SEC-006, SEC-007); Agent erhält nur Aufträge, keine Daten anderer Hosts | abgedeckt |
+| T-025 | Denial of Service | Speicher wird ohne Anmeldung erschöpft: über Argon2id (64 MiB je Berechnung) oder große Request-Bodys | Begrenzung gleichzeitiger Berechnungen, Login-Schutz, Einladungs-Token vor der Passwortarbeit geprüft (Design 3.7), Bodys höchstens 256 KiB, Profilbild 2 MiB, gemerkte Pseudonyme begrenzt (Design 2.1); Speichergrenze im Compose | abgedeckt |
+| T-026 | Tampering | Manipulierte Abhängigkeit oder Image in der Lieferkette | Signierte Images mit SBOM, govulncheck, gepinnte Actions und Basis-Images (SEC-013) | abgedeckt |
+| T-024 | Information Disclosure | Geheimnisse in den Logs von Panel und Agent, die über Portainer, Log-Sammler oder MCP von Dritten gelesen werden | Schwärzung auf allen Log-Levels, Sessions nur als Hash, Abnahme über Logs nur gegen Testinstanzen (SEC-012, Design 8.1) | abgedeckt |
 
 ## 4. Neue Maßnahmen
 
@@ -63,7 +63,7 @@ Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept
 | SEC-009 | Sicherheitsheader auf jeder Antwort des Web-Ports: Content-Security-Policy ohne Inline-Skripte, X-Content-Type-Options, Referrer-Policy, frame-ancestors none; der Agent-Port liefert keine Inhalte für Browser | Muss | R1 |
 | SEC-010 | Doku empfiehlt einen Socket-Proxy vor dem Docker-Socket, der nur die vom Agent benötigten Endpunkte durchlässt; der Agent funktioniert damit unverändert | Kann | R1 |
 | SEC-011 | Manipulationssichere Verkettung der Audit-Einträge (Hash-Kette) mit Prüffunktion | Kann | Backlog |
-| SEC-013 | Lieferkette: Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne Automerge; Release-Tags erst nach Veröffentlichung des Repositories; Signatur und SBOM gelten für ghcr.io und Docker Hub (PRJ-004) | Muss | R1 |
+| SEC-013 | Lieferkette: Images für amd64 und arm64 signiert (cosign keyless) mit SBOM (syft); govulncheck als Pflicht-Check; Actions auf Commit-SHA gepinnt; Abhängigkeits-Updates per Renovate ohne ungeprüftes Automerge, Merge durch Claude Code nach grüner CI und Sichtung des Changelogs, Major nur nach Freigabe; Release-Tags erst nach Veröffentlichung des Repositories; Signatur und SBOM gelten für ghcr.io und Docker Hub (PRJ-004) | Muss | R1 |
 
 ## 5. Restrisiken
 

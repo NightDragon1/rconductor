@@ -7,11 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
@@ -186,5 +190,137 @@ func TestEvictionRules(t *testing.T) {
 	}
 	if d, _ := full.check("newcomer", ip(30), now.Add(7*time.Second), time.Hour); d != 4*time.Second {
 		t.Errorf("delay with a table full of locks = %v, want 4s", d)
+	}
+}
+
+// TestParallelBurstStaysUnderTheLimit covers T-002: attempts in parallel
+// count before their result, so a burst gets no more guesses than the limit.
+func TestParallelBurstStaysUnderTheLimit(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx := context.Background()
+	attacker := clientAt("192.0.2.77")
+	var wg sync.WaitGroup
+	var guessed atomic.Int32
+	for range 40 {
+		wg.Go(func() {
+			if _, _, err := f.svc.Login(ctx, "Mod", "wrong password!!", attacker); errors.Is(err, ErrInvalidCredentials) {
+				guessed.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	if n := guessed.Load(); n > 5 {
+		t.Errorf("%d guesses got through, the limit is 5", n)
+	}
+}
+
+// TestIPv6NetworkIsOneClient covers T-002: rotating the address inside a /64
+// does not start a new count.
+func TestIPv6NetworkIsOneClient(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx := context.Background()
+	for i := range 5 {
+		_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", clientAt(fmt.Sprintf("2001:db8:1:2::%x", i+1)))
+	}
+	var locked *LockedError
+	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt("2001:db8:1:2::ffff")); !errors.As(err, &locked) {
+		t.Errorf("another address of the network = %v", err)
+	}
+	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt("2001:db8:1:3::1")); errors.As(err, &locked) {
+		t.Errorf("another network is locked too: %v", err)
+	}
+}
+
+// TestLockoutAuditsOnce covers T-016: a locked client repeats its attempts at
+// HTTP speed without a session; that adds one audit row, not one per attempt.
+func TestLockoutAuditsOnce(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx := context.Background()
+	attacker := clientAt("192.0.2.78")
+	for range 5 {
+		_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", attacker)
+	}
+	before := f.count(t, `SELECT count(*) FROM audit_log`)
+	for range 50 {
+		_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", attacker)
+	}
+	if n := f.count(t, `SELECT count(*) FROM audit_log`) - before; n != 1 {
+		t.Errorf("%d audit rows for 50 refused attempts, want 1", n)
+	}
+}
+
+// TestOverlongPasswordIsWrong covers T-025: a huge password fails like any
+// other wrong one.
+func TestOverlongPasswordIsWrong(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	if _, _, err := f.svc.Login(context.Background(), "Mod", strings.Repeat(testPassword, 1000), clientAt("192.0.2.79")); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// TestLongPseudonymStaysSmall covers T-025: the counters keep a small copy of
+// a name, not the string the name was cut from.
+func TestLongPseudonymStaysSmall(t *testing.T) {
+	tr := newThrottle()
+	ip := netip.MustParseAddr("192.0.2.81")
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	for i := range 50 {
+		name := fmt.Sprintf("%d", i) + strings.Repeat("x", 1<<20)
+		tr.fail(accountKey(name), ip, time.Now(), 5, time.Minute)
+	}
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	if grown := int64(after.HeapAlloc) - int64(before.HeapAlloc); grown > 4<<20 {
+		t.Errorf("50 names of 1 MiB keep %d bytes", grown)
+	}
+	runtime.KeepAlive(tr)
+}
+
+// TestAccountsNeverShareACounter: the key folds like the lookup, so a similar
+// account cannot clear the counters of another (T-002).
+func TestAccountsNeverShareACounter(t *testing.T) {
+	for _, pair := range [][2]string{{"Kai", "\u212Aai"}, {"Müller", "MÜLLER"}, {"admin", "adm\u0130n"}} {
+		if accountKey(pair[0]) == accountKey(pair[1]) {
+			t.Errorf("%q and %q share a key", pair[0], pair[1])
+		}
+	}
+	if accountKey("MoD") != accountKey("mod") {
+		t.Error("ASCII case must fold, as in the lookup")
+	}
+}
+
+// TestLowerLimitLocksNobodyOutForGood: failures from before a lower limit end
+// with their window, so the right password works again.
+func TestLowerLimitLocksNobodyOutForGood(t *testing.T) {
+	tr := newThrottle()
+	now := time.Now()
+	ip := netip.MustParseAddr("192.0.2.80")
+	for range 4 {
+		tr.fail("mod", ip, now, 5, time.Minute)
+	}
+	if tr.reserve("mod", ip, now, time.Minute, 3) {
+		t.Error("failures within the window do not count")
+	}
+	if !tr.reserve("mod", ip, now.Add(2*time.Minute), time.Minute, 3) {
+		t.Error("old failures still block the login")
+	}
+}
+
+// TestHangUpIsAudited covers SEC-004: a client that hangs up during the check
+// still leaves its failed attempt in the audit log.
+func TestHangUpIsAudited(t *testing.T) {
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod"})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	f.svc.audit(ctx, audit.Entry{Kind: audit.KindAuth, Action: "login", Result: audit.ResultDenied, Reason: "unauthenticated"})
+	if n := f.count(t, `SELECT count(*) FROM audit_log WHERE action = 'login'`); n != 1 {
+		t.Errorf("%d audit rows after a hang-up", n)
 	}
 }

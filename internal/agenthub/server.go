@@ -182,8 +182,11 @@ func (h *Hub) Serve(ctx context.Context, addr string, ready func(net.Addr)) erro
 	srv := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
-		ErrorLog:          slog.NewLogLogger(h.log.Handler(), slog.LevelDebug),
-		BaseContext:       func(net.Listener) context.Context { return ctx },
+		// A connection that made no agent session goes away; upgraded
+		// sessions have left the server by then.
+		IdleTimeout: h.hello,
+		ErrorLog:    slog.NewLogLogger(h.log.Handler(), slog.LevelDebug),
+		BaseContext: func(net.Listener) context.Context { return ctx },
 		// The listener hands out connections right after their TLS
 		// handshake; the hello deadline starts there.
 		ConnContext: func(ctx context.Context, _ net.Conn) context.Context {

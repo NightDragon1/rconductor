@@ -89,7 +89,7 @@ var settingRules = map[string]rule{
 	"login.lockout_duration":      durationRule(time.Minute, 24*time.Hour),
 	SettingInviteLifetime:         durationRule(time.Minute, 30*24*time.Hour),
 	perm.SettingSupportersEnabled: boolRule,
-	SettingAuditRetentionDays:     intRule(1, 3650),
+	SettingAuditRetentionDays:     intRule(30, 3650),
 	SettingWSMaxSockets:           intRule(1, 100),
 	SettingWSMaxSubs:              intRule(1, 64),
 	profiles.SettingPollInterval:  durationRule(profiles.MinPollInterval, time.Hour),

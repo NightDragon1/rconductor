@@ -97,7 +97,7 @@ func NewHandler(opts Options) http.Handler {
 			WriteProblem(w, http.StatusNotFound, "", "")
 		})
 	}
-	return withSecurityHeaders(withRequestID(withClient(opts.Proxies, mux)))
+	return withSecurityHeaders(withRequestID(withBodyLimit(withClient(opts.Proxies, mux))))
 }
 
 // Serve listens on addr and serves h until ctx ends, then shuts down

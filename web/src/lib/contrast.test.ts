@@ -54,6 +54,18 @@ describe.each([
   });
 });
 
+describe.each([
+  ['dark', tokens(dark)],
+  ['light', tokens(light)],
+])('text contrast in the %s design', (_, colors) => {
+  it.each(['text', 'text-muted', 'accent', 'ok', 'warn', 'danger'])('%s reaches 4.5:1', (name) => {
+    for (const surface of surfaces) {
+      const [fg = '', bg = ''] = [colors[name], colors[surface]];
+      expect(contrast(fg, bg), `${name} on ${surface}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 it('measures like the WCAG formula', () => {
   expect(contrast('#000000', '#ffffff')).toBeCloseTo(21);
   expect(contrast('#767676', '#ffffff')).toBeCloseTo(4.54, 1);

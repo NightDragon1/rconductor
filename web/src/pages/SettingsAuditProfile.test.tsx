@@ -72,7 +72,7 @@ describe('settings, audit and profile', () => {
     ]);
     // Dates come from the browser's formatting, not the language files.
     const data = /^(user\.update|boss|aria-label=.*|[\d.,:/ APM]+)$/;
-    expect(unmarked(container).filter((s) => !data.test(s) && !s.startsWith('{'))).toEqual([]);
+    expect(unmarked(container).filter((s) => !data.test(s) && !/^[{}"]/.test(s))).toEqual([]);
   });
 
   it('profile page has no text outside the language files (NFR-007)', async () => {

@@ -97,6 +97,25 @@ func (p *project) published(service, port string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// hardened checks the limits the delivered files set on a container.
+func (p *project) hardened(service string) {
+	p.t.Helper()
+	id, err := p.command("ps", "--quiet", service).Output()
+	if err != nil {
+		p.t.Fatal(err)
+	}
+	out, err := exec.Command("docker", "inspect", "--format",
+		"{{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.SecurityOpt}} {{.HostConfig.PidsLimit}} {{.HostConfig.Memory}}",
+		strings.TrimSpace(string(id))).Output()
+	if err != nil {
+		p.t.Fatal(err)
+	}
+	got := strings.TrimSpace(string(out))
+	if want := "true [ALL] [no-new-privileges:true] 256 1073741824"; got != want {
+		p.t.Errorf("%s runs with %s, want %s", service, got, want)
+	}
+}
+
 // noPorts covers AGT-011 for the delivered files: the service publishes no
 // port at all.
 func (p *project) noPorts(service string) {
@@ -181,6 +200,8 @@ func TestComposeAllInOne(t *testing.T) {
 	p.up("agent")
 	waitConnected(t, admin)
 	p.noPorts("agent")
+	p.hardened("panel")
+	p.hardened("agent")
 }
 
 // TestComposeSeparate covers NFR-014 for Design 5.4: panel and agent start

@@ -26,6 +26,7 @@ default without regard to case.
 | Supporters | the commands marked passable in the list of their moderator |
 | Precedence | wrapper commands of the game profile are always blocked for moderators and supporters, whatever the list says |
 | Catalog check | with a catalog entry, moderators and supporters are also checked against its parameters: a player must be a player name, so selectors like `@a` are refused; a choice must be listed, a number in range |
+| Command separators | a profile can name them in `syntax.separators`, such as `;` on Source servers; moderators and supporters cannot send a command that holds one. Set this in your own profiles if the game's console splits commands |
 | Admins | free input, no list |
 
 ## Pairing

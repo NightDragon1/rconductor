@@ -51,6 +51,42 @@ async function ringContrast(page: Page, name: string) {
   });
 }
 
+// weakFrames lists controls whose border stands below 3:1 against the
+// background behind them.
+async function weakFrames(page: Page) {
+  return page.evaluate(() => {
+    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
+    const lum = (c: number[]) => {
+      const [r = 0, g = 0, b = 0] = c.map((v) => {
+        const x = v / 255;
+        return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const behind = (el: Element | null): number[] => {
+      for (let e = el; e; e = e.parentElement) {
+        const c = rgb(getComputedStyle(e).backgroundColor);
+        if (c.length === 3 || (c[3] ?? 0) > 0) return c;
+      }
+      return [255, 255, 255];
+    };
+    const out: string[] = [];
+    const controls = 'a, button, input, select, textarea, [role="radio"]';
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>(controls))) {
+      const s = getComputedStyle(el);
+      if (parseFloat(s.borderTopWidth) === 0 || s.borderTopStyle === 'none') continue;
+      if (el.closest('[disabled]') || (el as HTMLInputElement).disabled) continue;
+      const [hi, lo] = [lum(rgb(s.borderTopColor)), lum(behind(el.parentElement))].sort(
+        (a, b) => b - a,
+      ) as [number, number];
+      const ratio = (hi + 0.05) / (lo + 0.05);
+      if (ratio < 3)
+        out.push(`${el.tagName} ${(el.textContent ?? '').slice(0, 24)}: ${ratio.toFixed(2)}`);
+    }
+    return out;
+  });
+}
+
 for (const theme of ['dark', 'light']) {
   test.describe(`${theme} design`, () => {
     test.beforeEach(async ({ page }) => design(page, theme));
@@ -86,6 +122,39 @@ for (const theme of ['dark', 'light']) {
         expect(ring.width, name).toBe('2px');
         expect(ring.ratio, name).toBeGreaterThanOrEqual(3);
       }
+    });
+
+    // The frame of each control the browser really draws, not only the
+    // token: 3:1 against what is behind it (WCAG 1.4.11).
+    test('controls have a visible frame', async ({ page, state }) => {
+      await login(page, 'admin', secret(state, 'admin'));
+      await expect(page.getByRole('navigation').first()).toBeVisible();
+      for (const path of [
+        `servers/${state.server_id}/console`,
+        'audit',
+        'admin/users',
+        'admin/servers',
+      ]) {
+        await page.goto(path);
+        await page.waitForLoadState('networkidle').catch(() => undefined);
+        expect.soft(await weakFrames(page), path).toEqual([]);
+      }
+      await login(page, 'mod', secret(state, 'mod'));
+      await expect(page.getByRole('navigation').first()).toBeVisible();
+      await page.goto(`servers/${state.server_id}/commands`);
+      await page.waitForLoadState('networkidle').catch(() => undefined);
+      expect.soft(await weakFrames(page), 'commands').toEqual([]);
+    });
+
+    test('an open row keeps its text readable', async ({ page, state }) => {
+      await login(page, 'admin', secret(state, 'admin'));
+      await expect(page.getByRole('navigation').first()).toBeVisible();
+      await page.goto('admin/users');
+      await page.getByRole('button', { name: 'mod', exact: true }).click();
+      await check(page, theme, 'open user row');
+      await page.goto('admin/servers');
+      await page.getByRole('button', { name: 'arena', exact: true }).click();
+      await check(page, theme, 'open server row');
     });
 
     test('the dialogs and menus', async ({ page, state }) => {

@@ -57,7 +57,7 @@ export function InvitePage() {
             <p role="status" className="mb-4 text-sm">
               {t('invite.done')}
             </p>
-            <Link to="/login" className="text-accent underline">
+            <Link to="/login" className="tap text-accent underline">
               {t('login.submit')}
             </Link>
           </>

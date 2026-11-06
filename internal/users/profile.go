@@ -164,6 +164,10 @@ func (p *Profiles) ChangePassword(ctx context.Context, req Request, current, nex
 	if err := password.Validate(next); err != nil {
 		return &InvalidError{Detail: err.Error()}
 	}
+	// An initial or temporary password is known to someone else (AUTH-010).
+	if next == current {
+		return &InvalidError{Detail: "the new password must differ from the current one"}
+	}
 	newHash, err := p.hasher.Hash(ctx, next)
 	if err != nil {
 		return err

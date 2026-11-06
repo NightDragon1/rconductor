@@ -43,7 +43,9 @@ func normalizePath(p string) (string, error) {
 			return "", &InvalidError{Detail: "a command path must not contain control characters"}
 		}
 	}
-	p = strings.Join(strings.Fields(p), " ")
+	// The pipeline strips the prefix from a command, so an entry with it
+	// would never match (CAT-002).
+	p = strings.Join(strings.Fields(strings.TrimPrefix(strings.TrimSpace(p), "/")), " ")
 	if p == "" || utf8.RuneCountInString(p) > maxPathLen {
 		return "", &InvalidError{Detail: fmt.Sprintf("a command path has 1 to %d characters", maxPathLen)}
 	}

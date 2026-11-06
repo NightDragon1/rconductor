@@ -1,6 +1,6 @@
 # Abnahmekriterien R1
 
-Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept, Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
+Dokumentversion 2.7, freigegeben; Änderungen gegenüber 2.6 siehe Gesamtkonzept, Kapitel 16, gegenüber 2.5 Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
 
 | Prüfart | Bedeutung |
 | --- | --- |
@@ -20,7 +20,7 @@ Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept
 | NFR-005 | Cache-Werte tragen ein Alter; nach Ablauf der Frist aus Gesamtkonzept 4.6 zeigt die Oberfläche sie als veraltet; bei Agent-Trennung werden Messwerte sofort als veraltet markiert | Integration |
 | NFR-007 | Alle Texte der Oberfläche kommen aus Sprachdateien; eine Testsprache mit veränderten Texten ändert jede sichtbare Beschriftung | Unit, E2E |
 | NFR-008 | Ein Backup erzeugt eine konsistente Kopie der Datenbank in /backups, die sich in eine leere Installation einspielen lässt; der Master-Key ist nicht enthalten | Integration |
-| NFR-009 | Die Erweiterungspunkte aus Architektur 7 sind als Go-Interfaces umgesetzt, jedes mit mindestens einer Test-Implementierung | Review |
+| NFR-009 | Protokolladapter und Agent-Backends sind als Go-Interfaces umgesetzt, jedes mit mindestens einer Test-Implementierung; Auth-Anbieter und Datenbanktreiber folgen in R2 | Review |
 | NFR-010 | Ein Neuanlegen des Containers mit denselben Volumes verliert keine Daten; das README listet jeden Pfad in /data, /secrets und /backups | Integration, Review |
 | NFR-013 | Ein Panel der Version N migriert eine Datenbank der Version N-2 in einem Lauf; ein zweiter gleichzeitiger Start wartet auf die Sperre; vor der Migration liegt ein Backup in /backups | Integration |
 | NFR-014 | Beide Compose-Varianten aus Design 5.4 und 5.5 starten unverändert; in der All-in-One-Variante ist 8443 nicht veröffentlicht | Integration |
@@ -34,9 +34,9 @@ Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept
 | PRJ-003 | Zu jeder Version gibt es ein GitHub-Release mit Tag, Änderungsnotizen, SBOM und Verweis auf die signierten Images | Review |
 | PRJ-004 | Die Images liegen auf Docker Hub unter denselben Tags wie auf ghcr.io; cosign verify bestätigt dort Signatur und SBOM-Attestierung | Review |
 | SEC-006 | Ein Spielername mit \<script> und eine RCON-Antwort mit HTML erscheinen als Text, nichts wird ausgeführt; Farbcodes werden entfernt und erzeugen keinen Stil; ein Spielername mit U+202E erscheint ohne Umkehrung; im Freitext erscheint U+202E als Platzhalter, Kopieren liefert das Original | E2E, Unit |
-| SEC-007 | Eine Nachricht über der Höchstgröße trennt die Agent-Verbindung; schnelle Verbindungsversuche einer Adresse werden gedrosselt; wartende Kopplungen bleiben unter der Obergrenze | Integration |
+| SEC-007 | Eine Nachricht über der Höchstgröße trennt die Agent-Verbindung; schnelle Verbindungsversuche einer Adresse werden gedrosselt; wartende Kopplungen bleiben unter der Obergrenze; ein Test mit echtem TLS und gefälschter Registry genügt | Integration |
 | SEC-008 | Ein WebSocket über der Abo-Grenze erhält error limit statt eines weiteren Abos; ein Socket über der Grenze je Session schließt den ältesten Socket mit error replaced; beide Grenzen ändert nur der RCON-Admin | Integration |
-| SEC-009 | Jede Antwort des Web-Ports trägt die Header laut SEC-009; die Oberfläche läuft ohne CSP-Verletzung in der Browser-Konsole | E2E |
+| SEC-009 | Jede Antwort des Panels am Web-Port trägt die Header laut SEC-009, ausgenommen Fehler, die net/http vor dem Handler erzeugt; die Oberfläche läuft ohne CSP-Verletzung in der Browser-Konsole | E2E |
 | SEC-010 | Die Doku enthält ein lauffähiges Beispiel mit Socket-Proxy; alle Agent-Funktionen aus AGT-003 funktionieren damit | Integration, Review |
 | NFR-016 | Jeder Ereigniscode aus Design 8.3 tritt im Testlauf mindestens einmal auf, als gültige JSON-Zeile mit allen Pflichtfeldern aus 8.2 | Integration |
 | SEC-013 | Release-Images für amd64 und arm64 tragen auf ghcr.io und Docker Hub eine cosign-Signatur und eine SBOM-Attestierung, die cosign verify bestätigt; govulncheck ist Pflicht-Check; alle Actions sind auf Commit-SHA gepinnt | Review |
@@ -74,7 +74,7 @@ Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept
 | ID | Abnahmekriterium | Prüfart |
 | --- | --- | --- |
 | SRV-001 | Ein Server mit Name, Profil, Host, Port und Passwort lässt sich anlegen; Agent und Container sind optional und wählbar | E2E |
-| SRV-002 | Das RCON-Passwort steht nur verschlüsselt in der Datenbank; mit gelöschtem Master-Key startet das Panel und fordert die Zugangsdaten neu an | Integration |
+| SRV-002 | Das RCON-Passwort steht nur verschlüsselt in der Datenbank; mit gelöschtem erzeugtem Master-Key startet das Panel und fordert die Zugangsdaten neu an | Integration |
 | SRV-003 | Der RCON-Admin legt Servergruppen an und ordnet Server zu; ein Server kann in mehreren Gruppen sein | E2E |
 | SRV-004 | Bei falschem Passwort zeigt der Server Auth-Fehler, bei gestopptem Spiel offline, sonst verbunden; der Wechsel ist binnen 10 s sichtbar | Integration |
 | SRV-005 | Spielports kommen aus dem Profil und lassen sich je Server überschreiben | Integration |
@@ -87,7 +87,7 @@ Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept
 | ID | Abnahmekriterium | Prüfart |
 | --- | --- | --- |
 | CAT-001 | Das Minecraft-Profil aus Design 7.4 wird fehlerfrei importiert; ein Profil mit fehlendem Pflichtfeld wird mit Fehlermeldung abgelehnt | Unit |
-| CAT-002 | Ein Befehl, der in keinem Katalog steht, lässt sich in eine Befehlsliste aufnehmen und senden | Integration |
+| CAT-002 | Ein Befehl, der in keinem Katalog steht, lässt sich in eine Befehlsliste aufnehmen und senden; der RCON-Admin sendet auch Befehle frei, die ein Katalogpfad einschränken würde | Integration |
 | CAT-003 | Eine geänderte Profildatei in /data/profiles ist ohne Neustart binnen 5 s in der Oberfläche sichtbar; eine fehlerhafte Änderung lässt den alten Stand aktiv | Integration |
 | CAT-005 | Mit case\_sensitive=false wird KICK wie kick behandelt; ein führender / wird entfernt; ein Befehl über max\_length wird abgelehnt | Unit |
 
@@ -121,7 +121,7 @@ Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept
 | AGT-009 | Ohne Agent löst Neustart den stop-Befehl aus dem Profil aus; der Container kommt mit unless-stopped zurück | Integration |
 | AGT-011 | Der Agent-Container veröffentlicht keinen Port und verbindet sich selbst zum Panel | Review, Integration |
 | AGT-012 | Ein Agent mit fremdem Schlüssel oder ein Panel mit fremdem Schlüssel wird beim Handshake abgewiesen; nach Widerruf verbindet sich der Agent nicht mehr | Integration |
-| AGT-013 | Ein Agent mit anderer Hauptversion wird mit Grund version abgelehnt; der Hinweis steht im Panel und im Agent-Log | Integration |
+| AGT-013 | Ein Agent mit anderer Hauptversion wird mit Grund version abgelehnt; der Hinweis steht im Panel-Log und im Agent-Log | Integration |
 
 ## 8. Oberfläche und Audit (2.9 bis 2.11)
 
@@ -137,7 +137,7 @@ Dokumentversion 2.6, freigegeben; Änderungen gegenüber 2.5 siehe Gesamtkonzept
 | UI-009 | Logs werden nur bei offener Ansicht übertragen; nach Verlassen der Seite endet logs.follow | Integration |
 | UI-011 | Navigation und Reiter zeigen je Rolle nur erlaubte Einträge laut Design 6.2 und 6.3 | E2E |
 | UI-012 | Bei 390 px Breite sind Befehlsseite, Karten und Konsole ohne horizontales Scrollen bedienbar; Tippflächen sind mindestens 44 px; Verwaltung ist nur lesbar, ausgenommen Sperren, Entsperren und Sitzungen beenden mit Bestätigungsdialog | E2E |
-| AUD-001 | Befehle, Ablehnungen, Agent-Aktionen, Verwaltungsänderungen und Anmeldungen erzeugen je einen Eintrag mit Ergebnis | Integration |
+| AUD-001 | Befehle, Ablehnungen, Agent-Aktionen, Verwaltungsänderungen und Anmeldungen erzeugen Einträge mit Ergebnis, ein Befehl cmd.sent und cmd.result, eine Sperre einen für alle abgewiesenen Versuche | Integration |
 | AUD-003 | Einträge älter als die Frist (Standard 90 Tage) sind nach dem nächsten Aufräumlauf entfernt; nur der RCON-Admin kann die Frist ändern | Integration |
 | AUD-004 | Ein Server-Admin sieht nur Einträge seines Scopes; der Versuch, die Frist zu ändern, wird abgelehnt | Integration |
 

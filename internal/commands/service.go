@@ -190,6 +190,7 @@ func (s *Service) syntax(ctx context.Context, serverID string) (Syntax, error) {
 		syn.MaxLength = rules.Syntax.MaxLength
 	}
 	syn.Wrappers = rules.Syntax.Wrappers
+	syn.Separators = rules.Syntax.Separators
 	if pp := rules.Syntax.PlayerPattern; pp != "" {
 		// The import has checked the pattern; one that does not compile
 		// leaves the fallback rules.
@@ -282,6 +283,9 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	if !sr.AllCommands {
 		if IsWrapper(tokens, syn) {
 			return Result{}, s.deny(ctx, req, serverID, cmd, ReasonWrapperBlocked, 0)
+		}
+		if HasSeparator(cmd, syn) {
+			return Result{}, s.deny(ctx, req, serverID, cmd, ReasonInvalid, 0)
 		}
 		if !AllowedByList(tokens, sr.Commands, syn.CaseSensitive) {
 			return Result{}, s.deny(ctx, req, serverID, cmd, ReasonNotInList, 0)

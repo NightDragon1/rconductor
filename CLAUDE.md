@@ -24,6 +24,8 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   z. B. "feat(cmd): Token-Pfad-Abgleich (CMD-004)".
 - Eine Anforderung ist erst fertig, wenn ihr Abnahmekriterium aus
   docs/05-abnahme-r1.md in der genannten Prüfart besteht (Test vorhanden und grün).
+- Meilenstein-Abschluss: Bevor Abnahmen grün werden, blinde Prüfung durch einen
+  Sub-Agent ohne Vorkontext (Stichprobe der Abnahmen und Sicherheit).
 - Widerspricht eine Anforderung einer anderen oder dem Design: nicht selbst
   entscheiden, sondern stoppen und mir den Widerspruch mit Fundstellen zeigen.
 - docs/ nicht verändern. Vorschläge für Änderungen nur als Hinweis an mich.
@@ -87,6 +89,9 @@ Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
   Merge, Abnahme oder Release. Ergebnisse beim nächsten Bericht nachreichen.
 - Fehler zuerst reproduzieren, dann gezielt beheben; keine Komplettläufe als
   Fehlersuche.
+- Definition of Done für Tests: neben dem Normalfall auch Reihenfolge- und
+  Nebenläufigkeitsfälle und Missbrauch (große Eingaben, parallele Anfragen, fehlende
+  Pflichtfelder), wo die Anforderung sie berührt.
 
 ## Kontext und Berichte
 - Kontext sparsam: docs/handover.md und das betroffene Kapitel lesen, nicht alle

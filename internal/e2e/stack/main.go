@@ -130,6 +130,9 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 		if cmd == "list" {
 			return "There are 2 of a max of 20 players online: Steve, <b>Alex</b>"
 		}
+		if strings.HasPrefix(cmd, "say slowly") {
+			time.Sleep(time.Second) // an answer that outlasts a switch of servers
+		}
 		return "Done: " + cmd
 	})
 	if err != nil {
