@@ -34,9 +34,23 @@ docker compose -f all-in-one.yaml logs panel | grep password:
 4. Under **Servers and groups**, choose **New server**: name, game profile,
    host, RCON port and password, and optionally agent and container.
 
-The images are on ghcr.io and Docker Hub (`nightdragon1/rconductor-panel`,
+The images are on Docker Hub and ghcr.io (`nightdragon1/rconductor-panel`,
 `nightdragon1/rconductor-agent`) for amd64 and arm64. The tag `1` follows all
-1.x releases, so panel and agent stay compatible.
+1.x releases, so panel and agent stay compatible. Docker Hub is the default;
+`RCD_IMAGE_REPO=ghcr.io/nightdragon1` in `.env` selects ghcr.io.
+
+### Test versions
+
+Before 1.0 the tag `1` does not exist yet, so a test version must be named. Do
+this before the first `docker compose up`:
+
+```sh
+echo "RCD_VERSION=0.9" >> .env
+```
+
+A version `0.x` is a pre-release for testing, with known issues: they are listed
+in its [release notes](https://github.com/NightDragon1/rconductor/releases). It
+has only its exact tag, there is no `0` or `latest`.
 
 ## Volumes and files
 

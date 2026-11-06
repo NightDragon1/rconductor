@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -27,11 +28,46 @@ const composeDir = "../../deploy/compose/"
 func composeImages(t *testing.T) {
 	t.Helper()
 	for local, name := range map[string]string{
-		panelImage(): "ghcr.io/nightdragon1/rconductor-panel:1",
-		agentImage(): "ghcr.io/nightdragon1/rconductor-agent:1",
+		panelImage(): "docker.io/nightdragon1/rconductor-panel:1",
+		agentImage(): "docker.io/nightdragon1/rconductor-agent:1",
 	} {
 		if out, err := exec.Command("docker", "tag", local, name).CombinedOutput(); err != nil {
 			t.Fatalf("docker tag %s: %v: %s", local, err, out)
+		}
+	}
+}
+
+// TestComposeImageRepo covers the choice of the registry: Docker Hub by
+// default, ghcr.io as the documented alternative, and a test version by name.
+func TestComposeImageRepo(t *testing.T) {
+	for _, c := range []struct {
+		repo, version, want string
+	}{
+		{"", "", "docker.io/nightdragon1/rconductor-%s:1"},
+		{"docker.io/nightdragon1", "0.9", "docker.io/nightdragon1/rconductor-%s:0.9"},
+		{"ghcr.io/nightdragon1", "", "ghcr.io/nightdragon1/rconductor-%s:1"},
+		{"ghcr.io/nightdragon1", "0.9", "ghcr.io/nightdragon1/rconductor-%s:0.9"},
+	} {
+		for file, parts := range map[string][]string{
+			"all-in-one.yaml": {"agent", "panel"},
+			"panel.yaml":      {"panel"},
+			"agent.yaml":      {"agent"},
+		} {
+			cmd := exec.Command("docker", "compose", "-f", composeDir+file, "config", "--images")
+			cmd.Env = append(os.Environ(), "RCD_IMAGE_REPO="+c.repo, "RCD_VERSION="+c.version, "DOCKER_GID=0")
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("compose config %s: %v: %s", file, err, out)
+			}
+			images := strings.Fields(string(out))
+			slices.Sort(images)
+			var want []string
+			for _, part := range parts {
+				want = append(want, fmt.Sprintf(c.want, part))
+			}
+			if !slices.Equal(images, want) {
+				t.Errorf("%s with repo %q, version %q: %v, want %v", file, c.repo, c.version, images, want)
+			}
 		}
 	}
 }
