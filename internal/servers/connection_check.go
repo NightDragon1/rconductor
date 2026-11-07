@@ -97,6 +97,7 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 		return "", ErrTestRateLimited
 	}
 	var base fields
+	var sealed []byte
 	if in.ServerID != "" {
 		r, err := s.st.Queries.GetServer(ctx, in.ServerID)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -106,6 +107,7 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 			return "", err
 		}
 		base = fields{profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port)}
+		sealed = r.Secret
 	}
 	f, err := s.check(ctx, base, Input{ProfileID: in.ProfileID, Host: in.Host, Port: in.Port})
 	if err != nil {
@@ -117,8 +119,7 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 	sameAddr := in.ServerID != "" && f.host == base.host && f.port == base.port
 	var stored logging.Secret
 	if sameAddr {
-		// Sealed with another key or missing: as if there were none.
-		stored, _ = s.Credentials(ctx, in.ServerID)
+		stored = s.storedPassword(in.ServerID, sealed)
 	}
 	password := stored
 	if in.Password != nil {
@@ -146,6 +147,17 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 		return "", err
 	}
 	return result, nil
+}
+
+// storedPassword opens the password of the read that gave the address, so
+// that the two belong together (B4). Sealed with another key or missing: as if
+// there were none.
+func (s *Service) storedPassword(id string, sealed []byte) logging.Secret {
+	pw, err := s.box.Open(sealed, secretContext(id))
+	if err != nil {
+		return ""
+	}
+	return pw
 }
 
 func samePassword(a, b logging.Secret) bool {
