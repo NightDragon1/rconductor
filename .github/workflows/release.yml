@@ -8,13 +8,8 @@
 # Signatures are keyless (cosign with GitHub OIDC) and land in the public
 # Rekor log for good. Each platform gets its own SBOM and signature at its
 # digest; scripts/release-verify.sh checks that from the outside before the
-# GitHub release appears. Next to publishing, behind the same approval, the
-# short description and the overview of both Docker Hub repos follow from
-# scripts/dockerhub-overview.sh. One token, DOCKERHUB_TOKEN in the
-# environment release, serves the push and the description; it needs the
-# scope Read, Write, Delete, because Read & Write only pushes images. A
-# failure of the description shows red in the run but holds back neither the
-# images nor the GitHub release.
+# GitHub release appears. describe sets short description and overview of
+# both Docker Hub repos with DOCKERHUB_TOKEN.
 #
 # A manual run is a dry run: it builds both platforms and shows image tags
 # and notes, without login, push or signature.
@@ -198,29 +193,30 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          # The login and the bearer token go through stdin and a private
-          # file only, never through arguments or the log.
+          # The login and the bearer token go through stdin and private files
+          # only, never through arguments or the log.
           umask 077
           auth=$(mktemp)
-          trap 'rm -f "$auth"' EXIT
-          hint="DOCKERHUB_TOKEN in the environment release needs the scope Read, Write, Delete"
-          jq -n '{identifier: env.DOCKERHUB_USERNAME, secret: env.DOCKERHUB_TOKEN}' |
-            curl -fsS --data @- -H 'Content-Type: application/json' https://hub.docker.com/v2/auth/token |
-            jq -er '"Authorization: Bearer " + .access_token' > "$auth" || {
-            echo "::error::Docker Hub login failed; $hint"
+          login=$(mktemp)
+          trap 'rm -f "$auth" "$login"' EXIT
+          fail() {
+            echo "::error::Docker Hub description update failed (HTTP $1)"
             exit 1
           }
+          code=$(jq -n '{identifier: env.DOCKERHUB_USERNAME, secret: env.DOCKERHUB_TOKEN}' |
+            curl -sS -o "$login" -w '%{http_code}' --data @- -H 'Content-Type: application/json' \
+              https://hub.docker.com/v2/auth/token) || code=000
+          [ "$code" = 200 ] || fail "$code"
+          jq -er '"Authorization: Bearer " + .access_token' "$login" > "$auth" || fail "$code"
           namespace=${HUB#docker.io/}
           for kind in panel agent; do
             repo=$namespace/rconductor-$kind
-            jq -n --arg short "$(scripts/dockerhub-overview.sh --short "$VERSION" "$kind")" \
+            code=$(jq -n --arg short "$(scripts/dockerhub-overview.sh --short "$VERSION" "$kind")" \
               --arg full "$(scripts/dockerhub-overview.sh "$VERSION" "$kind")" \
               '{description: $short, full_description: $full}' |
-              curl -fsS -o /dev/null -X PATCH --data @- -H 'Content-Type: application/json' -H @"$auth" \
-                "https://hub.docker.com/v2/repositories/$repo/" || {
-              echo "::error::updating $repo failed; $hint"
-              exit 1
-            }
+              curl -sS -o /dev/null -w '%{http_code}' -X PATCH --data @- -H 'Content-Type: application/json' -H @"$auth" \
+                "https://hub.docker.com/v2/repositories/$repo/") || code=000
+            case $code in 2??) ;; *) fail "$code" ;; esac
             echo "updated the description of $repo"
           done
 
