@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+.git
+.github
+.idea
+.vscode
+bin
+dist
+data
+secrets
+backups
+docs
+web/node_modules
+web/coverage
+web/test-results
+web/playwright-report
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep
+**/*.test
+coverage.out

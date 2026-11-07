@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+node_modules
+src/api/schema.d.ts
+e2e/.state-*.json
+test-results
+playwright-report
+.dist-language

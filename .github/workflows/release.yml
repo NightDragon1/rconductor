@@ -1,0 +1,248 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# A tag v1.0 publishes signed multi-arch images to ghcr.io and Docker Hub
+# (D-040, D-047, PRJ-004) and then the GitHub release with notes from
+# CHANGELOG.md and the SBOMs (PRJ-003). A tag v0.9 is a test version: only the
+# image tag 0.9, a pre-release and a fixed text. Publishing waits for the
+# reviewer of the environment release, which also holds the Docker Hub login.
+# Signatures are keyless (cosign with GitHub OIDC) and land in the public
+# Rekor log for good. Each platform gets its own SBOM and signature at its
+# digest; scripts/release-verify.sh checks that from the outside before the
+# GitHub release appears. describe sets short description and overview of
+# both Docker Hub repos with DOCKERHUB_TOKEN.
+#
+# A manual run is a dry run: it builds both platforms and shows image tags
+# and notes, without login, push or signature.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to try out
+        required: true
+        default: v1.0
+
+permissions:
+  contents: read
+
+env:
+  GHCR: ghcr.io/nightdragon1
+  HUB: docker.io/nightdragon1
+
+jobs:
+  version:
+    name: Version
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tags: ${{ steps.version.outputs.tags }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: scripts/release-version.sh "$TAG" | tee -a "$GITHUB_OUTPUT"
+      - name: Notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: scripts/release-notes.sh "$VERSION" "$PRERELEASE" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  dry-run:
+    name: Dry run ${{ matrix.target }}
+    if: github.event_name == 'workflow_dispatch'
+    needs: version
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    strategy:
+      matrix:
+        target: [panel, agent]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - id: names
+        env:
+          TAGS: ${{ needs.version.outputs.tags }}
+          TARGET: ${{ matrix.target }}
+        run: scripts/release-images.sh "$TARGET" "$TAGS" | tee -a "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: ${{ steps.names.outputs.images }}
+          build-args: VERSION=${{ needs.version.outputs.version }}
+      - name: Would publish
+        env:
+          IMAGES: ${{ steps.names.outputs.images }}
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          {
+            echo "Image tags of $TARGET:"
+            echo '```'
+            echo "$IMAGES"
+            echo '```'
+            echo "Docker Hub short description of $TARGET:"
+            echo '```'
+            scripts/dockerhub-overview.sh --short "$VERSION" "$TARGET"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  ci:
+    if: github.event_name == 'push'
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish ${{ matrix.target }}
+    if: github.event_name == 'push'
+    needs: [version, ci]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      matrix:
+        target: [panel, agent]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: names
+        env:
+          TAGS: ${{ needs.version.outputs.tags }}
+          TARGET: ${{ matrix.target }}
+        run: scripts/release-images.sh "$TARGET" "$TAGS" | tee -a "$GITHUB_OUTPUT"
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.names.outputs.images }}
+          build-args: VERSION=${{ needs.version.outputs.version }}
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - id: syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      - name: SBOM per platform, signatures and attestations in both registries
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          SYFT: ${{ steps.syft.outputs.cmd }}
+          TARGET: ${{ matrix.target }}
+        run: scripts/release-attest.sh "$TARGET" "$DIGEST"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ matrix.target }}
+          path: rconductor-*.spdx.json
+
+  verify:
+    name: Verify the published images
+    needs: [version, publish]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - name: Signature, SBOM and tags per platform and registry
+        env:
+          TAG: ${{ github.ref_name }}
+        run: scripts/release-verify.sh "$TAG"
+
+  describe:
+    name: Docker Hub description
+    if: github.event_name == 'push'
+    # Next to publish, so that one approval of the environment covers both;
+    # release does not wait for it.
+    needs: [version, ci]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Short description and overview of both repos
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          # The login and the bearer token go through stdin and private files
+          # only, never through arguments or the log.
+          umask 077
+          auth=$(mktemp)
+          login=$(mktemp)
+          trap 'rm -f "$auth" "$login"' EXIT
+          fail() {
+            echo "::error::Docker Hub description update failed (HTTP $1)"
+            exit 1
+          }
+          code=$(jq -n '{identifier: env.DOCKERHUB_USERNAME, secret: env.DOCKERHUB_TOKEN}' |
+            curl -sS -o "$login" -w '%{http_code}' --data @- -H 'Content-Type: application/json' \
+              https://hub.docker.com/v2/auth/token) || code=000
+          [ "$code" = 200 ] || fail "$code"
+          jq -er '"Authorization: Bearer " + .access_token' "$login" > "$auth" || fail "$code"
+          namespace=${HUB#docker.io/}
+          for kind in panel agent; do
+            repo=$namespace/rconductor-$kind
+            code=$(jq -n --arg short "$(scripts/dockerhub-overview.sh --short "$VERSION" "$kind")" \
+              --arg full "$(scripts/dockerhub-overview.sh "$VERSION" "$kind")" \
+              '{description: $short, full_description: $full}' |
+              curl -sS -o /dev/null -w '%{http_code}' -X PATCH --data @- -H 'Content-Type: application/json' -H @"$auth" \
+                "https://hub.docker.com/v2/repositories/$repo/") || code=000
+            case $code in 2??) ;; *) fail "$code" ;; esac
+            echo "updated the description of $repo"
+          done
+
+  release:
+    name: GitHub release
+    needs: [version, verify]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: sbom-*
+          merge-multiple: true
+          path: sbom
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          scripts/release-notes.sh "$VERSION" "$PRERELEASE" > notes.md
+          flag=--latest
+          [ "$PRERELEASE" = true ] && flag=--prerelease
+          gh release create "$TAG" sbom/*.spdx.json --verify-tag --title "$VERSION" --notes-file notes.md "$flag"

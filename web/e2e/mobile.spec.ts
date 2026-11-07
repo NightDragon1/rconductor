@@ -1,0 +1,392 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import type { APIRequestContext, Page } from '@playwright/test';
+import { expect, login, secret, test, type StackState } from './fixtures';
+
+// The phone view (UI-012, Design 6.6): at 390 px no page scrolls sideways,
+// every control is a tap target of 44 px, and the administration reads.
+
+async function enter(page: Page, state: StackState, user: string) {
+  await login(page, user, secret(state, user));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+}
+
+// measure looks at the whole page: sideways scrolling, controls below
+// 44 px, controls outside the window and text that is cut off. Rows of
+// tabs and chips that scroll on purpose say so with data-scrolls.
+const measure = (page: Page) =>
+  page.evaluate(() => {
+    const small: string[] = [];
+    const outside: string[] = [];
+    const controls = 'a,button,input,select,textarea,summary,[role=menuitem]';
+    for (const e of Array.from(document.querySelectorAll(controls))) {
+      const box = e.getBoundingClientRect();
+      const hidden = box.width === 0 || box.height === 0;
+      const off = e.matches(':disabled') || e.getAttribute('aria-disabled') === 'true';
+      if (hidden || off || e.matches('input[type=hidden]')) continue;
+      if (!e.closest('[data-scrolls]') && (box.left < 0 || box.right > window.innerWidth)) {
+        const name = e.getAttribute('aria-label') ?? e.textContent ?? '';
+        outside.push(`${e.tagName} ${Math.round(box.left)}..${Math.round(box.right)} ${name}`);
+      }
+      if (box.width < 44 || box.height < 44) {
+        const name = e.getAttribute('aria-label') ?? e.textContent ?? '';
+        small.push(
+          `${e.tagName} ${Math.round(box.width)}x${Math.round(box.height)} ${name.slice(0, 30)}`,
+        );
+      }
+    }
+    const cut: string[] = [];
+    for (const e of Array.from(document.querySelectorAll('body *'))) {
+      // Screen reader text is 1 px wide; form controls scroll by themselves.
+      if (e.clientWidth <= 1 || e.matches('input,select,textarea,option')) continue;
+      if (e.closest('[data-scrolls]')) continue;
+      const css = getComputedStyle(e);
+      const clips = css.textOverflow === 'ellipsis' || css.overflowX !== 'visible';
+      if (clips && e.scrollWidth > e.clientWidth + 1) {
+        cut.push(`${e.tagName} ${e.scrollWidth}>${e.clientWidth} ${e.textContent?.slice(0, 40)}`);
+      }
+    }
+    const d = document.documentElement;
+    return { scroll: d.scrollWidth, width: d.clientWidth, small, outside, cut };
+  });
+
+async function fits(page: Page) {
+  await page.waitForLoadState('networkidle');
+  const r = await measure(page);
+  expect(r.scroll, 'sideways scrolling').toBeLessThanOrEqual(r.width);
+  expect(r.small, 'tap targets below 44 px').toEqual([]);
+  expect(r.outside, 'controls outside the window').toEqual([]);
+  expect(r.cut, 'text cut off').toEqual([]);
+}
+
+test('the check finds text that is cut off', async ({ page }) => {
+  await page.goto('login');
+  await page.evaluate(() => {
+    const text = 'a text far too long for the narrow box it has to live in';
+    for (const css of [
+      'width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',
+      'width:80px;overflow-x:auto;white-space:nowrap',
+    ]) {
+      const box = document.createElement('p');
+      box.style.cssText = css;
+      box.textContent = text;
+      document.body.append(box);
+    }
+  });
+  expect((await measure(page)).cut).toHaveLength(2);
+});
+
+test('the check finds a control outside the window', async ({ page }) => {
+  await page.goto('login');
+  await page.evaluate(() => {
+    const button = document.createElement('button');
+    button.style.cssText = 'position:fixed;left:380px;width:60px;height:44px';
+    button.textContent = 'off';
+    document.body.append(button);
+  });
+  expect((await measure(page)).outside).toHaveLength(1);
+});
+
+test('login fits a phone (UI-012)', async ({ page }) => {
+  await page.goto('login');
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await fits(page);
+});
+
+for (const [user, tabs] of [
+  ['admin', ['overview', 'console', 'logs', 'history']],
+  ['sadmin', ['overview', 'console', 'logs', 'history']],
+  ['mod', ['overview', 'commands', 'history']],
+  ['sup', ['overview', 'commands', 'history']],
+] as const) {
+  test(`pages of ${user} fit a phone (UI-012)`, async ({ page, state }) => {
+    await enter(page, state, user);
+    await fits(page);
+    for (const path of [
+      'servers',
+      'profile',
+      'no-such-page',
+      ...(user === 'admin' || user === 'sadmin' ? ['audit'] : []),
+      ...tabs.map((t) => `servers/${state.servers.survival}/${t}`),
+    ]) {
+      await page.goto(path);
+      await fits(page);
+    }
+  });
+}
+
+test('the head links to the own profile, signing out stays in the menu', async ({
+  page,
+  state,
+}) => {
+  await enter(page, state, 'mod');
+  const banner = page.getByRole('banner');
+  await expect(banner.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+  await banner.getByRole('link', { name: 'Your profile' }).tap();
+  await expect(page.getByRole('heading', { name: 'Your profile', level: 1 })).toBeVisible();
+  await page.getByRole('button', { name: 'Menu' }).tap();
+  const menu = page.getByRole('dialog', { name: 'Menu' });
+  await menu.getByRole('button', { name: 'Sign out' }).tap();
+  await expect(page).toHaveURL(/login/);
+});
+
+// Toolbars break into further rows and keep every control in reach, down
+// to the narrowest phones.
+for (const width of [390, 320]) {
+  test(`toolbars of console, logs and history fit ${width} px (UI-012)`, async ({
+    page,
+    state,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await enter(page, state, 'admin');
+    const base = `servers/${state.servers.hostile}`;
+
+    await page.goto(`${base}/console`);
+    const input = page.getByRole('textbox', { name: 'Command' });
+    await input.fill(`say ${width}`);
+    await page.getByRole('button', { name: 'Send' }).tap();
+    const block = page.getByRole('article', { name: `say ${width}` });
+    await expect(block.getByRole('button', { name: 'Copy the block' })).toBeInViewport();
+    for (const name of ['Own commands', "Others' commands", 'Logs']) {
+      await expect(page.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
+    }
+    await fits(page);
+
+    await page.goto(`${base}/logs`);
+    for (const name of ['Follow', 'Wrap lines', 'Clear view', 'Copy the shown lines']) {
+      await expect(page.getByRole('button', { name })).toBeInViewport({ ratio: 1 });
+    }
+    await fits(page);
+
+    await page.goto(`${base}/history`);
+    await page.getByText('Answer', { exact: true }).first().tap();
+    await expect(page.getByRole('button', { name: 'Copy the answer' })).toBeVisible();
+    await fits(page);
+  });
+}
+
+test('the console works by touch and hides the timeline (Design 6.5)', async ({ page, state }) => {
+  await enter(page, state, 'admin');
+  await page.goto(`servers/${state.servers.survival}/console`);
+  await expect(page.getByRole('navigation', { name: 'Timeline' })).toBeHidden();
+  const input = page.getByRole('textbox', { name: 'Command' });
+  await input.tap();
+  await input.fill('whitelist');
+  const chips = page.getByRole('list', { name: 'Suggestions' });
+  await expect(chips).toBeVisible();
+  await fits(page);
+  await chips.getByRole('button').first().tap();
+  await expect(input).toHaveValue(/^whitelist \S* ?$/);
+  await input.fill('list');
+  await page.getByRole('button', { name: 'Send' }).tap();
+  const console_ = page.getByRole('region', { name: 'Console' });
+  await expect(console_.getByRole('article', { name: 'list', exact: true }).last()).toBeVisible();
+  await fits(page);
+  // The input stays on the screen, however long the console is.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(input).toBeInViewport();
+});
+
+test('server actions sit in the menu and ask first (AGT-008)', async ({ page, state }) => {
+  await enter(page, state, 'admin');
+  await page.goto(`servers/${state.servers.survival}/overview`);
+  await expect(page.getByRole('group', { name: 'Server actions' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Server actions' }).tap();
+  await expect(page.getByRole('menuitem')).toHaveText(['Start', 'Restart', 'Stop']);
+  await fits(page);
+  await page.getByRole('menuitem', { name: 'Stop' }).tap();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('survival');
+  await dialog.getByRole('button', { name: 'Cancel' }).tap();
+  await expect(dialog).toBeHidden();
+  // Moderators get no actions (AGT-008).
+  await page.context().clearCookies();
+  await enter(page, state, 'mod');
+  await page.goto(`servers/${state.servers.survival}/overview`);
+  await expect(page.getByRole('heading', { name: 'survival', level: 1 })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Server actions' })).toHaveCount(0);
+});
+
+test('commands: one card open, players in the sheet (Design 6.6)', async ({ page, state }) => {
+  await enter(page, state, 'mod');
+  await page.goto(`servers/${state.servers.survival}/commands`);
+  const commands = page.getByRole('region', { name: 'Commands' });
+  const card = (path: string) => commands.getByRole('form', { name: path, exact: true });
+  await expect(card('list').getByRole('button', { name: 'Run' })).toBeVisible();
+  // The first card with fields is open, the next opens in its place.
+  await expect(card('kick').getByLabel('player', { exact: true })).toBeVisible();
+  await expect(card('say').getByRole('button', { name: 'Run' })).toHaveCount(0);
+  await card('say').getByRole('button', { expanded: false }).tap();
+  await expect(card('say').getByRole('button', { name: 'Run' })).toBeVisible();
+  await expect(card('kick').getByLabel('player', { exact: true })).toHaveCount(0);
+  await card('kick').getByRole('button', { expanded: false }).tap();
+  await fits(page);
+  // The search opens the first match that has fields.
+  const search = page.getByRole('searchbox', { name: 'Search commands' });
+  await search.fill('whitelist');
+  await expect(card('whitelist add').getByLabel('player', { exact: true })).toBeVisible();
+  await search.fill('');
+
+  const sheet = page.getByRole('region', { name: 'Players online' });
+  await expect(sheet).toBeInViewport();
+  await card('kick').getByLabel('player', { exact: true }).tap();
+  await sheet.getByRole('button', { name: 'Steve' }).tap();
+  await expect(card('kick').getByLabel('player', { exact: true })).toHaveValue('Steve');
+  await card('kick').getByRole('button', { name: 'Run' }).tap();
+  await expect(page.getByRole('region', { name: 'My history' })).toContainText('kick Steve');
+
+  await sheet.getByRole('button', { expanded: true }).tap();
+  await expect(sheet.getByRole('button', { name: 'Steve' })).toHaveCount(0);
+  await sheet.getByRole('button', { expanded: false }).tap();
+  await expect(sheet.getByRole('button', { name: 'Steve' })).toBeVisible();
+});
+
+// What the administration may show on a phone; everything else that can be
+// used would be a change.
+const reading = /^(Close the details)$/;
+
+async function readsOnly(page: Page, extra: RegExp = /^$/) {
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByText('Read-only on a phone')).toBeVisible();
+  const main = page.getByRole('main');
+  await expect(main.getByRole('table')).toHaveCount(0);
+  for (const e of await main.getByRole('button').all()) {
+    if (!(await e.isEnabled())) continue;
+    const name = (await e.getAttribute('aria-label')) ?? (await e.textContent()) ?? '';
+    const opens = (await e.locator('xpath=ancestor::li').count()) > 0;
+    expect(opens || reading.test(name) || extra.test(name), `button "${name}"`).toBe(true);
+  }
+  await expect(main.getByRole('checkbox', { disabled: false })).toHaveCount(0);
+  await expect(main.locator('input:not([type=search]):not(:disabled)')).toHaveCount(0);
+  await fits(page);
+}
+
+test('the administration reads on a phone (UI-012)', async ({ page, state }) => {
+  await enter(page, state, 'admin');
+
+  await page.goto('admin/groups');
+  await readsOnly(page);
+  await page.getByRole('button', { name: 'moderators', exact: true }).tap();
+  const group = page.getByRole('complementary');
+  await expect(group).toBeInViewport();
+  await readsOnly(page);
+  await expect(group.getByRole('button', { name: /Remove/ })).toHaveCount(0);
+  await expect(group.getByRole('button', { name: /Delete/ })).toHaveCount(0);
+
+  await page.goto('admin/command-lists');
+  await readsOnly(page);
+  await page.getByRole('button', { name: 'moderation', exact: true }).tap();
+  await readsOnly(page);
+
+  await page.goto('admin/servers');
+  await expect(page.getByRole('button', { name: 'New server' })).toHaveCount(0);
+  await readsOnly(page);
+  const server = page.getByRole('list', { name: 'Servers' }).getByRole('listitem');
+  await expect(server.filter({ hasText: 'survival' })).toContainText('Minecraft');
+  await expect(server.filter({ hasText: 'survival' })).toContainText('Status');
+  await page.getByRole('button', { name: 'survival', exact: true }).tap();
+  await readsOnly(page);
+  await expect(page.getByRole('complementary').getByLabel('Name')).toBeDisabled();
+
+  await page.goto('admin/agents');
+  await expect(page.getByRole('button', { name: 'Pair an agent' })).toHaveCount(0);
+  await page.getByRole('searchbox', { name: 'Search agents' }).fill('host-1');
+  await expect(page.getByRole('list', { name: 'Agents' }).getByRole('listitem')).toHaveCount(1);
+  await page.getByRole('searchbox', { name: 'Search agents' }).fill('');
+  await readsOnly(page);
+  await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+
+  await page.goto('admin/settings');
+  await readsOnly(page);
+  await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
+});
+
+async function userId(request: APIRequestContext, base: string, name: string) {
+  const r = await request.get(`${base}api/v1/users`);
+  const { items } = (await r.json()) as { items: { id: string; pseudonym: string }[] };
+  const id = items.find((u) => u.pseudonym === name)?.id;
+  if (!id) throw new Error(`no user ${name}`);
+  return id;
+}
+
+test('users: search and details read; lock and end sessions ask (candidate 26)', async ({
+  page,
+  state,
+}) => {
+  await enter(page, state, 'admin');
+  await page.goto('admin/users');
+  await expect(page.getByRole('heading', { name: 'Users', level: 1 })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create invitation link' })).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('table')).toHaveCount(0);
+  const cards = page.getByRole('list', { name: 'Users' });
+  await expect(cards.getByRole('listitem').first()).toContainText('Role');
+  await expect(cards.getByRole('listitem').first()).toContainText('Status');
+  await expect(page.getByRole('checkbox', { name: /Select/ })).toHaveCount(0);
+  await page.getByRole('searchbox', { name: 'Search users' }).fill('sup');
+  await expect(page.getByRole('button', { name: 'mod', exact: true })).toHaveCount(0);
+  await fits(page);
+  await page.getByRole('button', { name: 'sup', exact: true }).tap();
+  const panel = page.getByRole('complementary');
+  await expect(panel).toBeInViewport();
+  await expect(panel.getByRole('combobox', { name: 'Role' })).toBeDisabled();
+  for (const name of ['Reset password', 'Remove', 'Use as template']) {
+    await expect(panel.getByRole('button', { name })).toHaveCount(0);
+  }
+  await fits(page);
+
+  await panel.getByRole('button', { name: 'End sessions' }).tap();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('End the sessions of sup?');
+  await dialog.getByRole('button', { name: 'End sessions' }).tap();
+  await expect(panel.getByRole('status')).toContainText('All sessions ended.');
+
+  const id = await userId(page.request, state.base_url, 'sup');
+  try {
+    const locked = panel.getByRole('switch', { name: 'Locked' });
+    await locked.tap();
+    await expect(dialog).toContainText('Lock sup?');
+    await dialog.getByRole('button', { name: 'Lock' }).tap();
+    await expect(panel.getByRole('status')).toContainText('Saved');
+    await locked.tap();
+    await expect(dialog).toContainText('Unlock sup?');
+    await dialog.getByRole('button', { name: 'Unlock' }).tap();
+    await expect(locked).not.toBeChecked();
+  } finally {
+    const r = await page.request.patch(`${state.base_url}api/v1/users/${id}`, {
+      headers: { Origin: new URL(state.base_url).origin },
+      data: { disabled: false },
+    });
+    expect(r.ok()).toBe(true);
+  }
+});
+
+test('a long server name fits a phone (SEC-006)', async ({ page, state }) => {
+  await enter(page, state, 'admin');
+  const url = `${state.base_url}api/v1/servers/${state.servers.arena}`;
+  // A change names the whole server and the version just read.
+  const put = async (name: string) => {
+    const now = (await (await page.request.get(url)).json()) as Record<string, unknown> & {
+      version: string;
+    };
+    const r = await page.request.patch(url, {
+      headers: { Origin: new URL(state.base_url).origin, 'If-Match': now.version },
+      data: {
+        name,
+        profile_id: now.profile_id,
+        host: now.host,
+        port: now.port,
+        agent_id: now.agent_id ?? '',
+        container_name: now.container_name ?? '',
+      },
+    });
+    expect(r.status(), await r.text()).toBe(200);
+  };
+  await put('x'.repeat(64));
+  try {
+    await page.goto('');
+    await fits(page);
+    await page.goto(`servers/${state.servers.arena}/console`);
+    await fits(page);
+  } finally {
+    await put('arena');
+  }
+});

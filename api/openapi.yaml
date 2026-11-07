@@ -1,0 +1,2861 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Single source of the panel API (D-039). Server stubs are generated with
+# oapi-codegen, client types with openapi-typescript. Extend this file
+# before implementing an endpoint.
+openapi: 3.1.0
+info:
+  title: RCONductor Panel API
+  version: 1.0.0
+  description: >-
+    REST API between the browser and the panel (Design 2). In R1 it serves
+    only the panel's own web UI. Errors use Problem Details (RFC 9457).
+    Bodies over 256 KiB, a profile picture over 2 MiB, get 413 (Design 2.1).
+  license:
+    name: AGPL-3.0-or-later
+    identifier: AGPL-3.0-or-later
+servers:
+  - url: /api/v1
+
+# Every operation needs a session unless it says otherwise.
+security:
+  - session: []
+
+# Endpoints are added per milestone (Design 2.2).
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      summary: Log in with pseudonym and password (AUTH-001, AUTH-006).
+      description: >-
+        Starts a new session and sets the session cookie. Wrong
+        credentials, unknown users and disabled accounts get the same
+        answer.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in; the response sets the session cookie.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: End the current session (AUTH-006).
+      tags: [auth]
+      responses:
+        "204":
+          description: Logged out; the response clears the session cookie.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /auth/session:
+    get:
+      operationId: getSession
+      summary: The current session and its user (AUTH-006).
+      tags: [auth]
+      responses:
+        "200":
+          description: Current session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /profiles:
+    get:
+      operationId: listProfiles
+      summary: Game profiles with their command catalog (CAT-001, CAT-002).
+      description: >-
+        The catalog is orientation only and allows or forbids nothing.
+        last_error is shown to the RCON admin only (health overview).
+      tags: [profiles]
+      responses:
+        "200":
+          description: All imported profiles.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /servers:
+    get:
+      operationId: listServers
+      summary: Servers in the caller's scope (ROLE-003).
+      description: >-
+        RCON admin and server admins see connection fields and the state
+        of the credentials; moderators and supporters see name, profile
+        and groups. The password is never returned.
+      tags: [servers]
+      responses:
+        "200":
+          description: The servers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      operationId: createServer
+      summary: Add a game server; RCON admin only (SRV-001).
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerInput"
+      responses:
+        "201":
+          description: The new server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /servers/test-connection:
+    post:
+      operationId: testServerConnection
+      summary: Test RCON data without saving; RCON admin only (SRV-007).
+      description: >-
+        With server_id and unchanged host, port and password (an empty
+        password counts as unchanged) the answer is the status of the
+        running connection, nothing connects. New or changed data open a
+        short connection that only authenticates and closes at once. With
+        server_id an empty password means the stored one, also at a new
+        address (D-050); without server_id it is refused. Limited per user.
+        No data of the game server comes back.
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionTest"
+      responses:
+        "200":
+          description: The result of the test.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionTestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /servers/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: getServer
+      summary: A server in the caller's scope; others answer 404 (Design 3.1).
+      tags: [servers]
+      responses:
+        "200":
+          description: The server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateServer
+      summary: Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only.
+      tags: [servers]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerInput"
+      responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "200":
+          description: The changed server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteServer
+      summary: Delete a server (soft delete); RCON admin only.
+      tags: [servers]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /servers/{id}/commands:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: listAllowedCommands
+      summary: Commands the caller may send on the server (CMD-003, CMD-015).
+      description: >-
+        Moderators and supporters get the paths of the list that applies to
+        them, with the catalog entry of the profile where one exists
+        (description and parameters); a path without catalog entry has no
+        parameters and takes the rest of the line. RCON admin and server
+        admin get free_input and the whole catalog, for completion.
+        Orientation only: the pipeline checks every command again.
+      tags: [commands]
+      responses:
+        "200":
+          description: The allowed commands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AllowedCommands"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: sendCommand
+      summary: Send a command over the server's one RCON connection (Design 3.3).
+      description: >-
+        RCON admin and server admin may send any command (CMD-002);
+        moderators and supporters only commands of the list that applies
+        to them on this server, never wrappers (CMD-004, CMD-005). For
+        them a command with catalog entry must also fit its parameters
+        (player a name after the profile's player_pattern, never a
+        selector such as @a; choice one of its values; number a whole
+        number in range; text the rest; required ones present; further
+        arguments only after a text parameter), else 422 invalid with
+        the parameter in the detail (revision 2.4 candidate 19);
+        commands without catalog entry pass as they are. The
+        answer comes synchronously and as event to the console; the
+        request ID is also the ID of the first audit entry (CMD-007).
+        The command has 10 s from its acceptance, the wait in the
+        server's queue included, then 504 timeout; a full queue answers
+        503 busy at once, no RCON connection 503 server_unavailable
+        (Design 3.8).
+      tags: [commands]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandInput"
+      responses:
+        "200":
+          description: The game server's answer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+        "504":
+          description: The game server did not answer in time.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /servers/{id}/players:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: getPlayers
+      summary: Players online, from the cache (SRV-006, Overview 4.6).
+      description: >-
+        Fetched over RCON with the profile's player command when missing
+        or older than 120 s; kept in memory only. A value that could not
+        be refreshed comes back marked stale with its time.
+      tags: [servers]
+      responses:
+        "200":
+          description: The player list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /servers/{id}/history:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: getHistory
+      summary: Command history of a server, newest first (Design 2.2).
+      description: >-
+        RCON admin and server admin see all commands; moderators and
+        supporters only their own in R1.
+      tags: [commands]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 256
+      responses:
+        "200":
+          description: A page of the history.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryPage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /servers/{id}/actions:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    post:
+      operationId: serverAction
+      summary: Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
+      description: >-
+        RCON admin everywhere, server admin in his scope; moderators and
+        supporters never (403). With an agent the order goes to it and
+        the agent checks the label again; without an agent only restart
+        works, by the profile's stop command over RCON and the container's
+        restart policy unless-stopped. Without a connected agent (or for
+        start and stop without agent) the answer is 503 agent_unavailable.
+        Every action is audited.
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerActionInput"
+      responses:
+        "200":
+          description: Done.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerActionResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          description: The agent or Docker refused the action (action_failed).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: No agent connected (agent_unavailable) or no RCON connection (server_unavailable).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "504":
+          description: The agent or the game server did not answer in time.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /servers/{id}/logs:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: getServerLogs
+      summary: The last log lines of the server's container over the agent (UI-009, logs.tail).
+      description: >-
+        Earlier lines than the live view holds (Gesamtkonzept 5, revision
+        2.4 candidate 20). RCON admin everywhere, server admin in his
+        scope, only with a connected agent; moderators and supporters
+        never (403). The lines are foreign data, cleaned and bounded
+        (SEC-006). The agent's rate limit per container applies (429).
+      tags: [servers]
+      parameters:
+        - name: lines
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+      responses:
+        "200":
+          description: The lines, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogTail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "502":
+          description: The agent or Docker could not read the logs (action_failed).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: No agent assigned or connected (agent_unavailable).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "504":
+          description: The agent did not answer in time.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /server-groups:
+    get:
+      operationId: listServerGroups
+      summary: Server groups; RCON admin all, server admin those fully in his scope (SRV-003).
+      tags: [servers]
+      responses:
+        "200":
+          description: The server groups.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroupList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      operationId: createServerGroup
+      summary: Add a server group; RCON admin only.
+      tags: [servers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerGroupInput"
+      responses:
+        "201":
+          description: The new group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /server-groups/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ServerGroupID"
+    get:
+      operationId: getServerGroup
+      summary: A server group the caller may see.
+      tags: [servers]
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroup"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateServerGroup
+      summary: Rename a group or replace its servers; RCON admin only.
+      tags: [servers]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerGroupInput"
+      responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "200":
+          description: The changed group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerGroup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteServerGroup
+      summary: Delete a server group (soft delete); RCON admin only.
+      tags: [servers]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /agents:
+    get:
+      operationId: listAgents
+      summary: Paired, pending and revoked agents (Design 1.2); RCON admin only.
+      description: >-
+        Pending pairings by fingerprint (way B) older than 24 h are dropped.
+        connected tells whether the agent has a session now.
+      tags: [agents]
+      responses:
+        "200":
+          description: All agents.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /agents/tokens:
+    post:
+      operationId: createAgentToken
+      summary: Create a pairing token (way A, AGT-005); RCON admin only.
+      description: >-
+        The token is valid once for 24 h and returned only now, with a
+        ready Compose service for the agent. It carries the panel address
+        (RCD_AGENT_PUBLIC_ADDR) and the fingerprint of the panel key; with
+        no public address the agent needs RCD_PANEL_ADDR.
+      tags: [agents]
+      responses:
+        "201":
+          description: The token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentToken"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /agents/{id}:
+    parameters:
+      - $ref: "#/components/parameters/AgentID"
+    get:
+      operationId: getAgent
+      summary: One agent; RCON admin only.
+      tags: [agents]
+      responses:
+        "200":
+          description: The agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteAgent
+      summary: Revoke an agent or turn down a pending pairing (Design 1.7); RCON admin only.
+      description: >-
+        A revoked agent gets the message revoked, is disconnected and cannot
+        connect again; a new pairing needs way A or B. A pending pairing is
+        removed.
+      tags: [agents]
+      responses:
+        "204":
+          description: Revoked or turned down.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /agents/{id}/containers:
+    parameters:
+      - $ref: "#/components/parameters/AgentID"
+    get:
+      operationId: listAgentContainers
+      summary: The containers an agent offers, for the server form (SRV-001).
+      description: >-
+        From the panel's cache: only containers with the agent's label
+        (AGT-002), with image and state; foreign data (SEC-006). While the
+        agent is away the list is the last known one and connected is
+        false. RCON admin only (revision 2.4 candidate 22).
+      tags: [agents]
+      responses:
+        "200":
+          description: The containers, by name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentContainers"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /agents/{id}/approve:
+    parameters:
+      - $ref: "#/components/parameters/AgentID"
+    post:
+      operationId: approveAgent
+      summary: Approve a pending pairing by fingerprint (way B); RCON admin only.
+      description: >-
+        Compare the fingerprint with the host operator first. The agent is
+        admitted on its next connection attempt.
+      tags: [agents]
+      responses:
+        "200":
+          description: The paired agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /ws:
+    get:
+      operationId: openWebSocket
+      summary: WebSocket for live data (Design 2.3).
+      description: >-
+        Upgrade with the session cookie; the Origin is checked. Messages
+        from the browser: {"type":"subscribe"|"unsubscribe","topic":...}.
+        Messages from the panel: {"type":"subscribed","topic":...} once a
+        subscription is in place, before its first event;
+        {"type":"event","topic":...,"data":...} and
+        {"type":"error","topic":...,"reason":...}. Topics:
+        servers.overview, server.{id}.status, server.{id}.console,
+        server.{id}.metrics and server.{id}.logs. Metrics and logs are
+        agent functions for RCON admin and server admin only; a new
+        subscription first gets the current value (last sample or the last
+        50 log lines), and logs stream from the agent only while someone
+        subscribes (UI-009). Metrics carry their time and a stale mark
+        (NFR-005). Rights are
+        checked on subscribe and after every change; withdrawn
+        subscriptions end with reason revoked. Ended sessions close the
+        socket. Limits (SEC-008): ws.max_sockets_per_session sockets per
+        session (default 20); a socket over the limit closes the oldest one
+        with reason replaced. ws.max_subscriptions_per_socket subscriptions
+        per socket (default 16); more get reason limit. Ping every 30 s.
+      tags: [live]
+      responses:
+        "101":
+          description: Switching to the WebSocket protocol.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /users:
+    get:
+      operationId: listUsers
+      summary: Users the caller manages (Design 2.2, 3.6).
+      description: >-
+        RCON admin: everyone with a lower role. Server admin: his
+        moderators and their supporters. Moderator: his supporters, if
+        supporters are enabled for him. Users are created only through
+        invites.
+      tags: [users]
+      parameters:
+        - name: role
+          in: query
+          schema:
+            $ref: "#/components/schemas/Role"
+        - name: q
+          in: query
+          description: Part of the pseudonym or real name, ignoring case.
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        "200":
+          description: Managed users, ordered by pseudonym.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    get:
+      operationId: getUser
+      summary: A user the caller manages.
+      tags: [users]
+      responses:
+        "200":
+          description: The user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateUser
+      summary: Change role, lock state or supporter release of a managed user (ROLE-006, ROLE-008).
+      description: >-
+        The new role must stay below the caller's role. A role change
+        removes the user's scopes, group memberships and grants, which
+        belong to the old role.
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: The changed user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteUser
+      summary: Delete a managed user (soft delete, Design 4.1).
+      tags: [users]
+      responses:
+        "204":
+          description: Deleted; the user's sessions have ended.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /users/{id}/assignments:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    get:
+      operationId: getAssignments
+      summary: Role, scopes, groups and grants of a managed user.
+      description: Also the template for quick entry (UI-008).
+      tags: [users]
+      responses:
+        "200":
+          description: The assignments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignments"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateAssignments
+      summary: Replace sections of a managed user's assignments (ROLE-003, ROLE-004).
+      description: >-
+        Each given section replaces the entries the caller controls; entries
+        others made in their own groups stay. Admin scopes: only the RCON
+        admin, only for server admins. Groups: groups the caller owns.
+        Grants: moderator groups the caller owns, targets within the
+        caller's and the group owner's scope, the moderator must be a
+        member. Supporter grants: for moderators the caller is or manages,
+        only with supporters enabled, servers within the moderator's
+        scope. Refusals are logged and audited.
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignmentsUpdate"
+      responses:
+        "200":
+          description: The assignments after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignments"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /user-groups:
+    get:
+      operationId: listUserGroups
+      summary: Groups the caller administers (AUTH-002, ROLE-005).
+      description: RCON admin all groups, server admin his own.
+      tags: [groups]
+      responses:
+        "200":
+          description: The groups.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGroupList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      operationId: createUserGroup
+      summary: Create a user group or moderator group owned by the caller.
+      tags: [groups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserGroupCreate"
+      responses:
+        "201":
+          description: The new group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGroup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /user-groups/{id}:
+    parameters:
+      - $ref: "#/components/parameters/GroupID"
+    get:
+      operationId: getUserGroup
+      summary: A group the caller administers.
+      tags: [groups]
+      responses:
+        "200":
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGroup"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateUserGroup
+      summary: Rename, set the list, replace members or group-wide grants.
+      description: >-
+        Members must be users the caller manages; a moderator group takes
+        only moderators. Grants apply to all members and must lie within
+        the caller's and the owner's scope. Members whose rights change
+        lose their sessions.
+      tags: [groups]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserGroupUpdate"
+      responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "200":
+          description: The changed group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserGroup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteUserGroup
+      summary: Delete a group (soft delete).
+      tags: [groups]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /command-lists:
+    get:
+      operationId: listCommandLists
+      summary: Command lists the caller administers (ROLE-005).
+      tags: [command-lists]
+      responses:
+        "200":
+          description: The lists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandListList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      operationId: createCommandList
+      summary: Create a command list owned by the caller.
+      description: >-
+        Any command may be listed, also one without catalog entry
+        (CAT-002). At least one command must stay locked for supporters
+        (ROLE-007).
+      tags: [command-lists]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandListCreate"
+      responses:
+        "201":
+          description: The new list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /command-lists/{id}:
+    parameters:
+      - $ref: "#/components/parameters/CommandListID"
+    get:
+      operationId: getCommandList
+      summary: A command list the caller administers.
+      tags: [command-lists]
+      responses:
+        "200":
+          description: The list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateCommandList
+      summary: Rename a list or replace its entries (ROLE-007).
+      tags: [command-lists]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandListUpdate"
+      responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "200":
+          description: The changed list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteCommandList
+      summary: Delete a command list (soft delete).
+      tags: [command-lists]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /invites:
+    get:
+      operationId: listInvites
+      summary: Invitations of the caller; the RCON admin sees all (UI-008).
+      tags: [invites]
+      responses:
+        "200":
+          description: The invitations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    post:
+      operationId: createInvite
+      summary: Invite a new user with a role below the caller's (AUTH-001, UI-008).
+      description: >-
+        The token is returned only now and is valid once until expires_at
+        (setting invite.lifetime, default 72 h). With a template the new
+        user takes the template's assignments as far as the caller
+        controls them. A moderator invites supporters only while
+        supporters are enabled for him.
+      tags: [invites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteCreate"
+      responses:
+        "201":
+          description: The invitation with its token and link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteCreated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /invites/{id}:
+    parameters:
+      - $ref: "#/components/parameters/InviteID"
+    delete:
+      operationId: deleteInvite
+      summary: Withdraw an unused invitation.
+      tags: [invites]
+      responses:
+        "204":
+          description: Withdrawn.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /invites/redeem:
+    post:
+      operationId: redeemInvite
+      summary: Create the invited user with own pseudonym and password.
+      description: >-
+        Unknown, expired and used tokens get the same answer. The new user
+        logs in afterwards.
+      tags: [invites]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteRedeem"
+      responses:
+        "201":
+          description: The new user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /me:
+    get:
+      operationId: getMe
+      summary: The caller's own profile (AUTH-009).
+      tags: [profile]
+      responses:
+        "200":
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    patch:
+      operationId: updateMe
+      summary: Change pseudonym, real name or contacts (AUTH-009).
+      description: The emergency admin keeps his pseudonym.
+      tags: [profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: The changed profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /me/favorites:
+    get:
+      operationId: getFavorites
+      summary: The caller's favorite servers for the console (CMD-001).
+      description: Servers that left the caller's scope are left out.
+      tags: [profile]
+      responses:
+        "200":
+          description: The favorites in order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Favorites"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+    put:
+      operationId: setFavorites
+      summary: Replace the caller's favorite servers.
+      description: Only servers in the caller's scope, at most 50, in the given order.
+      tags: [profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Favorites"
+      responses:
+        "200":
+          description: The favorites now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Favorites"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /me/password:
+    post:
+      operationId: changePassword
+      summary: Change the own password (AUTH-007).
+      description: >-
+        The old password, also the initial password, is invalid at once;
+        all other sessions of the user end.
+      tags: [profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChange"
+      responses:
+        "204":
+          description: Changed.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /me/avatar:
+    put:
+      operationId: setMyAvatar
+      summary: Upload the own profile picture (AUTH-009).
+      description: >-
+        PNG or JPEG, at most 1 MiB and 4096 × 4096 pixels; checked by
+        content, re-encoded without metadata and scaled to at most
+        512 × 512.
+      tags: [profile]
+      requestBody:
+        required: true
+        description: The image; its type is taken from the content, not from the header.
+        content:
+          image/*:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "204":
+          description: Stored.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/Invalid"
+    delete:
+      operationId: deleteMyAvatar
+      summary: Remove the own profile picture.
+      tags: [profile]
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /users/{id}/password-reset:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    post:
+      operationId: resetPassword
+      summary: Set a temporary password for a managed user (AUTH-010).
+      description: >-
+        The temporary password is in this answer only, never in log or
+        audit; the user must change it at the next login, and all his
+        sessions end.
+      tags: [users]
+      responses:
+        "200":
+          description: The temporary password, shown once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordReset"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /users/{id}/sessions:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    delete:
+      operationId: endUserSessions
+      summary: End all sessions of a managed user (AUTH-006).
+      description: >-
+        Whoever manages the user ends his sessions and closes his
+        WebSockets at once; audited, logged as auth.session.revoked
+        (revision 2.4 candidate 21).
+      tags: [users]
+      responses:
+        "204":
+          description: All sessions ended.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /users/{id}/avatar:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    get:
+      operationId: getUserAvatar
+      summary: Profile picture of a user (AUTH-009, decision W4).
+      description: >-
+        For the user himself, the RCON admin and whoever manages him.
+        Served with nosniff and a Content-Security-Policy that allows
+        nothing.
+      tags: [profile]
+      responses:
+        "200":
+          description: The picture.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /audit:
+    get:
+      operationId: listAudit
+      summary: Audit log, newest first (AUD-001, AUD-004).
+      description: >-
+        RCON admin: everything. Server admin: entries about servers in his
+        scope, about users he manages and his own actions. Others: 403.
+        Cursor-based paging (Design 2.1).
+      tags: [audit]
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum: [command, agent, admin, auth]
+        - name: server_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 256
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /settings:
+    get:
+      operationId: getSettings
+      summary: Global settings (Design 5.1); RCON admin only.
+      tags: [settings]
+      responses:
+        "200":
+          description: All global settings.
+          headers:
+            ETag:
+              description: Version of the settings for If-Match (revision 2.4 candidate 24).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    patch:
+      operationId: updateSettings
+      summary: Change global settings; RCON admin only (AUD-003).
+      description: >-
+        Only known keys with valid values, all or nothing; for example
+        audit.retention_days, supporters.enabled, session.idle_timeout.
+        Switching supporters off ends the sessions of all supporters.
+      tags: [settings]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Settings"
+      responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "200":
+          description: All global settings after the change.
+          headers:
+            ETag:
+              description: Version of the settings for If-Match (revision 2.4 candidate 24).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+
+components:
+  parameters:
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >-
+        The version read before (version field, or ETag of /settings).
+        Required for these writes: without it the answer is 428
+        precondition_required, after the role check. If it is not the
+        current one, the change is refused with 409 conflict and nothing
+        is written; the database checks and raises the version in one
+        statement (revision 2.4 candidate 24). Optional in this file only
+        so that the role check comes first.
+      schema:
+        type: string
+        maxLength: 128
+    AgentID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ServerID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ServerGroupID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InviteID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CommandListID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    GroupID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Agent:
+      type: object
+      required: [id, name, fingerprint, status, version, capabilities, connected, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Foreign data from the agent (SEC-006).
+        fingerprint:
+          type: string
+          description: SHA256:<base64> of the agent key.
+        status:
+          type: string
+          enum: [pending, active, revoked]
+        version:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        remote:
+          type: string
+          description: Source address of the last connection.
+        paired_by:
+          type: string
+          format: uuid
+        connected:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+
+    AgentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Agent"
+
+    AgentToken:
+      type: object
+      required: [token, expires_at, panel_fingerprint, compose]
+      properties:
+        token:
+          type: string
+          description: Shown only once; stored only as hash.
+        expires_at:
+          type: string
+          format: date-time
+        panel_addr:
+          type: string
+          description: RCD_AGENT_PUBLIC_ADDR; empty when not configured.
+        panel_fingerprint:
+          type: string
+        compose:
+          type: string
+          description: Compose service for the agent with the token filled in.
+
+    User:
+      type: object
+      required: [id, pseudonym, role, contacts, has_avatar, disabled, is_emergency, supporters_allowed, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        pseudonym:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        real_name:
+          type: string
+        contacts:
+          type: object
+          additionalProperties:
+            type: string
+          description: Contact details such as telegram or whatsapp (AUTH-009).
+        has_avatar:
+          type: boolean
+        disabled:
+          type: boolean
+        is_emergency:
+          type: boolean
+        supporters_allowed:
+          type: boolean
+          description: The moderator may have supporters (ROLE-006).
+        created_at:
+          type: string
+          format: date-time
+        last_login_at:
+          type: string
+          format: date-time
+
+    UserList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+
+    PlayerList:
+      type: object
+      required: [available, players, stale]
+      properties:
+        available:
+          type: boolean
+          description: The game profile defines a player list.
+        players:
+          type: array
+          description: Player names; foreign data (SEC-006).
+          items:
+            type: string
+        updated_at:
+          type: string
+          format: date-time
+        stale:
+          type: boolean
+
+    CommandInput:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+          minLength: 1
+          maxLength: 10000
+
+    CommandResult:
+      type: object
+      required: [request_id, ts, command, response, truncated]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        ts:
+          type: string
+          format: date-time
+        command:
+          type: string
+          description: The command as sent, after cleaning.
+        response:
+          type: string
+          description: Foreign data from the game server (SEC-006).
+        truncated:
+          type: boolean
+          description: The answer was longer than 64 KiB and is cut.
+
+    HistoryEntry:
+      type: object
+      required: [request_id, ts, command, result]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        ts:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+          format: uuid
+        pseudonym:
+          type: string
+        role:
+          type: string
+        command:
+          type: string
+        response:
+          type: string
+        truncated:
+          type: boolean
+        result:
+          type: string
+          enum: [ok, denied, error, timeout]
+        reason:
+          type: string
+
+    HistoryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryEntry"
+        next_cursor:
+          type: string
+
+    Server:
+      type: object
+      required: [id, name, groups, status, status_since, version]
+      properties:
+        version:
+          type: string
+          description: >-
+            Version of the stored object for optimistic locking, raised
+            by every change; send it as If-Match when changing the object
+            (revision 2.4 candidate 24).
+        status:
+          type: string
+          enum: [connected, auth_failed, offline]
+          description: Reachability over RCON (SRV-004).
+        status_since:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        profile_id:
+          type: string
+          format: uuid
+        groups:
+          type: array
+          items:
+            type: string
+            format: uuid
+        protocol:
+          type: string
+          description: Admins only.
+        host:
+          type: string
+          description: Admins only.
+        port:
+          type: integer
+          description: Admins only.
+        credentials:
+          type: string
+          enum: [ok, missing, reenter]
+          description: >-
+            Admins only. reenter: the credentials were encrypted with
+            another master key and must be entered again (SRV-002).
+        agent_id:
+          type: string
+          description: Admins only; the paired agent on the server's host.
+        container_name:
+          type: string
+          description: >-
+            Admins only; the container on that host. The agent resolves the
+            name and checks its label for every order.
+        runtime:
+          $ref: "#/components/schemas/ServerRuntime"
+        game_ports:
+          type: array
+          description: Admins only; the override of the server or the profile's ports (SRV-005).
+          items:
+            $ref: "#/components/schemas/GamePort"
+        game_ports_override:
+          type: boolean
+
+    ServerList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Server"
+
+    ServerInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        profile_id:
+          type: string
+          format: uuid
+        host:
+          type: string
+          minLength: 1
+          maxLength: 253
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 512
+          description: RCON password; stored encrypted, never returned.
+        game_ports:
+          type: array
+          description: Overrides the profile's game ports; an empty list returns to them.
+          items:
+            $ref: "#/components/schemas/GamePort"
+        agent_id:
+          type: string
+          maxLength: 36
+          description: An active agent; empty clears agent and container (SRV-001).
+        container_name:
+          type: string
+          maxLength: 255
+          description: Container name on the agent's host; set together with agent_id.
+
+    ConnectionTest:
+      type: object
+      properties:
+        server_id:
+          type: string
+          format: uuid
+          description: The server being edited; missing when a new one is created.
+        profile_id:
+          type: string
+          format: uuid
+        host:
+          type: string
+          minLength: 1
+          maxLength: 253
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 512
+
+    ConnectionTestResult:
+      type: object
+      required: [result]
+      properties:
+        result:
+          type: string
+          enum: [ok, auth_failed, unreachable]
+
+    ServerRuntime:
+      type: object
+      description: >-
+        Runtime data, kept in memory with its age (NFR-005); the same data
+        comes live in servers.overview with kind runtime. Player count for
+        everyone in scope, the container only for RCON admin and server
+        admin (UI-006).
+      required: [kind, server_id]
+      properties:
+        kind:
+          type: string
+          enum: [runtime]
+        server_id:
+          type: string
+          format: uuid
+        players:
+          type: integer
+        players_at:
+          type: string
+          format: date-time
+        players_stale:
+          type: boolean
+        container:
+          $ref: "#/components/schemas/ContainerRuntime"
+
+    ContainerRuntime:
+      type: object
+      required: [name, state, restart_count, restart_loop, stale, agent_connected]
+      properties:
+        name:
+          type: string
+        image:
+          type: string
+          description: Foreign data from the agent (SEC-006).
+        state:
+          type: string
+          description: Docker state, or unknown while the agent is disconnected.
+        started_at:
+          type: string
+          format: date-time
+        restart_count:
+          type: integer
+        restart_loop:
+          type: boolean
+          description: At least three starts within ten minutes (UI-003).
+        cpu_percent:
+          type: number
+          format: double
+        mem_bytes:
+          type: integer
+          format: int64
+        mem_limit:
+          type: integer
+          format: int64
+        metrics_at:
+          type: string
+          format: date-time
+        stale:
+          type: boolean
+        agent_connected:
+          type: boolean
+
+    ServerActionInput:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [start, stop, restart]
+
+    ServerActionResult:
+      type: object
+      required: [action, via]
+      properties:
+        action:
+          type: string
+          enum: [start, stop, restart]
+        via:
+          type: string
+          enum: [agent, rcon]
+          description: rcon is the restart without agent (AGT-009).
+
+    ServerGroup:
+      type: object
+      required: [id, name, server_ids, version]
+      properties:
+        version:
+          type: string
+          description: >-
+            Version of the stored object for optimistic locking, raised
+            by every change; send it as If-Match when changing the object
+            (revision 2.4 candidate 24).
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        server_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    ServerGroupList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServerGroup"
+
+    ServerGroupInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        server_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    ProfileParam:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [player, text, choice, number]
+        optional:
+          type: boolean
+        values:
+          type: array
+          items:
+            type: string
+        min:
+          type: integer
+        max:
+          type: integer
+
+    AgentContainers:
+      type: object
+      required: [connected, items]
+      properties:
+        connected:
+          type: boolean
+        items:
+          type: array
+          items:
+            type: object
+            required: [name, state]
+            properties:
+              name:
+                type: string
+              image:
+                type: string
+              state:
+                type: string
+
+    LogTail:
+      type: object
+      required: [server_id, container, lines, truncated]
+      properties:
+        server_id:
+          type: string
+          format: uuid
+        container:
+          type: string
+        lines:
+          type: array
+          description: Foreign data from the container (SEC-006).
+          items:
+            type: string
+        truncated:
+          type: boolean
+          description: Lines or the whole were cut to the limits.
+        current:
+          type: boolean
+          description: >-
+            The last lines, sent to a new subscriber; the client may hold them
+            already.
+
+    AllowedCommands:
+      type: object
+      required: [free_input, commands]
+      properties:
+        free_input:
+          type: boolean
+        commands:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogCommand"
+        player_pattern:
+          type: string
+          description: >-
+            RE2 pattern a player parameter must match as a whole
+            (syntax.player_pattern of the game profile). Without it a
+            player must not start with @ nor hold quotes or control
+            characters (revision 2.4 candidate 19).
+
+    CatalogCommand:
+      type: object
+      required: [path, description, params]
+      properties:
+        path:
+          type: string
+        description:
+          type: string
+        params:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileParam"
+
+    Favorites:
+      type: object
+      required: [server_ids]
+      properties:
+        server_ids:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+
+    GamePort:
+      type: object
+      required: [port, proto, name]
+      properties:
+        port:
+          type: integer
+        proto:
+          type: string
+          enum: [tcp, udp]
+        name:
+          type: string
+
+    GameProfile:
+      type: object
+      required: [id, slug, name, protocol, default_port, overridden, imported_at, case_sensitive, strip_prefix, max_length, wrappers, game_ports, catalog]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        protocol:
+          type: string
+        default_port:
+          type: integer
+        overridden:
+          type: boolean
+          description: A custom profile replaces the shipped one.
+        imported_at:
+          type: string
+          format: date-time
+        case_sensitive:
+          type: boolean
+        strip_prefix:
+          type: string
+        max_length:
+          type: integer
+        wrappers:
+          type: array
+          items:
+            type: string
+        game_ports:
+          type: array
+          items:
+            $ref: "#/components/schemas/GamePort"
+        catalog:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogCommand"
+        last_error:
+          type: string
+          description: Reason of the last rejected file; RCON admin only.
+        last_error_at:
+          type: string
+          format: date-time
+
+    ProfileList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/GameProfile"
+
+    AuditEntry:
+      type: object
+      required: [id, ts, kind, action, payload, result]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: For commands also the request ID (Design 4.1).
+        ts:
+          type: string
+          format: date-time
+        kind:
+          type: string
+          enum: [command, agent, admin, auth]
+        actor_id:
+          type: string
+          format: uuid
+        actor_role:
+          type: string
+        session:
+          type: string
+          description: First 8 characters of the session hash.
+        server_id:
+          type: string
+          format: uuid
+        target_type:
+          type: string
+        target_id:
+          type: string
+        action:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        result:
+          type: string
+          enum: [ok, denied, error, timeout]
+        reason:
+          type: string
+
+    AuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+        next_cursor:
+          type: string
+
+    Settings:
+      type: object
+      additionalProperties: true
+      description: Setting key to JSON value.
+
+    ProfileUpdate:
+      type: object
+      properties:
+        pseudonym:
+          type: string
+          minLength: 2
+          maxLength: 32
+        real_name:
+          type: string
+          maxLength: 64
+          description: An empty string removes the real name.
+        contacts:
+          type: object
+          maxProperties: 8
+          additionalProperties:
+            type: string
+            maxLength: 128
+
+    PasswordReset:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: Temporary password; shown only once.
+
+    PasswordChange:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        new_password:
+          type: string
+          minLength: 12
+          maxLength: 1024
+
+    Invite:
+      type: object
+      required: [id, created_by, role, created_at, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        created_by:
+          type: string
+          format: uuid
+        role:
+          $ref: "#/components/schemas/Role"
+        template_user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        used_at:
+          type: string
+          format: date-time
+        used_by:
+          type: string
+          format: uuid
+
+    InviteList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invite"
+
+    InviteCreate:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/Role"
+        template_user_id:
+          type: string
+          format: uuid
+
+    InviteCreated:
+      type: object
+      required: [invite, token, url]
+      properties:
+        invite:
+          $ref: "#/components/schemas/Invite"
+        token:
+          type: string
+          description: Shown only once; stored only as hash.
+        url:
+          type: string
+          description: Link for the invitee; the token is in the fragment, so it reaches no server log.
+
+    InviteRedeem:
+      type: object
+      required: [token, pseudonym, password]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 128
+        pseudonym:
+          type: string
+          minLength: 2
+          maxLength: 32
+        password:
+          type: string
+          minLength: 12
+          maxLength: 1024
+
+    CommandListEntry:
+      type: object
+      required: [path, passable]
+      properties:
+        path:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Token path such as "whitelist add" (CMD-004).
+        passable:
+          type: boolean
+          description: May be passed on to supporters (ROLE-007).
+
+    CommandList:
+      type: object
+      required: [id, name, owner_id, entries, version]
+      properties:
+        version:
+          type: string
+          description: >-
+            Version of the stored object for optimistic locking, raised
+            by every change; send it as If-Match when changing the object
+            (revision 2.4 candidate 24).
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        owner_id:
+          type: string
+          format: uuid
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandListEntry"
+
+    CommandListList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandList"
+
+    CommandListCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandListEntry"
+
+    CommandListUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandListEntry"
+
+    GroupKind:
+      type: string
+      enum: [general, moderator]
+
+    UserGroup:
+      type: object
+      required: [id, name, kind, owner_id, members, grants, version]
+      properties:
+        version:
+          type: string
+          description: >-
+            Version of the stored object for optimistic locking, raised
+            by every change; send it as If-Match when changing the object
+            (revision 2.4 candidate 24).
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/GroupKind"
+        owner_id:
+          type: string
+          format: uuid
+        command_list_id:
+          type: string
+          format: uuid
+        members:
+          type: array
+          items:
+            type: string
+            format: uuid
+        grants:
+          type: array
+          description: Servers and server groups for all members.
+          items:
+            $ref: "#/components/schemas/Target"
+
+    UserGroupList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserGroup"
+
+    UserGroupCreate:
+      type: object
+      required: [name, kind]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        kind:
+          $ref: "#/components/schemas/GroupKind"
+        command_list_id:
+          type: string
+          format: uuid
+
+    UserGroupUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        command_list_id:
+          type: string
+          description: A list ID, or an empty string to remove the list.
+        members:
+          type: array
+          items:
+            type: string
+            format: uuid
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Target"
+
+    Target:
+      type: object
+      description: Exactly one of server_id or server_group_id.
+      properties:
+        server_id:
+          type: string
+          format: uuid
+        server_group_id:
+          type: string
+          format: uuid
+
+    Grant:
+      type: object
+      required: [group_id]
+      description: >-
+        A server or server group for a moderator through one of his
+        moderator groups, whose list applies (Design 4.3).
+      properties:
+        group_id:
+          type: string
+          format: uuid
+        server_id:
+          type: string
+          format: uuid
+        server_group_id:
+          type: string
+          format: uuid
+
+    SupporterGrant:
+      type: object
+      required: [moderator_id, server_id]
+      properties:
+        moderator_id:
+          type: string
+          format: uuid
+        server_id:
+          type: string
+          format: uuid
+
+    Assignments:
+      type: object
+      required: [role, admin_scopes, groups, grants, supporter_grants]
+      properties:
+        role:
+          $ref: "#/components/schemas/Role"
+        admin_scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Target"
+        groups:
+          type: array
+          items:
+            type: string
+            format: uuid
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Grant"
+        supporter_grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupporterGrant"
+
+    AssignmentsUpdate:
+      type: object
+      properties:
+        admin_scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Target"
+        groups:
+          type: array
+          items:
+            type: string
+            format: uuid
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Grant"
+        supporter_grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupporterGrant"
+
+    UserUpdate:
+      type: object
+      properties:
+        role:
+          $ref: "#/components/schemas/Role"
+        disabled:
+          type: boolean
+        supporters_allowed:
+          type: boolean
+          description: >-
+            Release supporters for a moderator (ROLE-006); only server
+            admins and the RCON admin. Switching off takes the rights of
+            the moderator's supporters.
+
+    Role:
+      type: string
+      description: One of the four fixed roles (ROLE-001).
+      enum: [rcon_admin, server_admin, moderator, supporter]
+
+    LoginRequest:
+      type: object
+      required: [pseudonym, password]
+      properties:
+        pseudonym:
+          type: string
+          minLength: 1
+          maxLength: 64
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+
+    SessionUser:
+      type: object
+      required: [id, pseudonym, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        pseudonym:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+
+    Session:
+      type: object
+      required: [user, expires_at, must_change_password, ui, panel_version]
+      properties:
+        panel_version:
+          type: string
+          description: >-
+            Version of the panel (UI-015), e.g. 0.10; 0.0.0-dev in
+            development builds.
+        ui:
+          type: object
+          description: >-
+            Global interface settings everyone needs (revision 2.4
+            candidate 7); only the RCON admin changes them in /settings.
+          required: [shortcuts_enabled, supporters_enabled, supporters_allowed]
+          properties:
+            shortcuts_enabled:
+              type: boolean
+              description: Keyboard shortcuts, off by default (UI-008).
+            supporters_enabled:
+              type: boolean
+              description: >-
+                The global supporter switch (ROLE-006); with the user's own
+                release it decides whether a moderator manages supporters
+                (Design 6.2).
+            supporters_allowed:
+              type: boolean
+              description: >-
+                The user's own supporter release (moderators); with
+                supporters_enabled it shows whether he manages supporters.
+                The interface needs nothing else to hide entries.
+        must_change_password:
+          type: boolean
+          description: >-
+            Until the password is changed only /me/password, /auth/logout
+            and /auth/session are allowed (AUTH-010).
+        user:
+          $ref: "#/components/schemas/SessionUser"
+        expires_at:
+          type: string
+          format: date-time
+          description: >-
+            End of the session unless it is used again; it also ends after
+            the maximum lifetime.
+
+    ReasonCode:
+      type: string
+      description: Machine-readable reason of a rejection (Design 3.5).
+      enum:
+        - unauthenticated
+        - not_found
+        - not_in_list
+        - wrapper_blocked
+        - invalid
+        - rate_limited
+        - server_unavailable
+        - forbidden
+        - busy
+        - password_change_required
+        - timeout
+        - agent_unavailable
+        - action_failed
+        - conflict
+        - precondition_required
+
+    Problem:
+      type: object
+      description: Problem Details for HTTP APIs (RFC 9457).
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          description: URI reference identifying the problem type.
+          default: about:blank
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        detail:
+          type: string
+          description: Human-readable explanation of this occurrence.
+        instance:
+          type: string
+          description: URI reference of this occurrence.
+        reason:
+          $ref: "#/components/schemas/ReasonCode"
+        request_id:
+          type: string
+          description: Request ID of the call, also found in the logs.
+
+  responses:
+    BadRequest:
+      description: The request body or parameters are malformed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: >-
+        Not allowed, for example a write request without matching Origin
+        header (Design 2.1).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    RateLimited:
+      description: Too many attempts; Retry-After gives the wait in seconds.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Busy:
+      description: >-
+        The panel is busy (for example all password hashing slots are in
+        use or the game server's command queue is full); retry after
+        Retry-After seconds.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthenticated:
+      description: No valid session.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Invalid:
+      description: The request breaks a rule of the data.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource does not exist or is outside the caller's scope.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    PreconditionRequired:
+      description: >-
+        A versioned write without If-Match (precondition_required,
+        revision 2.4 candidate 24).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: >-
+        The object changed since it was read: If-Match does not name its
+        current version (conflict, revision 2.4 candidate 24).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: rcd_session
+      description: >-
+        Server-side session (Design 2.1, decision W1). The cookie is
+        HttpOnly and SameSite=Lax. Over HTTPS it is named
+        __Host-rcd_session and marked Secure; over plain HTTP it is named
+        rcd_session.

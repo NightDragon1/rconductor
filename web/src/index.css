@@ -1,0 +1,121 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+@import 'tailwindcss';
+
+/* The dark tokens are the base, data-theme switches to light (Design 6.1, UI-001).
+   Colours are tokens, so both designs share every component. */
+:root {
+  --background: #0b0d12;
+  --surface: #12151c;
+  --surface-raised: #1a1e27;
+  --border: #262b36;
+  /* The frame of inputs and outline buttons: 3:1 on every surface (WCAG 1.4.11). */
+  --control-border: #6b7280;
+  --text: #e8eaef;
+  --text-muted: #9aa1ae;
+  --accent: #a78bfa;
+  --accent-text: #160b33;
+  --ok: #4ade80;
+  --warn: #fb923c;
+  --danger: #f87171;
+  --danger-text: #2a0707;
+  --focus: #c4b5fd;
+  /* Frames of the server groups on the overview (Design 6.5). */
+  --group-1: #a78bfa;
+  --group-2: #2dd4bf;
+  --group-3: #fbbf24;
+  --group-4: #38bdf8;
+  --group-5: #f472b6;
+  --group-6: #a3e635;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --surface-raised: #eef0f4;
+  --border: #d5d9e0;
+  --control-border: #7b8494;
+  --text: #15181e;
+  --text-muted: #4d5563;
+  --accent: #6d28d9;
+  --accent-text: #ffffff;
+  --ok: #147a3a;
+  --warn: #a94d08;
+  --danger: #b91c1c;
+  --danger-text: #ffffff;
+  --focus: #6d28d9;
+  --group-1: #6d28d9;
+  --group-2: #0f766e;
+  --group-3: #b45309;
+  --group-4: #0369a1;
+  --group-5: #be185d;
+  --group-6: #4d7c0f;
+  color-scheme: light;
+}
+
+/* A tap target of 44 px on a phone (UI-012): links and small buttons in
+   running text grow around their text. */
+@utility tap {
+  @media (width < 48rem) {
+    display: inline-flex;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    align-items: center;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-control: var(--control-border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-danger-text: var(--danger-text);
+  --color-focus: var(--focus);
+  --color-group-1: var(--group-1);
+  --color-group-2: var(--group-2);
+  --color-group-3: var(--group-3);
+  --color-group-4: var(--group-4);
+  --color-group-5: var(--group-5);
+  --color-group-6: var(--group-6);
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+/* Everything clickable shows the pointer (UI-001); the frame has the
+   contrast of a control. :where keeps it below the focus ring. */
+:where(
+  a,
+  button:not(:disabled),
+  select:not(:disabled),
+  summary,
+  input[type='checkbox']:not(:disabled)
+):hover {
+  outline: 1px solid var(--control-border);
+  outline-offset: 1px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}

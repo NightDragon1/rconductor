@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+version: "2"
+sql:
+  - engine: sqlite
+    schema: migrations/sqlite
+    queries: internal/store/queries/sqlite
+    gen:
+      go:
+        package: sqlitedb
+        out: internal/store/sqlitedb
+        emit_empty_slices: true

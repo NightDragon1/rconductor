@@ -1,0 +1,740 @@
+{
+  "app": {
+    "name": "RCONductor",
+    "loading": "Loading…",
+    "error": "Something went wrong. Please try again.",
+    "org": "ShadowGhost.NET",
+    "version": "RCONductor {{version}}",
+    "later": "This page follows in a later step."
+  },
+  "login": {
+    "title": "Sign in",
+    "pseudonym": "Pseudonym",
+    "password": "Password",
+    "submit": "Sign in",
+    "failed": "Pseudonym or password is wrong.",
+    "locked": "Too many attempts. Please wait and try again.",
+    "busy": "The panel is busy. Please try again in a moment."
+  },
+  "password": {
+    "show": "Show password",
+    "hide": "Hide password",
+    "title": "Choose a new password",
+    "explain": "You signed in with a temporary password. Choose your own password to continue.",
+    "current": "Current password",
+    "new": "New password",
+    "repeat": "Repeat the new password",
+    "submit": "Change password",
+    "mismatch": "The two new passwords differ.",
+    "length": "Use 12 to 128 characters.",
+    "failed": "The password was not changed. Check the current password."
+  },
+  "nav": {
+    "logout": "Sign out",
+    "theme": "Design: {{design}}. Change it",
+    "logoutFailed": "Sign-out failed, you are still signed in.",
+    "design": {
+      "auto": "like the system",
+      "light": "light",
+      "dark": "dark"
+    },
+    "label": "Main navigation",
+    "menu": "Menu",
+    "collapse": "Collapse",
+    "expand": "Expand the navigation",
+    "overview": "Overview",
+    "servers": "Servers",
+    "audit": "Audit",
+    "admin": "Administration",
+    "users": "Users",
+    "groups": "Groups",
+    "commandLists": "Command lists",
+    "serverAdmin": "Servers and groups",
+    "agents": "Agents",
+    "settings": "Settings",
+    "profile": "Your profile"
+  },
+  "home": {
+    "title": "Overview",
+    "summaryServers_one": "{{count}} server",
+    "summaryServers_other": "{{count}} servers",
+    "summaryGroups_one": "{{count}} server group",
+    "summaryGroups_other": "{{count}} server groups",
+    "summaryAgents_one": "{{count}} agent",
+    "summaryAgents_other": "{{count}} agents",
+    "search": "Search servers …",
+    "searchLabel": "Search servers by name",
+    "ungrouped": "Other servers",
+    "empty": "No servers yet.",
+    "noMatch": "No server matches the search.",
+    "groupSummary_one": "{{count}} server · {{ok}} up",
+    "groupSummary_other": "{{count}} servers · {{ok}} up"
+  },
+  "role": {
+    "rcon_admin": "RCON admin",
+    "server_admin": "Server admin",
+    "moderator": "Moderator",
+    "supporter": "Supporter"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "back": "Back to the overview"
+  },
+  "health": {
+    "label": "Health",
+    "servers": "Servers",
+    "serversSub": "up",
+    "stopped": "{{count}} stopped",
+    "agents": "Agents",
+    "agentsSub": "connected",
+    "rconErrors": "RCON errors",
+    "restartLoops": "Restart loops",
+    "users": "Users",
+    "usersSub": "active · {{count}} locked",
+    "none": "none",
+    "notices": "Notices",
+    "noNotices": "Everything is fine.",
+    "restartLoop": "restarts again and again (3 or more starts in 10 minutes)",
+    "rconOffline": "RCON not reachable",
+    "rconAuth": "RCON password rejected",
+    "containerRunning": "container running",
+    "agentGone": "agent disconnected",
+    "userLocked": "locked",
+    "since": "since {{time}}",
+    "at": "{{time}}",
+    "openServer": "Open server",
+    "openAgents": "Open agents",
+    "openUser": "Open user"
+  },
+  "card": {
+    "profile": "Profile: {{name}}",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "percent": "{{value}} %",
+    "memory": "{{used}} / {{limit}} GB",
+    "players": "Players",
+    "playersValue": "{{count}}",
+    "started": "Started {{ago}}",
+    "stale": "Values stale · {{age}}",
+    "playersStale": "Players stale",
+    "open": "Open {{name}}"
+  },
+  "status": {
+    "running": "running",
+    "restartLoop": "restart loop",
+    "rconError": "RCON error",
+    "stopped": "stopped",
+    "unknown": "unknown",
+    "online": "online",
+    "offline": "offline",
+    "authFailed": "RCON password rejected"
+  },
+  "time": {
+    "seconds": "{{count}} s",
+    "minutes": "{{count}} min",
+    "hours": "{{count}} h",
+    "days": "{{count}} d",
+    "ago": "{{span}} ago"
+  },
+  "server": {
+    "breadcrumb": "Breadcrumb",
+    "tabs": "Server tabs",
+    "runningSince": "running for {{span}}",
+    "profile": "Profile",
+    "players": "Players",
+    "agent": "Agent",
+    "agentConnected": "connected",
+    "agentGone": "disconnected",
+    "commandList": "Command list",
+    "commandCount_one": "{{count}} command",
+    "commandCount_other": "{{count}} commands",
+    "tab": {
+      "overview": "Overview",
+      "console": "Console",
+      "commands": "Commands",
+      "logs": "Logs",
+      "history": "History"
+    },
+    "favorite": "Add to favorites",
+    "unfavorite": "Remove from favorites"
+  },
+  "actions": {
+    "label": "Server actions",
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "restartRcon": "Restart over RCON",
+    "cancel": "Cancel",
+    "agentGone": "The agent is disconnected; actions are not possible.",
+    "confirm": {
+      "stopTitle": "Stop {{name}}?",
+      "stop": "The container stops. Players are disconnected; the server stays down until it is started again.",
+      "restartTitle": "Restart {{name}}?",
+      "restart": "The container restarts. Players are disconnected for a moment.",
+      "rconTitle": "Restart {{name}} over RCON?",
+      "rcon": "The server is stopped with its stop command. It starts again only if a restart mechanism applies (for example Docker restart: always or unless-stopped; on-failure does not apply to a clean shutdown)."
+    },
+    "done": {
+      "start": "Start sent.",
+      "stop": "Stop sent.",
+      "restart": "Restart sent.",
+      "rcon": "Stop command sent."
+    },
+    "error": {
+      "agent_unavailable": "The agent is not connected.",
+      "action_failed": "The agent or Docker refused the action.",
+      "rate_limited": "Too many actions. Please wait a moment.",
+      "timeout": "The agent did not answer in time.",
+      "server_unavailable": "The server is not reachable over RCON.",
+      "forbidden": "This action is not allowed.",
+      "other": "The action failed."
+    }
+  },
+  "overview": {
+    "status": "Status",
+    "since": "since {{time}}",
+    "players": "Players online",
+    "noPlayers": "Nobody is online.",
+    "noPlayerList": "The game profile has no player list.",
+    "playersAt": "updated {{ago}}",
+    "stale": "stale",
+    "load": "Load",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "net": "Network",
+    "disk": "Disk",
+    "netValue": "↓ {{rx}} · ↑ {{tx}}",
+    "diskValue": "read {{read}} · written {{write}}",
+    "bytes": "{{value}} {{unit}}",
+    "metricsAt": "measured {{ago}}",
+    "noMetrics": "No measurements yet.",
+    "rcon": "RCON state"
+  },
+  "history": {
+    "title": "History",
+    "empty": "No commands yet.",
+    "ownOnly": "You see your own commands only.",
+    "more": "Load more",
+    "response": "Answer",
+    "truncated": "The answer was cut at 64 KiB.",
+    "copy": "Copy the answer",
+    "result": {
+      "ok": "OK",
+      "denied": "denied",
+      "error": "error",
+      "timeout": "timeout"
+    }
+  },
+  "copy": {
+    "copy": "Copy",
+    "copied": "Copied",
+    "pressCtrlC": "Selected. Press Ctrl+C to copy."
+  },
+  "console": {
+    "running": "Running …",
+    "olderInHistory": "Older commands are on the History tab.",
+    "historyFailed": "The history could not be loaded.",
+    "retry": "Try again",
+    "tracks": "Tracks",
+    "own": "Own commands",
+    "others": "Others' commands",
+    "logs": "Logs",
+    "filter": "Filter …",
+    "filterLabel": "Filter the console",
+    "timeline": "Timeline",
+    "jump": "Go to {{what}}",
+    "logLines": "Log lines",
+    "older": "Load older commands",
+    "empty": "No commands yet.",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "copy": "Copy the block",
+    "input": "Command",
+    "send": "Send",
+    "suggestions": "Suggestions",
+    "tab": "Tab",
+    "hint": "Tab takes the first suggestion · arrow keys walk your own commands",
+    "favorites": "Favorites"
+  },
+  "commands": {
+    "optional": "{{name}} (optional)",
+    "args": "Arguments",
+    "run": "Run",
+    "search": "Search commands",
+    "noMatch": "No command matches.",
+    "none": "There are no commands for you on this server.",
+    "players": "Players online",
+    "pick": "Put the name into the player field",
+    "pickHint": "Click a player field, then a name",
+    "myHistory": "My history",
+    "showAll": "Show all",
+    "reason": {
+      "not_in_list": "Not in your command list",
+      "wrapper_blocked": "This command is blocked for your role",
+      "rate_limited": "Too many commands. Please wait a moment.",
+      "rate_limited_wait": "Too many commands. Try again in {{s}} s.",
+      "invalid": "The command does not fit its fields",
+      "server_unavailable": "The server is not reachable",
+      "timeout": "The server did not answer in time",
+      "busy": "The server is busy",
+      "other": "The command failed"
+    },
+    "preview": "› {{command}}"
+  },
+  "form": {
+    "required": "Required",
+    "oneWord": "One word, no spaces",
+    "choice": "Pick one of the values",
+    "whole": "A whole number",
+    "range": "Out of range",
+    "player": "Not a player name"
+  },
+  "logs": {
+    "follow": "Follow",
+    "wrap": "Wrap lines",
+    "clear": "Clear view",
+    "copy": "Copy the shown lines",
+    "filterLabel": "Filter the logs",
+    "earlier": "Load earlier lines",
+    "lines": "Log lines",
+    "empty": "No log lines yet.",
+    "noMatch": "No line matches the filter.",
+    "agentGone": "The agent is disconnected; no new lines arrive.",
+    "rateLimited": "Too many requests for this container. Try again in {{s}} s.",
+    "failed": "The earlier lines could not be read."
+  },
+  "invite": {
+    "title": "Accept the invitation",
+    "explain": "Choose your pseudonym and password. Others see you by your pseudonym.",
+    "submit": "Create my account",
+    "done": "Your account is ready. Sign in with your pseudonym and password.",
+    "noToken": "This link holds no invitation. Open the link you got once more.",
+    "expired": "This invitation is not valid or has expired. Ask for a new link.",
+    "rejected": "The pseudonym is taken or not allowed. Choose another one."
+  },
+  "undo": {
+    "undo": "Undo",
+    "seconds": "{{s}} s",
+    "saved": "Saved: {{what}}",
+    "leaveTitle": "Leave without saving?",
+    "leaveText": "Your changes here are not saved yet and will be lost.",
+    "leave": "Discard changes"
+  },
+  "admin": {
+    "save": "Save",
+    "phoneReadOnly": "Read-only on a phone. Use a larger screen to make changes.",
+    "phoneReadOnlyUsers": "Read-only on a phone, apart from locking, unlocking and ending sessions. Use a larger screen for other changes.",
+    "locked": "Locked",
+    "lockTitle": "Lock {{name}}?",
+    "lockManyTitle": "Lock {{count}} users?",
+    "lockText": "This user can no longer sign in and open sessions end.",
+    "unlockTitle": "Unlock {{name}}?",
+    "unlockText": "This user can sign in again.",
+    "sessionsTitle": "End the sessions of {{name}}?",
+    "sessionsText": "This user is signed out everywhere and has to sign in again.",
+    "search": "Pseudonym, group, server …",
+    "searchLabel": "Search users",
+    "filterRole": "Filter by role",
+    "filterStatus": "Filter by status",
+    "allRoles": "Role: all",
+    "status": {
+      "all": "Status: all",
+      "active": "active",
+      "locked": "locked",
+      "invited": "invited"
+    },
+    "statusLabel": "Status",
+    "role": "Role",
+    "groupsScope": "Groups / scope",
+    "lastActive": "Last active",
+    "never": "never",
+    "allServers": "all servers",
+    "invitation": "(invitation)",
+    "expired": "expired",
+    "expiresIn": "expires in {{span}}",
+    "withdraw": "Withdraw",
+    "selectAll": "Select all",
+    "select": "Select {{name}}",
+    "noMatch": "No user matches.",
+    "bulk": {
+      "label": "Mass actions",
+      "selected": "{{count}} selected",
+      "group": "Assign group",
+      "scope": "Assign server scope",
+      "groupTitle": "Group {{name}} assigned",
+      "scopeTitle": "Server scope {{name}} assigned",
+      "results": "Result per user",
+      "allDone": "Done for every user.",
+      "someFailed": "{{ok}} done, {{failed}} failed.",
+      "ok": "done"
+    },
+    "reason": {
+      "forbidden": "Not allowed for this user",
+      "not_found": "Not found or not managed by you",
+      "invalid": "Not possible this way",
+      "rate_limited": "Too many changes, try again shortly",
+      "busy": "The panel is busy, try again",
+      "other": "Failed",
+      "conflict": "Changed by someone else – reload"
+    },
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "remove": "Remove …",
+    "removed": "Removed.",
+    "removeTitle_one": "Remove {{count}} user?",
+    "removeTitle_other": "Remove {{count}} users?",
+    "removeText": "The users lose their access and assignments at once. This cannot be undone.",
+    "close": "Close",
+    "closePanel": "Close the details",
+    "panel": "Details of {{name}}",
+    "created": "created {{time}}",
+    "lastLogin": "last sign-in {{time}}",
+    "realName": "Real name",
+    "groups": "Moderator groups",
+    "addGroup": "+ Group",
+    "scope": "Server scope",
+    "addScope": "+ Server or group",
+    "supportersAllowed": "May manage supporters",
+    "supportersAllowedHint": "Only passable commands of the own list",
+    "supportersOf": "Supporters of this moderator",
+    "supporterGrants": "Servers",
+    "addServer": "+ Server",
+    "none": "none",
+    "removeItem": "Remove {{name}}",
+    "useTemplate": "Use as template",
+    "endSessions": "End sessions",
+    "sessionsEnded": "All sessions ended.",
+    "resetPassword": "Reset password",
+    "resetTitle": "Reset the password of {{name}}?",
+    "resetText": "A temporary password replaces the current one; all sessions of the user end. You see it only once.",
+    "resetDone": "Password reset.",
+    "tempPassword": "Temporary password, shown only now:",
+    "copyPassword": "Copy the password",
+    "roleTitle": "Make {{name}} {{role}}?",
+    "roleWarning": "Assignments of the old role will be removed; sessions end.",
+    "changeRole": "Change role",
+    "saved": "Saved.",
+    "undo": {
+      "unlocked": "{{name}} unlocked",
+      "changed": "assignments of {{name}}",
+      "sessionsEnded": "assignments of {{name}}. The sessions of this user ended; Undo brings back the rights, not the sessions",
+      "bulk": "{{action}}: {{count}} users"
+    },
+    "invite": {
+      "title": "Create invitation link",
+      "fromTemplate": "Create from template",
+      "explain": "The invited person chooses pseudonym and password. A template passes on rights and assignments.",
+      "template": "Template",
+      "noTemplate": "No template",
+      "create": "Create link",
+      "once": "This link is shown only now. It holds the invitation in its fragment.",
+      "copy": "Copy the link"
+    },
+    "summary_one": "{{count}} user · {{locked}} locked",
+    "summary_other": "{{count}} users · {{locked}} locked",
+    "invitesOpen_one": "{{count}} invitation open",
+    "invitesOpen_other": "{{count}} invitations open",
+    "conflict": "Changed by someone else – reload",
+    "reload": "Reload"
+  },
+  "lists": {
+    "summary_one": "{{count}} command list",
+    "summary_other": "{{count}} command lists",
+    "search": "Name or command …",
+    "searchLabel": "Search command lists",
+    "newName": "Name of a new list",
+    "create": "Create list",
+    "name": "Name",
+    "entries": "Commands",
+    "passable": "Passable",
+    "yes": "yes",
+    "no": "no",
+    "passableCount": "{{count}}",
+    "passableFor": "{{path}} passable to supporters",
+    "path": "Command path",
+    "none": "No command lists.",
+    "explain": "A command path allows whole tokens and everything after them (CMD-004). Passable commands can be given to supporters.",
+    "oneLocked": "At least one command must stay locked for supporters. Not saved.",
+    "addLabel": "Add a command path",
+    "addPlaceholder": "whitelist add",
+    "add": "Add",
+    "delete": "Delete list …",
+    "deleteTitle": "Delete the list {{name}}?",
+    "deleteText": "Moderator groups with this list lose their commands at once. This cannot be undone.",
+    "undo": {
+      "changed": "List {{name}} changed"
+    }
+  },
+  "groups": {
+    "summary_one": "{{count}} group",
+    "summary_other": "{{count}} groups",
+    "search": "Group name …",
+    "searchLabel": "Search groups",
+    "newName": "Name of a new group",
+    "create": "Create group",
+    "kindLabel": "Kind",
+    "kind": {
+      "moderator": "Moderator group",
+      "general": "User group"
+    },
+    "name": "Name",
+    "list": "Command list",
+    "noList": "No list",
+    "members": "Members",
+    "memberCount_one": "{{count}} member",
+    "memberCount_other": "{{count}} members",
+    "addMember": "+ Member",
+    "grants": "Servers and server groups",
+    "addGrant": "+ Server or group",
+    "none": "No groups.",
+    "delete": "Delete group …",
+    "deleteTitle": "Delete the group {{name}}?",
+    "deleteText": "Its members lose the servers and commands of this group at once. This cannot be undone.",
+    "undo": {
+      "changed": "Group {{name}} changed"
+    }
+  },
+  "servers": {
+    "new": "New server",
+    "create": "Create server",
+    "save": "Save",
+    "testConnection": "Test connection",
+    "testResult": {
+      "ok": "Connection works: the game server accepted the password.",
+      "auth_failed": "The game server refused the password.",
+      "unreachable": "The game server cannot be reached at this address."
+    },
+    "delete": "Delete server …",
+    "deleteTitle": "Delete the server {{name}}?",
+    "deleteText": "Its history stays in the audit; groups and grants lose it at once. This cannot be undone.",
+    "name": "Name",
+    "profile": "Game profile",
+    "choose": "Choose …",
+    "host": "Host",
+    "port": "RCON port",
+    "password": "RCON password",
+    "newPassword": "New RCON password",
+    "unchanged": "unchanged",
+    "agent": "Agent",
+    "noAgent": "No agent",
+    "agentSet": "set",
+    "container": "Container",
+    "containerOption": "{{name}} · {{state}}",
+    "agentAway": "The agent is disconnected; the containers are the last known ones.",
+    "ownPorts": "Own game ports instead of the profile's",
+    "portNumber": "Port",
+    "proto": "Protocol",
+    "portName": "Name",
+    "addPort": "+ Port",
+    "address": "Address",
+    "groups": "Groups",
+    "serverGroups": "Server groups",
+    "groupServers": "Servers of the group",
+    "addToGroup": "+ Server",
+    "newGroupName": "Name of a new server group",
+    "createGroup": "Create group",
+    "noGroups": "No server groups.",
+    "deleteGroup": "Delete group …",
+    "deleteGroupTitle": "Delete the server group {{name}}?",
+    "deleteGroupText": "Grants and scopes on this group end at once; the servers stay. This cannot be undone.",
+    "explainAdmin": "Create servers, set agent and container, form server groups.",
+    "explainRead": "The servers and server groups of your scope, read only.",
+    "credentials": {
+      "missing": "No RCON password stored. Enter one.",
+      "reenter": "The RCON password was stored with another master key. Enter it again."
+    },
+    "credentialsShort": {
+      "missing": "password missing",
+      "reenter": "enter password again"
+    },
+    "undo": {
+      "changed": "Server {{name}} changed",
+      "groupChanged": "Server group {{name}} changed"
+    },
+    "search": "Name or host …",
+    "searchLabel": "Search servers and server groups"
+  },
+  "agents": {
+    "summary": "{{count}} paired · {{connected}} connected",
+    "pair": "Pair an agent",
+    "pairTitle": "Pair an agent",
+    "pairExplain": "Make a one-time token. The Compose service below starts the agent on the game host with it.",
+    "makeToken": "Make token",
+    "compose": "Compose service",
+    "copyCompose": "Copy the Compose service",
+    "once": "The token is in this service and shown only now; it is valid once for 24 hours.",
+    "fingerprint": "Fingerprint",
+    "fingerprintPairing": "Pairing by fingerprint",
+    "fingerprintHint": "Off by default. Waiting agents appear below to approve; it switches itself off after 30 minutes.",
+    "name": "Name",
+    "version": "Version",
+    "lastSeen": "Last seen",
+    "none": "No agents yet.",
+    "connected": "connected",
+    "disconnected": "disconnected",
+    "status": {
+      "pending": "waiting for approval",
+      "revoked": "revoked",
+      "active": "active"
+    },
+    "approve": "Approve",
+    "approved": "{{name}} approved.",
+    "reject": "Reject …",
+    "revoke": "Revoke …",
+    "revokeTitle": "Revoke {{name}}?",
+    "revokeText": "The agent loses its connection at once; servers on it lose agent and container. This cannot be undone.",
+    "revoked": "{{name}} revoked.",
+    "search": "Agent name …",
+    "searchLabel": "Search agents"
+  },
+  "settings": {
+    "showHelp": "Show explanations",
+    "explain": "Global settings of the panel (Design 5.6). Changes wait a few seconds for Undo.",
+    "save_one": "Save {{count}} change",
+    "save_other": "Save {{count}} changes",
+    "discard": "Discard",
+    "undo_one": "{{count}} setting changed",
+    "undo_other": "{{count}} settings changed",
+    "supportersOffTitle": "Switch supporters off?",
+    "supportersOffText": "All supporters lose their access and their sessions end at once.",
+    "supportersOff": "Switch off",
+    "section": {
+      "sessions": "Sessions",
+      "login": "Sign-in protection",
+      "invitations": "Invitations",
+      "supporters": "Supporters",
+      "ratelimits": "Rate limits",
+      "audit": "Audit",
+      "websocket": "Live connections",
+      "profiles": "Game profiles",
+      "agents": "Agents",
+      "interface": "Interface",
+      "backups": "Backups",
+      "other": "Other"
+    },
+    "key": {
+      "backup_interval": {
+        "label": "Backup interval",
+        "help": "How often the panel makes a backup of its database."
+      },
+      "backup_keep_auto": {
+        "label": "Automatic backups kept",
+        "help": "How many regular backups stay; older ones are removed."
+      },
+      "backup_keep_pre_migration": {
+        "label": "Backups before updates kept",
+        "help": "Backups made before a database update that stay."
+      },
+      "session_idle_timeout": {
+        "label": "Session idle time",
+        "help": "A session without activity ends after this time."
+      },
+      "session_max_lifetime": {
+        "label": "Session lifetime",
+        "help": "A session ends after this time at the latest."
+      },
+      "login_max_failures": {
+        "label": "Failed sign-ins before lock",
+        "help": "Wrong passwords per account and address before a lock."
+      },
+      "login_max_client_failures": {
+        "label": "Failed sign-ins per address",
+        "help": "Failures from one address, over all names, before it is locked. People behind one address share this count."
+      },
+      "login_overflow_gap": {
+        "label": "Waiting line: time per turn",
+        "help": "With a full table sign-ins go one by one; this is the time between two of them."
+      },
+      "login_overflow_line": {
+        "label": "Waiting line: places",
+        "help": "How many sign-ins may wait at once when the table is full."
+      },
+      "login_max_tracked": {
+        "label": "Sign-in counters in memory",
+        "help": "When they run out, sign-ins not yet counted wait in one line."
+      },
+      "login_lockout_duration": {
+        "label": "Lock after failed sign-ins",
+        "help": "How long sign-in stays locked after too many failures."
+      },
+      "invite_lifetime": {
+        "label": "Invitation lifetime",
+        "help": "How long an invitation link can be used."
+      },
+      "supporters_enabled": {
+        "label": "Supporters",
+        "help": "Moderators may have supporters. Off ends all supporter sessions."
+      },
+      "audit_retention_days": {
+        "label": "Audit retention (days)",
+        "help": "Audit entries older than this are removed."
+      },
+      "ws_max_sockets_per_session": {
+        "label": "Live connections per session",
+        "help": "Above this the oldest connection of a session closes."
+      },
+      "ws_max_subscriptions_per_socket": {
+        "label": "Subscriptions per connection",
+        "help": "Live topics one browser tab may follow at once."
+      },
+      "servers_connection_test_per_minute": {
+        "label": "Connection tests per minute",
+        "help": "How often one user may test RCON data in the server dialog."
+      },
+      "profiles_poll_interval": {
+        "label": "Game profile check",
+        "help": "How often the panel looks for changed profile files."
+      },
+      "agents_fingerprint_pairing": {
+        "label": "Pairing by fingerprint",
+        "help": "Waiting agents can be approved; switches itself off after 30 minutes."
+      },
+      "ui_shortcuts_enabled": {
+        "label": "Keyboard shortcuts",
+        "help": "Single keys for frequent actions, for everyone."
+      },
+      "ratelimit_per_minute": {
+        "label": "Commands per minute: {{role}}",
+        "help": "Rate limit per user and server."
+      },
+      "ratelimit_burst": {
+        "label": "Commands in a row: {{role}}",
+        "help": "How many may come at once before the limit."
+      }
+    },
+    "badDuration": "Use a number and h, min or s, e.g. 72 h."
+  },
+  "audit": {
+    "explain": "Who did what and when. Server admins see their scope.",
+    "kind": "Kind",
+    "allKinds": "Kind: all",
+    "server": "Server",
+    "allServers": "Server: all",
+    "kinds": {
+      "command": "Command",
+      "agent": "Agent",
+      "admin": "Administration",
+      "auth": "Sign-in"
+    },
+    "entries": "Audit entries",
+    "details": "Details",
+    "none": "No entries."
+  },
+  "profile": {
+    "explain": "Others see you by your pseudonym; real name, picture and contacts only those who manage you.",
+    "about": "About you",
+    "contacts": "Contacts",
+    "contactKind": "Kind of contact",
+    "contactValue": "Contact",
+    "addContact": "+ Contact",
+    "picture": "Profile picture",
+    "pictureAlt": "Your profile picture",
+    "choosePicture": "Choose a picture (PNG or JPEG)",
+    "removePicture": "Remove picture",
+    "pictureSaved": "Picture saved.",
+    "pictureRefused": "The picture was refused. Use a small PNG or JPEG.",
+    "pictureRemoved": "Picture removed.",
+    "passwordHint": "Your other sessions end when the password changes.",
+    "passwordChanged": "Password changed."
+  }
+}

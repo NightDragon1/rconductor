@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# A game host of the separate variant (Design 5.4). The agent opens no port.
+# RCD_PAIRING_TOKEN comes from the panel; without it the agent waits.
+# DOCKER_GID is the group of the socket: stat -c %g /var/run/docker.sock
+services:
+  agent:
+    image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-agent:${RCD_VERSION:-1}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
+    group_add: ["${DOCKER_GID:-999}"]
+    environment:
+      RCD_PAIRING_TOKEN: "${RCD_PAIRING_TOKEN:-}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-secrets:/secrets
+volumes:
+  agent-secrets:

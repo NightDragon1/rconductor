@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The panel host of the separate variant (Design 5.4). RCD_AGENT_PUBLIC_ADDR
+# is the address agents reach the panel under; it goes into pairing tokens.
+services:
+  panel:
+    image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-panel:${RCD_VERSION:-1}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
+    ports:
+      - "${RCD_WEB_PORT:-8080}:8080"
+      - "${RCD_AGENT_PORT:-8443}:8443"
+    environment:
+      RCD_AGENT_PUBLIC_ADDR: "${RCD_AGENT_PUBLIC_ADDR:-}"
+      RCD_IMAGE_REPO: "${RCD_IMAGE_REPO:-docker.io/nightdragon1}"
+      # Empty: 80 % of mem_limit, set by the panel.
+      GOMEMLIMIT: "${GOMEMLIMIT:-}"
+    volumes:
+      - data:/data
+      - secrets:/secrets
+      - backups:/backups
+volumes:
+  data:
+  secrets:
+  backups:

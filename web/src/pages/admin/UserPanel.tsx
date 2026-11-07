@@ -1,0 +1,596 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { useQueryClient } from '@tanstack/react-query';
+import { X } from 'lucide-react';
+import { useId, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { api, must } from '@/api/client';
+import type { Server, ServerGroup } from '@/api/servers';
+import {
+  assignmentsKey,
+  fetchAssignments,
+  managedUsersKey,
+  outcome,
+  rolesBelow,
+  sameSections,
+  useAssignments,
+  type Assignments,
+  type AssignmentsUpdate,
+  type Role,
+  type User,
+  type UserGroup,
+} from '@/api/users';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { CopyButton } from '@/components/CopyButton';
+import { Button } from '@/components/ui/button';
+import { dateTime } from '@/lib/format';
+import { useReveal } from '@/lib/phone';
+import { useUndo, useUnsaved } from '@/lib/undo';
+import { reasonText } from '@/lib/admin';
+
+function Chips({
+  label,
+  items,
+  onRemove,
+  add,
+}: {
+  label: string;
+  items: { key: string; text: string }[];
+  onRemove?: (key: string) => void;
+  add?: { options: { value: string; text: string }[]; onAdd: (v: string) => void; label: string };
+}) {
+  const { t } = useTranslation();
+  const id = useId();
+  return (
+    <section aria-label={label} className="flex flex-col gap-2">
+      <h3 className="text-sm text-muted">{label}</h3>
+      <ul className="flex flex-wrap gap-2">
+        {items.length === 0 && <li className="text-sm text-muted">{t('admin.none')}</li>}
+        {items.map((i) => (
+          <li
+            key={i.key}
+            className="flex items-center gap-1 rounded-md border border-border px-2 py-1 font-mono text-sm"
+          >
+            <bdi>{i.text}</bdi>
+            {onRemove && (
+              <button
+                type="button"
+                className="ml-1 text-muted hover:text-danger"
+                aria-label={t('admin.removeItem', { name: i.text })}
+                onClick={() => onRemove(i.key)}
+              >
+                <X aria-hidden className="size-4" />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {add && add.options.length > 0 && (
+        <>
+          <label htmlFor={id} className="sr-only">
+            {add.label}
+          </label>
+          <select
+            id={id}
+            className="h-9 rounded-md border border-control bg-surface px-2 text-sm"
+            value=""
+            onChange={(e) => e.target.value && add.onAdd(e.target.value)}
+          >
+            <option value="">{add.label}</option>
+            {add.options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.text}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+    </section>
+  );
+}
+
+// UserPanel shows a managed user beside the list (Design 6.1): role,
+// groups, scope, supporter release and grants, and the actions. Only what
+// the caller's role offers is shown; the backend decides (CLAUDE.md). On
+// a phone it reads; locking, unlocking and ending sessions stay, each
+// behind a dialog (revision 2.4 candidate 26).
+export function UserPanel({
+  user,
+  callerRole,
+  callerId,
+  callerName,
+  users,
+  groups,
+  servers,
+  serverGroups,
+  readOnly = false,
+  onTemplate,
+  onClose,
+}: {
+  user: User;
+  callerRole?: string;
+  callerId?: string;
+  callerName?: string;
+  users: User[];
+  groups: UserGroup[];
+  servers: Server[];
+  serverGroups: ServerGroup[];
+  readOnly?: boolean;
+  onTemplate: (u: User) => void;
+  onClose: () => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const qc = useQueryClient();
+  const { saved } = useUndo();
+  const a = useAssignments(user.id);
+  const [edits, setEdits] = useState<AssignmentsUpdate>({});
+  const saw = useRef<Assignments | null>(null);
+  const [release, setRelease] = useState<boolean | null>(null);
+  const edit = (body: AssignmentsUpdate) => {
+    setMessage(null);
+    setEdits((e) => ({ ...e, ...body }));
+  };
+  const [confirm, setConfirm] = useState<
+    'role' | 'reset' | 'remove' | 'lock' | 'unlock' | 'sessions' | null
+  >(null);
+  const panel = useReveal<HTMLElement>();
+  const [newRole, setNewRole] = useState<Role | ''>('');
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [temp, setTemp] = useState('');
+  const tempRef = useRef<HTMLParagraphElement>(null);
+  const roleId = useId();
+  const admin = callerRole === 'rcon_admin' || callerRole === 'server_admin';
+
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: managedUsersKey });
+    void qc.invalidateQueries({ queryKey: assignmentsKey(user.id) });
+  };
+  const report = async (run: () => Promise<unknown>, done: string) => {
+    const r = await outcome(user.id, run);
+    setMessage(r.ok ? { ok: true, text: done } : { ok: false, text: reasonText(t, r) });
+    refresh();
+  };
+  type Send = () => Promise<unknown>;
+  const put =
+    (body: AssignmentsUpdate): Send =>
+    async () =>
+      (saw.current = must(
+        await api.PUT('/users/{id}/assignments', { params: { path: { id: user.id } }, body }),
+      ));
+  const patch =
+    (body: { disabled?: boolean; supporters_allowed?: boolean; role?: Role }): Send =>
+    async () =>
+      must(await api.PATCH('/users/{id}', { params: { path: { id: user.id } }, body }));
+
+  // Edits collect here; Save sends them at once, Undo the previous state
+  // (D-048). Sessions end except for the scope alone (D-044).
+  const pick = (from: AssignmentsUpdate, keys: (keyof AssignmentsUpdate)[]) =>
+    Object.fromEntries(keys.map((k) => [k, from[k]])) as AssignmentsUpdate;
+  const send = async (sections: AssignmentsUpdate, supporters?: boolean) => {
+    const r = await outcome(user.id, async () => {
+      if (Object.keys(sections).length > 0) await put(sections)();
+      if (supporters !== undefined) await patch({ supporters_allowed: supporters })();
+    });
+    setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
+    refresh();
+    return r.ok;
+  };
+  const save = async () => {
+    if (!a.data) return;
+    const keys = Object.keys(edits) as (keyof AssignmentsUpdate)[];
+    const old = pick(a.data, keys);
+    const oldRelease = release === null ? undefined : user.supporters_allowed;
+    if (!(await send(edits, release ?? undefined))) return;
+    const ended = release !== null || keys.some((k) => k !== 'admin_scopes');
+    const after = saw.current;
+    const released = release;
+    setEdits({});
+    setRelease(null);
+    saved(
+      t(ended ? 'admin.undo.sessionsEnded' : 'admin.undo.changed', { name: user.pseudonym }),
+      () => void undo(keys, after, released, old, oldRelease),
+    );
+  };
+  // These objects have no version, so Undo looks first: what someone else
+  // changed in the meantime stays (Design 6.1).
+  const undo = async (
+    keys: (keyof AssignmentsUpdate)[],
+    after: Assignments | null,
+    released: boolean | null,
+    old: AssignmentsUpdate,
+    oldRelease: boolean | undefined,
+  ) => {
+    let same = true;
+    const r = await outcome(user.id, async () => {
+      if (after) same = sameSections(await fetchAssignments(user.id), after, keys);
+      if (same && released !== null) {
+        const now = must(await api.GET('/users/{id}', { params: { path: { id: user.id } } }));
+        same = now.supporters_allowed === released;
+      }
+    });
+    if (!r.ok || !same) {
+      setMessage({ ok: false, text: t('admin.conflict') });
+      refresh();
+      return;
+    }
+    await send(old, oldRelease);
+  };
+  // Locking asks, also as the Undo of an unlock.
+  const unlock = async () => {
+    const r = await outcome(user.id, patch({ disabled: false }));
+    setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
+    refresh();
+    if (r.ok) saved(t('admin.undo.unlocked', { name: user.pseudonym }), () => setConfirm('lock'));
+  };
+
+  const endSessions = () =>
+    report(
+      async () =>
+        must(await api.DELETE('/users/{id}/sessions', { params: { path: { id: user.id } } })),
+      t('admin.sessionsEnded'),
+    );
+
+  const cur = a.data && { ...a.data, ...edits };
+  const same = (k: keyof AssignmentsUpdate) =>
+    JSON.stringify(edits[k]) === JSON.stringify(a.data?.[k]);
+  const dirty =
+    (release !== null && release !== user.supporters_allowed) ||
+    (Object.keys(edits) as (keyof AssignmentsUpdate)[]).some((k) => !same(k));
+  useUnsaved(dirty);
+  const groupName = (id: string) => groups.find((g) => g.id === id)?.name ?? id;
+  const serverName = (id?: string) => servers.find((s) => s.id === id)?.name ?? id ?? '';
+  const sgName = (id?: string) => serverGroups.find((g) => g.id === id)?.name ?? id ?? '';
+  // The caller is not in his own list of managed users.
+  const userName = (id: string) =>
+    id === callerId ? (callerName ?? '') : (users.find((u) => u.id === id)?.pseudonym ?? '');
+  const supporters = users.filter((u) => u.role === 'supporter');
+
+  return (
+    <aside
+      ref={panel}
+      aria-label={t('admin.panel', { name: user.pseudonym })}
+      className="flex w-full flex-col gap-4 rounded-lg border border-border bg-surface p-5 xl:w-96"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="wrap-anywhere md:truncate font-mono text-lg font-semibold">
+            <bdi>{user.pseudonym}</bdi>
+          </h2>
+          <p className="text-xs text-muted">
+            {t('admin.created', { time: dateTime(i18n.language, user.created_at) })}
+            {user.last_login_at &&
+              ` · ${t('admin.lastLogin', { time: dateTime(i18n.language, user.last_login_at) })}`}
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" aria-label={t('admin.closePanel')} onClick={onClose}>
+          <X aria-hidden className="size-4" />
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor={roleId} className="text-sm text-muted">
+          {t('admin.role')}
+        </label>
+        <select
+          id={roleId}
+          className="h-11 rounded-md border border-control bg-surface px-3"
+          value={user.role}
+          disabled={readOnly || rolesBelow(callerRole).length < 2 || user.is_emergency}
+          onChange={(e) => {
+            setNewRole(e.target.value as Role);
+            setConfirm('role');
+          }}
+        >
+          {[user.role, ...rolesBelow(callerRole).filter((r) => r !== user.role)].map((r) => (
+            <option key={r} value={r}>
+              {t(`role.${r}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {(user.real_name || Object.keys(user.contacts).length > 0) && (
+        <dl className="text-sm">
+          {user.real_name && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">{t('admin.realName')}</dt>
+              <dd>
+                <bdi>{user.real_name}</bdi>
+              </dd>
+            </div>
+          )}
+          {Object.entries(user.contacts).map(([k, v]) => (
+            <div key={k} className="flex justify-between gap-3">
+              <dt className="text-muted">
+                <bdi>{k}</bdi>
+              </dt>
+              <dd>
+                <bdi>{v}</bdi>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {cur && admin && (user.role === 'moderator' || cur.groups.length > 0) && (
+        <Chips
+          label={t('admin.groups')}
+          items={cur.groups.map((g) => ({ key: g, text: groupName(g) }))}
+          onRemove={
+            readOnly ? undefined : (g) => edit({ groups: cur.groups.filter((x) => x !== g) })
+          }
+          add={
+            readOnly
+              ? undefined
+              : {
+                  label: t('admin.addGroup'),
+                  options: groups
+                    .filter((g) => !cur.groups.includes(g.id))
+                    .map((g) => ({ value: g.id, text: g.name })),
+                  onAdd: (g) => edit({ groups: [...cur.groups, g] }),
+                }
+          }
+        />
+      )}
+
+      {cur && user.role === 'server_admin' && (
+        <Chips
+          label={t('admin.scope')}
+          items={cur.admin_scopes.map((s) => ({
+            key: s.server_id ?? s.server_group_id ?? '',
+            text: s.server_id ? serverName(s.server_id) : sgName(s.server_group_id),
+          }))}
+          onRemove={
+            callerRole === 'rcon_admin' && !readOnly
+              ? (k) =>
+                  edit({
+                    admin_scopes: cur.admin_scopes.filter(
+                      (s) => (s.server_id ?? s.server_group_id) !== k,
+                    ),
+                  })
+              : undefined
+          }
+          add={
+            callerRole === 'rcon_admin' && !readOnly
+              ? {
+                  label: t('admin.addScope'),
+                  options: [
+                    ...serverGroups.map((g) => ({ value: `g:${g.id}`, text: g.name })),
+                    ...servers.map((s) => ({ value: `s:${s.id}`, text: s.name })),
+                  ],
+                  onAdd: (v) => {
+                    const target = v.startsWith('g:')
+                      ? { server_group_id: v.slice(2) }
+                      : { server_id: v.slice(2) };
+                    edit({ admin_scopes: [...cur.admin_scopes, target] });
+                  },
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {user.role === 'moderator' && admin && (
+        <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm">
+          <span>
+            <span className="block font-medium">{t('admin.supportersAllowed')}</span>
+            <span className="text-xs text-muted">{t('admin.supportersAllowedHint')}</span>
+          </span>
+          <input
+            type="checkbox"
+            className="size-5"
+            disabled={readOnly}
+            checked={release ?? user.supporters_allowed}
+            onChange={(e) => setRelease(e.target.checked)}
+          />
+        </label>
+      )}
+
+      {user.role === 'moderator' && (
+        <Chips
+          label={t('admin.supportersOf')}
+          items={supporters
+            .filter((s) => s.id !== user.id)
+            .filter((s) =>
+              qc
+                .getQueryData<{ supporter_grants: { moderator_id: string }[] }>(
+                  assignmentsKey(s.id),
+                )
+                ?.supporter_grants.some((g) => g.moderator_id === user.id),
+            )
+            .map((s) => ({ key: s.id, text: s.pseudonym }))}
+        />
+      )}
+
+      {cur && user.role === 'supporter' && (
+        <Chips
+          label={t('admin.supporterGrants')}
+          items={cur.supporter_grants.map((g) => ({
+            key: `${g.moderator_id}:${g.server_id}`,
+            text: userName(g.moderator_id)
+              ? `${serverName(g.server_id)} (${userName(g.moderator_id)})`
+              : serverName(g.server_id),
+          }))}
+          onRemove={
+            readOnly
+              ? undefined
+              : (k) =>
+                  edit({
+                    supporter_grants: cur.supporter_grants.filter(
+                      (g) => `${g.moderator_id}:${g.server_id}` !== k,
+                    ),
+                  })
+          }
+          add={
+            callerRole === 'moderator' && callerId && !readOnly
+              ? {
+                  label: t('admin.addServer'),
+                  options: servers
+                    .filter(
+                      (s) =>
+                        !cur.supporter_grants.some(
+                          (g) => g.moderator_id === callerId && g.server_id === s.id,
+                        ),
+                    )
+                    .map((s) => ({ value: s.id, text: s.name })),
+                  onAdd: (sid) =>
+                    edit({
+                      supporter_grants: [
+                        ...cur.supporter_grants,
+                        { moderator_id: callerId, server_id: sid },
+                      ],
+                    }),
+                }
+              : undefined
+          }
+        />
+      )}
+
+      {temp && (
+        <div className="flex flex-col gap-1 rounded-md border border-warn p-3">
+          <p className="text-sm">{t('admin.tempPassword')}</p>
+          <p ref={tempRef} className="font-mono">
+            {temp}
+          </p>
+          <CopyButton text={temp} target={tempRef} label={t('admin.copyPassword')} />
+        </div>
+      )}
+      {message && (
+        <p role="status" className={message.ok ? 'text-sm text-ok' : 'text-sm text-danger'}>
+          {message.text}
+        </p>
+      )}
+
+      {!readOnly && (
+        <Button className="self-start" disabled={!dirty} onClick={() => void save()}>
+          {t('admin.save')}
+        </Button>
+      )}
+
+      <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm">
+        <span className="font-medium">{t('admin.locked')}</span>
+        <input
+          type="checkbox"
+          role="switch"
+          className="size-5 max-md:size-11"
+          checked={user.disabled}
+          onChange={() => {
+            if (!user.disabled) setConfirm('lock');
+            else if (readOnly) setConfirm('unlock');
+            else void unlock();
+          }}
+        />
+      </label>
+
+      <div className="flex flex-wrap gap-2">
+        {!readOnly && (
+          <Button variant="outline" size="sm" onClick={() => onTemplate(user)}>
+            {t('admin.useTemplate')}
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => (readOnly ? setConfirm('sessions') : void endSessions())}
+        >
+          {t('admin.endSessions')}
+        </Button>
+        {!readOnly && !user.is_emergency && (
+          <Button variant="outline" size="sm" onClick={() => setConfirm('reset')}>
+            {t('admin.resetPassword')}
+          </Button>
+        )}
+        {!readOnly && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-danger text-danger"
+            onClick={() => setConfirm('remove')}
+          >
+            {t('admin.remove')}
+          </Button>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirm === 'lock'}
+        title={t('admin.lockTitle', { name: user.pseudonym })}
+        text={t('admin.lockText')}
+        action={t('admin.lock')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          void report(patch({ disabled: true }), t('admin.saved'));
+        }}
+      />
+      <ConfirmDialog
+        open={confirm === 'unlock'}
+        danger={false}
+        title={t('admin.unlockTitle', { name: user.pseudonym })}
+        text={t('admin.unlockText')}
+        action={t('admin.unlock')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          void report(patch({ disabled: false }), t('admin.saved'));
+        }}
+      />
+      <ConfirmDialog
+        open={confirm === 'sessions'}
+        title={t('admin.sessionsTitle', { name: user.pseudonym })}
+        text={t('admin.sessionsText')}
+        action={t('admin.endSessions')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          void endSessions();
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirm === 'role'}
+        title={t('admin.roleTitle', {
+          name: user.pseudonym,
+          role: newRole ? t(`role.${newRole}`) : '',
+        })}
+        text={t('admin.roleWarning')}
+        action={t('admin.changeRole')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          if (newRole) void report(patch({ role: newRole }), t('admin.saved'));
+        }}
+      />
+      <ConfirmDialog
+        open={confirm === 'reset'}
+        title={t('admin.resetTitle', { name: user.pseudonym })}
+        text={t('admin.resetText')}
+        action={t('admin.resetPassword')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          void report(async () => {
+            const r = must(
+              await api.POST('/users/{id}/password-reset', { params: { path: { id: user.id } } }),
+            );
+            setTemp(r.password);
+          }, t('admin.resetDone'));
+        }}
+      />
+      <ConfirmDialog
+        open={confirm === 'remove'}
+        title={t('admin.removeTitle', { count: 1 })}
+        text={t('admin.removeText')}
+        action={t('admin.remove')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          void report(
+            async () =>
+              must(await api.DELETE('/users/{id}', { params: { path: { id: user.id } } })),
+            t('admin.removed'),
+          ).then(onClose);
+        }}
+      />
+    </aside>
+  );
+}
