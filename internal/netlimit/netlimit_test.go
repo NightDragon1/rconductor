@@ -5,10 +5,12 @@ package netlimit
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"net/netip"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -129,4 +131,64 @@ func TestClientKey(t *testing.T) {
 			t.Errorf("ClientKey(%s) = %s, want %s", in, got, want)
 		}
 	}
+}
+
+// pipeConn is one end of a pipe with an address, for a test in virtual time.
+type pipeConn struct{ net.Conn }
+
+func (pipeConn) RemoteAddr() net.Addr { return &net.TCPAddr{IP: net.IPv4(192, 0, 2, 1), Port: 1} }
+
+// oneListener hands out one connection, then waits for its end.
+type oneListener struct {
+	net.Listener
+	conn net.Conn
+	done chan struct{}
+}
+
+func (l *oneListener) Accept() (net.Conn, error) {
+	if c := l.conn; c != nil {
+		l.conn = nil
+		return c, nil
+	}
+	<-l.done
+	return nil, net.ErrClosed
+}
+
+func (l *oneListener) Close() error { close(l.done); return nil }
+
+// TestMaxAgeInVirtualTime covers RCD_MAX_ANONYMOUS_CONNECTION_SECONDS with its
+// real value: the connection ends at the age, not before.
+func TestMaxAgeInVirtualTime(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		server, client := net.Pipe()
+		defer func() { _ = client.Close() }()
+		l := New(&oneListener{conn: pipeConn{server}, done: make(chan struct{})},
+			Options{Max: 4, PerClient: 4, MaxAge: 30 * time.Second, Log: slog.New(slog.DiscardHandler)})
+		defer func() { _ = l.Close() }()
+		if _, err := l.Accept(); err != nil {
+			t.Fatal(err)
+		}
+		ended := make(chan error, 1)
+		go func() {
+			_, err := client.Read(make([]byte, 1))
+			ended <- err
+		}()
+		time.Sleep(29 * time.Second)
+		synctest.Wait()
+		select {
+		case err := <-ended:
+			t.Fatalf("ended early: %v", err)
+		default:
+		}
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		select {
+		case err := <-ended:
+			if !errors.Is(err, io.EOF) {
+				t.Errorf("end = %v", err)
+			}
+		default:
+			t.Error("still open past its age")
+		}
+	})
 }

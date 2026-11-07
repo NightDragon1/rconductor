@@ -200,11 +200,17 @@ function UserBlock({ collapsed }: { collapsed: boolean }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [theme, setTheme] = useState(storedTheme);
+  const [logoutFailed, setLogoutFailed] = useState(false);
   if (!session) return null;
   const name = session.user.pseudonym;
 
   async function logout() {
-    await api.POST('/auth/logout');
+    const r = await api.POST('/auth/logout');
+    // 401: the session is gone already.
+    if (!r.response.ok && r.response.status !== 401) {
+      setLogoutFailed(true);
+      return;
+    }
     qc.clear();
     bufferOwner(undefined);
     await navigate({ to: '/login' });
@@ -242,6 +248,11 @@ function UserBlock({ collapsed }: { collapsed: boolean }) {
       >
         <SunMoon aria-hidden />
       </Button>
+      {logoutFailed && (
+        <p role="alert" className="text-xs text-danger">
+          {t('nav.logoutFailed')}
+        </p>
+      )}
       <Button
         variant="ghost"
         size="icon"

@@ -90,10 +90,20 @@ func delayFor(n int) time.Duration {
 		return time.Second
 	case n == 3:
 		return 2 * time.Second
-	default:
+	case n == 4:
 		return 4 * time.Second
+	case n == 5:
+		return 8 * time.Second
+	case n == 6:
+		return 16 * time.Second
+	default:
+		return maxAccountDelay
 	}
 }
+
+// maxAccountDelay ends the growing delay of an account. The failures count
+// over all addresses (R-11), and a delay locks nobody out.
+const maxAccountDelay = 30 * time.Second
 
 type counter struct {
 	failures int

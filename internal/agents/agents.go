@@ -82,13 +82,21 @@ type Service struct {
 	log        *slog.Logger
 	hub        Hub
 	publicAddr string
+	imageRepo  string
 	now        func() time.Time
+}
+
+// SetImageRepo names the registry of the pairing dialog (RCD_IMAGE_REPO).
+func (s *Service) SetImageRepo(repo string) {
+	if repo != "" {
+		s.imageRepo = repo
+	}
 }
 
 // NewService returns the agent administration; publicAddr is
 // RCD_AGENT_PUBLIC_ADDR.
 func NewService(st *store.Store, log *slog.Logger, publicAddr string) *Service {
-	return &Service{st: st, log: log, publicAddr: publicAddr, now: time.Now}
+	return &Service{st: st, log: log, publicAddr: publicAddr, imageRepo: "docker.io/nightdragon1", now: time.Now}
 }
 
 // SetHub connects the agent hub, which in turn uses the service as its
@@ -223,19 +231,19 @@ func (s *Service) CreateToken(ctx context.Context, req users.Request) (Token, er
 		return Token{}, err
 	}
 	tok := pt.Encode()
-	return Token{Token: tok, ExpiresAt: expires, PanelAddr: s.publicAddr, PanelFingerprint: pt.Fingerprint, Compose: compose(tok)}, nil
+	return Token{Token: tok, ExpiresAt: expires, PanelAddr: s.publicAddr, PanelFingerprint: pt.Fingerprint, Compose: compose(s.imageRepo, tok)}, nil
 }
 
 // compose is the agent service for the pairing dialog (AGT-005). The token
 // is a secret: the dialog shows it once.
-func compose(token string) string {
+func compose(repo, token string) string {
 	version := buildinfo.Version
 	if strings.HasPrefix(version, "0.0.0") {
 		version = "latest"
 	}
 	return fmt.Sprintf(`services:
   rconductor-agent:
-    image: ghcr.io/nightdragon1/rconductor-agent:%s
+    image: %s/rconductor-agent:%s
     restart: unless-stopped
     # GID of /var/run/docker.sock on the host: stat -c %%g /var/run/docker.sock
     group_add: ["DOCKER_GID"]
@@ -246,7 +254,7 @@ func compose(token string) string {
       - rconductor-agent-secrets:/secrets
 volumes:
   rconductor-agent-secrets:
-`, version, token)
+`, repo, version, token)
 }
 
 // Approve accepts a pending pairing by fingerprint (way B).

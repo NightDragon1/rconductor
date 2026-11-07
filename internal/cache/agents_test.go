@@ -4,6 +4,7 @@ package cache
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -78,7 +79,7 @@ func TestLogRing(t *testing.T) {
 	for i := range 60 {
 		d.Lines("a1", agentproto.LogLines{Container: "mc", Lines: []string{fmt.Sprintf("line %d", i)}})
 	}
-	logs, _ := d.Logs("a1", "mc")
+	logs, _, _ := d.Logs("a1", "mc")
 	if len(logs) != LogRing || logs[0] != "line 10" || logs[49] != "line 59" {
 		t.Errorf("ring = %d lines, %q .. %q", len(logs), logs[0], logs[len(logs)-1])
 	}
@@ -141,6 +142,31 @@ func TestAgentDataUTC(t *testing.T) {
 }
 
 func lines(d *AgentData, agentID, name string) []string {
-	l, _ := d.Logs(agentID, name)
+	l, _, _ := d.Logs(agentID, name)
 	return l
+}
+
+// TestLogLineNumbers covers #157: lines keep their numbers over deliveries,
+// also those the ring has dropped.
+func TestLogLineNumbers(t *testing.T) {
+	d, _, _ := newAgentData(t)
+	d.Snapshot("a1", agentproto.Snapshot{Containers: []agentproto.Container{running("1", "mc")}})
+	var firsts []uint64
+	d.OnLines(func(_ string, _ agentproto.LogLines, _, first uint64) { firsts = append(firsts, first) })
+	d.Lines("a1", agentproto.LogLines{Container: "mc", Lines: []string{"a", "b"}})
+	d.Lines("a1", agentproto.LogLines{Container: "mc", Lines: []string{"c"}})
+	if !slices.Equal(firsts, []uint64{1, 3}) {
+		t.Errorf("firsts = %v", firsts)
+	}
+	if _, _, first := d.Logs("a1", "mc"); first != 1 {
+		t.Errorf("first = %d", first)
+	}
+	many := make([]string, LogRing)
+	for i := range many {
+		many[i] = "x"
+	}
+	d.Lines("a1", agentproto.LogLines{Container: "mc", Lines: many})
+	if lines, _, first := d.Logs("a1", "mc"); len(lines) != LogRing || first != 4 {
+		t.Errorf("%d lines, first = %d", len(lines), first)
+	}
 }

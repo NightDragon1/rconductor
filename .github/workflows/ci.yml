@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Three stages (scripts/ci-scope.sh decides):
-#   1. every push: SPDX, Go lint and test, web lint and test, govulncheck
+#   1. every run: SPDX, Go lint, Go test, web lint and test, govulncheck
 #   2. push to main and pull requests: integration, E2E, amd64 image
 #   3. nightly, manual and tags: arm64 images, Minecraft and the long tests
 #      in real time, and everything else regardless of paths
@@ -39,6 +39,7 @@ jobs:
       stage3: ${{ steps.scope.outputs.stage3 }}
       e2e: ${{ steps.scope.outputs.e2e }}
       minecraft: ${{ steps.scope.outputs.minecraft }}
+      sqlc: ${{ steps.scope.outputs.sqlc }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -60,8 +61,9 @@ jobs:
           persist-credentials: false
       - run: scripts/check-spdx.sh
 
-  go:
-    name: Go lint and test
+  go-lint:
+    name: Go lint
+    needs: scope
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,13 +75,31 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/go.sum
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ hashFiles('tools/go.sum', '.golangci.*') }}-${{ github.sha }}
+          restore-keys: golangci-lint-${{ hashFiles('tools/go.sum', '.golangci.*') }}-
       - name: Generated code is up to date
         run: |
           go generate ./...
-          docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff
           git diff --exit-code
+      - name: Queries and schema fit the generated code
+        if: needs.scope.outputs.sqlc == 'true'
+        run: docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff
       - run: go vet ./...
       - run: make lint
+
+  go-test:
+    name: Go test
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
       - run: go test -race ./...
 
   govulncheck:

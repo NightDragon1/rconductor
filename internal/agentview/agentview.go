@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -85,8 +86,13 @@ type Logs struct {
 	Truncated bool     `json:"truncated,omitempty"`
 	// Current marks the last lines sent to a new subscriber, which the
 	// client may hold already (UI-009).
-	Current bool   `json:"current,omitempty"`
-	Seq     uint64 `json:"-"`
+	Current bool `json:"current,omitempty"`
+	// First numbers the first line; Run names the count, which starts
+	// over with the panel. With them the client tells new lines from
+	// known ones without comparing text (#157).
+	First uint64 `json:"first"`
+	Run   string `json:"run"`
+	Seq   uint64 `json:"-"`
 }
 
 // Sequence implements events.Sequenced.
@@ -109,6 +115,9 @@ type View struct {
 
 	mu      sync.Mutex
 	follows map[string]*follow // by server ID
+	orders  map[string]*logOrders
+	// run names this count of log lines, see Logs.
+	run string
 }
 
 // SetPlayers adds the player counts to the runtime data.
@@ -173,7 +182,8 @@ func (v *View) publishRuntime(ctx context.Context, serverID string) {
 
 // New wires the cache's notifications to the bus.
 func New(st *store.Store, data *cache.AgentData, agents Agents, bus Bus, log *slog.Logger) *View {
-	v := &View{st: st, data: data, agents: agents, bus: bus, log: log, follows: map[string]*follow{}}
+	v := &View{st: st, data: data, agents: agents, bus: bus, log: log, follows: map[string]*follow{},
+		orders: map[string]*logOrders{}, run: strconv.FormatInt(time.Now().UnixNano(), 36)}
 	data.OnMetrics(v.metrics)
 	data.OnChange(func(agentID, container string) { v.metrics(agentID, []string{container}) })
 	data.OnLines(v.lines)
@@ -226,8 +236,8 @@ func (v *View) Current(ctx context.Context, serverID, kind string) (any, bool) {
 	case "metrics":
 		return v.metricsOf(serverID, agentID, container)
 	case "logs":
-		lines, seq := v.data.Logs(agentID, container)
-		return Logs{ServerID: serverID, Container: container, Lines: lines, Current: true, Seq: seq}, true
+		lines, seq, first := v.data.Logs(agentID, container)
+		return Logs{ServerID: serverID, Container: container, Lines: lines, Current: true, First: first, Run: v.run, Seq: seq}, true
 	}
 	return nil, false
 }
@@ -246,9 +256,9 @@ func (v *View) metrics(agentID string, containers []string) {
 	}
 }
 
-func (v *View) lines(agentID string, ll agentproto.LogLines, seq uint64) {
+func (v *View) lines(agentID string, ll agentproto.LogLines, seq, first uint64) {
 	for _, id := range v.servers(agentID, ll.Container) {
-		v.bus.PublishAgentData(id, "logs", Logs{ServerID: id, Container: ll.Container, Lines: ll.Lines, Truncated: ll.Truncated, Seq: seq})
+		v.bus.PublishAgentData(id, "logs", Logs{ServerID: id, Container: ll.Container, Lines: ll.Lines, Truncated: ll.Truncated, First: first, Run: v.run, Seq: seq})
 	}
 }
 
@@ -269,7 +279,7 @@ func (v *View) FollowLogs(ctx context.Context, serverID string) func() {
 	first := f.viewers == 1
 	v.mu.Unlock()
 	if first {
-		go v.order(ctx, agentID, agentproto.TypeLogsFollow, container)
+		v.want(ctx, agentID, agentproto.TypeLogsFollow, container)
 	}
 	var once sync.Once
 	return func() {
@@ -282,7 +292,7 @@ func (v *View) FollowLogs(ctx context.Context, serverID string) func() {
 			}
 			v.mu.Unlock()
 			if last {
-				go v.order(ctx, agentID, agentproto.TypeLogsStop, container)
+				v.want(ctx, agentID, agentproto.TypeLogsStop, container)
 			}
 		})
 	}
@@ -302,6 +312,38 @@ func (v *View) reconnected(agentID string) {
 	for _, c := range containers {
 		go v.order(context.Background(), agentID, agentproto.TypeLogsFollow, c)
 	}
+}
+
+// logOrders is what is wanted of a container and what went out last.
+type logOrders struct{ want, sent string }
+
+// want asks for a log order. One goroutine per container sends them one
+// after the other, so that a stop cannot overtake a follow; of orders that
+// pile up only the last counts (#156).
+func (v *View) want(ctx context.Context, agentID, typ, container string) {
+	key := agentID + "/" + container
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if o := v.orders[key]; o != nil {
+		o.want = typ
+		return
+	}
+	o := &logOrders{want: typ}
+	v.orders[key] = o
+	go func() {
+		for {
+			v.mu.Lock()
+			next := o.want
+			if next == o.sent {
+				delete(v.orders, key)
+				v.mu.Unlock()
+				return
+			}
+			o.sent = next
+			v.mu.Unlock()
+			v.order(ctx, agentID, next, container)
+		}
+	}()
 }
 
 // order sends a log order; it outlives the subscription that caused it.

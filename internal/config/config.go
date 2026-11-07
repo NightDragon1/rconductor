@@ -37,7 +37,9 @@ type Log struct {
 
 // Panel is the start-up configuration of the panel (Design 5.2).
 type Panel struct {
-	HTTPAddr        string
+	HTTPAddr string
+	// ImageRepo is the registry named in the pairing dialog.
+	ImageRepo       string
 	AgentAddr       string
 	AgentPublicAddr string
 	PublicURL       *url.URL // nil: derived from the request
@@ -119,6 +121,7 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 		HTTPAddr:             r.addr("RCD_HTTP_ADDR", ":8080"),
 		AgentAddr:            r.addr("RCD_AGENT_ADDR", ":8443"),
 		AgentPublicAddr:      r.str("RCD_AGENT_PUBLIC_ADDR", ""),
+		ImageRepo:            r.str("RCD_IMAGE_REPO", "docker.io/nightdragon1"),
 		PublicURL:            r.publicURL("RCD_PUBLIC_URL"),
 		BasePath:             r.basePath("RCD_BASE_PATH", "/"),
 		TrustedProxies:       r.prefixes("RCD_TRUSTED_PROXIES"),
