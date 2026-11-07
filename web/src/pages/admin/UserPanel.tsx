@@ -7,10 +7,13 @@ import { api, must } from '@/api/client';
 import type { Server, ServerGroup } from '@/api/servers';
 import {
   assignmentsKey,
+  fetchAssignments,
   managedUsersKey,
   outcome,
   rolesBelow,
+  sameSections,
   useAssignments,
+  type Assignments,
   type AssignmentsUpdate,
   type Role,
   type User,
@@ -120,6 +123,7 @@ export function UserPanel({
   const { saved } = useUndo();
   const a = useAssignments(user.id);
   const [edits, setEdits] = useState<AssignmentsUpdate>({});
+  const saw = useRef<Assignments | null>(null);
   const [release, setRelease] = useState<boolean | null>(null);
   const edit = (body: AssignmentsUpdate) => {
     setMessage(null);
@@ -149,7 +153,9 @@ export function UserPanel({
   const put =
     (body: AssignmentsUpdate): Send =>
     async () =>
-      must(await api.PUT('/users/{id}/assignments', { params: { path: { id: user.id } }, body }));
+      (saw.current = must(
+        await api.PUT('/users/{id}/assignments', { params: { path: { id: user.id } }, body }),
+      ));
   const patch =
     (body: { disabled?: boolean; supporters_allowed?: boolean; role?: Role }): Send =>
     async () =>
@@ -177,19 +183,47 @@ export function UserPanel({
     const oldRelease = release === null ? undefined : user.supporters_allowed;
     if (!(await send(edits, release ?? undefined))) return;
     const ended = release !== null || keys.some((k) => k !== 'admin_scopes');
+    const after = saw.current;
+    const released = release;
     setEdits({});
     setRelease(null);
     saved(
       t(ended ? 'admin.undo.sessionsEnded' : 'admin.undo.changed', { name: user.pseudonym }),
-      () => void send(old, oldRelease),
+      () => void undo(keys, after, released, old, oldRelease),
     );
   };
+  // These objects have no version, so Undo looks first: what someone else
+  // changed in the meantime stays (Design 6.1, B2).
+  const undo = async (
+    keys: (keyof AssignmentsUpdate)[],
+    after: Assignments | null,
+    released: boolean | null,
+    old: AssignmentsUpdate,
+    oldRelease: boolean | undefined,
+  ) => {
+    let same = true;
+    const r = await outcome(user.id, async () => {
+      if (after) same = sameSections(await fetchAssignments(user.id), after, keys);
+      if (same && released !== null) {
+        const now = must(await api.GET('/users/{id}', { params: { path: { id: user.id } } }));
+        same = now.supporters_allowed === released;
+      }
+    });
+    if (!r.ok || !same) {
+      setMessage({ ok: false, text: t('admin.conflict') });
+      refresh();
+      return;
+    }
+    await send(old, oldRelease);
+  };
+  // Locking asks, also as the Undo of an unlock.
   const unlock = async () => {
-    await report(patch({ disabled: false }), t('admin.saved'));
-    saved(
-      t('admin.undo.unlocked', { name: user.pseudonym }),
-      () => void report(patch({ disabled: true }), t('admin.saved')),
+    const r = await outcome(user.id, patch({ disabled: false }));
+    setMessage(
+      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
     );
+    refresh();
+    if (r.ok) saved(t('admin.undo.unlocked', { name: user.pseudonym }), () => setConfirm('lock'));
   };
 
   const endSessions = () =>

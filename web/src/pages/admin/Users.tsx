@@ -11,6 +11,7 @@ import {
   invitesKey,
   managedUsersKey,
   outcome,
+  sameSections,
   useAllAssignments,
   useInvites,
   useManagedUsers,
@@ -135,7 +136,7 @@ export function UsersPage() {
   // A mass action runs per user and reports each outcome (UI-007): no
   // overall success when some fail.
   // run gives back how to restore the user, for Undo (D-048).
-  type Restore = () => Promise<unknown>;
+  type Restore = () => Promise<Outcome>;
   const bulk = async (title: string, run: (u: User) => Promise<Restore | undefined>) => {
     const targets = chosen;
     const restores: Restore[] = [];
@@ -155,7 +156,12 @@ export function UsersPage() {
     refresh();
     if (restores.length === 0) return;
     saved(t('admin.undo.bulk', { action: title, count: restores.length }), () => {
-      void Promise.all(restores.map((r) => r())).finally(refresh);
+      void (async () => {
+        // Each user reports on his own, as with the action itself.
+        const undone = await Promise.all(restores.map((r) => r()));
+        setResults({ title: t('undo.undo'), items: undone });
+        refresh();
+      })();
     });
   };
   const setDisabled = async (u: User, disabled: boolean) =>
@@ -165,27 +171,40 @@ export function UsersPage() {
       await setDisabled(u, true);
       return undefined;
     });
+  // An unlock has no Undo: that would lock without the question.
   const unlock = () =>
     bulk(t('admin.unlock'), async (u) => {
-      const was = u.disabled;
       await setDisabled(u, false);
-      return () => setDisabled(u, was);
+      return undefined;
     });
   const assign = async (u: User, body: AssignmentsUpdate) =>
     must(await api.PUT('/users/{id}/assignments', { params: { path: { id: u.id } }, body }));
+  // Undo takes a section back only if it still is what this action made
+  // (Design 6.1, B2).
+  const restore =
+    (u: User, key: 'groups' | 'admin_scopes', old: Assignments, after: Assignments): Restore =>
+    async () => {
+      let same = false;
+      const seen = await outcome(u.id, async () => {
+        same = sameSections(await fetchAssignments(u.id), after, [key]);
+      });
+      if (!seen.ok) return seen;
+      if (!same) return { id: u.id, ok: false, reason: 'conflict' };
+      return outcome(u.id, () => assign(u, { [key]: old[key] }));
+    };
   const addGroup = (gid: string) =>
     bulk(t('admin.bulk.groupTitle', { name: groupNames.get(gid) ?? '' }), async (u) => {
       const cur = await fetchAssignments(u.id);
-      await assign(u, { groups: [...new Set([...cur.groups, gid])] });
-      return () => assign(u, { groups: cur.groups });
+      const after = await assign(u, { groups: [...new Set([...cur.groups, gid])] });
+      return restore(u, 'groups', cur, after);
     });
   const addScope = (v: string) => {
     const target = v.startsWith('g:') ? { server_group_id: v.slice(2) } : { server_id: v.slice(2) };
     const name = v.startsWith('g:') ? sgNames.get(v.slice(2)) : serverNames.get(v.slice(2));
     void bulk(t('admin.bulk.scopeTitle', { name: name ?? '' }), async (u) => {
       const cur = await fetchAssignments(u.id);
-      await assign(u, { admin_scopes: [...cur.admin_scopes, target] });
-      return () => assign(u, { admin_scopes: cur.admin_scopes });
+      const after = await assign(u, { admin_scopes: [...cur.admin_scopes, target] });
+      return restore(u, 'admin_scopes', cur, after);
     });
   };
 

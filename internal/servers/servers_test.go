@@ -482,3 +482,35 @@ func TestConnectionLimit(t *testing.T) {
 		t.Errorf("limited %d, connections %d", limited.Load(), srv.Connections())
 	}
 }
+
+// TestB4PasswordFromTheReadOfTheAddress: a change after the address was read
+// does not reach the password of that test. This cannot fail on the code
+// before the fix: the race sat between two reads inside TestConnection, with
+// no seam for a test. It guards the part that closes it.
+func TestB4PasswordFromTheReadOfTheAddress(t *testing.T) {
+	f, _, in := connectionFixture(t)
+	ctx := context.Background()
+	name := "local"
+	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileID: in.ProfileID, Host: in.Host, Port: in.Port, Password: secretOf(rconPassword)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := f.st.Queries.GetServer(ctx, sv.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := "other.lan"
+	var version int64
+	if err := f.st.DB.QueryRowContext(ctx, `SELECT version FROM servers WHERE id = ?`, sv.ID).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{Host: &host, Password: secretOf("for the new address"), Version: &version}); err != nil {
+		t.Fatal(err)
+	}
+	if pw := f.svc.storedPassword(sv.ID, r.Secret); pw != rconPassword {
+		t.Errorf("password of the read = %q", pw)
+	}
+	if pw := f.svc.storedPassword(sv.ID, []byte("broken")); pw != "" {
+		t.Errorf("broken secret = %q", pw)
+	}
+}
