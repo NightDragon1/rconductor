@@ -337,3 +337,18 @@ func TestEvents(t *testing.T) {
 		t.Error("no snapshot first")
 	}
 }
+
+// TestK3FollowOutsideTheOrderLimit covers #155: switching between console
+// and logs does not use up the actions of a container.
+func TestK3FollowOutsideTheOrderLimit(t *testing.T) {
+	d, _, _ := newTestDocker(t)
+	for i := range 6 {
+		r, _ := order(t, d, agentproto.TypeLogsFollow, agentproto.LogsFollow{Container: "mc"})
+		if r.Code != agentproto.CodeOK {
+			t.Fatalf("follow %d = %s", i, r.Code)
+		}
+		if r, _ := order(t, d, agentproto.TypeLogsStop, agentproto.LogsFollow{Container: "mc"}); r.Code != agentproto.CodeOK {
+			t.Fatalf("stop %d = %s", i, r.Code)
+		}
+	}
+}

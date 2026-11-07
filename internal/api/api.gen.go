@@ -4829,6 +4829,25 @@ func (response ChangePassword422ApplicationProblemPlusJSONResponse) VisitChangeP
 	return err
 }
 
+type ChangePassword429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response ChangePassword429ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ChangePassword503ApplicationProblemPlusJSONResponse struct {
 	BusyApplicationProblemPlusJSONResponse
 }

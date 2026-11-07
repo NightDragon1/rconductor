@@ -43,6 +43,18 @@ export interface ConsoleBuffer {
   cursor?: string; // next older page of the history
   epoch?: number; // counts refills: an older page from before one is void
   running?: number; // commands to this server without an answer yet
+  logPos?: { run: string; last: number }; // number of the newest line held
+}
+
+// GAP_LINE marks lines that passed while nobody followed.
+export const GAP_LINE = '⋯';
+
+// A delivery of log lines; first numbers its first line within run.
+export interface LogDelivery {
+  lines: string[];
+  current?: boolean; // the last lines for a new subscription
+  first?: number;
+  run?: string;
 }
 
 export const emptyBuffer: ConsoleBuffer = { cmds: [], logs: [], loaded: false };
@@ -66,6 +78,14 @@ export function addCommands(buf: ConsoleBuffer, entries: CmdBlock[]): ConsoleBuf
   return { ...buf, cmds };
 }
 
+// RUNNING_MS is how long the history's not_answered means "still running":
+// past the time a command gets, nothing comes any more (#150).
+export const RUNNING_MS = 15_000;
+
+export function isRunning(b: CmdBlock, now: number): boolean {
+  return b.reason === 'not_answered' && now - Date.parse(b.ts) < RUNNING_MS;
+}
+
 let logSeq = 0;
 
 // newLines returns the lines of a delivery that follow what the buffer
@@ -78,6 +98,28 @@ export function newLines(buf: ConsoleBuffer, lines: string[]): string[] {
     }
   }
   return lines;
+}
+
+// addDelivery takes the new lines of a delivery by their numbers; repeated
+// lines stay apart that way (#157). Lines that passed meanwhile leave a mark.
+// Without a count to go by the text decides.
+export function addDelivery(buf: ConsoleBuffer, d: LogDelivery, ts: string): ConsoleBuffer {
+  const { lines, first, run } = d;
+  if (first === undefined || run === undefined) {
+    return addLogLines(buf, d.current ? newLines(buf, lines) : lines, ts);
+  }
+  const last = first + lines.length - 1;
+  const pos = buf.logPos;
+  if (pos?.run !== run) {
+    const fresh = d.current ? newLines(buf, lines) : lines;
+    return { ...addLogLines(buf, fresh, ts), logPos: { run, last } };
+  }
+  const fresh = lines.slice(Math.max(0, pos.last + 1 - first));
+  const gap = first > pos.last + 1;
+  return {
+    ...addLogLines(buf, gap ? [GAP_LINE, ...fresh] : fresh, ts),
+    logPos: { run, last: Math.max(pos.last, last) },
+  };
 }
 
 // addLogLines appends one delivery of log lines and drops the oldest
@@ -101,21 +143,20 @@ export function addLogLines(buf: ConsoleBuffer, lines: string[], ts: string): Co
   return { ...buf, logs };
 }
 
-// prependTail puts earlier lines from logs.tail before the buffer. The
-// tail ends with lines the buffer may already hold, so only the part
-// before the longest overlap goes in; the limit of MAX_LOG_LINES then
-// keeps the newest lines (G3).
+// prependTail puts earlier lines from logs.tail before the buffer. The tail
+// holds what the buffer starts with, and it may go on past the end of the
+// buffer (#154), so only what comes before that place goes in; the limit of
+// MAX_LOG_LINES then keeps the newest lines (G3).
 export function prependTail(buf: ConsoleBuffer, tail: string[]): ConsoleBuffer {
   const have = buf.logs.flatMap((l) => l.lines);
-  let overlap = 0;
-  for (let k = Math.min(tail.length, have.length); k > 0; k--) {
-    if (tail.slice(tail.length - k).every((line, i) => line === have[i])) {
-      overlap = k;
-      break;
-    }
-  }
+  const fits = (at: number) => {
+    const n = Math.min(have.length, tail.length - at);
+    return n > 0 && tail.slice(at, at + n).every((line, i) => line === have[i]);
+  };
+  let start = tail.findIndex((_, at) => fits(at));
+  if (start < 0) start = tail.length;
   const room = Math.max(0, MAX_LOG_LINES - have.length);
-  const earlier = tail.slice(0, tail.length - overlap).slice(-room);
+  const earlier = room === 0 ? [] : tail.slice(0, start).slice(-room);
   if (earlier.length === 0) return buf;
   const first = buf.logs[0];
   const ts = new Date((first ? Date.parse(first.ts) : Date.now()) - 1).toISOString();
