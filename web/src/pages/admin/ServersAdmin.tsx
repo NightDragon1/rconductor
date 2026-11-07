@@ -149,7 +149,7 @@ function ServerPanel({
     setMessage(
       r.ok
         ? { ok: result === 'ok', text: t(`servers.testResult.${result}`) }
-        : { ok: false, text: reasonText(t, r.reason) },
+        : { ok: false, text: reasonText(t, r) },
     );
   };
 
@@ -162,7 +162,7 @@ function ServerPanel({
           onCreated();
         });
         void qc.invalidateQueries({ queryKey: serversKey });
-        if (!r.ok) setMessage({ ok: false, text: reasonText(t, r.reason) });
+        if (!r.ok) setMessage({ ok: false, text: reasonText(t, r) });
       })();
       return;
     }
@@ -186,9 +186,7 @@ function ServerPanel({
       setMessage({ ok: false, text: t('admin.conflict') });
       return null;
     }
-    setMessage(
-      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
-    );
+    setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
     if (done) {
       setBase(done);
       setD(draftOf(done));
@@ -495,7 +493,7 @@ function ServerPanel({
             );
             void qc.invalidateQueries({ queryKey: serversKey });
             if (r.ok) onClose();
-            else setMessage({ ok: false, text: reasonText(t, r.reason) });
+            else setMessage({ ok: false, text: reasonText(t, r) });
           }}
         />
       )}
@@ -546,9 +544,7 @@ function GroupPanel({
       setMessage({ ok: false, text: t('admin.conflict') });
       return null;
     }
-    setMessage(
-      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
-    );
+    setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
     if (done) {
       setBase(done);
       setDraft(done);
@@ -677,7 +673,7 @@ function GroupPanel({
           );
           void qc.invalidateQueries({ queryKey: serverGroupsKey });
           if (r.ok) onClose();
-          else setMessage({ ok: false, text: reasonText(t, r.reason) });
+          else setMessage({ ok: false, text: reasonText(t, r) });
         }}
       />
     </aside>
@@ -735,7 +731,7 @@ export function ServersAdminPage() {
       setOpen({ kind: 'group', id: g.id });
     });
     void qc.invalidateQueries({ queryKey: serverGroupsKey });
-    if (!r.ok) setError(reasonText(t, r.reason));
+    if (!r.ok) setError(reasonText(t, r));
   };
 
   return (

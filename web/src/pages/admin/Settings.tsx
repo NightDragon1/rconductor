@@ -147,9 +147,7 @@ export function SettingsPage() {
       setMessage({ ok: false, text: t('admin.conflict') });
       return null;
     }
-    setMessage(
-      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
-    );
+    setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
     if (r.ok) reset();
     void qc.invalidateQueries({ queryKey: settingsKey });
     // ui.* and supporters.* reach the session (shortcuts, navigation).

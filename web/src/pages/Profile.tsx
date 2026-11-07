@@ -57,9 +57,7 @@ export function ProfilePage() {
         }),
       ),
     );
-    setInfo(
-      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
-    );
+    setInfo(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
     if (r.ok) {
       setRealName(null);
       setContacts(null);
@@ -86,7 +84,7 @@ export function ProfilePage() {
     setPic(
       r.ok
         ? { ok: true, text: t('profile.pictureRemoved') }
-        : { ok: false, text: reasonText(t, r.reason) },
+        : { ok: false, text: reasonText(t, r) },
     );
     void qc.invalidateQueries({ queryKey: ['me'] });
   };

@@ -146,7 +146,7 @@ export function UserPanel({
   };
   const report = async (run: () => Promise<unknown>, done: string) => {
     const r = await outcome(user.id, run);
-    setMessage(r.ok ? { ok: true, text: done } : { ok: false, text: reasonText(t, r.reason) });
+    setMessage(r.ok ? { ok: true, text: done } : { ok: false, text: reasonText(t, r) });
     refresh();
   };
   type Send = () => Promise<unknown>;
@@ -170,9 +170,7 @@ export function UserPanel({
       if (Object.keys(sections).length > 0) await put(sections)();
       if (supporters !== undefined) await patch({ supporters_allowed: supporters })();
     });
-    setMessage(
-      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
-    );
+    setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
     refresh();
     return r.ok;
   };
@@ -219,9 +217,7 @@ export function UserPanel({
   // Locking asks, also as the Undo of an unlock.
   const unlock = async () => {
     const r = await outcome(user.id, patch({ disabled: false }));
-    setMessage(
-      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
-    );
+    setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
     refresh();
     if (r.ok) saved(t('admin.undo.unlocked', { name: user.pseudonym }), () => setConfirm('lock'));
   };

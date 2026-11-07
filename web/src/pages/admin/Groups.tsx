@@ -153,9 +153,7 @@ function GroupPanel({
       setMessage({ ok: false, text: t('admin.conflict') });
       return null;
     }
-    setMessage(
-      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
-    );
+    setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
     if (done) {
       setBase(done);
       setDraft(done);
@@ -329,7 +327,7 @@ function GroupPanel({
           );
           void qc.invalidateQueries({ queryKey: userGroupsKey });
           if (r.ok) onClose();
-          else setMessage({ ok: false, text: reasonText(t, r.reason) });
+          else setMessage({ ok: false, text: reasonText(t, r) });
         }}
       />
     </aside>
@@ -369,7 +367,7 @@ export function GroupsPage() {
       await qc.invalidateQueries({ queryKey: userGroupsKey });
       setOpen(g.id);
     } catch (err) {
-      setError(reasonText(t, (err as { problem?: { reason?: string } }).problem?.reason));
+      setError(reasonText(t, (err as { problem?: { reason?: string; detail?: string } }).problem));
     }
   };
 
