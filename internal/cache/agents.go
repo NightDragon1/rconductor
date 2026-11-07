@@ -47,6 +47,7 @@ type containerEntry struct {
 	metricAt time.Time
 	logs     []string
 	logSeq   uint64      // deliveries of log lines so far, for Design 2.3
+	logTotal uint64      // log lines so far: the number of the newest one
 	starts   []time.Time // distinct start times within LoopWindow
 }
 
@@ -86,7 +87,7 @@ type AgentData struct {
 	// Receivers for the event bus; set before data arrives.
 	onChange  func(agentID, container string)
 	onMetrics func(agentID string, containers []string)
-	onLines   func(agentID string, ll agentproto.LogLines, seq uint64)
+	onLines   func(agentID string, ll agentproto.LogLines, seq, first uint64)
 	onConnect func(agentID string)
 }
 
@@ -96,7 +97,7 @@ func (d *AgentData) OnMetrics(f func(agentID string, containers []string)) { d.o
 // OnLines sets the receiver of new log lines; seq numbers the delivery
 // per container, so a reader of Logs can tell which deliveries its lines
 // already hold.
-func (d *AgentData) OnLines(f func(agentID string, ll agentproto.LogLines, seq uint64)) {
+func (d *AgentData) OnLines(f func(agentID string, ll agentproto.LogLines, seq, first uint64)) {
 	d.onLines = f
 }
 
@@ -241,9 +242,11 @@ func (d *AgentData) Lines(agentID string, ll agentproto.LogLines) {
 	}
 	e.logSeq++
 	seq := e.logSeq
+	first := e.logTotal + 1
+	e.logTotal += uint64(len(lines))
 	d.mu.Unlock()
 	if d.onLines != nil && len(lines) > 0 {
-		d.onLines(agentID, agentproto.LogLines{Container: ll.Container, Lines: lines, Truncated: cut || ll.Truncated}, seq)
+		d.onLines(agentID, agentproto.LogLines{Container: ll.Container, Lines: lines, Truncated: cut || ll.Truncated}, seq, first)
 	}
 }
 
@@ -349,17 +352,17 @@ func (d *AgentData) Metric(agentID, name string) (MetricView, bool) {
 	return MetricView{Metric: *e.metric, At: e.metricAt, Stale: stale}, true
 }
 
-// Logs returns the last log lines of a container, oldest first, and the
-// number of the last delivery they hold.
-func (d *AgentData) Logs(agentID, name string) ([]string, uint64) {
+// Logs returns the last log lines of a container, oldest first, the number
+// of the last delivery they hold and the number of the first line.
+func (d *AgentData) Logs(agentID, name string) ([]string, uint64, uint64) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	a := d.agents[agentID]
 	if a == nil || a.containers[name] == nil {
-		return nil, 0
+		return nil, 0, 0
 	}
 	e := a.containers[name]
-	return slices.Clone(e.logs), e.logSeq
+	return slices.Clone(e.logs), e.logSeq, e.logTotal - uint64(len(e.logs)) + 1
 }
 
 // Connected reports whether the agent's data is live.

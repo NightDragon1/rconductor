@@ -40,3 +40,14 @@ test('a temporary password forces a new one', async ({ page, state }) => {
   await page.getByRole('button', { name: 'Change password' }).click();
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
 });
+
+test('a session that ended leads to the sign-in at the next request (#161)', async ({
+  page,
+  state,
+}) => {
+  await login(page, 'admin', secret(state, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await page.context().clearCookies();
+  await page.getByRole('link', { name: 'Audit', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+});

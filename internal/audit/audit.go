@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -78,7 +79,33 @@ var lostLog atomic.Pointer[slog.Logger]
 // SetLostLog names the log of last resort: an entry the database does not
 // take within writeWait goes there in full, as audit.entry_lost, so that it
 // is not gone. Payloads hold no secrets (SEC-012).
-func SetLostLog(log *slog.Logger) { lostLog.Store(log) }
+func SetLostLog(log *slog.Logger) {
+	lostLog.Store(log)
+	stopping.Store(&stopper{ch: make(chan struct{})})
+}
+
+type stopper struct {
+	ch   chan struct{}
+	once sync.Once
+}
+
+var stopping atomic.Pointer[stopper]
+
+// Stop ends the waiting for the database: the process is about to go, and
+// what waits now would be gone without a trace. Entries still locked out go
+// to the log at once (B-7).
+func Stop() {
+	if s := stopping.Load(); s != nil {
+		s.once.Do(func() { close(s.ch) })
+	}
+}
+
+func stopped() <-chan struct{} {
+	if s := stopping.Load(); s != nil {
+		return s.ch
+	}
+	return nil
+}
 
 func logLost(params sqlitedb.InsertAuditParams, cause error) {
 	log := lostLog.Load()
@@ -148,11 +175,14 @@ func Write(ctx context.Context, db sqlitedb.DBTX, e Entry) (string, error) {
 func insertRetrying(ctx context.Context, db sqlitedb.DBTX, params sqlitedb.InsertAuditParams) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeWait)
 	defer cancel()
+	stop := stopped()
 	select {
 	case writers <- struct{}{}:
 		defer func() { <-writers }()
 	case <-ctx.Done():
 		return ctx.Err()
+	case <-stop:
+		// One try without waiting for the others.
 	}
 	for {
 		err := sqlitedb.New(db).InsertAudit(ctx, params)
@@ -162,6 +192,8 @@ func insertRetrying(ctx context.Context, db sqlitedb.DBTX, params sqlitedb.Inser
 		select {
 		case <-time.After(busyPause):
 		case <-ctx.Done():
+			return err
+		case <-stop:
 			return err
 		}
 	}
