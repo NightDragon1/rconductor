@@ -7,13 +7,16 @@
 package profiles
 
 import (
-	"bytes"
 	"fmt"
 	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/lexer"
+	"github.com/goccy/go-yaml/parser"
+	"github.com/goccy/go-yaml/token"
 
 	"github.com/NightDragon1/rconductor/internal/pattern"
 )
@@ -31,6 +34,11 @@ const (
 	maxDescription   = 256
 	DefaultMaxLength = 1000
 	maxMaxLength     = 10000
+	// maxAliases and maxDepth are limits of the file format like its size
+	// (B10-3, B10-4): a profile needs few aliases and little nesting, a
+	// file of a few hundred bytes must not keep the import busy.
+	maxAliases = 100
+	maxDepth   = 64
 )
 
 // Protocols are the adapters of this release (PROT-001); others follow
@@ -144,18 +152,92 @@ func (e *Error) Error() string { return "invalid profile: " + strings.Join(e.Pro
 // Parse reads and checks a profile file. Unknown fields are refused, so a
 // typo never goes unnoticed; all problems are reported together.
 func Parse(data []byte) (*Profile, error) {
+	p, _, err := parse(data)
+	return p, err
+}
+
+// parse is Parse that also returns the syntax tree, if the file has one, for
+// the lines of profile check; the file is parsed once.
+func parse(data []byte) (*Profile, *ast.File, error) {
 	if len(data) > MaxFileSize {
-		return nil, &Error{Problems: []string{fmt.Sprintf("file larger than %d bytes", MaxFileSize)}}
+		return nil, nil, &Error{Problems: []string{fmt.Sprintf("file larger than %d bytes", MaxFileSize)}}
+	}
+	if prob := checkShape(lexer.Tokenize(string(data))); prob != "" {
+		return nil, nil, &Error{Problems: []string{prob}}
+	}
+	file, err := parser.ParseBytes(data, 0)
+	if err != nil {
+		return nil, nil, &Error{Problems: []string{yaml.FormatError(err, false, false)}}
+	}
+	if prob := checkAliases(file); prob != "" {
+		return nil, file, &Error{Problems: []string{prob}}
 	}
 	var p Profile
-	if err := yaml.NewDecoder(bytes.NewReader(data), yaml.DisallowUnknownField()).Decode(&p); err != nil {
-		return nil, &Error{Problems: []string{yaml.FormatError(err, false, false)}}
+	if len(file.Docs) > 0 && file.Docs[0].Body != nil {
+		if err := yaml.NodeToValue(file.Docs[0].Body, &p, yaml.DisallowUnknownField()); err != nil {
+			return nil, file, &Error{Problems: []string{yaml.FormatError(err, false, false)}}
+		}
 	}
 	if probs := p.check(); len(probs) > 0 {
-		return nil, &Error{Problems: probs}
+		return nil, file, &Error{Problems: probs}
 	}
 	p.defaults()
-	return &p, nil
+	return &p, file, nil
+}
+
+// at is the position of a token as the YAML errors write it.
+func at(tk *token.Token) string { return fmt.Sprintf("[%d:%d]", tk.Position.Line, tk.Position.Column) }
+
+// checkShape refuses too many aliases and too deep nesting on the token
+// stream, before anything is built from it (B10-3, B10-4). The depth counts
+// open flow brackets and the indentation of block keys and list entries.
+func checkShape(tokens token.Tokens) string {
+	aliases, flow := 0, 0
+	var indents []int
+	for i, tk := range tokens {
+		switch tk.Type {
+		case token.AliasType:
+			if aliases++; aliases > maxAliases {
+				return fmt.Sprintf("%s more than %d aliases", at(tk), maxAliases)
+			}
+		case token.SequenceStartType, token.MappingStartType:
+			flow++
+		case token.SequenceEndType, token.MappingEndType:
+			flow = max(flow-1, 0)
+		}
+		key := i+1 < len(tokens) && tokens[i+1].Type == token.MappingValueType
+		if flow == 0 && (key || tk.Type == token.SequenceEntryType) {
+			for len(indents) > 0 && indents[len(indents)-1] >= tk.Position.Column {
+				indents = indents[:len(indents)-1]
+			}
+			indents = append(indents, tk.Position.Column)
+		}
+		if len(indents)+flow > maxDepth {
+			return fmt.Sprintf("%s nesting deeper than %d levels", at(tk), maxDepth)
+		}
+	}
+	return ""
+}
+
+// checkAliases refuses an alias inside an anchored value: anchors that
+// repeat other anchors grow exponentially when decoded, even with few
+// aliases (B10-3).
+func checkAliases(file *ast.File) string {
+	for _, doc := range file.Docs {
+		if doc == nil || doc.Body == nil {
+			continue
+		}
+		for _, n := range ast.Filter(ast.AnchorType, doc.Body) {
+			a, ok := n.(*ast.AnchorNode)
+			if !ok || a.Value == nil {
+				continue
+			}
+			if inner := ast.Filter(ast.AliasType, a.Value); len(inner) > 0 {
+				return fmt.Sprintf("%s an anchored value must not contain aliases", at(inner[0].GetToken()))
+			}
+		}
+	}
+	return ""
 }
 
 // NormalizePath joins the tokens of a command path with single spaces.

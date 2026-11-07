@@ -12,7 +12,6 @@ import (
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
-	"github.com/goccy/go-yaml/parser"
 )
 
 // Finding is one problem of a profile file; Line is 0 when no line fits.
@@ -33,7 +32,7 @@ var (
 // Check reads a profile file by the rules of the import and returns every
 // problem with its line (CAT-006); nil means the file is valid.
 func Check(data []byte) []Finding {
-	_, err := Parse(data)
+	_, file, err := parse(data)
 	if err == nil {
 		return nil
 	}
@@ -41,7 +40,6 @@ func Check(data []byte) []Finding {
 	if !errors.As(err, &pe) {
 		return []Finding{{Message: err.Error()}}
 	}
-	file, ferr := parser.ParseBytes(data, 0)
 	out := make([]Finding, 0, len(pe.Problems))
 	for _, m := range pe.Problems {
 		m = strings.TrimSpace(m)
@@ -51,7 +49,7 @@ func Check(data []byte) []Finding {
 			continue
 		}
 		f := Finding{Message: m}
-		if ferr == nil {
+		if file != nil {
 			f.Line = lineOf(file, problemPath.FindString(m))
 		}
 		out = append(out, f)
@@ -88,20 +86,20 @@ func RunCheck(args []string, stdout, stderr io.Writer) int {
 	for _, name := range args {
 		data, err := readLimited(name)
 		if err != nil {
-			_, _ = fmt.Fprintf(stderr, "%s: %v\n", name, err)
+			_, _ = fmt.Fprintf(stderr, "%s: %s\n", printable(name), printable(err.Error()))
 			code = 2
 			continue
 		}
 		findings := Check(data)
 		if len(findings) == 0 {
-			_, _ = fmt.Fprintf(stdout, "%s: ok\n", name)
+			_, _ = fmt.Fprintf(stdout, "%s: ok\n", printable(name))
 			continue
 		}
 		for _, f := range findings {
 			if f.Line > 0 {
-				_, _ = fmt.Fprintf(stdout, "%s:%d: %s\n", name, f.Line, f.Message)
+				_, _ = fmt.Fprintf(stdout, "%s:%d: %s\n", printable(name), f.Line, printable(f.Message))
 			} else {
-				_, _ = fmt.Fprintf(stdout, "%s: %s\n", name, f.Message)
+				_, _ = fmt.Fprintf(stdout, "%s: %s\n", printable(name), printable(f.Message))
 			}
 		}
 		if code == 0 {
@@ -109,4 +107,18 @@ func RunCheck(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	return code
+}
+
+// printable writes control characters from a foreign profile as \x..,
+// so that they never reach the terminal (B10-5).
+func printable(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			fmt.Fprintf(&b, "\\x%02x", r)
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
