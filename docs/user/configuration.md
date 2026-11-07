@@ -27,6 +27,7 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | --- | --- | --- | --- | --- |
 | `RCD_HTTP_ADDR` | address | `:8080` | `[host]:port` | web interface and API |
 | `RCD_AGENT_ADDR` | address | `:8443` | `[host]:port` | agent port, TLS 1.3 with pinned keys; never behind a reverse proxy |
+| `RCD_IMAGE_REPO` | text | `docker.io/nightdragon1` | registry and owner | the image the pairing dialog names; the Compose files pass it on |
 | `RCD_AGENT_PUBLIC_ADDR` | address | empty | `host:port` | where agents reach the panel; goes into pairing tokens |
 | `RCD_PUBLIC_URL` | URL | empty | absolute `http` or `https` URL | public URL for invitation links and origin checks; with `https://` session cookies are `Secure` |
 | `RCD_BASE_PATH` | path | `/` | absolute path such as `/rcon` | base path behind a reverse proxy |

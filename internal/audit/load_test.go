@@ -3,8 +3,11 @@
 package audit_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -72,5 +75,41 @@ func TestV3WriteInsideATransactionFailsAtOnce(t *testing.T) {
 	cancel()
 	if _, err := audit.Write(ctx, tx, audit.Entry{Kind: audit.KindAuth, Action: "x", Result: audit.ResultOK}); err == nil {
 		t.Error("canceled write in a transaction went through")
+	}
+}
+
+// TestB7StopGivesLockedEntriesToTheLog: at shutdown an entry that waits for
+// a locked database goes to the log at once instead of being lost with the
+// process.
+func TestB7StopGivesLockedEntriesToTheLog(t *testing.T) {
+	st := storetest.New(t)
+	ctx := context.Background()
+	var logs bytes.Buffer
+	audit.SetLostLog(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { audit.SetLostLog(nil) })
+	tx, err := st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `UPDATE settings SET key = key`); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := audit.Write(ctx, st.DB, audit.Entry{Kind: audit.KindAuth, Action: "stop.test", Result: audit.ResultDenied})
+		done <- err
+	}()
+	audit.Stop()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("written through a lock")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("still waiting after Stop")
+	}
+	if !strings.Contains(logs.String(), "stop.test") {
+		t.Errorf("not in the log: %s", logs.String())
 	}
 }

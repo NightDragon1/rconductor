@@ -34,6 +34,9 @@ const (
 	decodeBudget  = 1 << 20
 	pictureBudget = 4 * MaxPictureBody
 	bodyWait      = 5 * time.Second
+	pictureRead   = 10 * time.Second
+	// actionWrite is above the 70 s an action may take.
+	actionWrite = 80 * time.Second
 )
 
 // publicBody reports whether path takes a body without a session.
@@ -61,6 +64,20 @@ func withBodyLimit(next http.Handler) http.Handler {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
+		if r.ContentLength < 0 && publicBody(r.URL.Path) {
+			// Decoding would call a chunked body over the limit invalid.
+			body, err := io.ReadAll(r.Body)
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				WriteProblem(w, http.StatusRequestEntityTooLarge, api.ReasonCodeInvalid, "the request is too large")
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+		}
+		// An action may take longer than the usual write deadline (V-5).
+		if strings.HasSuffix(r.URL.Path, "/actions") {
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(actionWrite))
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -90,6 +107,8 @@ func (s *apiServer) limitBodies(next http.Handler) http.Handler {
 		if strings.HasSuffix(r.URL.Path, "/me/avatar") {
 			if take(w, r, s.pictures, MaxPictureBody) {
 				defer s.pictures.Release(MaxPictureBody)
+				// A slow upload holds its part of the budget only briefly (B-8).
+				_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(pictureRead))
 				next.ServeHTTP(w, r)
 			}
 			return

@@ -17,6 +17,7 @@ services:
       - "${RCD_WEB_PORT:-8080}:8080"
     environment:
       RCD_AGENT_PUBLIC_ADDR: panel:8443
+      RCD_IMAGE_REPO: "${RCD_IMAGE_REPO:-docker.io/nightdragon1}"
       # Empty: 80 % of mem_limit, set by the panel.
       GOMEMLIMIT: "${GOMEMLIMIT:-}"
     volumes:
