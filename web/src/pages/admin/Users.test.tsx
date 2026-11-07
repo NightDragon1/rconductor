@@ -3,7 +3,14 @@ import { fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverGroupsKey, serversKey } from '@/api/servers';
 import { sessionKey } from '@/api/session';
-import { assignmentsKey, invitesKey, managedUsersKey, userGroupsKey } from '@/api/users';
+import {
+  assignmentsKey,
+  invitesKey,
+  managedUsersKey,
+  sameSections,
+  userGroupsKey,
+  type Assignments,
+} from '@/api/users';
 import { renderPage, setLanguage, unmarked } from '@/test/render';
 import { UsersPage } from './Users';
 
@@ -131,5 +138,24 @@ describe('users page', () => {
     // Data, not texts: pseudonyms, initials, names and contacts.
     const data = /^(nyx|kiwi|NY|KI|mods|mc|Nyx N|telegram|@nyx|aria-label=.*|title=.*)$/;
     expect(unmarked(container).filter((s) => !data.test(s))).toEqual([]);
+  });
+});
+
+describe('sameSections (B2)', () => {
+  const base = {
+    role: 'server_admin',
+    admin_scopes: [{ server_id: 'a' }, { server_id: 'b' }],
+    groups: [],
+    grants: [],
+    supporter_grants: [],
+  } as unknown as Assignments;
+
+  // Undo of a save must not bring back what another admin withdrew.
+  it('sees a change of someone else, in any order', () => {
+    const turned = { ...base, admin_scopes: [{ server_id: 'b' }, { server_id: 'a' }] };
+    expect(sameSections(base, turned, ['admin_scopes'])).toBe(true);
+    const withdrawn = { ...base, admin_scopes: [] };
+    expect(sameSections(base, withdrawn, ['admin_scopes'])).toBe(false);
+    expect(sameSections(base, withdrawn, ['groups'])).toBe(true);
   });
 });
