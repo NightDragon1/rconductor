@@ -159,6 +159,8 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	var runtime *cache.Cache
 	var hub *eventbus.Hub
 	conns := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}}, serverSvc, logs.Module("rcon"), connmgr.Options{
+		ProbeInterval: cfg.RCON.Probe, IdleProbe: cfg.RCON.IdleProbe, ProbeTimeout: cfg.RCON.ProbeTimeout,
+		MaxBackoff: cfg.RCON.MaxBackoff, DialTimeout: cfg.RCON.DialTimeout, QueueSize: cfg.RCON.Queue,
 		OnStatus: func(id string, s connmgr.Status) {
 			if s != connmgr.Connected && runtime != nil {
 				runtime.Invalidate(id, "rcon_"+string(s))
@@ -169,6 +171,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		},
 	})
 	runtime = cache.New(st, conns, logs.Module("cache"))
+	runtime.SetRefresh(cfg.PlayersRefresh)
 	hub = eventbus.NewHub(checker, runtime, authSvc, logs.Module("ws"), eventbus.SettingsLimits(st))
 	authSvc.OnSessionsEnded(hub.CloseSessions)
 	serverSvc.SetConnections(conns)
@@ -180,6 +183,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		return err
 	}
 	cmdSvc := commands.NewService(st, checker, conns, logs.Module("cmd"))
+	cmdSvc.SetTimeout(cfg.CommandTimeout)
 	cmdSvc.Publish = hub.PublishConsole
 
 	var wg sync.WaitGroup
@@ -194,7 +198,10 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		return err
 	}
 	agentSvc := agentadmin.NewService(st, logs.Module("agent"), cfg.AgentPublicAddr)
-	agents := agenthub.New(panelKey, logs.Module("agent"), agenthub.Options{Registry: agentSvc})
+	agents := agenthub.New(panelKey, logs.Module("agent"), agenthub.Options{
+		Registry: agentSvc, MaxConnections: cfg.AgentPort.MaxConnections, MaxClientConnections: cfg.AgentPort.MaxClientConnections,
+		Throttle: agenthub.ThrottleOptions{PerMinute: cfg.AgentPort.ConnectsPerMinute, Burst: cfg.AgentPort.ConnectBurst},
+	})
 	agentData := cache.NewAgentData(logs.Module("cache"))
 	agents.OnMessage(agentData.Receive)
 	agents.OnDisconnect(agentData.Disconnected)

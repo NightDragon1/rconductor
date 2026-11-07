@@ -20,11 +20,17 @@ const (
 	SettingMaxClientFailures = "login.max_client_failures"
 	SettingLockout           = "login.lockout_duration"
 	SettingMaxTracked        = "login.max_tracked"
+	SettingOverflowGap       = "login.overflow_gap"
+	SettingOverflowLine      = "login.overflow_line"
 
 	DefaultMaxFailures       = 5
 	DefaultMaxClientFailures = 50
 	DefaultLockout           = 15 * time.Minute
 	DefaultMaxTracked        = 100000
+
+	// minTracked is the lowest setting of the table, also for a stored
+	// value that did not pass the API.
+	minTracked = 1000
 )
 
 // loginLimits are the settings of the login protection.
@@ -34,6 +40,24 @@ type loginLimits struct {
 	lockout           time.Duration
 	// maxTracked, if set, replaces the capacity of the table.
 	maxTracked int
+	// overflowGap and overflowLine, if set, replace those of the overflow
+	// line.
+	overflowGap  time.Duration
+	overflowLine int
+}
+
+func (l loginLimits) gap() time.Duration {
+	if l.overflowGap > 0 {
+		return l.overflowGap
+	}
+	return overflowGap
+}
+
+func (l loginLimits) line() int {
+	if l.overflowLine > 0 {
+		return l.overflowLine
+	}
+	return overflowLine
 }
 
 // purgeGap spaces the scans for ended counters of a full table: an attempt
@@ -49,8 +73,11 @@ const fullReportGap = time.Minute
 // keeps trying falls behind anyone who just wants to sign in. Login stays
 // possible on a full table, slowly, and the wait stays below a request timeout.
 const (
-	overflowGap  = 250 * time.Millisecond
-	overflowLine = 30
+	overflowGap = 250 * time.Millisecond
+	// minOverflowGap is the lowest setting: faster turns would let more
+	// guesses through the line.
+	minOverflowGap = 50 * time.Millisecond
+	overflowLine   = 30
 )
 
 // delayFor returns the wait before checking a password after n consecutive
@@ -264,7 +291,7 @@ func (t *throttle) joinLine(client netip.Addr, failures int, lim loginLimits) *w
 			worst = i
 		}
 	}
-	if len(t.line) >= overflowLine {
+	if len(t.line) >= lim.line() {
 		if t.line[worst].failures <= failures {
 			return nil
 		}
@@ -315,7 +342,7 @@ func (t *throttle) leaveLine(w *waiter) {
 // wait lets the attempts of the overflow line go one by one. It reports
 // whether the attempt got its turn, and the delay that the failures of the
 // account on the sketch ask for.
-func (t *throttle) wait(ctx context.Context, w *waiter, account string, sleep func(context.Context, time.Duration) error, now func() time.Time, window time.Duration) (time.Duration, bool, error) {
+func (t *throttle) wait(ctx context.Context, w *waiter, account string, sleep func(context.Context, time.Duration) error, now func() time.Time, window, gap time.Duration) (time.Duration, bool, error) {
 	select {
 	case turn := <-w.answer:
 		if !turn {
@@ -325,7 +352,7 @@ func (t *throttle) wait(ctx context.Context, w *waiter, account string, sleep fu
 		t.leaveLine(w)
 		return 0, false, ctx.Err()
 	}
-	err := sleep(ctx, overflowGap)
+	err := sleep(ctx, gap)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.turnTaken = false
@@ -506,7 +533,7 @@ func purge[K comparable](counters map[K]*counter, now time.Time, window time.Dur
 	}
 }
 
-// sketchSlots gives the two rows of the sketch 4 MiB. Far fewer attempts than
+// sketchSlots gives the two rows of the sketch 2 MiB. Far fewer attempts than
 // slots get through the overflow line in a window.
 const sketchSlots = 1 << 16
 

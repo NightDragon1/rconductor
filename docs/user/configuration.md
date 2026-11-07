@@ -43,6 +43,18 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_MAX_CONNECTIONS` | number | `512` | 16 to 65536 | open connections of the web port, WebSockets included; further ones wait until one ends |
 | `RCD_MAX_CLIENT_CONNECTIONS` | number | `128` | 1 to 65536 | open connections of one client address, an IPv6 /64 counts as one; further ones are closed; trusted proxies have no limit of their own |
 | `RCD_MAX_ANONYMOUS_CONNECTION_SECONDS` | number | `30` | 10 to 3600 | a connection without a valid session ends after this time, once its running request is done; behind a trusted proxy the proxy address is exempt |
+| `RCD_RCON_PROBE_SECONDS` | number | 2 | 1 to 60 | how often an idle RCON connection is read |
+| `RCD_RCON_IDLE_PROBE_SECONDS` | number | 30 | 5 to 600 | how often an idle RCON connection gets a probe |
+| `RCD_RCON_PROBE_TIMEOUT_SECONDS` | number | 5 | 1 to 60 | answer time of the probe |
+| `RCD_RCON_MAX_BACKOFF_SECONDS` | number | 5 | 1 to 120 | longest wait between two RCON connection attempts |
+| `RCD_RCON_DIAL_TIMEOUT_SECONDS` | number | 5 | 1 to 60 | time for one RCON connection attempt |
+| `RCD_RCON_QUEUE` | number | 64 | 1 to 1024 | commands waiting per game server |
+| `RCD_COMMAND_TIMEOUT_SECONDS` | number | 10 | 1 to 120 | time for one command, waiting included |
+| `RCD_PLAYERS_REFRESH_SECONDS` | number | 60 | 10 to 3600 | how often a viewed player list is fetched |
+| `RCD_AGENT_MAX_CONNECTIONS` | number | 1024 | 16 to 65536 | open connections at the agent port |
+| `RCD_AGENT_MAX_CLIENT_CONNECTIONS` | number | 64 | 1 to 65536 | of those per client address |
+| `RCD_AGENT_CONNECTS_PER_MINUTE` | number | 10 | 1 to 600 | new connections per address and minute at the agent port |
+| `RCD_AGENT_CONNECT_BURST` | number | 5 | 1 to 100 | of those in one go |
 | `GOMEMLIMIT` | text | empty | as in Go, such as `800MiB`, or `off` | memory the Go runtime aims for; empty means 80 % of the memory limit of the container, or none without one |
 | `RCD_LOG_LEVEL` | text | `info` | `debug`, `info`, `warn`, `error` | log level |
 | `RCD_LOG_FORMAT` | text | `text` | `text`, `json` | log format; audit-relevant events carry a fixed event code |
@@ -55,6 +67,12 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_PANEL_ADDR` | address | empty | `host:port` | panel agent port, for pairing by fingerprint or to override the token's address |
 | `RCD_AGENT_NAME` | text | host name | any | name shown in the panel |
 | `RCD_LABEL` | text | `rconductor.manage=true` | `key=value` | label that allows a container |
+| `RCD_AGENT_MAX_BACKOFF_SECONDS` | number | 120 | 5 to 3600 | longest wait between two connection attempts |
+| `RCD_AGENT_DIAL_TIMEOUT_SECONDS` | number | 15 | 1 to 120 | time for one connection attempt |
+| `RCD_METRICS_INTERVAL_SECONDS` | number | 10 | 1 to 300 | how often metrics are sent |
+| `RCD_MAX_LOG_FOLLOWS` | number | 16 | 1 to 256 | live logs at once |
+| `RCD_ACTIONS_PER_MINUTE` | number | 10 | 1 to 600 | start, stop, restart per container and minute |
+| `RCD_ACTIONS_BURST` | number | 3 | 1 to 100 | of those in one go |
 | `RCD_DOCKER_HOST` | URL | `unix:///var/run/docker.sock` | Docker address, also a socket proxy such as `tcp://socket-proxy:2375` | Docker API |
 | `RCD_SECRETS_DIR` | path | `/secrets` | directory | agent key and pairing |
 | `RCD_LOG_LEVEL` | text | `info` | `debug`, `info`, `warn`, `error` | log level |
@@ -74,6 +92,8 @@ are written like `24h`, `15m`, `30s`.
 | `session.max_lifetime` | duration | 7 days | 1m to 90 days | a session ends after this time at the latest |
 | `login.max_failures` | number | 5 | 1 to 100 | failed sign-ins before a lockout |
 | `login.max_client_failures` | number | 50 | 1 to 1000 | failed sign-ins from one address over all names within the lockout duration before that address is locked; everyone behind one address shares this count, so raise it for a large shared address |
+| `login.overflow_gap` | duration | 250ms | 50ms to 10s | time between two sign-ins in the waiting line when the table is full |
+| `login.overflow_line` | number | 30 | 1 to 1000 | places in that waiting line |
 | `login.max_tracked` | number | 100000 | 1000 to 1000000 | login counters kept in memory; on a full table sign-ins not yet counted wait in one line |
 | `login.lockout_duration` | duration | 15m | 1m to 24h | length of a lockout |
 | `invite.lifetime` | duration | 72h | 1m to 30 days | validity of an invitation link |
