@@ -217,3 +217,42 @@ func TestRestartWithoutAgent(t *testing.T) {
 		t.Errorf("audit = %s", got)
 	}
 }
+
+// floodAgent sends far more lines than were asked for.
+type floodAgent struct{ fakeAgents }
+
+func (a *floodAgent) RequestData(_ context.Context, _, _ string, _ any, collect func(agentproto.Envelope)) (agentproto.Result, error) {
+	lines := make([]string, agentproto.MaxLogLines)
+	for i := range lines {
+		lines[i] = "line"
+	}
+	for range 200 {
+		e, err := agentproto.New(agentproto.TypeLogLines, "", agentproto.LogLines{Lines: lines})
+		if err != nil {
+			return agentproto.Result{}, err
+		}
+		collect(e)
+	}
+	return agentproto.Result{Code: agentproto.CodeOK}, nil
+}
+
+// TestT9TailBoundedWhileCollecting covers #146: what a compromised agent
+// sends is cut while it comes in, the answer says so.
+func TestT9TailBoundedWhileCollecting(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if _, err := f.st.DB.ExecContext(ctx, `INSERT INTO agents (id, name, public_key, fingerprint, status, created_at) VALUES ('a1', 'a1', x'00', 'fp', 'active', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, agent_id, container_name, created_at, updated_at) VALUES ('s9', 's9', 'a1', 'mc', 't', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.SetActions(&floodAgent{}, &fakeRCON{})
+	r, err := f.svc.Logs(ctx, f.as("admin"), "s9", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Lines) != 100 || !r.Truncated {
+		t.Errorf("%d lines, truncated %v", len(r.Lines), r.Truncated)
+	}
+}

@@ -68,6 +68,7 @@ func RunPanel(ctx context.Context, cfg config.Panel, out io.Writer, opts PanelOp
 	logs := logging.New(out, "panel", cfg.Log)
 	root := logs.Root()
 	audit.SetLostLog(root)
+	defer context.AfterFunc(ctx, audit.Stop)()
 	memlimit.Apply(root)
 	root.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version))
 
@@ -198,6 +199,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		return err
 	}
 	agentSvc := agentadmin.NewService(st, logs.Module("agent"), cfg.AgentPublicAddr)
+	agentSvc.SetImageRepo(cfg.ImageRepo)
 	agents := agenthub.New(panelKey, logs.Module("agent"), agenthub.Options{
 		Registry: agentSvc, MaxConnections: cfg.AgentPort.MaxConnections, MaxClientConnections: cfg.AgentPort.MaxClientConnections,
 		Throttle: agenthub.ThrottleOptions{PerMinute: cfg.AgentPort.ConnectsPerMinute, Burst: cfg.AgentPort.ConnectBurst},
