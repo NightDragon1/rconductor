@@ -42,6 +42,12 @@ Das freigegebene Konzept liegt in docs/ und ist verbindlich; die gültige Versio
 - Releases: Regeln in CONTRIBUTING.md, Abschnitt Release. Ein echtes Release nur nach
   meinem OK; die Freigabe im Environment release mache ich.
 - Keine Sub-Agents für Release-Schritte und für Eingriffe in die Git-Historie.
+- Unabhängige Nebenaufgaben ohne Sicherheitsfläche laufen parallel als Sub-Agent
+  in eigenem Worktree, während ich am Hauptstrang weiterarbeite: z. B. Spielprofile,
+  Doku, Issue-Pflege, Testergänzungen. Ich prüfe und integriere das Ergebnis; Merge
+  nach den bestehenden Regeln.
+- Nicht parallel: Release, Git-Historie, Änderungen mit Auth, Rechten,
+  Eingabe-Parsing im Backend oder Agent.
 - Kein Force-Push. Falsche Nachricht in einem gepushten Commit: Kommentar am
   betroffenen Issue, die Historie bleibt.
 - Nichts systemweit installieren. Die Minecraft-EULA nie stellvertretend akzeptieren.
