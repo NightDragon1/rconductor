@@ -37,6 +37,11 @@
       "description": "GitHub Actions",
       "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions"
+    },
+    {
+      "description": "The container of the E2E jobs must fit the Playwright package",
+      "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"],
+      "groupName": "Playwright"
     }
   ]
 }
