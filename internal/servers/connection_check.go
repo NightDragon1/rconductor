@@ -119,9 +119,7 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 	sameAddr := in.ServerID != "" && f.host == base.host && f.port == base.port
 	var stored logging.Secret
 	if sameAddr {
-		// From the same read as the address (B4). Sealed with another key
-		// or missing: as if there were none.
-		stored, _ = s.box.Open(sealed, secretContext(in.ServerID))
+		stored = s.storedPassword(in.ServerID, sealed)
 	}
 	password := stored
 	if in.Password != nil {
@@ -149,6 +147,17 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 		return "", err
 	}
 	return result, nil
+}
+
+// storedPassword opens the password of the read that gave the address, so
+// that the two belong together (B4). Sealed with another key or missing: as if
+// there were none.
+func (s *Service) storedPassword(id string, sealed []byte) logging.Secret {
+	pw, err := s.box.Open(sealed, secretContext(id))
+	if err != nil {
+		return ""
+	}
+	return pw
 }
 
 func samePassword(a, b logging.Secret) bool {
