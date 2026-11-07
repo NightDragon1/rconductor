@@ -132,6 +132,10 @@ const maxPending = 64
 func (h *Hub) deliver(c *client, s *subscription, m message) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	// The target was taken earlier: it may have ended since (C3).
+	if c.subs[s.topic] != s {
+		return
+	}
 	if !s.ready {
 		if len(s.pending) < maxPending {
 			s.pending = append(s.pending, m)

@@ -1184,3 +1184,38 @@ func TestB5LineStaysBelowARequestTimeout(t *testing.T) {
 		t.Error("the default changed")
 	}
 }
+
+// TestC2HangUpInTheDelayCostsTheRank: hanging up after the turn of the line
+// counts as well, or a client keeps rank 0 for good. Failed before the fix:
+// 50 turns taken, 0 failures on the client.
+func TestC2HangUpInTheDelayCostsTheRank(t *testing.T) {
+	f := fullFixture(t)
+	ctx := context.Background()
+	for range 3 {
+		_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", clientAt("203.0.113.50"))
+	}
+	attacker := clientAt("203.0.113.60")
+	for i := range 3 {
+		rctx, cancel := context.WithCancel(ctx)
+		f.svc.sleep = func(_ context.Context, d time.Duration) error {
+			if d == overflowGap {
+				return nil
+			}
+			cancel()
+			return context.Canceled
+		}
+		_, _, err := f.svc.Login(rctx, "Mod", "wrong password!!", attacker)
+		cancel()
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("attempt %d: %v", i, err)
+		}
+	}
+	th := f.svc.throttle
+	n := th.overflow.count(clientName(attacker.IP), f.now, DefaultLockout)
+	if c := th.clients[attacker.IP]; c != nil {
+		n += c.failures
+	}
+	if n == 0 {
+		t.Error("the client stays at rank 0")
+	}
+}

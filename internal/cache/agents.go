@@ -75,6 +75,37 @@ func (e *containerEntry) inLoop(now time.Time) bool {
 type agentEntry struct {
 	connected  bool
 	containers map[string]*containerEntry
+	// counts keeps the log numbers of containers that went: one recreated
+	// under its name goes on counting, or clients take its lines for known
+	// ones (C5).
+	counts map[string]logCount
+}
+
+type logCount struct{ seq, total uint64 }
+
+// maxLogCounts bounds the names kept; losing them costs a gap in a log.
+const maxLogCounts = 10000
+
+// drop removes a container and keeps its numbers.
+func (a *agentEntry) drop(name string) {
+	e := a.containers[name]
+	if e == nil {
+		return
+	}
+	if len(a.counts) >= maxLogCounts {
+		clear(a.counts)
+	}
+	a.counts[name] = logCount{e.logSeq, e.logTotal}
+	delete(a.containers, name)
+}
+
+// fresh starts the entry of a container, with its numbers if it was here.
+func (a *agentEntry) fresh(name string) *containerEntry {
+	n := a.counts[name]
+	delete(a.counts, name)
+	e := &containerEntry{logSeq: n.seq, logTotal: n.total}
+	a.containers[name] = e
+	return e
 }
 
 // AgentData holds what agents report, in memory only (NFR-005).
@@ -115,7 +146,7 @@ func (d *AgentData) OnChange(f func(agentID, container string)) { d.onChange = f
 func (d *AgentData) agent(id string) *agentEntry {
 	a := d.agents[id]
 	if a == nil {
-		a = &agentEntry{containers: map[string]*containerEntry{}}
+		a = &agentEntry{containers: map[string]*containerEntry{}, counts: map[string]logCount{}}
 		d.agents[id] = a
 	}
 	return a
@@ -151,8 +182,7 @@ func (d *AgentData) Snapshot(agentID string, s agentproto.Snapshot) {
 		seen[c.Name] = true
 		e := a.containers[c.Name]
 		if e == nil {
-			e = &containerEntry{}
-			a.containers[c.Name] = e
+			e = a.fresh(c.Name)
 		}
 		if e.c.ID != "" && e.c.ID != c.ID {
 			e.logs, e.metric = nil, nil // another container under this name
@@ -163,7 +193,7 @@ func (d *AgentData) Snapshot(agentID string, s agentproto.Snapshot) {
 	}
 	for n := range a.containers {
 		if !seen[n] {
-			delete(a.containers, n)
+			a.drop(n)
 			names = append(names, n)
 		}
 	}
@@ -184,12 +214,11 @@ func (d *AgentData) Event(agentID string, ev agentproto.ContainerEvent) {
 	d.mu.Lock()
 	a := d.agent(agentID)
 	if ev.Gone {
-		delete(a.containers, c.Name)
+		a.drop(c.Name)
 	} else {
 		e := a.containers[c.Name]
 		if e == nil {
-			e = &containerEntry{}
-			a.containers[c.Name] = e
+			e = a.fresh(c.Name)
 		}
 		// A container that starts again or was replaced begins with an
 		// empty log ring (Gesamtkonzept 4.6).

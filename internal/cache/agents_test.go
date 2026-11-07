@@ -170,3 +170,31 @@ func TestLogLineNumbers(t *testing.T) {
 		t.Errorf("%d lines, first = %d", len(lines), first)
 	}
 }
+
+// TestC5NumbersGoOnAfterARecreate: a container recreated under its name goes
+// on counting, or clients take its lines for known ones. Failed before the
+// fix: seq 1, first 1.
+func TestC5NumbersGoOnAfterARecreate(t *testing.T) {
+	for name, gone := range map[string]func(d *AgentData){
+		"event": func(d *AgentData) {
+			d.Event("a", agentproto.ContainerEvent{Container: agentproto.Container{ID: "1", Name: "mc"}, Gone: true})
+		},
+		"snapshot": func(d *AgentData) { d.Snapshot("a", agentproto.Snapshot{}) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			d, _, _ := newAgentData(t)
+			d.Snapshot("a", agentproto.Snapshot{Containers: []agentproto.Container{running("1", "mc")}})
+			for range 10 {
+				d.Lines("a", agentproto.LogLines{Container: "mc", Lines: []string{"x", "y"}})
+			}
+			gone(d)
+			d.Event("a", agentproto.ContainerEvent{Container: running("2", "mc")})
+			var seq, first uint64
+			d.OnLines(func(_ string, _ agentproto.LogLines, s, f uint64) { seq, first = s, f })
+			d.Lines("a", agentproto.LogLines{Container: "mc", Lines: []string{"new"}})
+			if seq != 11 || first != 21 {
+				t.Errorf("seq %d, first %d", seq, first)
+			}
+		})
+	}
+}

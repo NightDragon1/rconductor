@@ -202,8 +202,10 @@ func (h *Hub) Serve(ctx context.Context, addr string, ready func(net.Addr)) erro
 	srv := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
-		// A connection that made no agent session goes away; upgraded
-		// sessions have left the server by then.
+		// A connection that made no agent session goes away, also one that
+		// announced a body and went silent (C1); upgraded sessions have
+		// left the server by then.
+		ReadTimeout: h.hello,
 		IdleTimeout: h.hello,
 		ErrorLog:    slog.NewLogLogger(h.log.Handler(), slog.LevelDebug),
 		BaseContext: func(net.Listener) context.Context { return ctx },
