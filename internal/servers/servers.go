@@ -468,6 +468,37 @@ func changedFields(in Input) []string {
 	return out
 }
 
+// updateAudit names what an update really changes, compared with the row
+// read before (B10-1): only fields whose value differs; host and port with
+// the old and the new value, so that the audit shows where the stored
+// password goes (R-16), also when a new profile moves the port (B10-2). The
+// password appears only as "password", never its value.
+func updateAudit(r sqlitedb.GetServerRow, f fields, password bool) map[string]any {
+	changed := map[string]bool{
+		"name": f.name != r.Name, "profile_id": f.profileID != r.ProfileID.String, "host": f.host != r.Host,
+		"port": f.port != int(r.Port), "password": password, "game_ports": f.gamePorts != r.GamePorts,
+		"agent_id": f.agentID != r.AgentID, "container_name": f.container != r.ContainerName,
+	}
+	var names []string
+	for name, c := range changed {
+		if c {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	slices.Sort(names)
+	out := map[string]any{"fields": names}
+	if changed["host"] {
+		out["host"] = map[string]string{"from": r.Host, "to": f.host}
+	}
+	if changed["port"] {
+		out["port"] = map[string]int{"from": int(r.Port), "to": f.port}
+	}
+	return out
+}
+
 // Create adds a server; name, profile, host and password are required, the
 // port defaults to the profile's (SRV-001).
 func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Server, error) {
@@ -548,17 +579,23 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 			return Server{}, err
 		}
 	}
+	// Optimistic locking in one statement (revision 2.4 candidate 24);
+	// the version is required, checked after role and scope.
+	if in.Version == nil {
+		return Server{}, users.ErrPreconditionRequired
+	}
+	payload := updateAudit(r, f, in.Password != nil)
+	if payload == nil {
+		// Nothing changes: no write, no audit entry, no reconnect; a stale
+		// version is still a conflict.
+		return s.unchanged(ctx, req, id, *in.Version)
+	}
 	tx, err := s.st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return Server{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
-	// Optimistic locking in one statement (revision 2.4 candidate 24);
-	// the version is required, checked after role and scope.
-	if in.Version == nil {
-		return Server{}, users.ErrPreconditionRequired
-	}
 	n, err := q.BumpServerVersion(ctx, sqlitedb.BumpServerVersionParams{ID: id, Version: *in.Version})
 	if err != nil {
 		return Server{}, err
@@ -581,13 +618,30 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 			return Server{}, err
 		}
 	}
-	if err := s.auditOK(ctx, tx, req, "server.update", "server", id, id, map[string]any{"fields": changedFields(in)}); err != nil {
+	if err := s.auditOK(ctx, tx, req, "server.update", "server", id, id, payload); err != nil {
 		return Server{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return Server{}, err
 	}
 	s.changed(ctx, id)
+	return s.Get(ctx, req, id)
+}
+
+// unchanged answers an update that changes nothing, after checking the
+// version read before.
+func (s *Service) unchanged(ctx context.Context, req users.Request, id string, version int64) (Server, error) {
+	versions, err := s.st.Queries.ListServerVersions(ctx)
+	if err != nil {
+		return Server{}, err
+	}
+	i := slices.IndexFunc(versions, func(v sqlitedb.ListServerVersionsRow) bool { return v.ID == id })
+	if i < 0 {
+		return Server{}, users.ErrNotFound
+	}
+	if versions[i].Version != version {
+		return Server{}, users.ErrConflict
+	}
 	return s.Get(ctx, req, id)
 }
 
