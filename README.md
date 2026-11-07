@@ -1,5 +1,8 @@
 # ShadowGhost.NET Game RCONductor
 
+> **Pre-release, not for production use.** Versions below 1.0 (tags `0.x`)
+> are test versions with known issues; there is no `latest` tag before 1.0.
+
 RCONductor is a self-hosted web panel for RCON-capable game servers with
 fine-grained roles and permissions. Containers are controlled only by a small
 agent per game host; the panel never touches the Docker socket.

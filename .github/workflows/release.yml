@@ -8,7 +8,12 @@
 # Signatures are keyless (cosign with GitHub OIDC) and land in the public
 # Rekor log for good. Each platform gets its own SBOM and signature at its
 # digest; scripts/release-verify.sh checks that from the outside before the
-# GitHub release appears.
+# GitHub release appears. Next to publishing, behind the same approval, the
+# short description and the overview of both Docker Hub repos follow from
+# scripts/dockerhub-overview.sh, with a token of their own:
+# DOCKERHUB_DESCRIBE_TOKEN (scope Read, Write, Delete) in the environment
+# release; DOCKERHUB_TOKEN stays for the push only. A failure there shows red
+# in the run but holds back neither the images nor the GitHub release.
 #
 # A manual run is a dry run: it builds both platforms and shows image tags
 # and notes, without login, push or signature.
@@ -83,11 +88,16 @@ jobs:
         env:
           IMAGES: ${{ steps.names.outputs.images }}
           TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
           {
             echo "Image tags of $TARGET:"
             echo '```'
             echo "$IMAGES"
+            echo '```'
+            echo "Docker Hub short description of $TARGET:"
+            echo '```'
+            scripts/dockerhub-overview.sh --short "$VERSION" "$TARGET"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -166,6 +176,52 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: scripts/release-verify.sh "$TAG"
+
+  describe:
+    name: Docker Hub description
+    if: github.event_name == 'push'
+    # Next to publish, so that one approval of the environment covers both;
+    # release does not wait for it.
+    needs: [version, ci]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Short description and overview of both repos
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_DESCRIBE_TOKEN: ${{ secrets.DOCKERHUB_DESCRIBE_TOKEN }}
+        run: |
+          # The login and the bearer token go through stdin and a private
+          # file only, never through arguments or the log.
+          umask 077
+          auth=$(mktemp)
+          trap 'rm -f "$auth"' EXIT
+          hint="DOCKERHUB_DESCRIBE_TOKEN in the environment release needs the scope Read, Write, Delete"
+          jq -n '{identifier: env.DOCKERHUB_USERNAME, secret: env.DOCKERHUB_DESCRIBE_TOKEN}' |
+            curl -fsS --data @- -H 'Content-Type: application/json' https://hub.docker.com/v2/auth/token |
+            jq -er '"Authorization: Bearer " + .access_token' > "$auth" || {
+            echo "::error::Docker Hub login failed; $hint"
+            exit 1
+          }
+          namespace=${HUB#docker.io/}
+          for kind in panel agent; do
+            repo=$namespace/rconductor-$kind
+            jq -n --arg short "$(scripts/dockerhub-overview.sh --short "$VERSION" "$kind")" \
+              --arg full "$(scripts/dockerhub-overview.sh "$VERSION" "$kind")" \
+              '{description: $short, full_description: $full}' |
+              curl -fsS -o /dev/null -X PATCH --data @- -H 'Content-Type: application/json' -H @"$auth" \
+                "https://hub.docker.com/v2/repositories/$repo/" || {
+              echo "::error::updating $repo failed; $hint"
+              exit 1
+            }
+            echo "updated the description of $repo"
+          done
 
   release:
     name: GitHub release
