@@ -102,11 +102,21 @@ func TestProfilesAPI(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil || rec.Code != http.StatusOK {
 		t.Fatalf("profiles = %d %s", rec.Code, rec.Body.String())
 	}
-	if len(list.Items) != 1 || list.Items[0].Slug != "minecraft-java" || len(list.Items[0].Catalog) != 5 {
-		t.Errorf("profiles = %+v", list.Items)
+	// Both shipped profiles; the list is ordered by name, so look up by slug.
+	bySlug := map[string]api.GameProfile{}
+	for _, p := range list.Items {
+		bySlug[p.Slug] = p
 	}
-	if list.Items[0].MaxLength != 1000 || list.Items[0].Wrappers[0] != "execute" || list.Items[0].LastError != nil {
-		t.Errorf("profile details = %+v", list.Items[0])
+	java, ok := bySlug["minecraft-java"]
+	if len(list.Items) != 2 || !ok || len(java.Catalog) != 38 {
+		t.Fatalf("profiles = %+v", list.Items)
+	}
+	if java.MaxLength != 1000 || len(java.Wrappers) == 0 || java.Wrappers[0] != "execute" || java.LastError != nil {
+		t.Errorf("profile details = %+v", java)
+	}
+	gtnh, ok := bySlug["minecraft-gtnh"]
+	if !ok || len(gtnh.Catalog) != 83 || len(gtnh.Wrappers) != 0 || gtnh.LastError != nil {
+		t.Errorf("gtnh profile = %+v", gtnh)
 	}
 }
 
