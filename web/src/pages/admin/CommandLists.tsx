@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, must } from '@/api/client';
+import { api, must, patchVersioned } from '@/api/client';
 import { useProfiles } from '@/api/servers';
 import { commandListsKey, outcome, useCommandLists, type CommandList } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -52,8 +52,8 @@ function ListPanel({
     let done = null as CommandList | null;
     const r = await outcome(list.id, async () => {
       done = must(
-        await api.PATCH('/command-lists/{id}', {
-          params: { path: { id: list.id }, header: { 'If-Match': from.version } },
+        await patchVersioned('/command-lists/{id}', from.version, {
+          path: { id: list.id },
           body: { name: to.name, entries: to.entries },
         }),
       );

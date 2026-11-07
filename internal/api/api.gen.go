@@ -1159,19 +1159,19 @@ type ListAuditParamsKind string
 
 // UpdateCommandListParams defines parameters for UpdateCommandList.
 type UpdateCommandListParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
 // UpdateServerGroupParams defines parameters for UpdateServerGroup.
 type UpdateServerGroupParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
 // UpdateServerParams defines parameters for UpdateServer.
 type UpdateServerParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
@@ -1188,13 +1188,13 @@ type GetServerLogsParams struct {
 
 // UpdateSettingsParams defines parameters for UpdateSettings.
 type UpdateSettingsParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
 // UpdateUserGroupParams defines parameters for UpdateUserGroup.
 type UpdateUserGroupParams struct {
-	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first.
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 

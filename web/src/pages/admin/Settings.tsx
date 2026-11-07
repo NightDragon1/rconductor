@@ -2,7 +2,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, must } from '@/api/client';
+import { api, must, patchVersioned } from '@/api/client';
 import { sessionKey } from '@/api/session';
 import { outcome } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -138,7 +138,7 @@ export function SettingsPage() {
   const write = async (body: Values, etag: string) => {
     let next = '';
     const r = await outcome('settings', async () => {
-      const res = await api.PATCH('/settings', { params: { header: { 'If-Match': etag } }, body });
+      const res = await patchVersioned('/settings', etag, { body });
       must(res);
       next = res.response.headers.get('ETag') ?? '';
     });

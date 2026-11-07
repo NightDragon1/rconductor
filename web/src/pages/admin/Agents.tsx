@@ -2,7 +2,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, must } from '@/api/client';
+import { api, must, patchVersioned } from '@/api/client';
 import { agentsKey, useAgents, type Agent } from '@/api/servers';
 import { outcome } from '@/api/users';
 import type { components } from '@/api/schema';
@@ -116,8 +116,7 @@ export function AgentsPage() {
       'settings',
       async () => {
         must(
-          await api.PATCH('/settings', {
-            params: { header: { 'If-Match': settings.data?.etag ?? '' } },
+          await patchVersioned('/settings', settings.data?.etag ?? '', {
             body: { 'agents.fingerprint_pairing': !fingerprintOn },
           }),
         );
