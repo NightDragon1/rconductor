@@ -388,8 +388,8 @@ func seedModeration(admin *client, panel, o string, st *State) error {
 	if err := admin.call(http.MethodPost, "/command-lists", map[string]any{"name": "moderation", "entries": []map[string]any{
 		{"path": "list", "passable": true}, {"path": "kick", "passable": false}, {"path": "whitelist add", "passable": true},
 		{"path": "say", "passable": true}, {"path": "time set", "passable": true},
-		// weather has no catalog entry: its card has a free field (Design 7.3).
-		{"path": "weather", "passable": false},
+		// setidletimeout has no catalog entry: its card has a free field (Design 7.3).
+		{"path": "setidletimeout", "passable": false},
 	}}, &list); err != nil {
 		return err
 	}
