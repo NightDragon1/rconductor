@@ -45,6 +45,32 @@ if scripts/release-notes.sh 7.0 false >/dev/null 2>&1; then
   fails=$((fails + 1))
 fi
 
+# Docker Hub texts: the pre-release notice only before 1.0, short
+# descriptions within the 100 characters Docker Hub allows.
+hub() { scripts/dockerhub-overview.sh "$@"; }
+expect "short panel 0.10" "RCONductor panel – web panel for RCON game servers. Pre-release (0.x): not for production use." "$(hub --short 0.10 panel)"
+expect "short agent 1.0" "RCONductor agent – runs game containers for the panel." "$(hub --short 1.0 agent)"
+for v in 0.10 1.0 12.34; do
+  for kind in panel agent; do
+    len=$(hub --short "$v" "$kind" | tr -d '\n' | wc -m)
+    [ "$len" -le 100 ] || { echo "short $v $kind: $len characters, over 100" >&2; fails=$((fails + 1)); }
+  done
+done
+expect "overview of a test version" "$(cat deploy/dockerhub/overview.md)" "$(hub 0.10 agent)"
+if hub 1.0 panel | grep -qi -e pre-release -e '^>'; then
+  echo "the overview of 1.0 must not carry the pre-release notice" >&2
+  fails=$((fails + 1))
+fi
+expect "overview of 1.0 keeps the links" 3 "$(hub 1.0 panel | grep -c '^- ')"
+expect "overview of 1.0 has no double blank line" 0 "$(hub 1.0 panel | awk 'p == "" && $0 == "" { n++ } { p = $0 } END { print n + 0 }')"
+for bad in "1.0 web" "1.0.0 panel" "v1.0 panel" "latest agent"; do
+  # shellcheck disable=SC2086 # split on purpose
+  if hub $bad >/dev/null 2>&1; then
+    echo "dockerhub-overview $bad: must be refused" >&2
+    fails=$((fails + 1))
+  fi
+done
+
 # release-verify.sh against stand-ins for docker and cosign. The stand-ins
 # read what the registry holds from $WORLD.
 world=$(mktemp -d)
