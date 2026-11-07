@@ -217,6 +217,9 @@ func runAgent(t *testing.T, p *panelSide, dockerHost string) *syncBuf {
 		if err := <-done; err != nil {
 			t.Errorf("agent: %v", err)
 		}
+		if t.Failed() {
+			t.Logf("agent log:\n%s\npanel log:\n%s", logs.String(), p.logs.String())
+		}
 	})
 	return logs
 }

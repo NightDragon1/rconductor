@@ -182,6 +182,9 @@ func (m *Manager) Status(id string) (Status, time.Time) {
 	return w.state()
 }
 
+// tryTimeout bounds a test of RCON data (Design 3.8).
+const tryTimeout = 5 * time.Second
+
 // Try opens a connection that only authenticates and closes it at once,
 // for a test of RCON data. It is the one exception to one connection per
 // server (PROT-002 rev. 2, D-049) and sends no command.
@@ -190,7 +193,7 @@ func (m *Manager) Try(ctx context.Context, protocol, addr string, password loggi
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, m.opts.DialTimeout)
+	ctx, cancel := context.WithTimeout(ctx, min(m.opts.DialTimeout, tryTimeout))
 	defer cancel()
 	conn, err := adapter.Dial(ctx, addr, password)
 	if err != nil {

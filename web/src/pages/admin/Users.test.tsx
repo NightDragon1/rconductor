@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverGroupsKey, serversKey } from '@/api/servers';
 import { sessionKey } from '@/api/session';
-import { assignmentsKey, invitesKey, managedUsersKey, userGroupsKey } from '@/api/users';
+import {
+  assignmentsKey,
+  invitesKey,
+  managedUsersKey,
+  sameSections,
+  userGroupsKey,
+  type Assignments,
+} from '@/api/users';
 import { renderPage, setLanguage, unmarked } from '@/test/render';
+import { api } from '@/api/client';
+import { UndoProvider } from '@/lib/undo';
 import { UsersPage } from './Users';
 
 const now = new Date().toISOString();
@@ -131,5 +140,73 @@ describe('users page', () => {
     // Data, not texts: pseudonyms, initials, names and contacts.
     const data = /^(nyx|kiwi|NY|KI|mods|mc|Nyx N|telegram|@nyx|aria-label=.*|title=.*)$/;
     expect(unmarked(container).filter((s) => !data.test(s))).toEqual([]);
+  });
+});
+
+describe('sameSections (B2)', () => {
+  const base = {
+    role: 'server_admin',
+    admin_scopes: [{ server_id: 'a' }, { server_id: 'b' }],
+    groups: [],
+    grants: [],
+    supporter_grants: [],
+  } as unknown as Assignments;
+
+  // Undo of a save must not bring back what another admin withdrew.
+  it('sees a change of someone else, in any order', () => {
+    const turned = { ...base, admin_scopes: [{ server_id: 'b' }, { server_id: 'a' }] };
+    expect(sameSections(base, turned, ['admin_scopes'])).toBe(true);
+    const withdrawn = { ...base, admin_scopes: [] };
+    expect(sameSections(base, withdrawn, ['admin_scopes'])).toBe(false);
+    expect(sameSections(base, withdrawn, ['groups'])).toBe(true);
+  });
+});
+
+// TestB2: Undo must not bring back what another admin changed in the five
+// seconds. Fails on the code before the fix: Undo sends the old section.
+describe('undo after a change of someone else (B2)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('reports the conflict and sends nothing', async () => {
+    vi.stubGlobal('matchMedia', () => ({
+      matches: false,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    Element.prototype.scrollIntoView = () => undefined;
+    setLanguage('en');
+    const answer = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
+    const saved = { ...assignments, groups: [] };
+    const put = vi.spyOn(api, 'PUT').mockResolvedValue(answer(saved) as never);
+    vi.spyOn(api, 'GET').mockResolvedValue(answer({ ...saved, groups: ['other'] }) as never);
+    await renderPage(
+      () => (
+        <UndoProvider>
+          <UsersPage />
+        </UndoProvider>
+      ),
+      [
+        [sessionKey, session],
+        [managedUsersKey, users],
+        [invitesKey, []],
+        [userGroupsKey, [{ id: 'g1', name: 'one', kind: 'moderator', members: [], grants: [] }]],
+        [serversKey, []],
+        [serverGroupsKey, []],
+        [assignmentsKey('u1'), assignments],
+        [assignmentsKey('u2'), { ...assignments, role: 'supporter', groups: [] }],
+      ],
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'nyx' }));
+    const panel = screen.getByRole('complementary', { name: 'Details of nyx' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Remove one' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save' }));
+    const undo = await screen.findByRole('button', { name: 'Undo' });
+    expect(put).toHaveBeenCalledOnce();
+    fireEvent.click(undo);
+    await waitFor(() => expect(panel.textContent).toContain('Changed by someone else'));
+    expect(put).toHaveBeenCalledOnce();
   });
 });
