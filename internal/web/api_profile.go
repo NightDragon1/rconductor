@@ -41,6 +41,8 @@ func (s *apiServer) ChangePassword(ctx context.Context, req api.ChangePasswordRe
 	}
 	err := s.profiles.ChangePassword(ctx, adminRequest(ctx), req.Body.CurrentPassword, req.Body.NewPassword)
 	switch {
+	case errors.Is(err, users.ErrTooManyTries):
+		return nil, &problem{status: http.StatusTooManyRequests, reason: api.ReasonCodeRateLimited, retryAfter: 60}
 	case errors.Is(err, users.ErrWrongPassword):
 		return nil, &problem{status: http.StatusForbidden, reason: api.ReasonCodeForbidden, detail: err.Error()}
 	case errors.Is(err, password.ErrBusy):

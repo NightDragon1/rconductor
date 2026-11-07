@@ -254,7 +254,8 @@ Grundlage: Für Befehle an Spieleserver gibt es keinen Branchenstandard. Pteroda
 
 | Punkt | Festlegung |
 | --- | --- |
-| Verzögerung | Je Konto ab dem dritten Fehlversuch in Folge 1 s, dann 2 s, dann 4 s vor der Passwortprüfung |
+| Verzögerung | Je Konto über alle Adressen ab dem dritten Fehlversuch in Folge 1 s, 2 s, 4 s, 8 s, 16 s, dann 30 s vor der Passwortprüfung; keine Sperre je Konto (R-11) |
+| Passwortwechsel | Das aktuelle Passwort darf je Benutzer und login.lockout\_duration höchstens login.max\_failures Mal falsch sein, danach 429 rate\_limited |
 | Sperre | Je Konto und Client-Adresse nach login.max\_failures (Standard 5) Fehlversuchen für login.lockout\_duration (Standard 15 min); auch das richtige Passwort wird dann mit 429 abgelehnt |
 | Sperre je Client | Je Client-Adresse über alle Namen nach login.max\_client\_failures (Standard 50) Fehlversuchen je Sperrfenster für login.lockout\_duration; das Fenster beginnt mit dem ersten Fehlversuch. Client-Adresse ist die Adresse, IPv6 je /64, hinter einem vertrauenswürdigen Proxy die echte Adresse des Besuchers (2.1). Auch hier wird das richtige Passwort mit 429 abgelehnt. Eine erfolgreiche Anmeldung ändert diesen Zähler nicht, sonst könnte ein eigenes Konto ihn zurücksetzen |
 | Unbekannte Benutzer | Zählen wie bekannte; gleiche Antwort, gleiche Fehlermeldung, gleiche Argon2id-Arbeit über einen Ersatz-Hash |
