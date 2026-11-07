@@ -11,10 +11,7 @@ async function as(page: Page, state: StackState, user: string, path: string, tit
   await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
 }
 
-test('settings: a change waits for undo and saves with the ETag (Design 5.6)', async ({
-  page,
-  state,
-}) => {
+test('settings: a change saves at once with the ETag (Design 5.6)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/settings', 'Settings');
   const field = page.getByLabel('invite.lifetime');
   const before = await field.inputValue();

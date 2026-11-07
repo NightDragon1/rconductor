@@ -7,8 +7,10 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/netip"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func envOf(m map[string]string) Lookup {
@@ -209,5 +211,39 @@ func TestLoadAgent(t *testing.T) {
 		if _, err := LoadAgent(envOf(env), filesOf(map[string]string{"/x": "b"})); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+// TestLimits: limits have their defaults, and values outside the range stop
+// the start; smaller ones exist only for tests that build the struct.
+func TestLimits(t *testing.T) {
+	env := func(m map[string]string) Lookup {
+		return func(k string) (string, bool) { v, ok := m[k]; return v, ok }
+	}
+	c, err := LoadPanel(env(nil), os.ReadFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.RCON.Queue != 64 || c.RCON.MaxBackoff != 5*time.Second || c.CommandTimeout != 10*time.Second ||
+		c.PlayersRefresh != time.Minute || c.AgentPort.MaxConnections != 1024 || c.AgentPort.ConnectsPerMinute != 10 {
+		t.Errorf("defaults = %+v", c)
+	}
+	a, err := LoadAgent(env(nil), os.ReadFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.MaxBackoff != 2*time.Minute || a.MetricsInterval != 10*time.Second || a.MaxFollows != 16 || a.OrdersBurst != 3 {
+		t.Errorf("defaults = %+v", a)
+	}
+	for key, value := range map[string]string{
+		"RCD_RCON_QUEUE": "0", "RCD_RCON_PROBE_SECONDS": "0", "RCD_COMMAND_TIMEOUT_SECONDS": "121",
+		"RCD_PLAYERS_REFRESH_SECONDS": "9", "RCD_AGENT_MAX_CONNECTIONS": "15",
+	} {
+		if _, err := LoadPanel(env(map[string]string{key: value}), os.ReadFile); err == nil || !strings.Contains(err.Error(), key) {
+			t.Errorf("%s=%s: %v", key, value, err)
+		}
+	}
+	if _, err := LoadAgent(env(map[string]string{"RCD_METRICS_INTERVAL_SECONDS": "0"}), os.ReadFile); err == nil {
+		t.Error("metrics interval 0 accepted")
 	}
 }

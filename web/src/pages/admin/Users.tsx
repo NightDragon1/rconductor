@@ -16,6 +16,7 @@ import {
   useManagedUsers,
   useUserGroups,
   type Assignments,
+  type AssignmentsUpdate,
   type Outcome,
   type Role,
   type User,
@@ -53,7 +54,7 @@ export function UsersPage() {
   const phone = usePhone();
   const qc = useQueryClient();
   const now = useNow(30_000);
-  const { schedule, undoLast } = useUndo();
+  const { saved, undoLast, guard } = useUndo();
   const { data: session } = useSession();
   const role = session?.user.role;
   const admin = role === 'rcon_admin' || role === 'server_admin';
@@ -75,6 +76,7 @@ export function UsersPage() {
   const [status, setStatus] = useState<Status>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<string | null>(null);
+  const [locking, setLocking] = useState(false);
   const [invite, setInvite] = useState<{ template?: User; key: number } | null>(null);
   const [results, setResults] = useState<{ title: string; items: Outcome[] } | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -87,7 +89,7 @@ export function UsersPage() {
   useShortcuts({
     '/': () => search.current?.focus(),
     i: () => !phone && setInvite({ key: Date.now() }),
-    Escape: () => setOpen(null),
+    Escape: () => guard(() => setOpen(null)),
     z: undoLast,
   });
 
@@ -132,66 +134,59 @@ export function UsersPage() {
 
   // A mass action runs per user and reports each outcome (UI-007): no
   // overall success when some fail.
-  const bulk = (
-    title: string,
-    run: (u: User, keepalive: boolean) => Promise<unknown>,
-    undoable: boolean,
-  ) => {
+  // run gives back how to restore the user, for Undo (D-048).
+  type Restore = () => Promise<unknown>;
+  const bulk = async (title: string, run: (u: User) => Promise<Restore | undefined>) => {
     const targets = chosen;
-    const go = async (keepalive: boolean) => {
-      const items = await Promise.all(targets.map((u) => outcome(u.id, () => run(u, keepalive))));
-      setResults({ title, items });
+    const restores: Restore[] = [];
+    const refresh = () => {
       void qc.invalidateQueries({ queryKey: managedUsersKey });
       targets.forEach((u) => void qc.invalidateQueries({ queryKey: assignmentsKey(u.id) }));
     };
-    if (undoable) schedule(t('admin.undo.bulk', { action: title, count: targets.length }), go);
-    else void go(false);
+    const items = await Promise.all(
+      targets.map((u) =>
+        outcome(u.id, async () => {
+          const r = await run(u);
+          if (r) restores.push(r);
+        }),
+      ),
+    );
+    setResults({ title, items });
+    refresh();
+    if (restores.length === 0) return;
+    saved(t('admin.undo.bulk', { action: title, count: restores.length }), () => {
+      void Promise.all(restores.map((r) => r())).finally(refresh);
+    });
   };
-  const lock = (disabled: boolean) =>
-    bulk(
-      t(disabled ? 'admin.lock' : 'admin.unlock'),
-      async (u, keepalive) =>
-        must(
-          await api.PATCH('/users/{id}', {
-            params: { path: { id: u.id } },
-            body: { disabled },
-            keepalive,
-          }),
-        ),
-      true,
-    );
+  const setDisabled = async (u: User, disabled: boolean) =>
+    must(await api.PATCH('/users/{id}', { params: { path: { id: u.id } }, body: { disabled } }));
+  const lock = () =>
+    bulk(t('admin.lock'), async (u) => {
+      await setDisabled(u, true);
+      return undefined;
+    });
+  const unlock = () =>
+    bulk(t('admin.unlock'), async (u) => {
+      const was = u.disabled;
+      await setDisabled(u, false);
+      return () => setDisabled(u, was);
+    });
+  const assign = async (u: User, body: AssignmentsUpdate) =>
+    must(await api.PUT('/users/{id}/assignments', { params: { path: { id: u.id } }, body }));
   const addGroup = (gid: string) =>
-    bulk(
-      t('admin.bulk.groupTitle', { name: groupNames.get(gid) ?? '' }),
-      async (u, keepalive) => {
-        const cur = await fetchAssignments(u.id);
-        return must(
-          await api.PUT('/users/{id}/assignments', {
-            params: { path: { id: u.id } },
-            body: { groups: [...new Set([...cur.groups, gid])] },
-            keepalive,
-          }),
-        );
-      },
-      true,
-    );
+    bulk(t('admin.bulk.groupTitle', { name: groupNames.get(gid) ?? '' }), async (u) => {
+      const cur = await fetchAssignments(u.id);
+      await assign(u, { groups: [...new Set([...cur.groups, gid])] });
+      return () => assign(u, { groups: cur.groups });
+    });
   const addScope = (v: string) => {
     const target = v.startsWith('g:') ? { server_group_id: v.slice(2) } : { server_id: v.slice(2) };
     const name = v.startsWith('g:') ? sgNames.get(v.slice(2)) : serverNames.get(v.slice(2));
-    bulk(
-      t('admin.bulk.scopeTitle', { name: name ?? '' }),
-      async (u, keepalive) => {
-        const cur = await fetchAssignments(u.id);
-        return must(
-          await api.PUT('/users/{id}/assignments', {
-            params: { path: { id: u.id } },
-            body: { admin_scopes: [...cur.admin_scopes, target] },
-            keepalive,
-          }),
-        );
-      },
-      true,
-    );
+    void bulk(t('admin.bulk.scopeTitle', { name: name ?? '' }), async (u) => {
+      const cur = await fetchAssignments(u.id);
+      await assign(u, { admin_scopes: [...cur.admin_scopes, target] });
+      return () => assign(u, { admin_scopes: cur.admin_scopes });
+    });
   };
 
   const toggle = (id: string) =>
@@ -333,10 +328,10 @@ export function UsersPage() {
                 </select>
               </>
             )}
-            <Button variant="outline" size="sm" onClick={() => lock(true)}>
+            <Button variant="outline" size="sm" onClick={() => setLocking(true)}>
               {t('admin.lock')}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => lock(false)}>
+            <Button variant="outline" size="sm" onClick={() => void unlock()}>
               {t('admin.unlock')}
             </Button>
             <Button
@@ -365,7 +360,7 @@ export function UsersPage() {
                 mono
                 title={<bdi>{u.pseudonym}</bdi>}
                 selected={open === u.id}
-                onOpen={() => setOpen(u.id)}
+                onOpen={() => guard(() => setOpen(u.id))}
                 facts={[
                   { label: t('admin.role'), value: t(`role.${u.role}`) },
                   {
@@ -439,7 +434,7 @@ export function UsersPage() {
                       <button
                         type="button"
                         className="flex items-center gap-2 font-mono hover:underline"
-                        onClick={() => setOpen(u.id)}
+                        onClick={() => guard(() => setOpen(u.id))}
                       >
                         <span
                           className="flex size-7 items-center justify-center rounded-full bg-surface-raised text-xs"
@@ -533,7 +528,7 @@ export function UsersPage() {
           serverGroups={serverGroups.data ?? []}
           readOnly={phone}
           onTemplate={(u) => setInvite({ key: Date.now(), template: u })}
-          onClose={() => setOpen(null)}
+          onClose={() => guard(() => setOpen(null))}
         />
       )}
 
@@ -564,11 +559,21 @@ export function UsersPage() {
         onClose={() => setRemoving(false)}
         onConfirm={() => {
           setRemoving(false);
-          bulk(
-            t('admin.remove'),
-            async (u) => must(await api.DELETE('/users/{id}', { params: { path: { id: u.id } } })),
-            false,
-          );
+          void bulk(t('admin.remove'), async (u) => {
+            must(await api.DELETE('/users/{id}', { params: { path: { id: u.id } } }));
+            return undefined;
+          });
+        }}
+      />
+      <ConfirmDialog
+        open={locking}
+        title={t('admin.lockManyTitle', { count: chosen.length })}
+        text={t('admin.lockText')}
+        action={t('admin.lock')}
+        onClose={() => setLocking(false)}
+        onConfirm={() => {
+          setLocking(false);
+          void lock();
         }}
       />
     </div>

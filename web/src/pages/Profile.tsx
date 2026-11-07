@@ -7,6 +7,7 @@ import { api, apiBase, must } from '@/api/client';
 import { useSession } from '@/api/session';
 import { outcome } from '@/api/users';
 import { Button } from '@/components/ui/button';
+import { PasswordInput } from '@/components/PasswordInput';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
 
@@ -231,21 +232,15 @@ export function ProfilePage() {
         <label htmlFor={ids.cur} className="text-sm text-muted">
           {t('password.current')}
         </label>
-        <Input
-          id={ids.cur}
-          name="current"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
+        <PasswordInput id={ids.cur} name="current" autoComplete="current-password" required />
         <label htmlFor={ids.next} className="text-sm text-muted">
           {t('password.new')}
         </label>
-        <Input id={ids.next} name="next" type="password" autoComplete="new-password" required />
+        <PasswordInput id={ids.next} name="next" autoComplete="new-password" required />
         <label htmlFor={ids.again} className="text-sm text-muted">
           {t('password.repeat')}
         </label>
-        <Input id={ids.again} name="again" type="password" autoComplete="new-password" required />
+        <PasswordInput id={ids.again} name="again" autoComplete="new-password" required />
         <Note m={pw} />
         <Button type="submit" className="self-start">
           {t('password.submit')}

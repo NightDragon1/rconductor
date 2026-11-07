@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 @import 'tailwindcss';
 
-/* Dark is the default design, light can be chosen (Design 6.1, UI-001).
+/* The dark tokens are the base, data-theme switches to light (Design 6.1, UI-001).
    Colours are tokens, so both designs share every component. */
 :root {
   --background: #0b0d12;
@@ -100,6 +100,19 @@ body {
   background: var(--background);
   color: var(--text);
   font-family: var(--font-sans);
+}
+
+/* Everything clickable shows the pointer (UI-001); the frame has the
+   contrast of a control. :where keeps it below the focus ring. */
+:where(
+  a,
+  button:not(:disabled),
+  select:not(:disabled),
+  summary,
+  input[type='checkbox']:not(:disabled)
+):hover {
+  outline: 1px solid var(--control-border);
+  outline-offset: 1px;
 }
 
 :focus-visible {
