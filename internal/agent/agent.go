@@ -52,6 +52,20 @@ const (
 	dialTimeout   = 15 * time.Second
 )
 
+func (a *Agent) maxBackoff() time.Duration {
+	if a.cfg.MaxBackoff > 0 {
+		return a.cfg.MaxBackoff
+	}
+	return backoffMax
+}
+
+func (a *Agent) dialTimeout() time.Duration {
+	if a.cfg.DialTimeout > 0 {
+		return a.cfg.DialTimeout
+	}
+	return dialTimeout
+}
+
 // ErrNoPanel means neither a token nor a panel address is configured.
 var ErrNoPanel = errors.New("set RCD_PAIRING_TOKEN (or _FILE) or RCD_PANEL_ADDR")
 
@@ -79,7 +93,9 @@ func New(cfg config.Agent, log *slog.Logger, backend Backend) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Agent{cfg: cfg, log: log, backend: backend, id: id, state: st, backoff: backoff}, nil
+	a := &Agent{cfg: cfg, log: log, backend: backend, id: id, state: st}
+	a.backoff = func(attempt int) time.Duration { return backoff(attempt, a.maxBackoff()) }
+	return a, nil
 }
 
 // State returns the current pairing state.
@@ -102,12 +118,12 @@ func (a *Agent) setState(st State) error {
 // Fingerprint is the fingerprint of the agent key.
 func (a *Agent) Fingerprint() string { return a.id.Fingerprint() }
 
-func backoff(attempt int) time.Duration {
+func backoff(attempt int, most time.Duration) time.Duration {
 	d := float64(backoffStart)
 	for range attempt {
 		d *= backoffFactor
 	}
-	d = min(d, float64(backoffMax))
+	d = min(d, float64(most))
 	d *= 0.8 + 0.4*rand.Float64() //nolint:gosec // jitter, not security
 	return time.Duration(d)
 }
@@ -184,7 +200,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		if reason == agentproto.RejectRevoked {
 			continue // the next plan stays idle
 		}
-		if time.Since(start) > backoffMax {
+		if time.Since(start) > a.maxBackoff() {
 			attempt = 0
 		}
 		wait := a.backoff(attempt)
@@ -206,7 +222,7 @@ func (a *Agent) connect(ctx context.Context, p plan) string {
 		a.log.Error("TLS setup failed", append(attrs, slog.Any("err", err))...)
 		return "tls"
 	}
-	dctx, cancel := context.WithTimeout(ctx, dialTimeout)
+	dctx, cancel := context.WithTimeout(ctx, a.dialTimeout())
 	defer cancel()
 	conn, resp, err := websocket.Dial(dctx, "wss://"+p.addr+agentproto.Path, &websocket.DialOptions{
 		HTTPClient: &http.Client{Transport: &http.Transport{TLSClientConfig: cfg, Proxy: nil}},
@@ -256,7 +272,7 @@ func (a *Agent) connect(ctx context.Context, p plan) string {
 	if err := s.Send(ctx, agentproto.TypeHello, "", h); err != nil {
 		return "closed"
 	}
-	rctx, rcancel := context.WithTimeout(ctx, dialTimeout)
+	rctx, rcancel := context.WithTimeout(ctx, a.dialTimeout())
 	_, data, err := conn.Read(rctx)
 	rcancel()
 	if err != nil {
