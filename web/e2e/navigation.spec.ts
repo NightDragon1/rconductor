@@ -118,12 +118,68 @@ test('on a phone the navigation is a menu', async ({ page, state }) => {
   expect(width).toBeLessThanOrEqual(390);
 });
 
-test('the design switches between dark and light', async ({ page, state }) => {
+test('the design follows the system, light and dark can be chosen (UI-001)', async ({
+  page,
+  state,
+}) => {
+  await page.emulateMedia({ colorScheme: 'light' });
   await login(page, 'admin', secret(state, 'admin'));
   const theme = () => page.evaluate(() => document.documentElement.dataset.theme);
-  expect(await theme()).toBe('dark');
-  await page.getByRole('button', { name: 'Switch between dark and light design' }).click();
+  const button = page.getByRole('button', { name: /^Design:/ });
+  await expect(button).toHaveAccessibleName(/like the system/);
+  expect(await theme()).toBe('light');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(theme).toBe('dark');
+  await button.click();
+  await expect(button).toHaveAccessibleName(/light/);
   expect(await theme()).toBe('light');
   await page.reload();
   expect(await theme()).toBe('light');
+  await button.click();
+  expect(await theme()).toBe('dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  expect(await theme()).toBe('dark');
+});
+
+test('a whole card opens its server and shows the pointer (UI-004, UI-001)', async ({
+  page,
+  state,
+}) => {
+  await login(page, 'admin', secret(state, 'admin'));
+  const card = page.getByRole('article', { name: 'survival', exact: true });
+  const before = await card.evaluate((e) => getComputedStyle(e).backgroundColor);
+  await card.hover({ position: { x: 20, y: 60 } });
+  await expect
+    .poll(() => card.evaluate((e) => getComputedStyle(e).backgroundColor))
+    .not.toBe(before);
+  await card.click({ position: { x: 20, y: 60 } });
+  await expect(page).toHaveURL(new RegExp(`servers/${state.servers.survival}`));
+});
+
+test('a password can be shown at sign-in and hides for sending (UI-013)', async ({
+  page,
+  state,
+}) => {
+  await page.goto('login');
+  const field = page.getByLabel('Password', { exact: true });
+  await field.fill('some password');
+  await page.getByRole('button', { name: 'Show password' }).click();
+  await expect(field).toHaveAttribute('type', 'text');
+  await page.getByLabel('Pseudonym').fill('admin');
+  await field.fill(secret(state, 'admin'));
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+});
+
+test('explanations in the settings can be hidden (UI-014)', async ({ page, state }) => {
+  await login(page, 'admin', secret(state, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await page.goto('admin/settings');
+  const help = page.getByText('Audit entries older than this are removed.');
+  await expect(help).toBeVisible();
+  await page.getByLabel('Show explanations').uncheck();
+  await expect(help).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByLabel('Show explanations')).not.toBeChecked();
+  await expect(help).toHaveCount(0);
 });

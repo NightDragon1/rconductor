@@ -12,7 +12,6 @@ async function openUsers(page: Page, state: StackState, user = 'admin') {
   await expect(page.getByRole('heading', { name: 'Users', level: 1 })).toBeVisible();
 }
 
-// Changes wait five seconds for Undo (UI-008, F8).
 const afterUndo = { timeout: 9000 };
 
 test('search and filters (UI-007)', async ({ page, state }) => {
@@ -63,6 +62,7 @@ test('a mass action reports each user, also a refusal (UI-007)', async ({ page, 
   for (const name of ['mod2', 'sup'])
     await page.getByRole('checkbox', { name: `Select ${name}`, exact: true }).check();
   await bar.getByRole('button', { name: 'Lock', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Lock' }).click();
   await expect(page.getByRole('dialog')).toContainText('Done for every user.', afterUndo);
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
   for (const name of ['mod2', 'sup']) await expect(row(page, name)).toContainText('locked');
@@ -78,13 +78,18 @@ test('undo restores a change; shortcuts are off by default (UI-008)', async ({ p
   await openUsers(page, state);
   await row(page, 'mod2').getByRole('button', { name: 'mod2' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of mod2' });
-  await panel.getByRole('button', { name: 'Lock' }).click();
-  const note = page.getByRole('status').filter({ hasText: 'mod2 locked' });
-  await expect(note).toBeVisible();
+  const release = panel.getByRole('checkbox', { name: /May manage supporters/ });
+  const before = await release.isChecked();
+  await release.setChecked(!before);
+  await panel.getByRole('button', { name: 'Save' }).click();
+  const note = page.getByRole('status').filter({ hasText: 'assignments of mod2' });
+  await expect(note).toContainText('Undo brings back the rights, not the sessions');
+  await expect(release).toBeChecked({ checked: !before });
   await note.getByRole('button', { name: 'Undo' }).click();
-  await page.waitForTimeout(6000);
+  await expect(panel.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
   await page.reload();
-  await expect(row(page, 'mod2')).toContainText('active');
+  await row(page, 'mod2').getByRole('button', { name: 'mod2' }).click();
+  await expect(release).toBeChecked({ checked: before });
 
   // Shortcuts are off: "/" does not reach the search, "i" opens nothing.
   await page.locator('body').press('/');
@@ -223,13 +228,14 @@ test('locking ends the session at once, socket included (AUTH-006)', async ({
   await openUsers(page, state);
   await row(page, 'sup').getByRole('button', { name: 'sup' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of sup' });
-  await panel.getByRole('button', { name: 'Lock' }).click();
+  await panel.getByRole('switch', { name: 'Locked' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Lock' }).click();
   await expect(row(page, 'sup')).toContainText('locked', afterUndo);
   await expect.poll(() => closed, { timeout: 5000 }).toBe(true);
   await supPage.reload();
   await expect(supPage.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await sup.close();
 
-  await panel.getByRole('button', { name: 'Unlock' }).click();
+  await panel.getByRole('switch', { name: 'Locked' }).click();
   await expect(row(page, 'sup')).toContainText('active', afterUndo);
 });

@@ -86,6 +86,8 @@ type Service struct {
 	throttle  *throttle
 	now       func() time.Time
 	sleep     func(ctx context.Context, d time.Duration) error
+	// minTracked is the lowest table size; tests go below it.
+	minTracked int
 
 	mu    sync.Mutex
 	ended []func(sessionHashes []string)
@@ -116,7 +118,7 @@ func (s *Service) sessionsEnded(hashes ...string) {
 func NewService(st *store.Store, h *password.Hasher, log *slog.Logger, emergencyEnabled bool) *Service {
 	return &Service{
 		st: st, hasher: h, log: log, emergency: emergencyEnabled, throttle: newThrottle(),
-		now: time.Now, sleep: sleepCtx,
+		now: time.Now, sleep: sleepCtx, minTracked: minTracked,
 	}
 }
 
@@ -140,6 +142,8 @@ func EnsureDefaults(ctx context.Context, st *store.Store) error {
 		SettingMaxClientFailures: DefaultMaxClientFailures,
 		SettingLockout:           DefaultLockout.String(),
 		SettingMaxTracked:        DefaultMaxTracked,
+		SettingOverflowLine:      overflowLine,
+		SettingOverflowGap:       overflowGap.String(),
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
@@ -167,7 +171,8 @@ func (s *Service) policy(ctx context.Context) (idle, maxLife time.Duration) {
 // loginPolicy reads the login protection settings.
 func (s *Service) loginPolicy(ctx context.Context) loginLimits {
 	lim := loginLimits{maxFailures: DefaultMaxFailures, maxClientFailures: DefaultMaxClientFailures, lockout: DefaultLockout, maxTracked: DefaultMaxTracked}
-	for key, dst := range map[string]*int{SettingMaxFailures: &lim.maxFailures, SettingMaxClientFailures: &lim.maxClientFailures, SettingMaxTracked: &lim.maxTracked} {
+	ints := map[string]*int{SettingMaxFailures: &lim.maxFailures, SettingMaxClientFailures: &lim.maxClientFailures, SettingMaxTracked: &lim.maxTracked, SettingOverflowLine: &lim.overflowLine}
+	for key, dst := range ints {
 		var n int
 		if err := s.st.GlobalSetting(ctx, key, &n); err != nil {
 			continue
@@ -178,12 +183,23 @@ func (s *Service) loginPolicy(ctx context.Context) loginLimits {
 			s.log.Warn("invalid login setting, using default", slog.String("setting", key))
 		}
 	}
+	if lim.maxTracked < s.minTracked {
+		s.log.Warn("invalid login setting, using default", slog.String("setting", SettingMaxTracked))
+		lim.maxTracked = DefaultMaxTracked
+	}
 	var v string
 	if err := s.st.GlobalSetting(ctx, SettingLockout, &v); err == nil {
 		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
 			lim.lockout = d
 		} else {
 			s.log.Warn("invalid login setting, using default", slog.String("setting", SettingLockout))
+		}
+	}
+	if err := s.st.GlobalSetting(ctx, SettingOverflowGap, &v); err == nil {
+		if d, err := time.ParseDuration(v); err == nil && d >= minOverflowGap {
+			lim.overflowGap = d
+		} else {
+			s.log.Warn("invalid login setting, using default", slog.String("setting", SettingOverflowGap))
 		}
 	}
 	return lim
@@ -232,7 +248,7 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 	defer s.throttle.release(key, c.IP, tk)
 	if tk.place != nil {
 		// The wait comes first: the delay counts what went before in line.
-		d, turn, err := s.throttle.wait(ctx, tk.place, key, s.sleep, s.now, lim.lockout)
+		d, turn, err := s.throttle.wait(ctx, tk.place, key, s.sleep, s.now, lim.lockout, lim.gap())
 		// After the turn: the entry can take long, and the line goes on.
 		s.reportFull(ctx, c)
 		if err != nil {

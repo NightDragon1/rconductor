@@ -11,11 +11,28 @@ import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
 import { formatDuration, isGoDuration, parseDuration } from '@/lib/duration';
 import { usePhone } from '@/lib/phone';
-import { useUndo } from '@/lib/undo';
+import { useUndo, useUnsaved } from '@/lib/undo';
 import { PhoneNote } from './PhoneNote';
 
 type Values = Record<string, unknown>;
 export const settingsKey = ['settings'] as const;
+
+// Whether the explanations show is a per-browser convenience (UI-014).
+const helpKey = 'rcd.settings.help';
+function storedHelp() {
+  try {
+    return localStorage.getItem(helpKey) !== 'off';
+  } catch {
+    return true;
+  }
+}
+function storeHelp(on: boolean) {
+  try {
+    localStorage.setItem(helpKey, on ? 'on' : 'off');
+  } catch {
+    // private mode: the choice lasts for this page only
+  }
+}
 
 // Keys with their own label and help in the language file.
 const keyTexts = [
@@ -29,6 +46,8 @@ const keyTexts = [
   'login_max_client_failures',
   'login_max_failures',
   'login_max_tracked',
+  'login_overflow_gap',
+  'login_overflow_line',
   'profiles_poll_interval',
   'servers_connection_test_per_minute',
   'session_idle_timeout',
@@ -83,8 +102,9 @@ const sectionOf = (key: string) => sections.find(([, re]) => re.test(key))?.[0] 
 export function SettingsPage() {
   const { t } = useTranslation();
   const phone = usePhone();
+  const [showHelp, setShowHelp] = useState(storedHelp);
   const qc = useQueryClient();
-  const { schedule } = useUndo();
+  const { saved } = useUndo();
   const settings = useQuery({
     queryKey: settingsKey,
     queryFn: async () => {
@@ -110,48 +130,46 @@ export function SettingsPage() {
       ? formatDuration(a) === formatDuration(b)
       : JSON.stringify(a) === JSON.stringify(b);
   const changed = Object.keys(values).filter((k) => base && !same(values[k], base.values[k]));
+  useUnsaved(changed.length > 0);
   const off = conflict || phone;
   const invalid = Object.entries(texts).some(([, x]) => parseDuration(x) === null);
 
-  const send = () => {
-    if (!base) return;
-    const body = Object.fromEntries(changed.map((k) => [k, values[k]]));
-    const etag = base.etag;
-    schedule(
-      t('settings.undo', { count: changed.length }),
-      async (keepalive) => {
-        const r = await outcome('settings', async () =>
-          must(
-            await api.PATCH('/settings', {
-              params: { header: { 'If-Match': etag } },
-              body,
-              keepalive,
-            }),
-          ),
-        );
-        if (r.reason === 'conflict') {
-          setConflict(true);
-          setMessage({ ok: false, text: t('admin.conflict') });
-          return;
-        }
-        setMessage(
-          r.ok
-            ? { ok: true, text: t('admin.saved') }
-            : { ok: false, text: reasonText(t, r.reason) },
-        );
-        if (r.ok) reset();
-        void qc.invalidateQueries({ queryKey: settingsKey });
-        // ui.* and supporters.* reach the session (shortcuts, navigation).
-        void qc.invalidateQueries({ queryKey: sessionKey });
-      },
-      { key: 'settings', onUndo: () => reset() },
+  // A change goes out at once; Undo sends the old values (D-048).
+  const write = async (body: Values, etag: string) => {
+    let next = '';
+    const r = await outcome('settings', async () => {
+      const res = await api.PATCH('/settings', { params: { header: { 'If-Match': etag } }, body });
+      must(res);
+      next = res.response.headers.get('ETag') ?? '';
+    });
+    if (r.reason === 'conflict') {
+      setConflict(true);
+      setMessage({ ok: false, text: t('admin.conflict') });
+      return null;
+    }
+    setMessage(
+      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
     );
+    if (r.ok) reset();
+    void qc.invalidateQueries({ queryKey: settingsKey });
+    // ui.* and supporters.* reach the session (shortcuts, navigation).
+    void qc.invalidateQueries({ queryKey: sessionKey });
+    return r.ok ? next : null;
+  };
+  const send = async () => {
+    if (!base) return;
+    const pick = (from: Values) => Object.fromEntries(changed.map((k) => [k, from[k]]));
+    const old = pick(base.values);
+    const etag = await write(pick(values), base.etag);
+    if (etag !== null) {
+      saved(t('settings.undo', { count: changed.length }), () => void write(old, etag));
+    }
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (changed.includes('supporters.enabled') && values['supporters.enabled'] === false)
       setConfirmOff(true);
-    else send();
+    else void send();
   };
   const set = (key: string, v: unknown) => {
     setMessage(null);
@@ -165,6 +183,20 @@ export function SettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold">{t('nav.settings')}</h1>
         <p className="text-sm text-muted">{t('settings.explain')}</p>
+        {!phone && (
+          <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="max-md:size-11"
+              checked={showHelp}
+              onChange={(e) => {
+                setShowHelp(e.target.checked);
+                storeHelp(e.target.checked);
+              }}
+            />
+            {t('settings.showHelp')}
+          </label>
+        )}
       </div>
       <PhoneNote />
       {settings.isPending && <p className="text-muted">{t('app.loading')}</p>}
@@ -188,7 +220,7 @@ export function SettingsPage() {
                 const head = (
                   <span className="flex min-w-0 flex-col">
                     <span className="font-medium">{label}</span>
-                    {help && <span className="text-xs text-muted">{help}</span>}
+                    {showHelp && help && <span className="text-xs text-muted">{help}</span>}
                     <code className="font-mono text-xs text-muted">{k}</code>
                   </span>
                 );
@@ -286,7 +318,7 @@ export function SettingsPage() {
         onClose={() => setConfirmOff(false)}
         onConfirm={() => {
           setConfirmOff(false);
-          send();
+          void send();
         }}
       />
     </form>

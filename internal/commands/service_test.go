@@ -607,3 +607,24 @@ func TestSlashChangesNoDecision(t *testing.T) {
 		t.Errorf("with slash %q, without %q", reason(with), reason(without))
 	}
 }
+
+// TestPruneDropsFullBuckets: when the table is at its size, buckets that are
+// full again go; one that is still used up keeps its count (CMD-019).
+func TestPruneDropsFullBuckets(t *testing.T) {
+	l := newLimiter()
+	lim := Limit{PerMinute: 60, Burst: 2}
+	now := time.Now()
+	for i := range maxBuckets {
+		l.buckets[bucketKey{user: strconv.Itoa(i)}] = &bucket{tokens: 2, last: now}
+	}
+	l.buckets[bucketKey{user: "busy"}] = &bucket{tokens: 0, last: now}
+	if ok, _ := l.take("new", "s", lim, now); !ok {
+		t.Fatal("refused")
+	}
+	if len(l.buckets) != 2 {
+		t.Errorf("%d buckets left", len(l.buckets))
+	}
+	if ok, _ := l.take("busy", "", lim, now); ok {
+		t.Error("a used-up bucket got a new start")
+	}
+}

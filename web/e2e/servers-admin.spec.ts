@@ -33,8 +33,10 @@ test('a server with profile, host, port, password and an agent container (SRV-00
   const row = page.getByRole('row').filter({ hasText: 'e2e-new' });
   await expect(row).toContainText('mc.example:25575');
   await expect(row).toContainText('mc-lobby');
-  // The password is never shown again.
+  // The dialog closes after Create; the password is never shown again.
   const opened = page.getByRole('complementary', { name: 'Details of e2e-new' });
+  await expect(panel).toHaveCount(0);
+  await row.getByRole('button', { name: 'e2e-new' }).click();
   await expect(opened.getByLabel('New RCON password')).toHaveValue('');
 
   await opened.getByRole('button', { name: 'Delete server …' }).click();
@@ -78,7 +80,19 @@ test('a server needs no agent (SRV-001)', async ({ page, state }) => {
   const row = page.getByRole('row').filter({ hasText: 'e2e-plain' });
   await expect(row).toContainText('mc.example:25575');
 
+  await row.getByRole('button', { name: 'e2e-plain' }).click();
   const opened = page.getByRole('complementary', { name: 'Details of e2e-plain' });
+  // Undo takes a change back, but not one of the credentials (D-048).
+  await opened.getByLabel('Name').fill('e2e-plain2');
+  await opened.getByRole('button', { name: 'Save' }).click();
+  const note = page.getByRole('status').filter({ hasText: 'Saved: Server e2e-plain2 changed' });
+  await note.getByRole('button', { name: 'Undo' }).click();
+  await expect(opened.getByLabel('Name')).toHaveValue('e2e-plain');
+  await opened.getByLabel('New RCON password').fill('another rcon password');
+  await opened.getByRole('button', { name: 'Save' }).click();
+  const plain = page.getByRole('status').filter({ hasText: 'Saved: Server e2e-plain changed' });
+  await expect(plain.last()).toBeVisible();
+  await expect(plain.last().getByRole('button', { name: 'Undo' })).toHaveCount(0);
   await opened.getByRole('button', { name: 'Delete server …' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
   await expect(row).toHaveCount(0);
@@ -91,6 +105,7 @@ test('a server can be in several server groups (SRV-003)', async ({ page, state 
   const panel = page.getByRole('complementary', { name: 'Details of e2e-group' });
   await panel.getByLabel('+ Server').selectOption({ label: 'survival' });
   await panel.getByLabel('+ Server').selectOption({ label: 'arena' });
+  await panel.getByRole('button', { name: 'Save' }).click();
   await expect(panel.getByRole('status')).toHaveText('Saved.', saved);
   const survival = page
     .getByRole('row')
@@ -170,8 +185,9 @@ test('test connection reports the state without saving (SRV-007)', async ({ page
   await expect(page.getByRole('row').filter({ hasText: '127.0.0.1:1' })).toHaveCount(0);
 
   // The running connection answers for unchanged data.
-  await panel.getByRole('button', { name: 'Close' }).click();
-  await page.getByRole('row').filter({ hasText: 'survival' }).getByRole('button').first().click();
+  await panel.getByRole('button', { name: 'Close the details' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes' }).click();
+  await page.getByRole('button', { name: 'survival', exact: true }).click();
   const open = page.getByRole('complementary', { name: 'Details of survival' });
   await open.getByRole('button', { name: 'Test connection' }).click();
   await expect(open.getByText('Connection works')).toBeVisible();

@@ -80,21 +80,21 @@ describe('users page on a phone (UI-012, candidate 26)', () => {
   it('reads, and only locks and ends sessions behind a dialog', async () => {
     await open('nyx');
     expect(screen.queryAllByRole('checkbox', { name: /Select/ })).toHaveLength(0);
-    expect(names().filter(Boolean)).toEqual(['nyx', 'kiwi', 'End sessions', 'Lock']);
+    expect(names().filter(Boolean)).toEqual(['nyx', 'kiwi', 'End sessions']);
     expect((screen.getByRole('combobox', { name: 'Role' }) as HTMLSelectElement).disabled).toBe(
       true,
     );
     fireEvent.click(screen.getByRole('button', { name: 'End sessions' }));
     expect(screen.getByRole('dialog').textContent).toContain('End the sessions of nyx?');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Lock' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Locked' }));
     expect(screen.getByRole('dialog').textContent).toContain('Lock nyx?');
   });
 
   it('unlocks behind a dialog', async () => {
     await open('kiwi');
     expect(names()).toContain('End sessions');
-    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Locked' }));
     expect(screen.getByRole('dialog').textContent).toContain('Unlock kiwi?');
   });
 });

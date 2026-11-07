@@ -363,6 +363,10 @@ Ein täglicher Job entfernt Audit-Einträge nach Ablauf der Frist (Standard 90 T
 | RCD\_MAX\_CLIENT\_CONNECTIONS | 128 | Offene Verbindungen einer Client-Adresse am Web-Port (1 bis 65536), ein IPv6-/64 zählt als eine; weitere werden sofort geschlossen; Adressen aus RCD\_TRUSTED\_PROXIES ausgenommen (Sicherheit T-025) |
 | GOMEMLIMIT | 80 % von mem\_limit | Speicherziel der Go-Laufzeit; leer: 80 % der Speichergrenze der cgroup, ohne Grenze keins; off schaltet es ab (Sicherheit T-025) |
 | RCD\_MAX\_ANONYMOUS\_CONNECTION\_SECONDS | 30 | Eine Verbindung ohne gültige Session endet nach dieser Zeit (10 bis 3600), nach ihrer laufenden Anfrage; WebSockets und vertrauenswürdige Proxys sind ausgenommen (Sicherheit T-025) |
+| RCD\_RCON\_PROBE\_SECONDS, RCD\_RCON\_IDLE\_PROBE\_SECONDS, RCD\_RCON\_PROBE\_TIMEOUT\_SECONDS | 2, 30, 5 | Prüfung im Leerlauf (3.8) |
+| RCD\_RCON\_MAX\_BACKOFF\_SECONDS, RCD\_RCON\_DIAL\_TIMEOUT\_SECONDS, RCD\_RCON\_QUEUE | 5, 5, 64 | Wiederverbindung und Warteschlange (3.8) |
+| RCD\_COMMAND\_TIMEOUT\_SECONDS, RCD\_PLAYERS\_REFRESH\_SECONDS | 10, 60 | Zeit je Befehl (3.8), Abruf der Spielerliste (Gesamtkonzept 4.6) |
+| RCD\_AGENT\_MAX\_CONNECTIONS, RCD\_AGENT\_MAX\_CLIENT\_CONNECTIONS, RCD\_AGENT\_CONNECTS\_PER\_MINUTE, RCD\_AGENT\_CONNECT\_BURST | 1024, 64, 10, 5 | Grenzen am Agent-Port (SEC-007) |
 | RCD\_LOG\_LEVEL | info | debug, info, warn, error |
 | RCD\_LOG\_FORMAT | text | text oder json |
 
@@ -374,6 +378,8 @@ Ein täglicher Job entfernt Audit-Einträge nach Ablauf der Frist (Standard 90 T
 | RCD\_PANEL\_ADDR | leer | Panel-Adresse für Weg B oder um die Adresse aus dem Token zu überschreiben |
 | RCD\_AGENT\_NAME | Hostname | Anzeigename im Panel |
 | RCD\_LABEL | rconductor.manage=true | Label, das einen Container freigibt |
+| RCD\_AGENT\_MAX\_BACKOFF\_SECONDS, RCD\_AGENT\_DIAL\_TIMEOUT\_SECONDS | 120, 15 | Wiederverbindung des Agents (1.1) |
+| RCD\_METRICS\_INTERVAL\_SECONDS, RCD\_MAX\_LOG\_FOLLOWS, RCD\_ACTIONS\_PER\_MINUTE, RCD\_ACTIONS\_BURST | 10, 16, 10, 3 | Messwerte, Live-Logs und Aktionen je Container (1.5, 1.6) |
 | RCD\_DOCKER\_HOST | unix:///var/run/docker.sock | Zugang zum Docker-Daemon |
 | RCD\_SECRETS\_DIR | /secrets | Agent-Schlüssel und gepinnter Panel-Schlüssel |
 | RCD\_LOG\_LEVEL, RCD\_LOG\_FORMAT | info, text | wie beim Panel |
@@ -483,6 +489,7 @@ Globale Einstellungen in settings; nur der RCON-Admin liest und ändert sie übe
 | backup.interval, backup.keep\_auto, backup.keep\_pre\_migration | 24 h, 7, 3 | Backups (NFR-008, NFR-013) |
 | session.idle\_timeout, session.max\_lifetime | 12 h, 7 Tage | Sessions (AUTH-006) |
 | login.max\_failures, login.max\_client\_failures, login.lockout\_duration | 5, 50, 15 min | Login-Schutz (SEC-004, 3.7) |
+| login.overflow\_gap, login.overflow\_line | 250 ms (50 ms bis 10 s), 30 (1 bis 1000) | Überlaufreihe bei voller Zähltabelle (3.7) |
 | invite.lifetime | 72 h | Gültigkeit von Einladungen (UI-008) |
 | supporters.enabled | aus | Globale Supporter-Freigabe (ROLE-006); Abschalten beendet die Sessions aller Supporter |
 | ui.shortcuts\_enabled | aus | Tastaturkürzel (6.1); für alle Benutzer lesbar über /auth/session (Feld ui) |

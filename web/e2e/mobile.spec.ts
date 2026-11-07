@@ -341,14 +341,15 @@ test('users: search and details read; lock and end sessions ask (candidate 26)',
 
   const id = await userId(page.request, state.base_url, 'sup');
   try {
-    await panel.getByRole('button', { name: 'Lock' }).tap();
+    const locked = panel.getByRole('switch', { name: 'Locked' });
+    await locked.tap();
     await expect(dialog).toContainText('Lock sup?');
     await dialog.getByRole('button', { name: 'Lock' }).tap();
     await expect(panel.getByRole('status')).toContainText('Saved');
-    await panel.getByRole('button', { name: 'Unlock' }).tap();
+    await locked.tap();
     await expect(dialog).toContainText('Unlock sup?');
     await dialog.getByRole('button', { name: 'Unlock' }).tap();
-    await expect(panel.getByRole('button', { name: 'Lock' })).toBeVisible();
+    await expect(locked).not.toBeChecked();
   } finally {
     const r = await page.request.patch(`${state.base_url}api/v1/users/${id}`, {
       headers: { Origin: new URL(state.base_url).origin },
