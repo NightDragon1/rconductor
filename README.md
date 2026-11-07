@@ -67,7 +67,7 @@ never contains the master key.
 | `/data/rconductor.db` | SQLite database: users, servers, settings, audit log | first start |
 | `/data/rconductor.db-wal`, `/data/rconductor.db-shm` | SQLite write-ahead log and index, part of the database | while running |
 | `/data/rconductor.db.migrate.lock` | lock against parallel migration runs | first start |
-| `/data/profiles/*.yaml` | custom game profiles; one with the id of a shipped profile replaces it; changes are picked up without restart (file events, plus a check every 30 s, setting `profiles.poll_interval`) | by you |
+| `/data/profiles/*.yaml` | custom game profiles; one with the id of a shipped profile replaces it; changes are picked up without restart (file events, plus a check every 30 s, setting `profiles.poll_interval`); check one first with `docker run --rm -v ./x.yaml:/p.yaml:ro nightdragon1/rconductor-panel:0.10 profile check /p.yaml` ([details](docs/user/technical.md#checking-a-profile)) | by you |
 | `/secrets/master.key` | master key (32 random bytes, base64, mode 0600) for encrypting RCON credentials | first start, unless `RCD_MASTER_KEY_FILE` is set |
 | `/secrets/panel.key` | Ed25519 key pair of the agent port (PEM, mode 0600); agents pin its fingerprint, shown as `panel_fingerprint` in the `app.ready` line. Losing it means pairing all agents again | first start |
 | `/backups/rconductor-<UTC time>-auto.db` | automatic backup, every 24 h, the last 7 are kept | 24 h after the newest automatic backup, or 24 h after start if there is none |

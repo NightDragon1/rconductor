@@ -144,7 +144,7 @@ func (im *Importer) Sync(ctx context.Context) error {
 }
 
 func readLimited(path string) ([]byte, error) {
-	f, err := os.Open(path) //nolint:gosec // path inside the configured profile directory
+	f, err := os.Open(path) //nolint:gosec // a profile file: inside the profile directory, or named by the caller of profile check
 	if err != nil {
 		return nil, err
 	}
