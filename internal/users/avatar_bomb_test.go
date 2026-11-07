@@ -118,13 +118,16 @@ func TestR5B11ProgressiveJPEGStaysWithinItsWeight(t *testing.T) {
 	}
 }
 
-// TestR5B13ScanBomb keeps the proof of a known gap: a file of 1 MiB with 26000
-// scans holds a decoder for over 5 minutes. It fails on today's code; see #161.
+// TestR5B13ScanBomb: a file of 1 MiB with 26000 scans held a decoder for over
+// 5 minutes before the scans were counted (#161).
 func TestR5B13ScanBomb(t *testing.T) {
-	t.Skip("known gap before 1.0, see #161")
 	data := progressiveJPEG(maxAvatarPixels, 3, 26000)
 	began := time.Now()
-	_, _, _ = processAvatar(context.Background(), data)
+	_, _, err := processAvatar(context.Background(), data)
+	var invalid *InvalidError
+	if !errors.As(err, &invalid) {
+		t.Errorf("err = %v", err)
+	}
 	if d := time.Since(began); d > 10*time.Second {
 		t.Errorf("decoding took %v", d)
 	}

@@ -38,6 +38,7 @@ const (
 	helloTimeout = 10 * time.Second
 	// Connections of the agent port in total and per client address, far
 	// above the number of hosts of one panel (T-017).
+	acceptPause            = 100 * time.Millisecond
 	maxAgentConns          = 1024
 	maxAgentConnsPerClient = 64
 )
@@ -238,20 +239,32 @@ type handshakeListener struct {
 	net.Listener
 	conns chan net.Conn
 	done  <-chan struct{}
+	// stopped closes when the accept loop has ended; conns stays open,
+	// because handshakes may still be sending on it (V-4).
+	stopped chan struct{}
 }
 
 func newHandshakeListener(ctx context.Context, ln net.Listener, cfg *tls.Config, h *Hub) *handshakeListener {
-	l := &handshakeListener{Listener: ln, conns: make(chan net.Conn), done: ctx.Done()}
+	l := &handshakeListener{Listener: ln, conns: make(chan net.Conn), done: ctx.Done(), stopped: make(chan struct{})}
 	go func() {
 		<-ctx.Done()
 		_ = ln.Close()
 	}()
 	go func() {
-		defer close(l.conns)
+		defer close(l.stopped)
 		for {
 			c, err := ln.Accept()
-			if err != nil {
+			if errors.Is(err, net.ErrClosed) || ctx.Err() != nil {
 				return
+			}
+			if err != nil {
+				// Out of file descriptors and the like pass.
+				h.log.Warn("agent port cannot accept", slog.Any("err", err))
+				select {
+				case <-time.After(acceptPause):
+				case <-ctx.Done():
+				}
+				continue
 			}
 			remote := hostOf(c.RemoteAddr())
 			// Rotating inside an IPv6 /64 is one source (T-017).
@@ -288,15 +301,18 @@ func (l *handshakeListener) handshake(ctx context.Context, c net.Conn, cfg *tls.
 	case l.conns <- tc:
 	case <-l.done:
 		_ = tc.Close()
+	case <-l.stopped:
+		_ = tc.Close()
 	}
 }
 
 func (l *handshakeListener) Accept() (net.Conn, error) {
-	c, ok := <-l.conns
-	if !ok {
+	select {
+	case c := <-l.conns:
+		return c, nil
+	case <-l.stopped:
 		return nil, net.ErrClosed
 	}
-	return c, nil
 }
 
 func hostOf(a net.Addr) string {

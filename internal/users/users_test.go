@@ -8,6 +8,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -234,4 +235,31 @@ func (f *fixture) version(table, id string) *int64 {
 		f.t.Fatal(err)
 	}
 	return &v
+}
+
+// TestChangePasswordLimit covers #161: a session cannot guess its own
+// password without limit, a right one starts the count over, the window ends.
+func TestChangePasswordLimit(t *testing.T) {
+	var p passwordTries
+	now := time.Now()
+	for i := range 5 {
+		if !p.take("u", 5, time.Minute, now) {
+			t.Fatalf("refused after %d", i)
+		}
+	}
+	if p.take("u", 5, time.Minute, now) {
+		t.Error("over the limit")
+	}
+	if !p.take("other", 5, time.Minute, now) {
+		t.Error("the count of another user counted")
+	}
+	if !p.take("u", 5, time.Minute, now.Add(time.Minute)) {
+		t.Error("no new window")
+	}
+	p.reset("u")
+	for range 5 {
+		if !p.take("u", 5, time.Minute, now) {
+			t.Fatal("the reset did not count")
+		}
+	}
 }

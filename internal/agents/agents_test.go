@@ -197,6 +197,9 @@ func TestPairingByToken(t *testing.T) {
 	if err != nil || pt.Addr != "panel.example:8443" || pt.Fingerprint != f.hub.Fingerprint() {
 		t.Fatalf("token = %+v %v", pt, err)
 	}
+	if !strings.Contains(tok.Compose, "image: docker.io/nightdragon1/rconductor-agent:") {
+		t.Errorf("registry in compose = %s", tok.Compose)
+	}
 	if !strings.Contains(tok.Compose, "RCD_PAIRING_TOKEN: \""+tok.Token+"\"") || !strings.Contains(tok.Compose, "group_add") {
 		t.Errorf("compose = %s", tok.Compose)
 	}

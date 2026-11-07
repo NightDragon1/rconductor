@@ -268,22 +268,22 @@ func exerciseAgent(t *testing.T, p *panelSide, agentID, labeled, plain string, l
 		t.Errorf("logs.tail: %+v", r)
 	}
 	waitUntil(t, 10*time.Second, "log lines", func() bool {
-		l, _ := p.data.Logs(agentID, labeled)
+		l, _, _ := p.data.Logs(agentID, labeled)
 		return slices.Contains(l, "tick")
 	})
 	// UI-009, SEC-010: live logs run until logs.stop, also through the proxy.
 	if r := p.request(agentID, agentproto.TypeLogsFollow, agentproto.LogsFollow{Container: labeled}); r.Code != agentproto.CodeOK {
 		t.Errorf("logs.follow: %+v", r)
 	}
-	_, seq := p.data.Logs(agentID, labeled)
-	waitUntil(t, 10*time.Second, "live log lines", func() bool { _, s := p.data.Logs(agentID, labeled); return s > seq })
+	_, seq, _ := p.data.Logs(agentID, labeled)
+	waitUntil(t, 10*time.Second, "live log lines", func() bool { _, s, _ := p.data.Logs(agentID, labeled); return s > seq })
 	if r := p.request(agentID, agentproto.TypeLogsStop, agentproto.LogsFollow{Container: labeled}); r.Code != agentproto.CodeOK {
 		t.Errorf("logs.stop: %+v", r)
 	}
 	time.Sleep(500 * time.Millisecond) // lines already on their way
-	_, seq = p.data.Logs(agentID, labeled)
+	_, seq, _ = p.data.Logs(agentID, labeled)
 	time.Sleep(3 * time.Second)
-	if _, s := p.data.Logs(agentID, labeled); s != seq {
+	if _, s, _ := p.data.Logs(agentID, labeled); s != seq {
 		t.Errorf("log lines keep coming after logs.stop: %d, then %d", seq, s)
 	}
 
