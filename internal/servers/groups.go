@@ -244,6 +244,14 @@ func (s *Service) UpdateGroup(ctx context.Context, req users.Request, id string,
 	if n == 0 {
 		return Group{}, users.ErrConflict
 	}
+	// Compared with the group of the version the caller read, in the
+	// transaction (B11-1).
+	if r, err = q.GetServerGroup(ctx, id); err != nil {
+		return Group{}, err
+	}
+	if name == nil {
+		newName = r.Name
+	}
 	changes := map[string]any{}
 	if newName != r.Name {
 		if err := q.RenameServerGroup(ctx, sqlitedb.RenameServerGroupParams{Name: newName, UpdatedAt: store.Now(), ID: id}); err != nil {

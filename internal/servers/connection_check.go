@@ -110,7 +110,7 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 		base = fields{profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port)}
 		sealed = r.Secret
 	}
-	f, err := s.check(ctx, base, Input{ProfileID: in.ProfileID, Host: in.Host, Port: in.Port})
+	f, err := s.check(ctx, s.st.Queries, base, Input{ProfileID: in.ProfileID, Host: in.Host, Port: in.Port})
 	if err != nil {
 		return "", err
 	}

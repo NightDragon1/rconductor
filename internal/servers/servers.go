@@ -355,7 +355,9 @@ type fields struct {
 	agentID, container              sql.NullString
 }
 
-func (s *Service) check(ctx context.Context, f fields, in Input) (fields, error) {
+// check applies an input to the checked state f; q reads profile and agent,
+// inside the transaction of an update.
+func (s *Service) check(ctx context.Context, q *sqlitedb.Queries, f fields, in Input) (fields, error) {
 	var err error
 	if in.Name != nil {
 		if f.name, err = plainName(*in.Name); err != nil {
@@ -363,7 +365,7 @@ func (s *Service) check(ctx context.Context, f fields, in Input) (fields, error)
 		}
 	}
 	if in.ProfileID != nil {
-		p, err := s.st.Queries.GetGameProfile(ctx, *in.ProfileID)
+		p, err := q.GetGameProfile(ctx, *in.ProfileID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return f, &users.InvalidError{Detail: "unknown profile"}
 		}
@@ -405,7 +407,7 @@ func (s *Service) check(ctx context.Context, f fields, in Input) (fields, error)
 		if id == "" {
 			f.container = sql.NullString{}
 		} else {
-			a, err := s.st.Queries.GetAgent(ctx, id)
+			a, err := q.GetAgent(ctx, id)
 			if errors.Is(err, sql.ErrNoRows) || (err == nil && a.Status != "active") {
 				return f, &users.InvalidError{Detail: "unknown or inactive agent"}
 			}
@@ -508,7 +510,7 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	if in.Name == nil || in.ProfileID == nil || in.Host == nil || in.Password == nil {
 		return Server{}, &users.InvalidError{Detail: "name, profile_id, host and password are required"}
 	}
-	f, err := s.check(ctx, fields{}, in)
+	f, err := s.check(ctx, s.st.Queries, fields{}, in)
 	if err != nil {
 		return Server{}, err
 	}
@@ -550,45 +552,28 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	return s.Get(ctx, req, id)
 }
 
-// Update changes a server; a new password replaces the old one.
+// Update changes a server; a new password replaces the old one. The
+// version is raised first, in the transaction (BEGIN IMMEDIATE), and the row
+// is read after that: it is the state the caller read with If-Match, and
+// check and audit work on it (B11-1). A stale or predicted version is a
+// conflict before anything is read.
 func (s *Service) Update(ctx context.Context, req users.Request, id string, in Input) (Server, error) {
 	if err := s.mustBeAdmin(ctx, req, "server.update", "server", id); err != nil {
 		return Server{}, err
 	}
-	r, err := s.st.Queries.GetServer(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Server{}, users.ErrNotFound
+	// The version is required, checked after role and scope.
+	if in.Version == nil {
+		return Server{}, users.ErrPreconditionRequired
 	}
-	if err != nil {
-		return Server{}, err
-	}
-	f, err := s.check(ctx, fields{
-		name: r.Name, profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port), gamePorts: r.GamePorts,
-		agentID: r.AgentID, container: r.ContainerName,
-	}, in)
-	if err != nil {
-		return Server{}, err
-	}
-	// A new host or port keeps the stored password (D-050, R-16).
 	var sealed []byte
 	if in.Password != nil {
 		if err := checkPassword(*in.Password); err != nil {
 			return Server{}, err
 		}
+		var err error
 		if sealed, err = s.box.Seal(*in.Password, secretContext(id)); err != nil {
 			return Server{}, err
 		}
-	}
-	// Optimistic locking in one statement (revision 2.4 candidate 24);
-	// the version is required, checked after role and scope.
-	if in.Version == nil {
-		return Server{}, users.ErrPreconditionRequired
-	}
-	payload := updateAudit(r, f, in.Password != nil)
-	if payload == nil {
-		// Nothing changes: no write, no audit entry, no reconnect; a stale
-		// version is still a conflict.
-		return s.unchanged(ctx, req, id, *in.Version)
 	}
 	tx, err := s.st.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -596,12 +581,35 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
+	// Optimistic locking in one statement (revision 2.4 candidate 24).
 	n, err := q.BumpServerVersion(ctx, sqlitedb.BumpServerVersionParams{ID: id, Version: *in.Version})
 	if err != nil {
 		return Server{}, err
 	}
 	if n == 0 {
+		if _, err := q.GetServer(ctx, id); errors.Is(err, sql.ErrNoRows) {
+			return Server{}, users.ErrNotFound
+		}
 		return Server{}, users.ErrConflict
+	}
+	r, err := q.GetServer(ctx, id)
+	if err != nil {
+		return Server{}, err
+	}
+	f, err := s.check(ctx, q, fields{
+		name: r.Name, profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port), gamePorts: r.GamePorts,
+		agentID: r.AgentID, container: r.ContainerName,
+	}, in)
+	if err != nil {
+		return Server{}, err
+	}
+	// A new host or port keeps the stored password (D-050, R-16).
+	payload := updateAudit(r, f, in.Password != nil)
+	if payload == nil {
+		// Nothing changes: the rollback takes the new version back; no
+		// audit entry, no reconnect.
+		_ = tx.Rollback()
+		return s.Get(ctx, req, id)
 	}
 	now := store.Now()
 	if err := q.UpdateServer(ctx, sqlitedb.UpdateServerParams{
@@ -625,23 +633,6 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 		return Server{}, err
 	}
 	s.changed(ctx, id)
-	return s.Get(ctx, req, id)
-}
-
-// unchanged answers an update that changes nothing, after checking the
-// version read before.
-func (s *Service) unchanged(ctx context.Context, req users.Request, id string, version int64) (Server, error) {
-	versions, err := s.st.Queries.ListServerVersions(ctx)
-	if err != nil {
-		return Server{}, err
-	}
-	i := slices.IndexFunc(versions, func(v sqlitedb.ListServerVersionsRow) bool { return v.ID == id })
-	if i < 0 {
-		return Server{}, users.ErrNotFound
-	}
-	if versions[i].Version != version {
-		return Server{}, users.ErrConflict
-	}
 	return s.Get(ctx, req, id)
 }
 
