@@ -485,7 +485,8 @@ func TestHostChangeKeepsPassword(t *testing.T) {
 	if err := f.st.DB.QueryRowContext(ctx, `SELECT payload FROM audit_log WHERE action = 'server.update' AND target_id = ?`, sv.ID).Scan(&payload); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(payload, "host") || !strings.Contains(payload, "port") || strings.Contains(payload, rconPassword) {
+	// Both listeners run on 127.0.0.1, so only the port moves (B10-1).
+	if !strings.Contains(payload, `"port":{"from"`) || strings.Contains(payload, "host") || strings.Contains(payload, rconPassword) {
 		t.Errorf("audit payload = %s", payload)
 	}
 }
