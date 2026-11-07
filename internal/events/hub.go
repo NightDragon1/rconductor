@@ -430,6 +430,13 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 		}
 		return
 	}
+	// A change of rights since the first check found no subscription to end
+	// (B1): now it is visible to Recheck, so one more look closes the gap.
+	if server != "" && !h.mayFollow(ctx, c, server, kind) {
+		h.unsubscribe(c, topic)
+		h.deny(c, topic, ReasonRevoked)
+		return
+	}
 	h.log.Info("subscribed", append(h.attrs(c), logging.Event(logging.WSSubscribe), slog.String("topic", topic))...)
 	// The confirmation comes before any event of the topic (Design 2.3,
 	// issue #99).
@@ -440,6 +447,10 @@ func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 		current, has = h.agentViews.Current(ctx, server, kind)
 	}
 	h.mu.Lock()
+	if c.subs[topic] != s {
+		h.mu.Unlock()
+		return // Recheck ended it meanwhile
+	}
 	if has {
 		c.send(message{Type: "event", Topic: topic, Data: current})
 		if q, ok := current.(Sequenced); ok {
@@ -470,6 +481,16 @@ func (h *Hub) watch(ctx context.Context, ids []string) func() {
 			r()
 		}
 	}
+}
+
+// mayFollow checks a topic of a server against the current rights.
+func (h *Hub) mayFollow(ctx context.Context, c *client, server, kind string) bool {
+	rights, err := h.perm.For(ctx, c.p.UserID)
+	if err != nil {
+		return false
+	}
+	sr, ok := rights.Server(server)
+	return ok && (!agentKind(kind) || sr.Agent)
 }
 
 func agentKind(kind string) bool { return kind == "metrics" || kind == "logs" }
@@ -506,18 +527,25 @@ func (h *Hub) Recheck() {
 	}
 	h.mu.Unlock()
 	for _, c := range clients {
+		// Rights that cannot be read end what depends on them: standard is
+		// refusal, and the client can subscribe again (B1).
 		rights, err := h.perm.For(ctx, c.p.UserID)
-		if err != nil {
-			continue
+		var ids []string
+		if err == nil {
+			ids = rights.ServerIDs()
 		}
-		ids := rights.ServerIDs()
 		var gone, moved []*subscription
 		h.mu.Lock()
 		for topic, s := range c.subs {
 			if s.server == "" {
-				if !slices.Equal(s.scope, ids) {
+				if err == nil && !slices.Equal(s.scope, ids) {
 					moved = append(moved, s)
 				}
+				continue
+			}
+			if err != nil {
+				delete(c.subs, topic)
+				gone = append(gone, s)
 				continue
 			}
 			if sr, ok := rights.Server(s.server); !ok || (agentKind(s.kind) && !sr.Agent) {

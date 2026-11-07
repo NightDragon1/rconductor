@@ -5,6 +5,7 @@ package users
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
@@ -261,5 +262,28 @@ func TestChangePasswordLimit(t *testing.T) {
 		if !p.take("u", 5, time.Minute, now) {
 			t.Fatal("the reset did not count")
 		}
+	}
+}
+
+// TestB3ConnectionTestLimitStored: the setting has a row, so that a change
+// lasts and the settings page shows it. Failed before the fix: PATCH said ok,
+// nothing was stored.
+func TestB3ConnectionTestLimitStored(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if err := EnsureAuditDefaults(ctx, f.st); err != nil {
+		t.Fatal(err)
+	}
+	in := map[string]json.RawMessage{SettingConnectionTests: json.RawMessage(`1`)}
+	out, err := f.svc.UpdateSettings(ctx, f.as("admin"), in, f.version("settings", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v int
+	if err := f.st.GlobalSetting(ctx, SettingConnectionTests, &v); err != nil || v != 1 {
+		t.Errorf("stored %d, %v", v, err)
+	}
+	if out[SettingConnectionTests] == nil {
+		t.Error("not in the answer")
 	}
 }

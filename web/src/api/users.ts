@@ -42,6 +42,13 @@ export async function fetchAssignments(id: string): Promise<Assignments> {
   return must(await api.GET('/users/{id}/assignments', { params: { path: { id } } }));
 }
 
+// sameSections compares the given sections, in any order of their entries.
+export function sameSections(a: Assignments, b: Assignments, keys: (keyof Assignments)[]) {
+  const norm = (x: Assignments, k: keyof Assignments) =>
+    JSON.stringify(Array.isArray(x[k]) ? [...x[k]].map((e) => JSON.stringify(e)).sort() : x[k]);
+  return keys.every((k) => norm(a, k) === norm(b, k));
+}
+
 export function useAssignments(id: string | undefined) {
   return useQuery({
     queryKey: assignmentsKey(id ?? ''),
