@@ -3,10 +3,8 @@
 schema: 1
 id: minecraft-gtnh
 name: Minecraft GT New Horizons (1.7.10)
-match:
-  # TODO: Image des GTNH-Containers eintragen (itzg mit TYPE=FORGE
-  # oder eigenes Image).
-  images: ["itzg/minecraft-server*"]
+# No match.images: GTNH usually runs on the same image as vanilla
+# (itzg/minecraft-server), so the profile is chosen when the server is created.
 protocol:
   type: source-rcon
   default_port: 25575
@@ -17,7 +15,7 @@ syntax:
   case_sensitive: false
   strip_prefix: "/"
   max_length: 1000
-  # 1.7.10: kein /execute.
+  # 1.7.10 has no /execute.
   wrappers: []
   player_pattern: "^[A-Za-z0-9_]{1,16}$"
 players:
@@ -47,7 +45,7 @@ catalog:
   - path: whitelist
     description: Toggle or reload the whitelist
     params:
-      - { name: action, type: choice, values: [on, off, reload] }
+      - { name: action, type: choice, values: ["on", "off", reload] }
   - path: kick
     description: Kick a player from the server
     params:
@@ -63,10 +61,9 @@ catalog:
     params:
       - { name: player, type: player }
   - path: ban-ip
-    description: Ban an IP address
+    description: Ban an IP address, optional reason after it
     params:
-      - { name: ip, type: text }
-      - { name: reason, type: text, optional: true }
+      - { name: ip_and_reason, type: text }
   - path: pardon-ip
     description: Unban an IP address
     params:
@@ -94,26 +91,22 @@ catalog:
       - { name: player, type: player }
       - { name: target, type: player }
   - path: give
-    description: Give an item (modid:name or numeric id, optional count and meta)
+    description: Give an item (modid:name or numeric id, optional count and meta after it)
     params:
       - { name: player, type: player }
-      - { name: item, type: text }
-      - { name: count, type: text, optional: true }
-      - { name: meta, type: text, optional: true }
+      - { name: item_and_count_and_meta, type: text }
   - path: clear
     description: Clear a player's inventory
     params:
       - { name: player, type: player }
   - path: xp
-    description: Give experience (append L for levels, e.g. 5L)
+    description: Give experience, amount and player (append L for levels, e.g. 5L Steve)
     params:
-      - { name: amount, type: text }
-      - { name: player, type: player }
+      - { name: amount_and_player, type: text }
   - path: achievement give
-    description: Unlock an achievement for a player
+    description: Unlock an achievement for a player (achievement id and player)
     params:
-      - { name: id, type: text }
-      - { name: player, type: player }
+      - { name: id_and_player, type: text }
   - path: time set
     description: Set the time of day (day, night or ticks)
     params:
@@ -132,10 +125,9 @@ catalog:
     params:
       - { name: level, type: choice, values: [peaceful, easy, normal, hard] }
   - path: gamerule
-    description: Set a game rule (keepInventory, mobGriefing, doMobSpawning, doFireTick, doDaylightCycle)
+    description: Set or show a game rule, rule and optional true/false (keepInventory, mobGriefing, doMobSpawning, doFireTick, doDaylightCycle)
     params:
-      - { name: rule, type: text }
-      - { name: value, type: choice, values: ["true", "false"], optional: true }
+      - { name: rule_and_value, type: text }
   - path: say
     description: Message to all players
     params:
@@ -173,34 +165,25 @@ catalog:
     params:
       - { name: filter, type: text, optional: true }
   - path: cofh tpx
-    description: Teleport a player to a dimension id or to another player
+    description: Teleport a player to a dimension id, another player, or x y z and a dimension id
     params:
       - { name: player, type: player }
       - { name: destination, type: text }
-  - path: cofh tpx
-    description: Teleport a player to coordinates in a dimension
-    params:
-      - { name: player, type: player }
-      - { name: xyz, type: text }
-      - { name: dimension, type: text }
   - path: cofh countblocks
     description: Count blocks of a type around a player (xR yR zR block)
     params:
       - { name: player, type: player }
-      - { name: radii, type: text }
-      - { name: block, type: text }
+      - { name: radii_and_block, type: text }
   - path: cofh replaceblocks
     description: Replace blocks around a player (xR yR zR newBlock targetBlock)
     params:
       - { name: player, type: player }
-      - { name: radii, type: text }
-      - { name: blocks, type: text }
+      - { name: radii_and_blocks, type: text }
   - path: cofh enchant
-    description: Apply an enchantment to a player's held item
+    description: Apply an enchantment to a player's held item (enchantment, optional level after it)
     params:
       - { name: player, type: player }
-      - { name: enchantment, type: text }
-      - { name: level, type: text, optional: true }
+      - { name: enchantment_and_level, type: text }
   - path: cofh version
     description: Show CoFH Core version
 
@@ -240,7 +223,7 @@ catalog:
   # --- ServerUtilities (OP; each command must be enabled in
   #     serverutilities/serverutilities.cfg → commands { B:<name>=true }) ---
   - path: backup start
-    description: Start a world backup now (2.9.x: =oc only claimed chunks, =overwrite)
+    description: "Start a world backup now (2.9.x: =oc only claimed chunks, =overwrite)"
     params:
       - { name: name, type: text, optional: true }
   - path: backup stop
@@ -302,15 +285,13 @@ catalog:
     params:
       - { name: state, type: choice, values: ["true", "false"], optional: true }
   - path: bq_admin complete
-    description: Force-complete a quest (id or all) for a player
+    description: Force-complete a quest for a player (quest id or all, then player)
     params:
-      - { name: quest, type: text }
-      - { name: player, type: player }
+      - { name: quest_and_player, type: text }
   - path: bq_admin reset
-    description: Reset a quest (id or all) for a player; without player = everyone
+    description: Reset a quest (quest id or all, optional player after it; without player = everyone)
     params:
-      - { name: quest, type: text }
-      - { name: player, type: player, optional: true }
+      - { name: quest_and_player, type: text }
   - path: bq_admin check
     description: Check whether a player has completed a quest id
     params:
@@ -324,7 +305,7 @@ catalog:
     description: Manage hardcore lives
     params:
       - { name: action, type: choice, values: [add, set, max, default] }
-      - { name: value, type: text }
+      - { name: value, type: number }
       - { name: player, type: player, optional: true }
   - path: bq_admin default
     description: Save/load the quest database to/from the pack defaults (load after pack update)
@@ -349,17 +330,16 @@ catalog:
   - path: thaumcraft research list
     description: List all research codes
   - path: thaumcraft aspect
-    description: Add research points for an aspect (or all)
+    description: Add research points for an aspect or all (aspect, then amount)
     params:
       - { name: player, type: player }
-      - { name: aspect, type: text }
-      - { name: amount, type: text }
+      - { name: aspect_and_amount, type: text }
   - path: tc warp
     description: Set or add warp; type empty = normal, TEMP, PERM
     params:
       - { name: player, type: player }
       - { name: action, type: choice, values: [set, add] }
-      - { name: value, type: text }
+      - { name: value, type: number }
       - { name: type, type: choice, values: [TEMP, PERM], optional: true }
 
   # --- Other mods ---
@@ -383,7 +363,7 @@ catalog:
     description: Teleport a player into a Personal Space dimension
     params:
       - { name: player, type: player }
-      - { name: dimension, type: text }
+      - { name: dimension, type: number }
       - { name: xyz, type: text, optional: true }
   - path: pspace give-portal
     description: Give a player a Personal Space portal bound to a dimension

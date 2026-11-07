@@ -45,7 +45,7 @@ catalog:
   - path: whitelist
     description: Toggle or reload the whitelist
     params:
-      - { name: action, type: choice, values: [on, off, reload] }
+      - { name: action, type: choice, values: ["on", "off", reload] }
   - path: kick
     description: Kick a player from the server
     params:
@@ -61,10 +61,9 @@ catalog:
     params:
       - { name: player, type: player }
   - path: ban-ip
-    description: Ban an IP address or the IP of an online player
+    description: Ban an IP address or the IP of an online player, optional reason after it
     params:
-      - { name: target, type: text }
-      - { name: reason, type: text, optional: true }
+      - { name: target_and_reason, type: text }
   - path: pardon-ip
     description: Unban an IP address
     params:
@@ -92,11 +91,10 @@ catalog:
       - { name: player, type: player }
       - { name: target, type: player }
   - path: give
-    description: Give an item to a player (item as namespaced id, e.g. minecraft:diamond)
+    description: Give an item to a player (namespaced id, e.g. minecraft:diamond, optional count after it)
     params:
       - { name: player, type: player }
-      - { name: item, type: text }
-      - { name: count, type: text, optional: true }
+      - { name: item_and_count, type: text }
   - path: clear
     description: Clear a player's inventory
     params:
@@ -109,7 +107,7 @@ catalog:
     description: Add experience to a player
     params:
       - { name: player, type: player }
-      - { name: amount, type: text }
+      - { name: amount, type: number }
       - { name: unit, type: choice, values: [points, levels], optional: true }
   - path: kill
     description: Kill a player
@@ -138,10 +136,9 @@ catalog:
     params:
       - { name: mode, type: choice, values: [survival, creative, adventure, spectator] }
   - path: gamerule
-    description: Set a game rule (e.g. keepInventory true)
+    description: Set or show a game rule (rule and optional value, e.g. keepInventory true)
     params:
-      - { name: rule, type: text }
-      - { name: value, type: text, optional: true }
+      - { name: rule_and_value, type: text }
   - path: setworldspawn
     description: Set the world spawn point
     params:
