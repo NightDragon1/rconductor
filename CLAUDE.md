@@ -3,7 +3,7 @@
 ## Projekt
 ShadowGhost.NET Game RCONductor (kurz RCONductor): selbst gehostetes Webpanel
 für RCON-fähige Spieleserver. Lizenz GNU AGPL-3.0.
-Das freigegebene Konzept (Version 2.0) liegt in docs/ und ist verbindlich.
+Das freigegebene Konzept liegt in docs/ und ist verbindlich; die gültige Version steht in der Kopfzeile von docs/01-gesamtkonzept.md.
 
 ## Verbindliche Dokumente
 - docs/01-gesamtkonzept.md  Anforderungen mit IDs, Rollen, Entscheidungen D-xxx, Releaseplan
