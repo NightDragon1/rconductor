@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, must } from '@/api/client';
 import { useServerGroups, useServers } from '@/api/servers';
@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePhone, useReveal } from '@/lib/phone';
 import { useShortcuts } from '@/lib/shortcuts';
-import { useUndo } from '@/lib/undo';
+import { useUndo, useUnsaved } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { reasonText } from '@/lib/admin';
 import { Card, Cards } from './Cards';
@@ -106,7 +106,7 @@ function GroupPanel({
   const { t } = useTranslation();
   const panel = useReveal<HTMLElement>();
   const qc = useQueryClient();
-  const { schedule } = useUndo();
+  const { saved } = useUndo();
   const users = useManagedUsers();
   const lists = useCommandLists(true);
   const servers = useServers();
@@ -117,7 +117,10 @@ function GroupPanel({
   const [conflict, setConflict] = useState(false);
   // The version of the last saved state goes along as If-Match (revision
   // 2.4 candidate 24).
-  const base = useRef(group);
+  const [base, setBase] = useState(group);
+  const body = (g: UserGroup) => JSON.stringify([g.command_list_id ?? '', g.members, g.grants]);
+  const dirty = body(draft) !== body(base);
+  useUnsaved(dirty);
   const groups = useUserGroups(true);
   const listId = useId();
 
@@ -129,43 +132,48 @@ function GroupPanel({
     (u) => !draft.members.includes(u.id) && (draft.kind !== 'moderator' || u.role === 'moderator'),
   );
 
-  const change = (next: UserGroup, label: string) => {
-    if (conflict) return;
-    setDraft(next);
-    schedule(
-      label,
-      async (keepalive) => {
-        const r = await outcome(group.id, async () => {
-          base.current = must(
-            await api.PATCH('/user-groups/{id}', {
-              params: { path: { id: group.id }, header: { 'If-Match': base.current.version } },
-              body: {
-                name: next.name,
-                command_list_id: next.command_list_id ?? '',
-                members: next.members,
-                grants: next.grants,
-              },
-              keepalive,
-            }),
-          );
-        });
-        if (r.reason === 'conflict') {
-          setConflict(true);
-          setMessage({ ok: false, text: t('admin.conflict') });
-          return;
-        }
-        setMessage(
-          r.ok
-            ? { ok: true, text: t('admin.saved') }
-            : { ok: false, text: reasonText(t, r.reason) },
-        );
-        if (!r.ok) setDraft(base.current);
-        void qc.invalidateQueries({ queryKey: userGroupsKey });
-      },
-      { key: `group:${group.id}`, onUndo: () => setDraft(base.current) },
+  // Edits change the draft; Save sends it at once (D-048).
+  const write = async (from: UserGroup, to: UserGroup) => {
+    let done = null as UserGroup | null;
+    const r = await outcome(group.id, async () => {
+      done = must(
+        await api.PATCH('/user-groups/{id}', {
+          params: { path: { id: group.id }, header: { 'If-Match': from.version } },
+          body: {
+            name: to.name,
+            command_list_id: to.command_list_id ?? '',
+            members: to.members,
+            grants: to.grants,
+          },
+        }),
+      );
+    });
+    if (r.reason === 'conflict') {
+      setConflict(true);
+      setMessage({ ok: false, text: t('admin.conflict') });
+      return null;
+    }
+    setMessage(
+      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
     );
+    if (done) {
+      setBase(done);
+      setDraft(done);
+    }
+    void qc.invalidateQueries({ queryKey: userGroupsKey });
+    return done;
   };
-  const label = t('groups.undo.changed', { name: draft.name });
+  const save = async () => {
+    const before = base;
+    const after = await write(before, draft);
+    if (after)
+      saved(t('groups.undo.changed', { name: after.name }), () => void write(after, before));
+  };
+  const change = (next: UserGroup) => {
+    if (conflict) return;
+    setMessage(null);
+    setDraft(next);
+  };
 
   return (
     <aside
@@ -195,9 +203,7 @@ function GroupPanel({
             className="h-11 rounded-md border border-control bg-surface px-3 disabled:opacity-70"
             disabled={readOnly}
             value={draft.command_list_id ?? ''}
-            onChange={(e) =>
-              change({ ...draft, command_list_id: e.target.value || undefined }, label)
-            }
+            onChange={(e) => change({ ...draft, command_list_id: e.target.value || undefined })}
           >
             <option value="">{t('groups.noList')}</option>
             {(lists.data ?? []).map((l) => (
@@ -217,14 +223,14 @@ function GroupPanel({
           onRemove={
             readOnly
               ? undefined
-              : (m) => change({ ...draft, members: draft.members.filter((x) => x !== m) }, label)
+              : (m) => change({ ...draft, members: draft.members.filter((x) => x !== m) })
           }
         />
         {!readOnly && (
           <Picker
             label={t('groups.addMember')}
             options={candidates.map((u) => ({ value: u.id, text: u.pseudonym }))}
-            onPick={(m) => change({ ...draft, members: [...draft.members, m] }, label)}
+            onPick={(m) => change({ ...draft, members: [...draft.members, m] })}
           />
         )}
       </section>
@@ -241,13 +247,10 @@ function GroupPanel({
             readOnly
               ? undefined
               : (k) =>
-                  change(
-                    {
-                      ...draft,
-                      grants: draft.grants.filter((g) => (g.server_id ?? g.server_group_id) !== k),
-                    },
-                    label,
-                  )
+                  change({
+                    ...draft,
+                    grants: draft.grants.filter((g) => (g.server_id ?? g.server_group_id) !== k),
+                  })
           }
         />
         {!readOnly && (
@@ -262,18 +265,13 @@ function GroupPanel({
                 .map((s) => ({ value: `s:${s.id}`, text: s.name })),
             ]}
             onPick={(v) =>
-              change(
-                {
-                  ...draft,
-                  grants: [
-                    ...draft.grants,
-                    v.startsWith('g:')
-                      ? { server_group_id: v.slice(2) }
-                      : { server_id: v.slice(2) },
-                  ],
-                },
-                label,
-              )
+              change({
+                ...draft,
+                grants: [
+                  ...draft.grants,
+                  v.startsWith('g:') ? { server_group_id: v.slice(2) } : { server_id: v.slice(2) },
+                ],
+              })
             }
           />
         )}
@@ -287,6 +285,11 @@ function GroupPanel({
           {message.text}
         </p>
       )}
+      {!readOnly && !conflict && (
+        <Button className="self-start" disabled={!dirty} onClick={() => void save()}>
+          {t('admin.save')}
+        </Button>
+      )}
       {conflict && (
         <Button
           variant="outline"
@@ -294,7 +297,7 @@ function GroupPanel({
           onClick={async () => {
             const fresh = (await groups.refetch()).data?.find((x) => x.id === group.id);
             if (fresh) {
-              base.current = fresh;
+              setBase(fresh);
               setDraft(fresh);
             }
             setConflict(false);
@@ -344,12 +347,13 @@ export function GroupsPage() {
   const lists = useCommandLists(true);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const { guard } = useUndo();
   const [name, setName] = useState('');
   const [kind, setKind] = useState<Kind>('moderator');
   const [error, setError] = useState('');
   const nameId = useId();
   const kindId = useId();
-  useShortcuts({ Escape: () => setOpen(null) });
+  useShortcuts({ Escape: () => guard(() => setOpen(null)) });
   const all = groups.data ?? [];
   const needle = q.trim().toLowerCase();
   const shown = all.filter((g) => !needle || g.name.toLowerCase().includes(needle));
@@ -435,7 +439,7 @@ export function GroupsPage() {
                 key={g.id}
                 title={<bdi>{g.name}</bdi>}
                 selected={open === g.id}
-                onOpen={() => setOpen(g.id)}
+                onOpen={() => guard(() => setOpen(g.id))}
                 facts={[
                   { label: t('groups.kindLabel'), value: t(`groups.kind.${g.kind}`) },
                   { label: t('groups.list'), value: <bdi>{listName(g.command_list_id)}</bdi> },
@@ -468,7 +472,7 @@ export function GroupsPage() {
                       <button
                         type="button"
                         className="hover:underline"
-                        onClick={() => setOpen(g.id)}
+                        onClick={() => guard(() => setOpen(g.id))}
                       >
                         <bdi>{g.name}</bdi>
                       </button>
@@ -497,7 +501,7 @@ export function GroupsPage() {
           key={current.id}
           group={current}
           readOnly={phone}
-          onClose={() => setOpen(null)}
+          onClose={() => guard(() => setOpen(null))}
         />
       )}
     </div>

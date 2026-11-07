@@ -86,7 +86,8 @@ export function ServerCard({
       aria-label={server.name}
       data-status={status}
       className={cn(
-        'flex min-w-0 flex-col gap-3 rounded-lg border border-l-4 border-border bg-surface p-4',
+        'relative flex min-w-0 flex-col gap-3 rounded-lg border border-l-4 border-border bg-surface p-4',
+        'hover:border-control hover:bg-surface-raised has-[a:focus-visible]:bg-surface-raised',
         edge[tone],
         status === 'stopped' && 'opacity-90',
       )}
@@ -97,7 +98,7 @@ export function ServerCard({
             <Link
               to="/servers/$serverId"
               params={{ serverId: server.id }}
-              className="tap max-w-full hover:underline"
+              className="tap max-w-full after:absolute after:inset-0 hover:underline"
               aria-label={t('card.open', { name: server.name })}
             >
               <bdi>{server.name}</bdi>

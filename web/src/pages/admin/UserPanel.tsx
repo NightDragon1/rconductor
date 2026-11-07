@@ -21,7 +21,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
 import { dateTime } from '@/lib/format';
 import { useReveal } from '@/lib/phone';
-import { useUndo } from '@/lib/undo';
+import { useUndo, useUnsaved } from '@/lib/undo';
 import { reasonText } from '@/lib/admin';
 
 function Chips({
@@ -117,8 +117,14 @@ export function UserPanel({
 }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
-  const { schedule } = useUndo();
+  const { saved } = useUndo();
   const a = useAssignments(user.id);
+  const [edits, setEdits] = useState<AssignmentsUpdate>({});
+  const [release, setRelease] = useState<boolean | null>(null);
+  const edit = (body: AssignmentsUpdate) => {
+    setMessage(null);
+    setEdits((e) => ({ ...e, ...body }));
+  };
   const [confirm, setConfirm] = useState<
     'role' | 'reset' | 'remove' | 'lock' | 'unlock' | 'sessions' | null
   >(null);
@@ -139,25 +145,52 @@ export function UserPanel({
     setMessage(r.ok ? { ok: true, text: done } : { ok: false, text: reasonText(t, r.reason) });
     refresh();
   };
-  // Changes that can be undone wait UNDO_MS (K3); keepalive lets them
-  // outlive the page when it goes away.
-  type Send = (keepalive?: boolean) => Promise<unknown>;
-  const later = (label: string, body: Send, done: string) =>
-    schedule(label, (keepalive) => report(() => body(keepalive), done));
+  type Send = () => Promise<unknown>;
   const put =
     (body: AssignmentsUpdate): Send =>
-    async (keepalive = false) =>
-      must(
-        await api.PUT('/users/{id}/assignments', {
-          params: { path: { id: user.id } },
-          body,
-          keepalive,
-        }),
-      );
+    async () =>
+      must(await api.PUT('/users/{id}/assignments', { params: { path: { id: user.id } }, body }));
   const patch =
     (body: { disabled?: boolean; supporters_allowed?: boolean; role?: Role }): Send =>
-    async (keepalive = false) =>
-      must(await api.PATCH('/users/{id}', { params: { path: { id: user.id } }, body, keepalive }));
+    async () =>
+      must(await api.PATCH('/users/{id}', { params: { path: { id: user.id } }, body }));
+
+  // Edits collect here; Save sends them at once, Undo the previous state
+  // (D-048). Sessions end except for the scope alone (D-044).
+  const pick = (from: AssignmentsUpdate, keys: (keyof AssignmentsUpdate)[]) =>
+    Object.fromEntries(keys.map((k) => [k, from[k]])) as AssignmentsUpdate;
+  const send = async (sections: AssignmentsUpdate, supporters?: boolean) => {
+    const r = await outcome(user.id, async () => {
+      if (Object.keys(sections).length > 0) await put(sections)();
+      if (supporters !== undefined) await patch({ supporters_allowed: supporters })();
+    });
+    setMessage(
+      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
+    );
+    refresh();
+    return r.ok;
+  };
+  const save = async () => {
+    if (!a.data) return;
+    const keys = Object.keys(edits) as (keyof AssignmentsUpdate)[];
+    const old = pick(a.data, keys);
+    const oldRelease = release === null ? undefined : user.supporters_allowed;
+    if (!(await send(edits, release ?? undefined))) return;
+    const ended = release !== null || keys.some((k) => k !== 'admin_scopes');
+    setEdits({});
+    setRelease(null);
+    saved(
+      t(ended ? 'admin.undo.sessionsEnded' : 'admin.undo.changed', { name: user.pseudonym }),
+      () => void send(old, oldRelease),
+    );
+  };
+  const unlock = async () => {
+    await report(patch({ disabled: false }), t('admin.saved'));
+    saved(
+      t('admin.undo.unlocked', { name: user.pseudonym }),
+      () => void report(patch({ disabled: true }), t('admin.saved')),
+    );
+  };
 
   const endSessions = () =>
     report(
@@ -166,7 +199,13 @@ export function UserPanel({
       t('admin.sessionsEnded'),
     );
 
-  const cur = a.data;
+  const cur = a.data && { ...a.data, ...edits };
+  const same = (k: keyof AssignmentsUpdate) =>
+    JSON.stringify(edits[k]) === JSON.stringify(a.data?.[k]);
+  const dirty =
+    (release !== null && release !== user.supporters_allowed) ||
+    (Object.keys(edits) as (keyof AssignmentsUpdate)[]).some((k) => !same(k));
+  useUnsaved(dirty);
   const groupName = (id: string) => groups.find((g) => g.id === id)?.name ?? id;
   const serverName = (id?: string) => servers.find((s) => s.id === id)?.name ?? id ?? '';
   const sgName = (id?: string) => serverGroups.find((g) => g.id === id)?.name ?? id ?? '';
@@ -247,14 +286,7 @@ export function UserPanel({
           label={t('admin.groups')}
           items={cur.groups.map((g) => ({ key: g, text: groupName(g) }))}
           onRemove={
-            readOnly
-              ? undefined
-              : (g) =>
-                  later(
-                    t('admin.undo.groupRemoved', { name: user.pseudonym }),
-                    put({ groups: cur.groups.filter((x) => x !== g) }),
-                    t('admin.saved'),
-                  )
+            readOnly ? undefined : (g) => edit({ groups: cur.groups.filter((x) => x !== g) })
           }
           add={
             readOnly
@@ -264,12 +296,7 @@ export function UserPanel({
                   options: groups
                     .filter((g) => !cur.groups.includes(g.id))
                     .map((g) => ({ value: g.id, text: g.name })),
-                  onAdd: (g) =>
-                    later(
-                      t('admin.undo.groupAdded', { name: user.pseudonym }),
-                      put({ groups: [...cur.groups, g] }),
-                      t('admin.saved'),
-                    ),
+                  onAdd: (g) => edit({ groups: [...cur.groups, g] }),
                 }
           }
         />
@@ -285,15 +312,11 @@ export function UserPanel({
           onRemove={
             callerRole === 'rcon_admin' && !readOnly
               ? (k) =>
-                  later(
-                    t('admin.undo.scopeChanged', { name: user.pseudonym }),
-                    put({
-                      admin_scopes: cur.admin_scopes.filter(
-                        (s) => (s.server_id ?? s.server_group_id) !== k,
-                      ),
-                    }),
-                    t('admin.saved'),
-                  )
+                  edit({
+                    admin_scopes: cur.admin_scopes.filter(
+                      (s) => (s.server_id ?? s.server_group_id) !== k,
+                    ),
+                  })
               : undefined
           }
           add={
@@ -308,11 +331,7 @@ export function UserPanel({
                     const target = v.startsWith('g:')
                       ? { server_group_id: v.slice(2) }
                       : { server_id: v.slice(2) };
-                    later(
-                      t('admin.undo.scopeChanged', { name: user.pseudonym }),
-                      put({ admin_scopes: [...cur.admin_scopes, target] }),
-                      t('admin.saved'),
-                    );
+                    edit({ admin_scopes: [...cur.admin_scopes, target] });
                   },
                 }
               : undefined
@@ -330,15 +349,8 @@ export function UserPanel({
             type="checkbox"
             className="size-5"
             disabled={readOnly}
-            checked={user.supporters_allowed}
-            onChange={(e) => {
-              const v = e.target.checked;
-              later(
-                t('admin.undo.release', { name: user.pseudonym }),
-                patch({ supporters_allowed: v }),
-                t('admin.saved'),
-              );
-            }}
+            checked={release ?? user.supporters_allowed}
+            onChange={(e) => setRelease(e.target.checked)}
           />
         </label>
       )}
@@ -372,15 +384,11 @@ export function UserPanel({
             readOnly
               ? undefined
               : (k) =>
-                  later(
-                    t('admin.undo.grantChanged', { name: user.pseudonym }),
-                    put({
-                      supporter_grants: cur.supporter_grants.filter(
-                        (g) => `${g.moderator_id}:${g.server_id}` !== k,
-                      ),
-                    }),
-                    t('admin.saved'),
-                  )
+                  edit({
+                    supporter_grants: cur.supporter_grants.filter(
+                      (g) => `${g.moderator_id}:${g.server_id}` !== k,
+                    ),
+                  })
           }
           add={
             callerRole === 'moderator' && callerId && !readOnly
@@ -395,16 +403,12 @@ export function UserPanel({
                     )
                     .map((s) => ({ value: s.id, text: s.name })),
                   onAdd: (sid) =>
-                    later(
-                      t('admin.undo.grantChanged', { name: user.pseudonym }),
-                      put({
-                        supporter_grants: [
-                          ...cur.supporter_grants,
-                          { moderator_id: callerId, server_id: sid },
-                        ],
-                      }),
-                      t('admin.saved'),
-                    ),
+                    edit({
+                      supporter_grants: [
+                        ...cur.supporter_grants,
+                        { moderator_id: callerId, server_id: sid },
+                      ],
+                    }),
                 }
               : undefined
           }
@@ -426,6 +430,27 @@ export function UserPanel({
         </p>
       )}
 
+      {!readOnly && (
+        <Button className="self-start" disabled={!dirty} onClick={() => void save()}>
+          {t('admin.save')}
+        </Button>
+      )}
+
+      <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm">
+        <span className="font-medium">{t('admin.locked')}</span>
+        <input
+          type="checkbox"
+          role="switch"
+          className="size-5 max-md:size-11"
+          checked={user.disabled}
+          onChange={() => {
+            if (!user.disabled) setConfirm('lock');
+            else if (readOnly) setConfirm('unlock');
+            else void unlock();
+          }}
+        />
+      </label>
+
       <div className="flex flex-wrap gap-2">
         {!readOnly && (
           <Button variant="outline" size="sm" onClick={() => onTemplate(user)}>
@@ -444,24 +469,6 @@ export function UserPanel({
             {t('admin.resetPassword')}
           </Button>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          className={user.disabled ? '' : 'border-danger text-danger'}
-          onClick={() =>
-            readOnly
-              ? setConfirm(user.disabled ? 'unlock' : 'lock')
-              : later(
-                  t(user.disabled ? 'admin.undo.unlocked' : 'admin.undo.locked', {
-                    name: user.pseudonym,
-                  }),
-                  patch({ disabled: !user.disabled }),
-                  t('admin.saved'),
-                )
-          }
-        >
-          {t(user.disabled ? 'admin.unlock' : 'admin.lock')}
-        </Button>
         {!readOnly && (
           <Button
             variant="outline"

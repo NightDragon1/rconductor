@@ -182,6 +182,7 @@ func TestEvictionRules(t *testing.T) {
 // other addresses cannot wipe the failures of an attacker.
 func TestR1B2FloodKeepsRunningCounters(t *testing.T) {
 	f := newSessionFixture(t, true)
+	f.svc.minTracked = 1
 	if _, err := f.st.DB.ExecContext(context.Background(), `UPDATE settings SET value = '60' WHERE key = ?`, SettingMaxTracked); err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +231,7 @@ func attempt(t *testing.T, th *throttle, name string, ip netip.Addr, at time.Tim
 	}
 	now := func() time.Time { return at }
 	sleep := func(context.Context, time.Duration) error { return nil }
-	if _, turn, err := th.wait(t.Context(), tk.place, name, sleep, now, lim.lockout); err != nil || !turn {
+	if _, turn, err := th.wait(t.Context(), tk.place, name, sleep, now, lim.lockout, overflowGap); err != nil || !turn {
 		t.Fatalf("wait = %v, %v", turn, err)
 	}
 	th.fail(name, ip, at, lim, tk)
@@ -321,7 +322,7 @@ func TestR4B3RunningAttemptsCountInLine(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if _, turn, err := th.wait(t.Context(), tk.place, name, sleep, clock, time.Hour); err != nil || !turn {
+		if _, turn, err := th.wait(t.Context(), tk.place, name, sleep, clock, time.Hour, overflowGap); err != nil || !turn {
 			t.Fatalf("wait = %v, %v", turn, err)
 		}
 		running++ // no result yet: neither fail nor release
@@ -373,7 +374,7 @@ func TestR4B3PairOnTheLine(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if _, turn, err := th.wait(t.Context(), tk.place, "victim", sleep, clock, time.Hour); err != nil || !turn {
+		if _, turn, err := th.wait(t.Context(), tk.place, "victim", sleep, clock, time.Hour, overflowGap); err != nil || !turn {
 			t.Fatalf("wait = %v, %v", turn, err)
 		}
 		total++
@@ -517,6 +518,7 @@ func fullFixture(t *testing.T) *sessionFixture {
 	f := newSessionFixture(t, true)
 	f.user(t, storetest.User{Pseudonym: "Mod"})
 	f.svc.throttle = fullTable(f.now)
+	f.svc.minTracked = 1
 	if _, err := f.st.DB.ExecContext(context.Background(), `UPDATE settings SET value = '9' WHERE key = ?`, SettingMaxTracked); err != nil {
 		t.Fatal(err)
 	}
@@ -603,14 +605,14 @@ func TestHangUpInLine(t *testing.T) {
 	cancel()
 	sleep := func(context.Context, time.Duration) error { return nil }
 	clock := func() time.Time { return now }
-	if _, _, err := th.wait(ctx, second.place, "b", sleep, clock, time.Hour); !errors.Is(err, context.Canceled) {
+	if _, _, err := th.wait(ctx, second.place, "b", sleep, clock, time.Hour, overflowGap); !errors.Is(err, context.Canceled) {
 		t.Fatalf("wait in line = %v", err)
 	}
 	if n := len(th.line); n != 0 {
 		t.Errorf("%d places left", n)
 	}
 	// The first has the turn and hangs up; either way it hands the turn on.
-	_, _, _ = th.wait(ctx, first.place, "a", sleep, clock, time.Hour)
+	_, _, _ = th.wait(ctx, first.place, "a", sleep, clock, time.Hour, overflowGap)
 	if th.turnTaken {
 		t.Error("the turn stayed taken")
 	}

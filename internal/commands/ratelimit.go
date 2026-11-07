@@ -29,7 +29,8 @@ type bucket struct {
 
 type bucketKey struct{ user, server string }
 
-// maxBuckets bounds the memory; buckets that are full again are dropped.
+// maxBuckets is where pruning starts: buckets that are full again go. What
+// stays is bounded by users times servers, and none of them loses its count.
 const maxBuckets = 10000
 
 // limiter holds one bucket per user and server (CMD-019).
@@ -50,7 +51,7 @@ func (l *limiter) take(user, server string, lim Limit, now time.Time) (bool, tim
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if len(l.buckets) >= maxBuckets {
-		l.prune(now, rate)
+		l.prune(now, rate, float64(lim.Burst))
 	}
 	k := bucketKey{user, server}
 	b := l.buckets[k]
@@ -67,9 +68,9 @@ func (l *limiter) take(user, server string, lim Limit, now time.Time) (bool, tim
 	return false, time.Duration((1 - b.tokens) / rate * float64(time.Second))
 }
 
-func (l *limiter) prune(now time.Time, rate float64) {
+func (l *limiter) prune(now time.Time, rate, burst float64) {
 	for k, b := range l.buckets {
-		if now.Sub(b.last).Seconds()*rate >= float64(maxBuckets) || now.Sub(b.last) > time.Hour {
+		if b.tokens+now.Sub(b.last).Seconds()*rate >= burst || now.Sub(b.last) > time.Hour {
 			delete(l.buckets, k)
 		}
 	}

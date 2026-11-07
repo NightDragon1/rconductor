@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { bufferOwner } from '@/lib/console';
 import { cn } from '@/lib/utils';
-import { applyTheme, storedTheme } from '@/lib/theme';
+import { applyTheme, storedTheme, themes } from '@/lib/theme';
 import { adminNav, mainNav, type NavEntry } from '@/nav';
 
 const collapsedKey = 'rcd.nav.collapsed';
@@ -232,10 +232,10 @@ function UserBlock({ collapsed }: { collapsed: boolean }) {
       <Button
         variant="ghost"
         size="icon"
-        aria-label={t('nav.theme')}
-        title={t('nav.theme')}
+        aria-label={t('nav.theme', { design: t(`nav.design.${theme}`) })}
+        title={t('nav.theme', { design: t(`nav.design.${theme}`) })}
         onClick={() => {
-          const next = theme === 'dark' ? 'light' : 'dark';
+          const next = themes[(themes.indexOf(theme) + 1) % themes.length] ?? 'auto';
           applyTheme(next);
           setTheme(next);
         }}

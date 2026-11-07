@@ -5,7 +5,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { setNonce } from 'get-nonce';
 import { initI18n } from '@/i18n';
-import { applyTheme, storedTheme } from '@/lib/theme';
+import { startTheme } from '@/lib/theme';
 import { makeRouter } from '@/router';
 import './index.css';
 
@@ -13,7 +13,7 @@ import './index.css';
 // need one to lock scrolling.
 const nonce = document.querySelector<HTMLMetaElement>('meta[name="rcd-style-nonce"]')?.content;
 if (nonce) setNonce(nonce);
-applyTheme(storedTheme());
+startTheme();
 initI18n();
 const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false } },

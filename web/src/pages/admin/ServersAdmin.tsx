@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, must } from '@/api/client';
 import {
@@ -25,7 +25,7 @@ import { stripCodes } from '@/lib/serverpage';
 import { cardStatus } from '@/lib/status';
 import { usePhone, useReveal } from '@/lib/phone';
 import { useShortcuts } from '@/lib/shortcuts';
-import { useUndo } from '@/lib/undo';
+import { useUndo, useUnsaved } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
@@ -98,11 +98,11 @@ function ServerPanel({
   canEdit: boolean;
   canSeeAgents: boolean;
   onClose: () => void;
-  onCreated: (id: string) => void;
+  onCreated: () => void;
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { schedule } = useUndo();
+  const { saved } = useUndo();
   const profiles = useProfiles();
   const agents = useAgents(canSeeAgents);
   const panel = useReveal<HTMLElement>();
@@ -111,7 +111,8 @@ function ServerPanel({
   const [conflict, setConflict] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const base = useRef(server);
+  const [base, setBase] = useState(server);
+  useUnsaved(JSON.stringify(d) !== JSON.stringify(draftOf(base)));
   const containers = useQuery({
     queryKey: ['agent-containers', d.agent_id],
     queryFn: async () =>
@@ -119,16 +120,17 @@ function ServerPanel({
     enabled: canSeeAgents && !!d.agent_id,
   });
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
-  const body = () => ({
-    name: d.name.trim(),
-    profile_id: d.profile_id || undefined,
-    host: d.host.trim(),
-    port: d.port ? Number(d.port) : undefined,
-    password: d.password || undefined,
-    agent_id: d.agent_id,
-    container_name: d.agent_id ? d.container_name : '',
-    game_ports: d.ownPorts ? d.game_ports : [],
+  const bodyOf = (x: Draft) => ({
+    name: x.name.trim(),
+    profile_id: x.profile_id || undefined,
+    host: x.host.trim(),
+    port: x.port ? Number(x.port) : undefined,
+    password: x.password || undefined,
+    agent_id: x.agent_id,
+    container_name: x.agent_id ? x.container_name : '',
+    game_ports: x.ownPorts ? x.game_ports : [],
   });
+  const body = () => bodyOf(d);
 
   // Tests what is in the form without saving it (SRV-007).
   const testConnection = async () => {
@@ -156,44 +158,52 @@ function ServerPanel({
     if (!server) {
       void (async () => {
         const r = await outcome('new', async () => {
-          const s = must(await api.POST('/servers', { body: body() }));
-          onCreated(s.id);
+          must(await api.POST('/servers', { body: body() }));
+          onCreated();
         });
         void qc.invalidateQueries({ queryKey: serversKey });
         if (!r.ok) setMessage({ ok: false, text: reasonText(t, r.reason) });
       })();
       return;
     }
-    const next = body();
-    schedule(
-      t('servers.undo.changed', { name: server.name }),
-      async (keepalive) => {
-        const r = await outcome(server.id, async () => {
-          base.current = must(
-            await api.PATCH('/servers/{id}', {
-              params: {
-                path: { id: server.id },
-                header: { 'If-Match': base.current?.version ?? '' },
-              },
-              body: next,
-              keepalive,
-            }),
-          );
-        });
-        if (r.reason === 'conflict') {
-          setConflict(true);
-          setMessage({ ok: false, text: t('admin.conflict') });
-          return;
-        }
-        setMessage(
-          r.ok
-            ? { ok: true, text: t('admin.saved') }
-            : { ok: false, text: reasonText(t, r.reason) },
-        );
-        void qc.invalidateQueries({ queryKey: serversKey });
-      },
-      { key: `server:${server.id}`, onUndo: () => setD(draftOf(base.current)) },
+    void change(server);
+  };
+  // Save goes out at once; Undo sends the previous state, but never for
+  // host, port or password: the old password is not known here (D-048).
+  const write = async (id: string, from: Server, next: Draft) => {
+    let done = null as Server | null;
+    const r = await outcome(id, async () => {
+      done = must(
+        await api.PATCH('/servers/{id}', {
+          params: { path: { id }, header: { 'If-Match': from.version } },
+          body: bodyOf(next),
+        }),
+      );
+    });
+    if (r.reason === 'conflict') {
+      setConflict(true);
+      setMessage({ ok: false, text: t('admin.conflict') });
+      return null;
+    }
+    setMessage(
+      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
     );
+    if (done) {
+      setBase(done);
+      setD(draftOf(done));
+    }
+    void qc.invalidateQueries({ queryKey: serversKey });
+    return done;
+  };
+  const change = async (s: Server) => {
+    const before = base ?? s;
+    const old = draftOf(before);
+    const credentials = !!d.password || d.host.trim() !== old.host || d.port !== old.port;
+    const after = await write(s.id, before, d);
+    if (!after) return;
+    const label = t('servers.undo.changed', { name: after.name });
+    if (credentials) saved(label);
+    else saved(label, () => void write(s.id, after, old));
   };
 
   const off = !canEdit || conflict;
@@ -448,7 +458,7 @@ function ServerPanel({
                       queryFn: async () => must(await api.GET('/servers')).items,
                     })
                   ).find((s) => s.id === server?.id);
-                  base.current = fresh;
+                  setBase(fresh);
                   setD(draftOf(fresh));
                   setConflict(false);
                   setMessage(null);
@@ -507,46 +517,56 @@ function GroupPanel({
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { schedule } = useUndo();
+  const { saved } = useUndo();
   const panel = useReveal<HTMLElement>();
   const [draft, setDraft] = useState(group);
   const [message, setMessage] = useState<Message>(null);
   const [conflict, setConflict] = useState(false);
   const [removing, setRemoving] = useState(false);
-  const base = useRef(group);
+  const [base, setBase] = useState(group);
+  const dirty = JSON.stringify(draft.server_ids) !== JSON.stringify(base.server_ids);
+  useUnsaved(dirty);
   const pickId = useId();
   const name = (id: string) => servers.find((s) => s.id === id)?.name ?? id;
 
+  // Edits change the draft; Save sends it at once (D-048).
+  const write = async (from: ServerGroup, to: ServerGroup) => {
+    let done = null as ServerGroup | null;
+    const r = await outcome(group.id, async () => {
+      done = must(
+        await api.PATCH('/server-groups/{id}', {
+          params: { path: { id: group.id }, header: { 'If-Match': from.version } },
+          body: { name: to.name, server_ids: to.server_ids },
+        }),
+      );
+    });
+    if (r.reason === 'conflict') {
+      setConflict(true);
+      setMessage({ ok: false, text: t('admin.conflict') });
+      return null;
+    }
+    setMessage(
+      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
+    );
+    if (done) {
+      setBase(done);
+      setDraft(done);
+    }
+    void qc.invalidateQueries({ queryKey: serverGroupsKey });
+    void qc.invalidateQueries({ queryKey: serversKey });
+    return done;
+  };
+  const save = async () => {
+    const before = base;
+    const after = await write(before, draft);
+    if (after) {
+      saved(t('servers.undo.groupChanged', { name: after.name }), () => void write(after, before));
+    }
+  };
   const change = (next: ServerGroup) => {
     if (conflict) return;
+    setMessage(null);
     setDraft(next);
-    schedule(
-      t('servers.undo.groupChanged', { name: group.name }),
-      async (keepalive) => {
-        const r = await outcome(group.id, async () => {
-          base.current = must(
-            await api.PATCH('/server-groups/{id}', {
-              params: { path: { id: group.id }, header: { 'If-Match': base.current.version } },
-              body: { name: next.name, server_ids: next.server_ids },
-              keepalive,
-            }),
-          );
-        });
-        if (r.reason === 'conflict') {
-          setConflict(true);
-          setMessage({ ok: false, text: t('admin.conflict') });
-          return;
-        }
-        setMessage(
-          r.ok
-            ? { ok: true, text: t('admin.saved') }
-            : { ok: false, text: reasonText(t, r.reason) },
-        );
-        void qc.invalidateQueries({ queryKey: serverGroupsKey });
-        void qc.invalidateQueries({ queryKey: serversKey });
-      },
-      { key: `server-group:${group.id}`, onUndo: () => setDraft(base.current) },
-    );
   };
 
   return (
@@ -620,13 +640,18 @@ function GroupPanel({
             const fresh = must(
               await api.GET('/server-groups/{id}', { params: { path: { id: group.id } } }),
             );
-            base.current = fresh;
+            setBase(fresh);
             setDraft(fresh);
             setConflict(false);
             setMessage(null);
           }}
         >
           {t('admin.reload')}
+        </Button>
+      )}
+      {canEdit && !conflict && (
+        <Button className="self-start" disabled={!dirty} onClick={() => void save()}>
+          {t('admin.save')}
         </Button>
       )}
       {canEdit && (
@@ -672,11 +697,12 @@ export function ServersAdminPage() {
   const groups = useServerGroups(true);
   const profiles = useProfiles();
   const [open, setOpen] = useState<{ kind: 'server' | 'group'; id: string } | null>(null);
+  const { guard } = useUndo();
   const [groupName, setGroupName] = useState('');
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const groupNameId = useId();
-  useShortcuts({ Escape: () => setOpen(null) });
+  useShortcuts({ Escape: () => guard(() => setOpen(null)) });
   const all = servers.data ?? [];
   const needle = q.trim().toLowerCase();
   const shown = all.filter(
@@ -722,7 +748,7 @@ export function ServersAdminPage() {
             </p>
           </div>
           {canEdit && (
-            <Button onClick={() => setOpen({ kind: 'server', id: 'new' })}>
+            <Button onClick={() => guard(() => setOpen({ kind: 'server', id: 'new' }))}>
               {t('servers.new')}
             </Button>
           )}
@@ -747,7 +773,7 @@ export function ServersAdminPage() {
                 mono
                 title={<bdi>{s.name}</bdi>}
                 selected={open?.id === s.id}
-                onOpen={() => setOpen({ kind: 'server', id: s.id })}
+                onOpen={() => guard(() => setOpen({ kind: 'server', id: s.id }))}
                 facts={[
                   { label: t('admin.statusLabel'), value: t(`status.${cardStatus(s)}`) },
                   { label: t('servers.profile'), value: profileName(s.profile_id) },
@@ -783,7 +809,7 @@ export function ServersAdminPage() {
                       <button
                         type="button"
                         className="font-mono hover:underline"
-                        onClick={() => setOpen({ kind: 'server', id: s.id })}
+                        onClick={() => guard(() => setOpen({ kind: 'server', id: s.id }))}
                       >
                         <bdi>{s.name}</bdi>
                       </button>
@@ -846,7 +872,7 @@ export function ServersAdminPage() {
                   mono
                   title={<bdi className="uppercase">{g.name}</bdi>}
                   selected={open?.id === g.id}
-                  onOpen={() => setOpen({ kind: 'group', id: g.id })}
+                  onOpen={() => guard(() => setOpen({ kind: 'group', id: g.id }))}
                   facts={[
                     {
                       label: t('nav.servers'),
@@ -879,7 +905,7 @@ export function ServersAdminPage() {
                         <button
                           type="button"
                           className="font-mono uppercase hover:underline"
-                          onClick={() => setOpen({ kind: 'group', id: g.id })}
+                          onClick={() => guard(() => setOpen({ kind: 'group', id: g.id }))}
                         >
                           <bdi>{g.name}</bdi>
                         </button>
@@ -911,8 +937,8 @@ export function ServersAdminPage() {
           server={current}
           canEdit={canEdit}
           canSeeAgents={canSeeAgents}
-          onClose={() => setOpen(null)}
-          onCreated={(id) => setOpen({ kind: 'server', id })}
+          onClose={() => guard(() => setOpen(null))}
+          onCreated={() => setOpen(null)}
         />
       )}
       {currentGroup && (
@@ -921,7 +947,7 @@ export function ServersAdminPage() {
           group={currentGroup}
           canEdit={canEdit}
           servers={all}
-          onClose={() => setOpen(null)}
+          onClose={() => guard(() => setOpen(null))}
         />
       )}
     </div>

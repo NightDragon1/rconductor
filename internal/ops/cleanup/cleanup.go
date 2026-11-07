@@ -32,7 +32,7 @@ func Run(ctx context.Context, st *store.Store, log *slog.Logger, now time.Time) 
 	q := st.Queries
 	var res Result
 	days := users.DefaultAuditRetentionDays
-	if err := st.GlobalSetting(ctx, users.SettingAuditRetentionDays, &days); err != nil || days < 1 {
+	if err := st.GlobalSetting(ctx, users.SettingAuditRetentionDays, &days); err != nil || days < users.MinAuditRetentionDays {
 		days = users.DefaultAuditRetentionDays
 	}
 	idle := auth.DefaultIdleTimeout

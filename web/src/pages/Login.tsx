@@ -7,6 +7,7 @@ import { api } from '@/api/client';
 import { sessionKey } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { PasswordInput } from '@/components/PasswordInput';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -46,13 +47,7 @@ export function LoginPage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="password">{t('login.password')}</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
+            <PasswordInput id="password" name="password" autoComplete="current-password" required />
           </div>
           {error && (
             <p role="alert" className="text-sm text-danger">

@@ -16,6 +16,8 @@
     "busy": "The panel is busy. Please try again in a moment."
   },
   "password": {
+    "show": "Show password",
+    "hide": "Hide password",
     "title": "Choose a new password",
     "explain": "You signed in with a temporary password. Choose your own password to continue.",
     "current": "Current password",
@@ -28,7 +30,12 @@
   },
   "nav": {
     "logout": "Sign out",
-    "theme": "Switch between dark and light design",
+    "theme": "Design: {{design}}. Change it",
+    "design": {
+      "auto": "like the system",
+      "light": "light",
+      "dark": "dark"
+    },
     "label": "Main navigation",
     "menu": "Menu",
     "collapse": "Collapse",
@@ -301,12 +308,19 @@
   },
   "undo": {
     "undo": "Undo",
-    "seconds": "{{s}} s"
+    "seconds": "{{s}} s",
+    "saved": "Saved: {{what}}",
+    "leaveTitle": "Leave without saving?",
+    "leaveText": "Your changes here are not saved yet and will be lost.",
+    "leave": "Discard changes"
   },
   "admin": {
+    "save": "Save",
     "phoneReadOnly": "Read-only on a phone. Use a larger screen to make changes.",
     "phoneReadOnlyUsers": "Read-only on a phone, apart from locking, unlocking and ending sessions. Use a larger screen for other changes.",
+    "locked": "Locked",
     "lockTitle": "Lock {{name}}?",
+    "lockManyTitle": "Lock {{count}} users?",
     "lockText": "This user can no longer sign in and open sessions end.",
     "unlockTitle": "Unlock {{name}}?",
     "unlockText": "This user can sign in again.",
@@ -395,13 +409,9 @@
     "changeRole": "Change role",
     "saved": "Saved.",
     "undo": {
-      "locked": "{{name}} locked",
       "unlocked": "{{name}} unlocked",
-      "groupAdded": "Group added to {{name}}",
-      "groupRemoved": "Group removed from {{name}}",
-      "scopeChanged": "Scope of {{name}} changed",
-      "release": "Supporter release of {{name}} changed",
-      "grantChanged": "Servers of {{name}} changed",
+      "changed": "assignments of {{name}}",
+      "sessionsEnded": "assignments of {{name}}. The sessions of this user ended; Undo brings back the rights, not the sessions",
       "bulk": "{{action}}: {{count}} users"
     },
     "invite": {
@@ -572,6 +582,7 @@
     "searchLabel": "Search agents"
   },
   "settings": {
+    "showHelp": "Show explanations",
     "explain": "Global settings of the panel (Design 5.6). Changes wait a few seconds for Undo.",
     "save_one": "Save {{count}} change",
     "save_other": "Save {{count}} changes",
@@ -623,6 +634,14 @@
       "login_max_client_failures": {
         "label": "Failed sign-ins per address",
         "help": "Failures from one address, over all names, before it is locked. People behind one address share this count."
+      },
+      "login_overflow_gap": {
+        "label": "Waiting line: time per turn",
+        "help": "With a full table sign-ins go one by one; this is the time between two of them."
+      },
+      "login_overflow_line": {
+        "label": "Waiting line: places",
+        "help": "How many sign-ins may wait at once when the table is full."
       },
       "login_max_tracked": {
         "label": "Sign-in counters in memory",

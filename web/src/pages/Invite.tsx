@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { PasswordInput } from '@/components/PasswordInput';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -81,23 +82,11 @@ export function InvitePage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="password">{t('login.password')}</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                />
+                <PasswordInput id="password" name="password" autoComplete="new-password" required />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="repeat">{t('password.repeat')}</Label>
-                <Input
-                  id="repeat"
-                  name="repeat"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                />
+                <PasswordInput id="repeat" name="repeat" autoComplete="new-password" required />
               </div>
               {error && (
                 <p role="alert" className="text-sm text-danger">

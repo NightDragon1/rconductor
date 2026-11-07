@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, must } from '@/api/client';
 import { useProfiles } from '@/api/servers';
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePhone, useReveal } from '@/lib/phone';
 import { useShortcuts } from '@/lib/shortcuts';
-import { useUndo } from '@/lib/undo';
+import { useUndo, useUnsaved } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { lockedOk, reasonText } from '@/lib/admin';
 import { Card, Cards } from './Cards';
@@ -29,7 +29,7 @@ function ListPanel({
   const { t } = useTranslation();
   const panel = useReveal<HTMLElement>();
   const qc = useQueryClient();
-  const { schedule } = useUndo();
+  const { saved } = useUndo();
   const profiles = useProfiles();
   const lists = useCommandLists(true);
   const [draft, setDraft] = useState<CommandList>(list);
@@ -37,61 +37,59 @@ function ListPanel({
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [removing, setRemoving] = useState(false);
   const [conflict, setConflict] = useState(false);
-  // The version of the last saved state goes along as If-Match (revision
-  // 2.4 candidate 24).
-  const base = useRef(list);
+  const [base, setBase] = useState(list);
+  const dirty = JSON.stringify(draft.entries) !== JSON.stringify(base.entries);
+  useUnsaved(dirty);
   const pathId = useId();
   const catalogId = useId();
   const catalog = [
     ...new Set((profiles.data ?? []).flatMap((p) => p.catalog.map((c) => c.path))),
   ].sort();
 
-  // Edits change the draft at once and save it as a whole after the undo
-  // time; undo goes back to the saved list.
-  const change = (next: CommandList, label: string) => {
+  // Edits change the draft; Save sends it as a whole at once (D-048). The
+  // version goes along as If-Match (revision 2.4 candidate 24).
+  const write = async (from: CommandList, to: CommandList) => {
+    let done = null as CommandList | null;
+    const r = await outcome(list.id, async () => {
+      done = must(
+        await api.PATCH('/command-lists/{id}', {
+          params: { path: { id: list.id }, header: { 'If-Match': from.version } },
+          body: { name: to.name, entries: to.entries },
+        }),
+      );
+    });
+    if (r.reason === 'conflict') {
+      setConflict(true);
+      setMessage({ ok: false, text: t('admin.conflict') });
+      return null;
+    }
+    setMessage(
+      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
+    );
+    if (done) {
+      setBase(done);
+      setDraft(done);
+    }
+    void qc.invalidateQueries({ queryKey: commandListsKey });
+    return done;
+  };
+  const save = async () => {
+    const before = base;
+    const after = await write(before, draft);
+    if (after)
+      saved(t('lists.undo.changed', { name: after.name }), () => void write(after, before));
+  };
+  const change = (next: CommandList) => {
     if (conflict) return;
     setDraft(next);
-    if (!lockedOk(next.entries)) {
-      setMessage({ ok: false, text: t('lists.oneLocked') });
-      return;
-    }
-    setMessage(null);
-    schedule(
-      label,
-      async (keepalive) => {
-        const r = await outcome(list.id, async () => {
-          base.current = must(
-            await api.PATCH('/command-lists/{id}', {
-              params: { path: { id: list.id }, header: { 'If-Match': base.current.version } },
-              body: { name: next.name, entries: next.entries },
-              keepalive,
-            }),
-          );
-        });
-        if (r.reason === 'conflict') {
-          setConflict(true);
-          setMessage({ ok: false, text: t('admin.conflict') });
-          return;
-        }
-        setMessage(
-          r.ok
-            ? { ok: true, text: t('admin.saved') }
-            : { ok: false, text: reasonText(t, r.reason) },
-        );
-        void qc.invalidateQueries({ queryKey: commandListsKey });
-      },
-      { key: `list:${list.id}`, onUndo: () => setDraft(base.current) },
-    );
+    setMessage(lockedOk(next.entries) ? null : { ok: false, text: t('lists.oneLocked') });
   };
   const add = (e: FormEvent) => {
     e.preventDefault();
     const p = path.trim().replace(/\s+/g, ' ');
     if (!p || draft.entries.some((x) => x.path === p)) return;
     setPath('');
-    change(
-      { ...draft, entries: [...draft.entries, { path: p, passable: false }] },
-      t('lists.undo.changed', { name: draft.name }),
-    );
+    change({ ...draft, entries: [...draft.entries, { path: p, passable: false }] });
   };
 
   return (
@@ -144,15 +142,12 @@ function ListPanel({
                     disabled={readOnly}
                     checked={e.passable}
                     onChange={(ev) =>
-                      change(
-                        {
-                          ...draft,
-                          entries: draft.entries.map((x, j) =>
-                            j === i ? { ...x, passable: ev.target.checked } : x,
-                          ),
-                        },
-                        t('lists.undo.changed', { name: draft.name }),
-                      )
+                      change({
+                        ...draft,
+                        entries: draft.entries.map((x, j) =>
+                          j === i ? { ...x, passable: ev.target.checked } : x,
+                        ),
+                      })
                     }
                   />
                 </td>
@@ -163,10 +158,7 @@ function ListPanel({
                       className="text-muted hover:text-danger"
                       aria-label={t('admin.removeItem', { name: e.path })}
                       onClick={() =>
-                        change(
-                          { ...draft, entries: draft.entries.filter((_, j) => j !== i) },
-                          t('lists.undo.changed', { name: draft.name }),
-                        )
+                        change({ ...draft, entries: draft.entries.filter((_, j) => j !== i) })
                       }
                     >
                       <X aria-hidden className="size-4" />
@@ -210,6 +202,15 @@ function ListPanel({
           {message.text}
         </p>
       )}
+      {!readOnly && !conflict && (
+        <Button
+          className="self-start"
+          disabled={!dirty || !lockedOk(draft.entries)}
+          onClick={() => void save()}
+        >
+          {t('admin.save')}
+        </Button>
+      )}
       {conflict && (
         <Button
           variant="outline"
@@ -217,7 +218,7 @@ function ListPanel({
           onClick={async () => {
             const fresh = (await lists.refetch()).data?.find((x) => x.id === list.id);
             if (fresh) {
-              base.current = fresh;
+              setBase(fresh);
               setDraft(fresh);
             }
             setConflict(false);
@@ -266,10 +267,11 @@ export function CommandListsPage() {
   const lists = useCommandLists(true);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const { guard } = useUndo();
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const nameId = useId();
-  useShortcuts({ Escape: () => setOpen(null) });
+  useShortcuts({ Escape: () => guard(() => setOpen(null)) });
   const all = lists.data ?? [];
   const needle = q.trim().toLowerCase();
   const shown = all.filter(
@@ -346,7 +348,7 @@ export function CommandListsPage() {
                 key={l.id}
                 title={<bdi>{l.name}</bdi>}
                 selected={open === l.id}
-                onOpen={() => setOpen(l.id)}
+                onOpen={() => guard(() => setOpen(l.id))}
                 facts={[
                   {
                     label: t('lists.entries'),
@@ -384,7 +386,7 @@ export function CommandListsPage() {
                       <button
                         type="button"
                         className="hover:underline"
-                        onClick={() => setOpen(l.id)}
+                        onClick={() => guard(() => setOpen(l.id))}
                       >
                         <bdi>{l.name}</bdi>
                       </button>
@@ -412,7 +414,12 @@ export function CommandListsPage() {
         )}
       </div>
       {current && (
-        <ListPanel key={current.id} list={current} readOnly={phone} onClose={() => setOpen(null)} />
+        <ListPanel
+          key={current.id}
+          list={current}
+          readOnly={phone}
+          onClose={() => guard(() => setOpen(null))}
+        />
       )}
     </div>
   );

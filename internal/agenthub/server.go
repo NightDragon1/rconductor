@@ -95,10 +95,20 @@ type Options struct {
 	Registry Registry
 	// Throttle bounds connection attempts per source address.
 	Throttle ThrottleOptions
+	// MaxConnections and MaxClientConnections bound the open connections
+	// in all and per client; zero takes the default.
+	MaxConnections, MaxClientConnections int
 	// Ping overrides PingInterval, for tests.
 	Ping time.Duration
 	// HelloTimeout overrides the 10 s for the hello, for tests.
 	HelloTimeout time.Duration
+}
+
+func orDefault(v, def int) int {
+	if v > 0 {
+		return v
+	}
+	return def
 }
 
 // Hub runs the agent port.
@@ -109,6 +119,8 @@ type Hub struct {
 	throttle *throttle
 	ping     time.Duration
 	hello    time.Duration
+	// maxConns and maxClientConns bound the agent port.
+	maxConns, maxClientConns int
 
 	mu       sync.Mutex
 	sessions map[string]*Session
@@ -163,6 +175,7 @@ func New(id *keys.Identity, log *slog.Logger, opts Options) *Hub {
 	}
 	return &Hub{
 		id: id, log: log, registry: opts.Registry, throttle: newThrottle(opts.Throttle), ping: opts.Ping, hello: opts.HelloTimeout,
+		maxConns: orDefault(opts.MaxConnections, maxAgentConns), maxClientConns: orDefault(opts.MaxClientConnections, maxAgentConnsPerClient),
 		sessions: map[string]*Session{},
 	}
 }
@@ -182,7 +195,7 @@ func (h *Hub) Serve(ctx context.Context, addr string, ready func(net.Addr)) erro
 	if err != nil {
 		return err
 	}
-	tl := newHandshakeListener(ctx, netlimit.New(ln, netlimit.Options{Max: maxAgentConns, PerClient: maxAgentConnsPerClient, Log: h.log}), cfg, h)
+	tl := newHandshakeListener(ctx, netlimit.New(ln, netlimit.Options{Max: h.maxConns, PerClient: h.maxClientConns, Log: h.log}), cfg, h)
 	mux := http.NewServeMux()
 	mux.HandleFunc(agentproto.Path, h.handle)
 	srv := &http.Server{
