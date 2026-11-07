@@ -236,6 +236,14 @@ func (s *Service) UpdateCommandList(ctx context.Context, req Request, id string,
 	if n == 0 {
 		return CommandList{}, ErrConflict
 	}
+	// Compared with the list of the version the caller read, in the
+	// transaction (B11-1).
+	if l, err = q.GetCommandList(ctx, id); err != nil {
+		return CommandList{}, err
+	}
+	if name == nil {
+		newName = l.Name
+	}
 	changes := map[string]any{}
 	if newName != l.Name {
 		if err := q.RenameCommandList(ctx, sqlitedb.RenameCommandListParams{Name: newName, UpdatedAt: store.Now(), ID: id}); err != nil {

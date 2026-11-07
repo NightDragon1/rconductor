@@ -85,12 +85,18 @@ func (s *Service) Groups(ctx context.Context, req Request) ([]Group, error) {
 }
 
 func (s *Service) groupDetails(ctx context.Context, r sqlitedb.GetGroupRow) (Group, error) {
+	return groupDetailsOf(ctx, s.st.Queries, r)
+}
+
+// groupDetailsOf reads members and grants through q, inside a transaction
+// for an update.
+func groupDetailsOf(ctx context.Context, q *sqlitedb.Queries, r sqlitedb.GetGroupRow) (Group, error) {
 	g := Group{ID: r.ID, Name: r.Name, Kind: r.Kind, OwnerID: r.OwnerID, CommandListID: r.CommandListID.String, Grants: []Target{}}
 	var err error
-	if g.Members, err = s.st.Queries.ListGroupMembers(ctx, r.ID); err != nil {
+	if g.Members, err = q.ListGroupMembers(ctx, r.ID); err != nil {
 		return Group{}, err
 	}
-	grants, err := s.st.Queries.ListGroupGrants(ctx, r.ID)
+	grants, err := q.ListGroupGrants(ctx, r.ID)
 	if err != nil {
 		return Group{}, err
 	}
@@ -193,15 +199,16 @@ func (s *Service) UpdateGroup(ctx context.Context, req Request, id string, up Gr
 	if err != nil {
 		return Group{}, err
 	}
-	name := g.Name
+	var newName string
 	if up.Name != nil {
-		if name, err = validName(*up.Name); err != nil {
+		if newName, err = validName(*up.Name); err != nil {
 			return Group{}, err
 		}
 	}
-	list := g.CommandListID
+	var newList sql.NullString
 	if up.CommandListID != nil {
-		list = sql.NullString{String: *up.CommandListID, Valid: *up.CommandListID != ""}
+		list := sql.NullString{String: *up.CommandListID, Valid: *up.CommandListID != ""}
+		newList = list
 		if list.Valid {
 			if g.Kind != KindModerator {
 				return Group{}, &InvalidError{Detail: "only moderator groups have a command list"}
@@ -252,10 +259,6 @@ func (s *Service) UpdateGroup(ctx context.Context, req Request, id string, up Gr
 		}
 	}
 
-	before, err := s.groupDetails(ctx, g)
-	if err != nil {
-		return Group{}, err
-	}
 	affected := map[string]bool{}
 	changes := map[string]any{}
 	tx, err := s.st.DB.BeginTx(ctx, nil)
@@ -265,7 +268,9 @@ func (s *Service) UpdateGroup(ctx context.Context, req Request, id string, up Gr
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	// Optimistic locking in one statement (revision 2.4 candidate 24);
-	// the version is required, checked after role and scope.
+	// the version is required, checked after role and scope. The group is
+	// read after the version, in the transaction: names, list and members
+	// are compared with the state the caller read (B11-1).
 	if up.Version == nil {
 		return Group{}, ErrPreconditionRequired
 	}
@@ -275,6 +280,20 @@ func (s *Service) UpdateGroup(ctx context.Context, req Request, id string, up Gr
 	}
 	if n == 0 {
 		return Group{}, ErrConflict
+	}
+	if g, err = q.GetGroup(ctx, id); err != nil {
+		return Group{}, err
+	}
+	before, err := groupDetailsOf(ctx, q, g)
+	if err != nil {
+		return Group{}, err
+	}
+	name, list := g.Name, g.CommandListID
+	if up.Name != nil {
+		name = newName
+	}
+	if up.CommandListID != nil {
+		list = newList
 	}
 	now := store.Now()
 	if name != g.Name || list != g.CommandListID {

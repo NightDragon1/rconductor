@@ -173,10 +173,6 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 		s.deniedOn(ctx, req, "settings.update", "settings", "", "forbidden", map[string]any{"keys": keysTried})
 		return nil, ErrForbidden
 	}
-	cur, err := s.Settings(ctx, req)
-	if err != nil {
-		return nil, err
-	}
 	values := map[string]string{}
 	for k, raw := range in {
 		r, ok := settingRules[k]
@@ -207,6 +203,16 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 	}
 	if n == 0 {
 		return nil, ErrConflict
+	}
+	// Compared with the settings of the version the caller read, in the
+	// transaction (B11-1).
+	rows, err := q.ListGlobalSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cur := map[string]json.RawMessage{}
+	for _, r := range rows {
+		cur[r.Key] = json.RawMessage(r.Value)
 	}
 	changes := map[string]any{}
 	for k, v := range values {
