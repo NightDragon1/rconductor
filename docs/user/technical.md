@@ -13,6 +13,21 @@ fields of the command page.
 | Precedence | your profile with the id of a shipped one replaces it and is marked as adapted |
 | Errors | an invalid file is not imported; the last valid state stays active, the error is in the log and the health overview |
 
+### Checking a profile
+
+Check a profile before you copy it to `/data/profiles`. The panel image does it
+without configuration, database or network:
+
+```sh
+docker run --rm -v ./my-game.yaml:/p.yaml:ro nightdragon1/rconductor-panel:0.10 profile check /p.yaml
+```
+
+With the binary it is `rconductor-panel profile check my-game.yaml other.yaml`. Each
+problem is one line `file:line: message`, a valid file shows `file: ok`. The exit
+code is 0 when all files are valid, 1 when a file has problems, and 2 for a wrong
+call or a file that cannot be read. The rules are those of the import, so a file
+that passes is imported.
+
 ## Command lists
 
 Command lists live in the database and are managed under **Command lists**. An entry is
