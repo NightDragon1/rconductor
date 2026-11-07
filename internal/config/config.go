@@ -64,6 +64,10 @@ type Panel struct {
 	// MaxAnonymousAge ends a connection that showed no session after this
 	// time (T-025).
 	MaxAnonymousAge time.Duration
+	RCON            RCONLimits
+	CommandTimeout  time.Duration
+	PlayersRefresh  time.Duration
+	AgentPort       AgentPortLimits
 	Log             Log
 }
 
@@ -83,7 +87,22 @@ type Agent struct {
 	LabelKey, LabelValue string
 	DockerHost           string
 	SecretsDir           string
-	Log                  Log
+	// The rest are limits; zero takes the default, for tests that build
+	// this by hand. Values below the minimum come only that way.
+	MaxBackoff, DialTimeout, MetricsInterval time.Duration
+	MaxFollows, OrdersPerMinute, OrdersBurst int
+	Log                                      Log
+}
+
+// RCONLimits tune the connections to game servers (Design 3.8).
+type RCONLimits struct {
+	Probe, IdleProbe, ProbeTimeout, MaxBackoff, DialTimeout time.Duration
+	Queue                                                   int
+}
+
+// AgentPortLimits bound the agent port (SEC-007).
+type AgentPortLimits struct {
+	MaxConnections, MaxClientConnections, ConnectsPerMinute, ConnectBurst int
 }
 
 // LoadPanelFromOS loads the panel configuration from the process environment.
@@ -114,8 +133,24 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 		HashConcurrency:      r.integer("RCD_PASSWORD_HASH_CONCURRENCY", 2, 1, 2),
 		MaxConnections:       r.integer("RCD_MAX_CONNECTIONS", 512, 16, 65536),
 		MaxClientConnections: r.integer("RCD_MAX_CLIENT_CONNECTIONS", 128, 1, 65536),
-		MaxAnonymousAge:      time.Duration(r.integer("RCD_MAX_ANONYMOUS_CONNECTION_SECONDS", 30, 10, 3600)) * time.Second,
-		Log:                  r.log(),
+		MaxAnonymousAge:      r.seconds("RCD_MAX_ANONYMOUS_CONNECTION_SECONDS", 30, 10, 3600),
+		RCON: RCONLimits{
+			Probe:        r.seconds("RCD_RCON_PROBE_SECONDS", 2, 1, 60),
+			IdleProbe:    r.seconds("RCD_RCON_IDLE_PROBE_SECONDS", 30, 5, 600),
+			ProbeTimeout: r.seconds("RCD_RCON_PROBE_TIMEOUT_SECONDS", 5, 1, 60),
+			MaxBackoff:   r.seconds("RCD_RCON_MAX_BACKOFF_SECONDS", 5, 1, 120),
+			DialTimeout:  r.seconds("RCD_RCON_DIAL_TIMEOUT_SECONDS", 5, 1, 60),
+			Queue:        r.integer("RCD_RCON_QUEUE", 64, 1, 1024),
+		},
+		CommandTimeout: r.seconds("RCD_COMMAND_TIMEOUT_SECONDS", 10, 1, 120),
+		PlayersRefresh: r.seconds("RCD_PLAYERS_REFRESH_SECONDS", 60, 10, 3600),
+		AgentPort: AgentPortLimits{
+			MaxConnections:       r.integer("RCD_AGENT_MAX_CONNECTIONS", 1024, 16, 65536),
+			MaxClientConnections: r.integer("RCD_AGENT_MAX_CLIENT_CONNECTIONS", 64, 1, 65536),
+			ConnectsPerMinute:    r.integer("RCD_AGENT_CONNECTS_PER_MINUTE", 10, 1, 600),
+			ConnectBurst:         r.integer("RCD_AGENT_CONNECT_BURST", 5, 1, 100),
+		},
+		Log: r.log(),
 	}
 	if c.AgentPublicAddr != "" {
 		if _, _, err := net.SplitHostPort(c.AgentPublicAddr); err != nil {
@@ -129,12 +164,18 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 func LoadAgent(env Lookup, readFile ReadFile) (Agent, error) {
 	r := reader{env: env, readFile: readFile}
 	c := Agent{
-		PairingToken: r.secret("RCD_PAIRING_TOKEN"),
-		PanelAddr:    r.str("RCD_PANEL_ADDR", ""),
-		Name:         r.str("RCD_AGENT_NAME", ""),
-		DockerHost:   r.str("RCD_DOCKER_HOST", "unix:///var/run/docker.sock"),
-		SecretsDir:   r.str("RCD_SECRETS_DIR", "/secrets"),
-		Log:          r.log(),
+		PairingToken:    r.secret("RCD_PAIRING_TOKEN"),
+		PanelAddr:       r.str("RCD_PANEL_ADDR", ""),
+		Name:            r.str("RCD_AGENT_NAME", ""),
+		DockerHost:      r.str("RCD_DOCKER_HOST", "unix:///var/run/docker.sock"),
+		MaxBackoff:      r.seconds("RCD_AGENT_MAX_BACKOFF_SECONDS", 120, 5, 3600),
+		DialTimeout:     r.seconds("RCD_AGENT_DIAL_TIMEOUT_SECONDS", 15, 1, 120),
+		MetricsInterval: r.seconds("RCD_METRICS_INTERVAL_SECONDS", 10, 1, 300),
+		MaxFollows:      r.integer("RCD_MAX_LOG_FOLLOWS", 16, 1, 256),
+		OrdersPerMinute: r.integer("RCD_ACTIONS_PER_MINUTE", 10, 1, 600),
+		OrdersBurst:     r.integer("RCD_ACTIONS_BURST", 3, 1, 100),
+		SecretsDir:      r.str("RCD_SECRETS_DIR", "/secrets"),
+		Log:             r.log(),
 	}
 	label := r.str("RCD_LABEL", "rconductor.manage=true")
 	key, value, ok := strings.Cut(label, "=")
@@ -227,6 +268,10 @@ func (r *reader) integer(key string, def, lo, hi int) int {
 		return def
 	}
 	return n
+}
+
+func (r *reader) seconds(key string, def, lo, hi int) time.Duration {
+	return time.Duration(r.integer(key, def, lo, hi)) * time.Second
 }
 
 func (r *reader) publicURL(key string) *url.URL {

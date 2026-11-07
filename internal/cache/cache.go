@@ -74,8 +74,8 @@ type Cache struct {
 
 	mu      sync.Mutex
 	entries map[string]*entry
-	// refresh overrides PlayersRefresh, for tests.
-	refresh time.Duration
+	// refresh is PlayersRefresh unless set otherwise, stale fits it.
+	refresh, stale time.Duration
 	// onPlayers is told about every new player list.
 	onPlayers func(serverID string)
 }
@@ -97,7 +97,16 @@ func (c *Cache) Cached(serverID string) (Players, bool) {
 
 // New returns an empty cache.
 func New(st *store.Store, exec Executor, log *slog.Logger) *Cache {
-	return &Cache{st: st, exec: exec, log: log, now: time.Now, entries: map[string]*entry{}, refresh: PlayersRefresh}
+	return &Cache{st: st, exec: exec, log: log, now: time.Now, entries: map[string]*entry{}, refresh: PlayersRefresh, stale: PlayersStale}
+}
+
+// SetRefresh replaces PlayersRefresh; zero keeps it. A value counts as stale
+// after two refreshes that did not come, and never before PlayersStale.
+func (c *Cache) SetRefresh(d time.Duration) {
+	if d > 0 {
+		c.refresh = d
+		c.stale = max(PlayersStale, 2*d)
+	}
 }
 
 func (c *Cache) get(id string) *entry {
@@ -155,7 +164,7 @@ func (c *Cache) Players(ctx context.Context, serverID string) (Players, error) {
 func (c *Cache) view(e *entry) Players {
 	p := e.players
 	p.Names = append([]string(nil), p.Names...)
-	p.Stale = e.invalidated || (!p.UpdatedAt.IsZero() && c.now().Sub(p.UpdatedAt) > PlayersStale)
+	p.Stale = e.invalidated || (!p.UpdatedAt.IsZero() && c.now().Sub(p.UpdatedAt) > c.stale)
 	return p
 }
 
