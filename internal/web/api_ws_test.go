@@ -590,3 +590,55 @@ func TestEndUserSessions(t *testing.T) {
 		t.Errorf("audit entries = %d", n)
 	}
 }
+
+// withdrawingViews takes the access away in the moment of the subscription.
+type withdrawingViews struct{ withdraw func() }
+
+func (withdrawingViews) Current(context.Context, string, string) (any, bool) { return nil, false }
+func (v withdrawingViews) FollowLogs(context.Context, string) func() {
+	v.withdraw()
+	return func() {}
+}
+
+// TestB1SubscribeRacesWithdrawal: access withdrawn while a subscription is
+// set up ends it, also with no later change of rights. Failed before the fix:
+// REST answered 404 while the socket kept the log lines.
+func TestB1SubscribeRacesWithdrawal(t *testing.T) {
+	w := newWSFixture(t)
+	ctx := context.Background()
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`UPDATE users SET role='server_admin' WHERE id=?`, []any{w.userID}},
+		{`INSERT INTO admin_scopes (id, user_id, server_id, assigned_by, created_at) VALUES ('sc', ?, ?, ?, 't')`, []any{w.userID, w.server, w.adminID}},
+	} {
+		if _, err := w.st.DB.ExecContext(ctx, q.sql, q.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.checker.Invalidate()
+	sa, boss := w.login(t, "Mod"), w.login(t, "Boss")
+	w.hub.SetAgentViews(withdrawingViews{withdraw: func() {
+		rec := w.do(t, call{method: http.MethodPut, path: "/api/v1/users/" + w.userID + "/assignments", cookies: []*http.Cookie{boss},
+			origin: "http://panel.lan", body: `{"admin_scopes":[]}`})
+		if rec.Code != http.StatusOK {
+			t.Errorf("withdraw = %d", rec.Code)
+		}
+		time.Sleep(200 * time.Millisecond) // Recheck runs and finds nothing
+	}})
+	c, _, err := w.dial(t, sa, w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	topic := "server." + w.server + ".logs"
+	send(t, c, "subscribe", topic)
+	m, err := next(t, c, 5*time.Second)
+	if err != nil || m.Type != "error" || m.Reason != "revoked" {
+		t.Fatalf("after the withdrawal: %+v %v", m, err)
+	}
+	w.hub.PublishAgentData(w.server, "logs", agentview.Logs{ServerID: w.server, Lines: []string{"secret"}, Seq: 1})
+	if m, err := next(t, c, 300*time.Millisecond); err == nil {
+		t.Errorf("socket still gets: %s %s %s", m.Type, m.Topic, m.Data)
+	}
+}

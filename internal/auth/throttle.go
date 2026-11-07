@@ -53,11 +53,14 @@ func (l loginLimits) gap() time.Duration {
 	return overflowGap
 }
 
+// line is the number of places; the whole line stays below a request
+// timeout, whatever gap and places are set to (B5).
 func (l loginLimits) line() int {
+	n := overflowLine
 	if l.overflowLine > 0 {
-		return l.overflowLine
+		n = l.overflowLine
 	}
-	return overflowLine
+	return max(1, min(n, int(maxLineWait/l.gap())))
 }
 
 // purgeGap spaces the scans for ended counters of a full table: an attempt
@@ -74,6 +77,7 @@ const fullReportGap = time.Minute
 // possible on a full table, slowly, and the wait stays below a request timeout.
 const (
 	overflowGap = 250 * time.Millisecond
+	maxLineWait = 50 * time.Second
 	// minOverflowGap is the lowest setting: faster turns would let more
 	// guesses through the line.
 	minOverflowGap = 50 * time.Millisecond

@@ -125,6 +125,7 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingAuditRetentionDays: DefaultAuditRetentionDays,
 		SettingWSMaxSockets:       DefaultWSMaxSockets,
 		SettingWSMaxSubs:          DefaultWSMaxSubs,
+		SettingConnectionTests:    DefaultConnectionTests,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
