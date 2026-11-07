@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   addCommands,
   addLogLines,
+  isRunning,
+  RUNNING_MS,
   bufferOwner,
   bufferWriter,
   newLines,
@@ -195,5 +197,24 @@ describe('bufferWriter (Design 6.3)', () => {
     late('s', (b) => ({ ...b, running: 3 }));
     expect(buffers('s').running).toBeUndefined();
     bufferOwner(undefined);
+  });
+});
+
+describe('a command without an answer (#150)', () => {
+  const block = (ts: string): CmdBlock => ({
+    kind: 'cmd',
+    id: '1',
+    ts,
+    command: 'list',
+    result: 'error',
+    reason: 'not_answered',
+  });
+
+  it('counts as running for a while, then as failed', () => {
+    const at = Date.parse('2026-11-06T10:00:00Z');
+    const b = block('2026-11-06T10:00:00Z');
+    expect(isRunning(b, at + RUNNING_MS - 1)).toBe(true);
+    expect(isRunning(b, at + RUNNING_MS)).toBe(false);
+    expect(isRunning({ ...b, reason: 'timeout' }, at)).toBe(false);
   });
 });

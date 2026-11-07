@@ -66,6 +66,14 @@ export function addCommands(buf: ConsoleBuffer, entries: CmdBlock[]): ConsoleBuf
   return { ...buf, cmds };
 }
 
+// RUNNING_MS is how long the history's not_answered means "still running":
+// past the time a command gets, nothing comes any more (#150).
+export const RUNNING_MS = 15_000;
+
+export function isRunning(b: CmdBlock, now: number): boolean {
+  return b.reason === 'not_answered' && now - Date.parse(b.ts) < RUNNING_MS;
+}
+
 let logSeq = 0;
 
 // newLines returns the lines of a delivery that follow what the buffer

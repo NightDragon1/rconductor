@@ -229,6 +229,10 @@
     "pressCtrlC": "Selected. Press Ctrl+C to copy."
   },
   "console": {
+    "running": "Running …",
+    "olderInHistory": "Older commands are on the History tab.",
+    "historyFailed": "The history could not be loaded.",
+    "retry": "Try again",
     "tracks": "Tracks",
     "own": "Own commands",
     "others": "Others' commands",
