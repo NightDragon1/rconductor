@@ -201,6 +201,19 @@ func TestBudgetAnswersBusy(t *testing.T) {
 	}
 }
 
+// TestV6ChunkedPublicBodyOverTheLimit covers #158: also on the routes open to
+// anyone a chunked body over the limit is too large, not invalid.
+func TestV6ChunkedPublicBodyOverTheLimit(t *testing.T) {
+	h := withBodyLimit(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("ran with a body over the limit") }))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(strings.Repeat("x", MaxPublicBody+1)))
+	r.ContentLength = -1
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("chunked public body over the limit = %d", rec.Code)
+	}
+}
+
 // TestChunkedBodyOverTheLimit: the answer does not depend on how the size
 // is sent (Design 2.1).
 func TestChunkedBodyOverTheLimit(t *testing.T) {

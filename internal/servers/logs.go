@@ -69,8 +69,10 @@ func (s *Service) Logs(ctx context.Context, req users.Request, id string, n int)
 			return
 		}
 		if ll, err := agentproto.Payload[agentproto.LogLines](e); err == nil {
-			got.Lines = append(got.Lines, ll.Lines...)
-			got.Truncated = got.Truncated || ll.Truncated
+			// Bounded while collecting: an agent decides how much it sends.
+			lines, cut := agentproto.LimitLines(append(got.Lines, ll.Lines...))
+			got.Lines = lines
+			got.Truncated = got.Truncated || ll.Truncated || cut
 		}
 	}
 	tctx, cancel := context.WithTimeout(ctx, tailTimeout)

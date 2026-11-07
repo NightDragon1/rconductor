@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -32,6 +34,48 @@ var contactKey = regexp.MustCompile(`^[a-z0-9_]{1,32}$`)
 // ErrWrongPassword means the current password did not match.
 var ErrWrongPassword = errors.New("the current password is wrong")
 
+// ErrTooManyTries means the current password was wrong too often: a session
+// cannot guess it without limit (#161).
+var ErrTooManyTries = errors.New("too many wrong passwords")
+
+// passwordTries counts wrong current passwords per user; only signed-in
+// users get here, so the table stays small.
+type passwordTries struct {
+	mu    sync.Mutex
+	users map[string]*tryWindow
+}
+
+type tryWindow struct {
+	start time.Time
+	count int
+}
+
+// take counts an attempt before its result is known, so that parallel
+// requests cannot pass the limit.
+func (p *passwordTries) take(user string, limit int, window time.Duration, now time.Time) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.users == nil {
+		p.users = map[string]*tryWindow{}
+	}
+	w := p.users[user]
+	if w == nil || now.Sub(w.start) >= window {
+		w = &tryWindow{start: now}
+		p.users[user] = w
+	}
+	if w.count >= limit {
+		return false
+	}
+	w.count++
+	return true
+}
+
+func (p *passwordTries) reset(user string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.users, user)
+}
+
 // OtherSessionsRevoker ends all sessions of a user but one
 // (auth.Service.RevokeOtherSessions).
 type OtherSessionsRevoker func(ctx context.Context, userID, keepHash, reason, requestID string) error
@@ -41,11 +85,13 @@ type Profiles struct {
 	users        *Service
 	hasher       *password.Hasher
 	revokeOthers OtherSessionsRevoker
+	tries        passwordTries
+	now          func() time.Time
 }
 
 // NewProfiles returns the profile service.
 func NewProfiles(users *Service, h *password.Hasher, revokeOthers OtherSessionsRevoker) *Profiles {
-	return &Profiles{users: users, hasher: h, revokeOthers: revokeOthers}
+	return &Profiles{users: users, hasher: h, revokeOthers: revokeOthers, now: time.Now}
 }
 
 // ProfileUpdate holds the changes of PATCH /me; nil fields stay. An empty
@@ -149,6 +195,9 @@ func (p *Profiles) Update(ctx context.Context, req Request, up ProfileUpdate) (U
 // admin, is invalid at once (AUTH-007), and all other sessions end.
 func (p *Profiles) ChangePassword(ctx context.Context, req Request, current, next string) error {
 	s := p.users
+	if !p.tries.take(req.Actor.ID, p.maxTries(ctx), p.triesWindow(ctx), p.now()) {
+		return ErrTooManyTries
+	}
 	hash, err := s.st.Queries.GetPasswordHash(ctx, req.Actor.ID)
 	if err != nil {
 		return fmt.Errorf("load password: %w", err)
@@ -161,6 +210,7 @@ func (p *Profiles) ChangePassword(ctx context.Context, req Request, current, nex
 		s.denied(ctx, req, "password.change", req.Actor.ID, "unauthenticated", nil)
 		return ErrWrongPassword
 	}
+	p.tries.reset(req.Actor.ID)
 	if err := password.Validate(next); err != nil {
 		return &InvalidError{Detail: err.Error()}
 	}
@@ -190,6 +240,26 @@ func (p *Profiles) ChangePassword(ctx context.Context, req Request, current, nex
 		return p.revokeOthers(ctx, req.Actor.ID, req.SessionID, "password.change", req.RequestID)
 	}
 	return nil
+}
+
+// maxTries and triesWindow follow the login protection.
+func (p *Profiles) maxTries(ctx context.Context) int {
+	n := 5
+	var v int
+	if err := p.users.st.GlobalSetting(ctx, "login.max_failures", &v); err == nil && v > 0 {
+		n = v
+	}
+	return n
+}
+
+func (p *Profiles) triesWindow(ctx context.Context) time.Duration {
+	var v string
+	if err := p.users.st.GlobalSetting(ctx, "login.lockout_duration", &v); err == nil {
+		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
+			return d
+		}
+	}
+	return 15 * time.Minute
 }
 
 // SetAvatar stores the caller's profile picture; nil data removes it.

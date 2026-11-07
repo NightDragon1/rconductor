@@ -54,6 +54,12 @@ describe('useConsoleFeed (CMD-001)', () => {
     client.clear();
   });
 
+  it('tells when the history cannot be loaded (#150)', async () => {
+    vi.spyOn(api, 'GET').mockRejectedValue(new Error('down'));
+    const { result } = feed();
+    await waitFor(() => expect(result.current.feed.history.isError).toBe(true));
+  });
+
   it('keeps an answer with the server it was sent to', async () => {
     let answer: (v: unknown) => void = () => undefined;
     vi.spyOn(api, 'GET').mockResolvedValue(page as never);

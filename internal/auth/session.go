@@ -252,6 +252,11 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 		// After the turn: the entry can take long, and the line goes on.
 		s.reportFull(ctx, c)
 		if err != nil {
+			// Hanging up in line costs the rank, or a client that never
+			// fails could stay in front (B2-2).
+			if errors.Is(err, context.Canceled) {
+				s.throttle.fail(key, c.IP, s.now(), lim, tk)
+			}
 			return "", Principal{}, err
 		}
 		if !turn {
