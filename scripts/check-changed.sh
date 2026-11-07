@@ -18,10 +18,23 @@ if [[ -n "$go_dirs" ]]; then
     echo "$unformatted"
     exit 1
   fi
-  # shellcheck disable=SC2086
-  go tool -modfile=tools/go.mod golangci-lint run $go_dirs
-  # shellcheck disable=SC2086
-  CGO_ENABLED=1 go test -race $go_dirs
+  # Directories whose files are all excluded by build constraints, such as
+  # scripts/loadtest (//go:build ignore), are no package for lint and test;
+  # vet their files directly instead.
+  pkg_dirs=""
+  for d in $go_dirs; do
+    if [[ -n $(go list -e -f '{{if or .GoFiles .TestGoFiles .XTestGoFiles}}pkg{{end}}' "$d") ]]; then
+      pkg_dirs+="$d "
+    else
+      go vet "$d"/*.go
+    fi
+  done
+  if [[ -n "$pkg_dirs" ]]; then
+    # shellcheck disable=SC2086
+    go tool -modfile=tools/go.mod golangci-lint run $pkg_dirs
+    # shellcheck disable=SC2086
+    CGO_ENABLED=1 go test -race $pkg_dirs
+  fi
 fi
 
 if [[ -n "$web_files" ]]; then
