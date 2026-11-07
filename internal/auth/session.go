@@ -246,17 +246,27 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 		return "", Principal{}, &LockedError{RetryAfter: time.Second}
 	}
 	defer s.throttle.release(key, c.IP, tk)
+	// Hanging up costs the rank of the line, or a client that never fails
+	// could stay in front (B2-2, C2). Locks it causes are reported as ever.
+	hungUp := func(err error) {
+		if tk.place == nil || !errors.Is(err, context.Canceled) {
+			return
+		}
+		pairLocked, clientLocked := s.throttle.fail(key, c.IP, s.now(), lim, tk)
+		if pairLocked {
+			s.lockedOut(ctx, c, u.ID, u.Pseudonym, "account", lim.lockout)
+		}
+		if clientLocked {
+			s.lockedOut(ctx, c, u.ID, u.Pseudonym, "client", lim.lockout)
+		}
+	}
 	if tk.place != nil {
 		// The wait comes first: the delay counts what went before in line.
 		d, turn, err := s.throttle.wait(ctx, tk.place, key, s.sleep, s.now, lim.lockout, lim.gap())
 		// After the turn: the entry can take long, and the line goes on.
 		s.reportFull(ctx, c)
 		if err != nil {
-			// Hanging up in line costs the rank, or a client that never
-			// fails could stay in front (B2-2).
-			if errors.Is(err, context.Canceled) {
-				s.throttle.fail(key, c.IP, s.now(), lim, tk)
-			}
+			hungUp(err)
 			return "", Principal{}, err
 		}
 		if !turn {
@@ -270,6 +280,7 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 	}
 	if delay > 0 {
 		if err := s.sleep(ctx, delay); err != nil {
+			hungUp(err)
 			return "", Principal{}, err
 		}
 	}
@@ -287,6 +298,7 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 
 	if !known {
 		if err := s.hasher.VerifyDummy(ctx, pw); err != nil {
+			hungUp(err)
 			return "", Principal{}, err
 		}
 		return fail("unknown_user")
@@ -294,6 +306,7 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 
 	match, err := s.hasher.Verify(ctx, u.PasswordHash, pw)
 	if err != nil {
+		hungUp(err)
 		return "", Principal{}, err
 	}
 	reason := ""

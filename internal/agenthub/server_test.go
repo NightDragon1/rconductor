@@ -506,3 +506,28 @@ func TestV4AcceptErrorKeepsTheLoop(t *testing.T) {
 		t.Errorf("after the end: %v", err)
 	}
 }
+
+// TestC1StalledBodyGivesThePlaceBack: a client that announces a body and goes
+// silent holds no place of the agent port. Failed before the fix: open after
+// 40 s, and no agent could connect.
+func TestC1StalledBodyGivesThePlaceBack(t *testing.T) {
+	f := newFixtureWith(t, Options{MaxConnections: 1, MaxClientConnections: 1, HelloTimeout: 300 * time.Millisecond,
+		Throttle: ThrottleOptions{Burst: 100, PerMinute: 600}})
+	cfg, err := agentproto.ClientConfig(agentKey(t), f.panel.Fingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := tls.Dial("tcp", f.addr, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if _, err := io.WriteString(c, "POST /other HTTP/1.1\r\nHost: t\r\nContent-Length: 1000\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	var timeout net.Error
+	if _, err := io.ReadAll(c); errors.As(err, &timeout) && timeout.Timeout() {
+		t.Error("the connection outlived its time")
+	}
+}
