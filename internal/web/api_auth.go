@@ -14,6 +14,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
+	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
@@ -65,6 +66,7 @@ func (s *apiServer) sessionOf(ctx context.Context, p auth.Principal) api.Session
 		User:               api.SessionUser{Id: id, Pseudonym: p.Pseudonym, Role: api.Role(p.Role)},
 		ExpiresAt:          p.ExpiresAt,
 		MustChangePassword: p.MustChangePassword,
+		PanelVersion:       buildinfo.Version,
 	}
 	if s.store != nil {
 		var on, supporters bool

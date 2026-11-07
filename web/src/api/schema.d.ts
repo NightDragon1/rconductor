@@ -1352,6 +1352,8 @@ export interface components {
             role: components["schemas"]["Role"];
         };
         Session: {
+            /** @description Version of the panel (UI-015), e.g. 0.10; 0.0.0-dev in development builds. */
+            panel_version: string;
             /** @description Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings. */
             ui: {
                 /** @description Keyboard shortcuts, off by default (UI-008). */

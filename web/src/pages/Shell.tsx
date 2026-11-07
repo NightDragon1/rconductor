@@ -66,6 +66,7 @@ export function Shell() {
           {!collapsed && <span>{t('nav.collapse')}</span>}
         </Button>
         <UserBlock collapsed={collapsed} />
+        <PanelVersion collapsed={collapsed} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -81,6 +82,7 @@ export function Shell() {
               <Brand collapsed={false} />
               <Navigation collapsed={false} onNavigate={() => setMenuOpen(false)} />
               <UserBlock collapsed={false} />
+              <PanelVersion collapsed={false} />
             </SheetContent>
           </Sheet>
           <span className="font-semibold">{t('app.name')}</span>
@@ -191,6 +193,26 @@ function Initials({ name }: { name: string }) {
     >
       {name.slice(0, 2).toUpperCase()}
     </span>
+  );
+}
+
+// PanelVersion is the small line below the user block in the sidebar and
+// the phone menu: every role sees which panel version runs (UI-015).
+export function PanelVersion({ collapsed }: { collapsed: boolean }) {
+  const { t } = useTranslation();
+  const { data: session } = useSession();
+  if (!session) return null;
+  const text = t('app.version', { version: session.panel_version });
+  return (
+    <p
+      className={cn(
+        'px-3 pb-3 text-xs text-muted',
+        collapsed ? 'truncate text-center' : 'wrap-anywhere',
+      )}
+      title={text}
+    >
+      {collapsed ? session.panel_version : text}
+    </p>
   );
 }
 

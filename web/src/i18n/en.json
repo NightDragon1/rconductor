@@ -4,6 +4,7 @@
     "loading": "Loading…",
     "error": "Something went wrong. Please try again.",
     "org": "ShadowGhost.NET",
+    "version": "RCONductor {{version}}",
     "later": "This page follows in a later step."
   },
   "login": {
