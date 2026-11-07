@@ -86,7 +86,8 @@ test('undo restores a change; shortcuts are off by default (UI-008)', async ({ p
   await expect(note).toContainText('Undo brings back the rights, not the sessions');
   await expect(release).toBeChecked({ checked: !before });
   await note.getByRole('button', { name: 'Undo' }).click();
-  await expect(panel.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  // "Saved." still stands from the save; the box says when Undo is through.
+  await expect(release).toBeChecked({ checked: before });
   await page.reload();
   await row(page, 'mod2').getByRole('button', { name: 'mod2' }).click();
   await expect(release).toBeChecked({ checked: before });
