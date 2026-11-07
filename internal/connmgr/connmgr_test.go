@@ -7,8 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/config"
@@ -270,4 +273,36 @@ func TestHalfOpenConnection(t *testing.T) {
 	if got, err := f.m.Execute(context.Background(), "s1", "after"); err != nil || got != "after" {
 		t.Errorf("after the outage: %q %v", got, err)
 	}
+}
+
+// downAdapter counts attempts at a server that never answers.
+type downAdapter struct{ dials atomic.Int64 }
+
+func (a *downAdapter) Dial(context.Context, string, logging.Secret) (rcon.Conn, error) {
+	a.dials.Add(1)
+	return nil, errors.New("connection refused")
+}
+
+// TestBackoffInVirtualTime covers Design 3.8 without waiting for it: the
+// attempts thin out to one per MaxBackoff, at most 20 % sooner.
+func TestBackoffInVirtualTime(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		src := &fakeSource{targets: map[string]Target{}}
+		src.set(Target{ID: "s", Name: "s", Protocol: "x", Addr: "x:1", Usable: true})
+		down := &downAdapter{}
+		m := New(rcon.Registry{"x": down}, src, slog.New(slog.DiscardHandler), Options{})
+		if err := m.Start(ctx); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Minute)
+		first := down.dials.Load()
+		time.Sleep(10 * time.Minute)
+		n := down.dials.Load() - first
+		cancel()
+		m.Wait()
+		if n < 100 || n > 150 {
+			t.Errorf("%d attempts in 10 minutes, want about one per 5 s", n)
+		}
+	})
 }
