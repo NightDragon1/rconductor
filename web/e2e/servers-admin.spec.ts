@@ -82,7 +82,8 @@ test('a server needs no agent (SRV-001)', async ({ page, state }) => {
 
   await row.getByRole('button', { name: 'e2e-plain' }).click();
   const opened = page.getByRole('complementary', { name: 'Details of e2e-plain' });
-  // Undo takes a change back, but not one of the credentials (D-048).
+  // Undo takes a change back, but not a new password (D-048); host and
+  // port keep the stored password and can be undone (D-050).
   await opened.getByLabel('Name').fill('e2e-plain2');
   await opened.getByRole('button', { name: 'Save' }).click();
   const note = page.getByRole('status').filter({ hasText: 'Saved: Server e2e-plain2 changed' });
@@ -93,6 +94,12 @@ test('a server needs no agent (SRV-001)', async ({ page, state }) => {
   const plain = page.getByRole('status').filter({ hasText: 'Saved: Server e2e-plain changed' });
   await expect(plain.last()).toBeVisible();
   await expect(plain.last().getByRole('button', { name: 'Undo' })).toHaveCount(0);
+  await opened.getByLabel('Host').fill('mc2.example');
+  await opened.getByRole('button', { name: 'Save' }).click();
+  await expect(row).toContainText('mc2.example:25575');
+  await plain.getByRole('button', { name: 'Undo' }).click();
+  await expect(opened.getByLabel('Host')).toHaveValue('mc.example');
+  await expect(row).toContainText('mc.example:25575');
   await opened.getByRole('button', { name: 'Delete server …' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
   await expect(row).toHaveCount(0);

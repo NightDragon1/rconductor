@@ -168,8 +168,9 @@ function ServerPanel({
     }
     void change(server);
   };
-  // Save goes out at once; Undo sends the previous state, but never for
-  // host, port or password: the old password is not known here (D-048).
+  // Save goes out at once; Undo sends the previous state, but never for a
+  // new password: the old one is not known here (D-048). Host and port
+  // keep the stored password, so they can be undone (D-050).
   const write = async (id: string, from: Server, next: Draft) => {
     let done = null as Server | null;
     const r = await outcome(id, async () => {
@@ -198,7 +199,7 @@ function ServerPanel({
   const change = async (s: Server) => {
     const before = base ?? s;
     const old = draftOf(before);
-    const credentials = !!d.password || d.host.trim() !== old.host || d.port !== old.port;
+    const credentials = !!d.password;
     const after = await write(s.id, before, d);
     if (!after) return;
     const label = t('servers.undo.changed', { name: after.name });

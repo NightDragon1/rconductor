@@ -1376,7 +1376,7 @@ type ServerInterface interface {
 	// GetServer A server in the caller's scope; others answer 404 (Design 3.1).
 	// (GET /servers/{id})
 	GetServer(w http.ResponseWriter, r *http.Request, id ServerID)
-	// UpdateServer Change a server; a password replaces the stored one; RCON admin only.
+	// UpdateServer Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only.
 	// (PATCH /servers/{id})
 	UpdateServer(w http.ResponseWriter, r *http.Request, id ServerID, params UpdateServerParams)
 	// ServerAction Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
@@ -7774,7 +7774,7 @@ type StrictServerInterface interface {
 	// GetServer A server in the caller's scope; others answer 404 (Design 3.1).
 	// (GET /servers/{id})
 	GetServer(ctx context.Context, request GetServerRequestObject) (GetServerResponseObject, error)
-	// UpdateServer Change a server; a password replaces the stored one; RCON admin only.
+	// UpdateServer Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only.
 	// (PATCH /servers/{id})
 	UpdateServer(ctx context.Context, request UpdateServerRequestObject) (UpdateServerResponseObject, error)
 	// ServerAction Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
