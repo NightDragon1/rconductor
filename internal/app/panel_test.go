@@ -135,7 +135,7 @@ func TestPanelStartupSequence(t *testing.T) {
 	}
 
 	got := strings.Join(events(t, first.String()), " ")
-	want := "app.start db.migrate.start db.migrate.done key.created profile.imported auth.initial_password.issued key.created app.ready"
+	want := "app.start db.migrate.start db.migrate.done key.created profile.imported profile.imported auth.initial_password.issued key.created app.ready"
 	if got != want {
 		t.Errorf("first start events = %q, want %q", got, want)
 	}

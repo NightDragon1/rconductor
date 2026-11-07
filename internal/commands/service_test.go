@@ -553,7 +553,7 @@ func TestCatalogParamsInPipeline(t *testing.T) {
 	for _, who := range []string{"m", "sup"} {
 		_, err := w.send(who, "time set dusk")
 		var d *DeniedError
-		if !errors.As(err, &d) || d.Reason != ReasonInvalid || !strings.HasPrefix(d.Detail, "parameter time: not one of day, night") {
+		if !errors.As(err, &d) || d.Reason != ReasonInvalid || !strings.HasPrefix(d.Detail, "parameter time: not one of day, noon, night, midnight") {
 			t.Errorf("%s time set dusk: %v %+v", who, err, d)
 		}
 	}
