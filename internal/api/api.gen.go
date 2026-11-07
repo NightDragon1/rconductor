@@ -981,6 +981,9 @@ type Session struct {
 	// MustChangePassword Until the password is changed only /me/password, /auth/logout and /auth/session are allowed (AUTH-010).
 	MustChangePassword bool `json:"must_change_password"`
 
+	// PanelVersion Version of the panel (UI-015), e.g. 0.10; 0.0.0-dev in development builds.
+	PanelVersion string `json:"panel_version"`
+
 	// Ui Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings.
 	Ui struct {
 		// ShortcutsEnabled Keyboard shortcuts, off by default (UI-008).

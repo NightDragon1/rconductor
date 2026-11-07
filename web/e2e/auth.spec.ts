@@ -5,6 +5,8 @@ test('the RCON admin signs in and out', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
   await expect(page.getByTitle('Your profile')).toContainText('admin');
+  // UI-015: the sidebar names the panel version.
+  await expect(page.getByText(/^RCONductor \d+\.\d+/)).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   // Without a session every page leads to the sign-in.

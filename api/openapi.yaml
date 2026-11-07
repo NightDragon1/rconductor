@@ -2685,8 +2685,13 @@ components:
 
     Session:
       type: object
-      required: [user, expires_at, must_change_password, ui]
+      required: [user, expires_at, must_change_password, ui, panel_version]
       properties:
+        panel_version:
+          type: string
+          description: >-
+            Version of the panel (UI-015), e.g. 0.10; 0.0.0-dev in
+            development builds.
         ui:
           type: object
           description: >-
