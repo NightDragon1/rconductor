@@ -10,10 +10,11 @@
 # digest; scripts/release-verify.sh checks that from the outside before the
 # GitHub release appears. Next to publishing, behind the same approval, the
 # short description and the overview of both Docker Hub repos follow from
-# scripts/dockerhub-overview.sh, with a token of their own:
-# DOCKERHUB_DESCRIBE_TOKEN (scope Read, Write, Delete) in the environment
-# release; DOCKERHUB_TOKEN stays for the push only. A failure there shows red
-# in the run but holds back neither the images nor the GitHub release.
+# scripts/dockerhub-overview.sh. One token, DOCKERHUB_TOKEN in the
+# environment release, serves the push and the description; it needs the
+# scope Read, Write, Delete, because Read & Write only pushes images. A
+# failure of the description shows red in the run but holds back neither the
+# images nor the GitHub release.
 #
 # A manual run is a dry run: it builds both platforms and shows image tags
 # and notes, without login, push or signature.
@@ -195,15 +196,15 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_DESCRIBE_TOKEN: ${{ secrets.DOCKERHUB_DESCRIBE_TOKEN }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           # The login and the bearer token go through stdin and a private
           # file only, never through arguments or the log.
           umask 077
           auth=$(mktemp)
           trap 'rm -f "$auth"' EXIT
-          hint="DOCKERHUB_DESCRIBE_TOKEN in the environment release needs the scope Read, Write, Delete"
-          jq -n '{identifier: env.DOCKERHUB_USERNAME, secret: env.DOCKERHUB_DESCRIBE_TOKEN}' |
+          hint="DOCKERHUB_TOKEN in the environment release needs the scope Read, Write, Delete"
+          jq -n '{identifier: env.DOCKERHUB_USERNAME, secret: env.DOCKERHUB_TOKEN}' |
             curl -fsS --data @- -H 'Content-Type: application/json' https://hub.docker.com/v2/auth/token |
             jq -er '"Authorization: Bearer " + .access_token' > "$auth" || {
             echo "::error::Docker Hub login failed; $hint"
