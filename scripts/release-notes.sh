@@ -20,7 +20,6 @@ Coming from 0.9:
 To be settled before 1.0:
 
 - The player count of modded Minecraft servers shows nothing until the answer of `list` fits the game profile
-- Residual risks in the threat model that wait for approval (R-11, R-15)
 NOTES
 else
   notes=$(awk -v h="## $version" '$0 == h { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md)
