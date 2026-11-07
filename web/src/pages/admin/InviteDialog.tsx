@@ -55,8 +55,7 @@ export function InviteDialog({
       setUrl(r.url);
       void qc.invalidateQueries({ queryKey: invitesKey });
     } catch (e) {
-      const reason = (e as { problem?: { reason?: string } }).problem?.reason;
-      setError(reasonText(t, reason));
+      setError(reasonText(t, (e as { problem?: { reason?: string; detail?: string } }).problem));
     }
   };
 

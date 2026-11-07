@@ -69,11 +69,12 @@ export function useAllAssignments(ids: string[]) {
 }
 
 // Outcome is the result of one change for one user: ok, or the reason
-// code of the refusal (Design 3.5).
+// code of the refusal (Design 3.5) with the backend's detail (UI-016).
 export interface Outcome {
   id: string;
   ok: boolean;
   reason?: string;
+  detail?: string;
 }
 
 export async function outcome(id: string, run: () => Promise<unknown>): Promise<Outcome> {
@@ -85,6 +86,7 @@ export async function outcome(id: string, run: () => Promise<unknown>): Promise<
       id,
       ok: false,
       reason: e instanceof ApiError ? (e.problem?.reason ?? String(e.status)) : 'error',
+      detail: e instanceof ApiError ? e.problem?.detail : undefined,
     };
   }
 }

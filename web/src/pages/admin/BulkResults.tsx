@@ -45,7 +45,7 @@ export function BulkResults({
             >
               <bdi className="font-mono">{name(r.id)}</bdi>
               <span className={r.ok ? 'text-ok' : 'text-danger'}>
-                {r.ok ? t('admin.bulk.ok') : reasonText(t, r.reason)}
+                {r.ok ? t('admin.bulk.ok') : reasonText(t, r)}
               </span>
             </li>
           ))}

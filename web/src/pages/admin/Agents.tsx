@@ -39,7 +39,7 @@ function PairDialog({ onClose }: { onClose: () => void }) {
     const r = await outcome('token', async () => {
       setToken(must(await api.POST('/agents/tokens')));
     });
-    if (!r.ok) setError(reasonText(t, r.reason));
+    if (!r.ok) setError(reasonText(t, r));
     void qc.invalidateQueries({ queryKey: agentsKey });
   };
   return (
@@ -108,7 +108,7 @@ export function AgentsPage() {
 
   const act = async (id: string, run: () => Promise<unknown>, done: string) => {
     const r = await outcome(id, run);
-    setMessage(r.ok ? { ok: true, text: done } : { ok: false, text: reasonText(t, r.reason) });
+    setMessage(r.ok ? { ok: true, text: done } : { ok: false, text: reasonText(t, r) });
     void qc.invalidateQueries({ queryKey: agentsKey });
   };
   const toggleFingerprint = () =>

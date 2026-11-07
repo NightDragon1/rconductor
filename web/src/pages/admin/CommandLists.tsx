@@ -63,9 +63,7 @@ function ListPanel({
       setMessage({ ok: false, text: t('admin.conflict') });
       return null;
     }
-    setMessage(
-      r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r.reason) },
-    );
+    setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
     if (done) {
       setBase(done);
       setDraft(done);
@@ -250,7 +248,7 @@ function ListPanel({
           );
           void qc.invalidateQueries({ queryKey: commandListsKey });
           if (r.ok) onClose();
-          else setMessage({ ok: false, text: reasonText(t, r.reason) });
+          else setMessage({ ok: false, text: reasonText(t, r) });
         }}
       />
     </aside>
@@ -293,7 +291,7 @@ export function CommandListsPage() {
       await qc.invalidateQueries({ queryKey: commandListsKey });
       setOpen(l.id);
     } catch (err) {
-      setError(reasonText(t, (err as { problem?: { reason?: string } }).problem?.reason));
+      setError(reasonText(t, (err as { problem?: { reason?: string; detail?: string } }).problem));
     }
   };
 
