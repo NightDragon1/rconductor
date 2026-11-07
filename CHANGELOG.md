@@ -16,7 +16,7 @@ Coming from a test version: the container label is now `rconductor.manage=true`.
 
 ### Known issues
 
-- Undo of assignments and of mass actions compares first and writes afterwards: a change by a second admin in between can be overwritten.
+- Undo of assignments and of mass actions compares first and writes afterwards: a change by a second admin in between can be overwritten. See #8.
 - The player list is cut at about 230 Minecraft names.
 - A change refused because the session has ended shows an error instead of the sign-in page; reload the page to sign in again.
 - A custom game profile near the size limit that repeats large parts through aliases, or that has very many unknown keys, can take about a second and more than 100 MB to import.
