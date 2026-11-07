@@ -1,0 +1,394 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+schema: 1
+id: minecraft-gtnh
+name: Minecraft GT New Horizons (1.7.10)
+match:
+  # TODO: Image des GTNH-Containers eintragen (itzg mit TYPE=FORGE
+  # oder eigenes Image).
+  images: ["itzg/minecraft-server*"]
+protocol:
+  type: source-rcon
+  default_port: 25575
+ports:
+  game:
+    - { port: 25565, proto: tcp, name: game }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  # 1.7.10: kein /execute.
+  wrappers: []
+  player_pattern: "^[A-Za-z0-9_]{1,16}$"
+players:
+  command: list
+  # 1.7.10: "There are 1/20 players online:\nSteve, Alex"
+  pattern: "players online:\\s*(.*)$"
+  separator: ", "
+stop:
+  command: stop
+version:
+  pattern: "Starting minecraft server version (\\S+)"
+formatting: minecraft
+catalog:
+  # --- Vanilla 1.7.10 ---
+  - path: list
+    description: Show players online
+  - path: whitelist add
+    description: Add a player to the whitelist
+    params:
+      - { name: player, type: player }
+  - path: whitelist remove
+    description: Remove a player from the whitelist
+    params:
+      - { name: player, type: player }
+  - path: whitelist list
+    description: Show the whitelist
+  - path: whitelist
+    description: Toggle or reload the whitelist
+    params:
+      - { name: action, type: choice, values: [on, off, reload] }
+  - path: kick
+    description: Kick a player from the server
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
+  - path: ban
+    description: Ban a player
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
+  - path: pardon
+    description: Unban a player
+    params:
+      - { name: player, type: player }
+  - path: ban-ip
+    description: Ban an IP address
+    params:
+      - { name: ip, type: text }
+      - { name: reason, type: text, optional: true }
+  - path: pardon-ip
+    description: Unban an IP address
+    params:
+      - { name: ip, type: text }
+  - path: banlist
+    description: Show banned players or IPs
+    params:
+      - { name: type, type: choice, values: [players, ips], optional: true }
+  - path: op
+    description: Grant operator status
+    params:
+      - { name: player, type: player }
+  - path: deop
+    description: Revoke operator status
+    params:
+      - { name: player, type: player }
+  - path: gamemode
+    description: Set a player's game mode (no spectator in 1.7.10)
+    params:
+      - { name: mode, type: choice, values: [survival, creative, adventure] }
+      - { name: player, type: player }
+  - path: tp
+    description: Teleport a player to another player
+    params:
+      - { name: player, type: player }
+      - { name: target, type: player }
+  - path: give
+    description: Give an item (modid:name or numeric id, optional count and meta)
+    params:
+      - { name: player, type: player }
+      - { name: item, type: text }
+      - { name: count, type: text, optional: true }
+      - { name: meta, type: text, optional: true }
+  - path: clear
+    description: Clear a player's inventory
+    params:
+      - { name: player, type: player }
+  - path: xp
+    description: Give experience (append L for levels, e.g. 5L)
+    params:
+      - { name: amount, type: text }
+      - { name: player, type: player }
+  - path: achievement give
+    description: Unlock an achievement for a player
+    params:
+      - { name: id, type: text }
+      - { name: player, type: player }
+  - path: time set
+    description: Set the time of day (day, night or ticks)
+    params:
+      - { name: time, type: choice, values: [day, night] }
+  - path: time add
+    description: Advance time by ticks
+    params:
+      - { name: ticks, type: text }
+  - path: weather
+    description: Set the weather
+    params:
+      - { name: type, type: choice, values: [clear, rain, thunder] }
+      - { name: duration, type: text, optional: true }
+  - path: difficulty
+    description: Set the difficulty
+    params:
+      - { name: level, type: choice, values: [peaceful, easy, normal, hard] }
+  - path: gamerule
+    description: Set a game rule (keepInventory, mobGriefing, doMobSpawning, doFireTick, doDaylightCycle)
+    params:
+      - { name: rule, type: text }
+      - { name: value, type: choice, values: ["true", "false"], optional: true }
+  - path: say
+    description: Message to all players
+    params:
+      - { name: text, type: text }
+  - path: tell
+    description: Private message to a player
+    params:
+      - { name: player, type: player }
+      - { name: text, type: text }
+  - path: save-all
+    description: Save the world to disk
+  - path: save-off
+    description: Disable automatic world saving
+  - path: save-on
+    description: Enable automatic world saving
+  - path: seed
+    description: Show the world seed
+
+  # --- Forge ---
+  - path: forge tps
+    description: Show tick time and TPS per dimension
+  - path: forge track
+    description: Track entity or tile-entity tick cost for N seconds
+    params:
+      - { name: type, type: choice, values: [entity, te] }
+      - { name: seconds, type: text }
+
+  # --- CoFH Core ---
+  - path: cofh tps
+    description: Show overall TPS; o = overview, a = entity/TE counts
+    params:
+      - { name: mode, type: choice, values: [o, a], optional: true }
+  - path: cofh killall
+    description: Kill hostile mobs; "*" = all entities, "item" = dropped items, or partial name
+    params:
+      - { name: filter, type: text, optional: true }
+  - path: cofh tpx
+    description: Teleport a player to a dimension id or to another player
+    params:
+      - { name: player, type: player }
+      - { name: destination, type: text }
+  - path: cofh tpx
+    description: Teleport a player to coordinates in a dimension
+    params:
+      - { name: player, type: player }
+      - { name: xyz, type: text }
+      - { name: dimension, type: text }
+  - path: cofh countblocks
+    description: Count blocks of a type around a player (xR yR zR block)
+    params:
+      - { name: player, type: player }
+      - { name: radii, type: text }
+      - { name: block, type: text }
+  - path: cofh replaceblocks
+    description: Replace blocks around a player (xR yR zR newBlock targetBlock)
+    params:
+      - { name: player, type: player }
+      - { name: radii, type: text }
+      - { name: blocks, type: text }
+  - path: cofh enchant
+    description: Apply an enchantment to a player's held item
+    params:
+      - { name: player, type: player }
+      - { name: enchantment, type: text }
+      - { name: level, type: text, optional: true }
+  - path: cofh version
+    description: Show CoFH Core version
+
+  # --- GregTech (GT5U) ---
+  - path: gt chunks
+    description: Dump all GregTech-forced chunks to logs/GregTech.log
+  - path: gt pollution
+    description: Add (+) or remove (-) pollution in the sender's chunk; needs a player sender
+    params:
+      - { name: amount, type: text }
+  - path: gt global_energy_display
+    description: Show a player's wireless EU network balance
+    params:
+      - { name: player, type: player }
+  - path: gt global_energy_add
+    description: Add EU to a player's wireless network
+    params:
+      - { name: player, type: player }
+      - { name: eu, type: text }
+  - path: gt global_energy_set
+    description: Set a player's wireless network EU
+    params:
+      - { name: player, type: player }
+      - { name: eu, type: text }
+  - path: gt global_energy_join
+    description: Join player A to player B's wireless network
+    params:
+      - { name: player, type: player }
+      - { name: network_owner, type: player }
+  - path: gt toggle
+    description: Toggle a GregTech debug flag at runtime
+    params:
+      - name: flag
+        type: choice
+        values: [D1, D2, debugCleanroom, debugDriller, debugBlockPump, debugBlockMiner, debugWorldGen, debugEntityCramming, debugOrevein, debugSmallOres, debugStones, debugChunkloaders, debugMulti, debugWorldData]
+
+  # --- ServerUtilities (OP; each command must be enabled in
+  #     serverutilities/serverutilities.cfg → commands { B:<name>=true }) ---
+  - path: backup start
+    description: Start a world backup now (2.9.x: =oc only claimed chunks, =overwrite)
+    params:
+      - { name: name, type: text, optional: true }
+  - path: backup stop
+    description: Cancel the running backup
+  - path: backup getsize
+    description: Show world size and backup folder size
+  - path: backup list
+    description: List backups with size and age (SU 2.4+ / GTNH 2.9.x)
+  - path: mute
+    description: Mute a player in chat
+    params:
+      - { name: player, type: player }
+  - path: unmute
+    description: Unmute a player
+    params:
+      - { name: player, type: player }
+  - path: nick
+    description: Set or reset a player's nickname
+    params:
+      - { name: player, type: player }
+      - { name: nickname, type: text, optional: true }
+  - path: heal
+    description: Fully heal a player
+    params:
+      - { name: player, type: player }
+  - path: fly
+    description: Toggle creative flight for a player
+    params:
+      - { name: player, type: player }
+  - path: god
+    description: Toggle invulnerability for a player
+    params:
+      - { name: player, type: player }
+  - path: killall
+    description: Remove loaded entities (SU variant)
+  - path: ranks
+    description: Rank management (list, add, remove, set_player_rank, get_player_rank, set_permission, reload)
+    params:
+      - { name: action, type: choice, values: [list, add, remove, set_player_rank, get_player_rank, set_permission, reload] }
+      - { name: args, type: text, optional: true }
+  - path: leaderboard
+    description: Show a leaderboard (e.g. deaths, time_played)
+    params:
+      - { name: stat, type: text, optional: true }
+  - path: dump_permissions
+    description: Dump all commands, permission nodes and sources to a file
+  - path: dump_chunkloaders
+    description: Dump all chunkloaded chunks per player
+  - path: reload
+    description: ServerUtilities reload (replaces vanilla /reload; ranks, config)
+
+  # --- BetterQuesting (GTNH fork, console-capable) ---
+  - path: bq_admin edit
+    description: Toggle or set quest edit mode
+    params:
+      - { name: state, type: choice, values: ["true", "false"], optional: true }
+  - path: bq_admin hardcore
+    description: Toggle or set hardcore lives mode
+    params:
+      - { name: state, type: choice, values: ["true", "false"], optional: true }
+  - path: bq_admin complete
+    description: Force-complete a quest (id or all) for a player
+    params:
+      - { name: quest, type: text }
+      - { name: player, type: player }
+  - path: bq_admin reset
+    description: Reset a quest (id or all) for a player; without player = everyone
+    params:
+      - { name: quest, type: text }
+      - { name: player, type: player, optional: true }
+  - path: bq_admin check
+    description: Check whether a player has completed a quest id
+    params:
+      - { name: player, type: player }
+      - { name: quest_id, type: text }
+  - path: bq_admin check_all
+    description: List all quests a player has completed
+    params:
+      - { name: player, type: player }
+  - path: bq_admin lives
+    description: Manage hardcore lives
+    params:
+      - { name: action, type: choice, values: [add, set, max, default] }
+      - { name: value, type: text }
+      - { name: player, type: player, optional: true }
+  - path: bq_admin default
+    description: Save/load the quest database to/from the pack defaults (load after pack update)
+    params:
+      - { name: action, type: choice, values: [save, load] }
+  - path: bq_admin delete
+    description: Delete a quest (id or all) and its progress
+    params:
+      - { name: quest, type: text }
+  - path: bq_copyquests
+    description: Copy completed quests from one player to another (to, from)
+    params:
+      - { name: to, type: player }
+      - { name: from, type: player }
+
+  # --- Thaumcraft ---
+  - path: thaumcraft research
+    description: Grant research (all | reset | research_code) to a player
+    params:
+      - { name: player, type: player }
+      - { name: research, type: text }
+  - path: thaumcraft research list
+    description: List all research codes
+  - path: thaumcraft aspect
+    description: Add research points for an aspect (or all)
+    params:
+      - { name: player, type: player }
+      - { name: aspect, type: text }
+      - { name: amount, type: text }
+  - path: tc warp
+    description: Set or add warp; type empty = normal, TEMP, PERM
+    params:
+      - { name: player, type: player }
+      - { name: action, type: choice, values: [set, add] }
+      - { name: value, type: text }
+      - { name: type, type: choice, values: [TEMP, PERM], optional: true }
+
+  # --- Other mods ---
+  - path: tfprogress
+    description: Set Twilight Forest progression past a boss
+    params:
+      - { name: player, type: player }
+      - { name: boss, type: choice, values: [none, naga, lich, mooshroom, hydra, knights, urghast, yeti, snowqueen, giants, final] }
+  - path: ob_inventory restore
+    description: Restore a player's inventory from an OpenBlocks grave file (use .grave, not .death)
+    params:
+      - { name: player, type: player }
+      - { name: file, type: text }
+  - path: pspace ls
+    description: List all Personal Space dimensions
+  - path: pspace where
+    description: Show which Personal Space dimension a player is in
+    params:
+      - { name: player, type: player }
+  - path: pspace tpx
+    description: Teleport a player into a Personal Space dimension
+    params:
+      - { name: player, type: player }
+      - { name: dimension, type: text }
+      - { name: xyz, type: text, optional: true }
+  - path: pspace give-portal
+    description: Give a player a Personal Space portal bound to a dimension
+    params:
+      - { name: player, type: player }
+      - { name: dimension, type: text, optional: true }
+  - path: forestry butterfly kill
+    description: Remove all butterflies from the world
