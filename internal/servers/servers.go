@@ -538,11 +538,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	if err != nil {
 		return Server{}, err
 	}
-	// The stored password must not travel to a new address unasked: a stolen
-	// session could read it there (T-011).
-	if in.Password == nil && (f.host != r.Host || f.port != int(r.Port)) {
-		return Server{}, &users.InvalidError{Detail: "enter the RCON password again when host or port change"}
-	}
+	// A new host or port keeps the stored password (D-050, R-16).
 	var sealed []byte
 	if in.Password != nil {
 		if err := checkPassword(*in.Password); err != nil {

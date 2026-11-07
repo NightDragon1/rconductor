@@ -392,7 +392,7 @@ func TestConnectionNewData(t *testing.T) {
 
 // TestConnectionRunning covers PROT-002 rev. 2 and D-049: unchanged data
 // connect no second time, also with the password typed in again; changed
-// data do, and the stored password never goes to a new address.
+// data do, and at a new address the stored password is used (D-050).
 func TestConnectionRunning(t *testing.T) {
 	f, srv, in := connectionFixture(t)
 	ctx := context.Background()
@@ -436,12 +436,57 @@ func TestConnectionRunning(t *testing.T) {
 	defer other.Close()
 	host, port, _ := net.SplitHostPort(other.Addr)
 	p, _ := strconv.Atoi(port)
-	var inv *users.InvalidError
-	if _, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ServerID: sv.ID, Host: &host, Port: &p}); !errors.As(err, &inv) {
-		t.Errorf("new address without password: %v", err)
+	if got, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ServerID: sv.ID, Host: &host, Port: &p}); err != nil || got != ConnectionOK {
+		t.Errorf("new address with the stored password: %q %v", got, err)
 	}
-	if other.Connections() != 0 {
-		t.Error("the stored password went to a new address")
+	if other.Connections() != 1 {
+		t.Errorf("%d connections at the new address, want 1", other.Connections())
+	}
+	var inv *users.InvalidError
+	if _, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ProfileID: in.ProfileID, Host: &host, Port: &p}); !errors.As(err, &inv) {
+		t.Errorf("without server and password: %v", err)
+	}
+}
+
+// TestHostChangeKeepsPassword covers D-050: the RCON admin moves a server
+// to a new host and port without typing the password again; the stored
+// one connects there, and the audit names the fields, never the password.
+func TestHostChangeKeepsPassword(t *testing.T) {
+	f, _, in := connectionFixture(t)
+	ctx := context.Background()
+	name := "moved"
+	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileID: in.ProfileID, Host: in.Host, Port: in.Port, Password: secretOf(rconPassword)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := rcontest.Start(rconPassword, rcontest.Minecraft, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	host, port, _ := net.SplitHostPort(other.Addr)
+	p, _ := strconv.Atoi(port)
+	got, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{Host: &host, Port: &p, Version: f.version(sv.ID)})
+	if err != nil {
+		t.Fatalf("host and port without password: %v", err)
+	}
+	if got.Host != host || got.Port != p || got.Credentials != "ok" {
+		t.Errorf("after the move: %+v", got)
+	}
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		if st, _ := f.svc.conns.Status(sv.ID); st == connmgr.Connected && other.Connections() > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("not connected at the new address with the stored password")
+		}
+	}
+	var payload string
+	if err := f.st.DB.QueryRowContext(ctx, `SELECT payload FROM audit_log WHERE action = 'server.update' AND target_id = ?`, sv.ID).Scan(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(payload, "host") || !strings.Contains(payload, "port") || strings.Contains(payload, rconPassword) {
+		t.Errorf("audit payload = %s", payload)
 	}
 }
 

@@ -85,8 +85,9 @@ func (s *Service) testLimit(ctx context.Context) int {
 // TestConnection tests RCON data without saving them (SRV-007, D-049).
 // Unchanged data of a server get the status of its running connection, so
 // that nothing connects a second time; new or changed data open a short
-// connection that only authenticates. The stored password never goes to a
-// new address (T-011). The password appears in neither log nor audit.
+// connection that only authenticates. Without a password typed in, the
+// stored one is used, also at a new address (D-050, R-16). The password
+// appears in neither log nor audit.
 func (s *Service) TestConnection(ctx context.Context, req users.Request, in ConnectionData) (string, error) {
 	const action = "server.connection_test"
 	if err := s.mustBeAdmin(ctx, req, action, "server", in.ServerID); err != nil {
@@ -118,7 +119,7 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 	}
 	sameAddr := in.ServerID != "" && f.host == base.host && f.port == base.port
 	var stored logging.Secret
-	if sameAddr {
+	if in.ServerID != "" {
 		stored = s.storedPassword(in.ServerID, sealed)
 	}
 	password := stored

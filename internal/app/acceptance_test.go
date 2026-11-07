@@ -612,18 +612,22 @@ func TestBigBodies(t *testing.T) {
 	}
 }
 
-// TestStoredPasswordStaysAtItsHost covers T-011: changing host or port needs
-// the password again, or a stolen session could read it at a listener.
-func TestStoredPasswordStaysAtItsHost(t *testing.T) {
+// TestHostChangeOnlyByRCONAdmin covers T-011 with D-050: the RCON admin
+// moves a server to a new host or port without the password again (R-16);
+// every other role is refused, so no one else can send the stored password
+// to a listener.
+func TestHostChangeOnlyByRCONAdmin(t *testing.T) {
 	f := newRightsFixture(t)
-	if status, reason := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]string{"host": "attacker.example"}); status != http.StatusUnprocessableEntity && status != http.StatusBadRequest {
+	for _, who := range []string{rSI, rSO, rMR, rSU, rX} {
+		if status, _ := f.raw(who, http.MethodPatch, "/servers/"+f.server, map[string]string{"host": "attacker.example"}); status < 400 {
+			t.Errorf("%s: new host = %d", who, status)
+		}
+	}
+	if status, reason := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]string{"host": "other.example"}); status != http.StatusOK {
 		t.Errorf("new host without password = %d %s", status, reason)
 	}
-	if status, _ := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]any{"port": 1}); status < 400 {
+	if status, _ := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]any{"port": 1}); status != http.StatusOK {
 		t.Errorf("new port without password = %d", status)
-	}
-	if status, _ := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]string{"name": "renamed"}); status != http.StatusOK {
-		t.Errorf("another field = %d", status)
 	}
 	if status, _ := f.raw(rA, http.MethodPatch, "/servers/"+f.server, map[string]string{"host": "mc.example", "password": "a new password"}); status != http.StatusOK {
 		t.Errorf("new host with password = %d", status)

@@ -151,10 +151,10 @@ paths:
         With server_id and unchanged host, port and password (an empty
         password counts as unchanged) the answer is the status of the
         running connection, nothing connects. New or changed data open a
-        short connection that only authenticates and closes at once. An
-        empty password at a new address is refused: the stored password
-        never goes there. Limited per user. No data of the game server
-        comes back.
+        short connection that only authenticates and closes at once. With
+        server_id an empty password means the stored one, also at a new
+        address (D-050); without server_id it is refused. Limited per user.
+        No data of the game server comes back.
       tags: [servers]
       requestBody:
         required: true
@@ -201,7 +201,7 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateServer
-      summary: Change a server; a password replaces the stored one; RCON admin only.
+      summary: Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only.
       tags: [servers]
       parameters:
         - $ref: "#/components/parameters/IfMatch"

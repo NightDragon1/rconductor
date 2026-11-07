@@ -110,7 +110,7 @@ export interface paths {
         put?: never;
         /**
          * Test RCON data without saving; RCON admin only (SRV-007).
-         * @description With server_id and unchanged host, port and password (an empty password counts as unchanged) the answer is the status of the running connection, nothing connects. New or changed data open a short connection that only authenticates and closes at once. An empty password at a new address is refused: the stored password never goes there. Limited per user. No data of the game server comes back.
+         * @description With server_id and unchanged host, port and password (an empty password counts as unchanged) the answer is the status of the running connection, nothing connects. New or changed data open a short connection that only authenticates and closes at once. With server_id an empty password means the stored one, also at a new address (D-050); without server_id it is refused. Limited per user. No data of the game server comes back.
          */
         post: operations["testServerConnection"];
         delete?: never;
@@ -136,7 +136,7 @@ export interface paths {
         delete: operations["deleteServer"];
         options?: never;
         head?: never;
-        /** Change a server; a password replaces the stored one; RCON admin only. */
+        /** Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only. */
         patch: operations["updateServer"];
         trace?: never;
     };
