@@ -545,11 +545,14 @@ func (d *Docker) follow(ctx context.Context, s container.Summary, name, ref stri
 		return agentproto.CodeError, "logs not readable"
 	}
 	d.log.Info("following container logs", logging.Event(logging.LogsFollowStart), slog.String("container", name))
-	go d.pump(fctx, r, name, ref, out)
+	go d.pump(fctx, ctx, r, name, ref, out)
 	return agentproto.CodeOK, ""
 }
 
-func (d *Docker) pump(ctx context.Context, r io.ReadCloser, name, ref string, out Sender) {
+// pump sends the lines of a follow until ctx ends. Sends run under session,
+// not ctx: coder/websocket closes the connection when the context of a write
+// ends during it, so a logs.stop in the middle of a send would end the session.
+func (d *Docker) pump(ctx, session context.Context, r io.ReadCloser, name, ref string, out Sender) {
 	defer func() {
 		_ = r.Close()
 		d.stopFollow(name)
@@ -576,7 +579,7 @@ func (d *Docker) pump(ctx context.Context, r io.ReadCloser, name, ref string, ou
 		}
 		ls, cut := agentproto.LimitLines(batch)
 		batch = nil
-		_ = out.Send(ctx, agentproto.TypeLogLines, ref, agentproto.LogLines{Container: name, Lines: ls, Truncated: cut})
+		_ = out.Send(session, agentproto.TypeLogLines, ref, agentproto.LogLines{Container: name, Lines: ls, Truncated: cut})
 	}
 	for {
 		select {
