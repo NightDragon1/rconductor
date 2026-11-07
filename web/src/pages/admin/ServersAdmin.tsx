@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, must } from '@/api/client';
+import { api, must, patchVersioned } from '@/api/client';
 import {
   serverGroupsKey,
   serversKey,
@@ -175,8 +175,8 @@ function ServerPanel({
     let done = null as Server | null;
     const r = await outcome(id, async () => {
       done = must(
-        await api.PATCH('/servers/{id}', {
-          params: { path: { id }, header: { 'If-Match': from.version } },
+        await patchVersioned('/servers/{id}', from.version, {
+          path: { id },
           body: bodyOf(next),
         }),
       );
@@ -533,8 +533,8 @@ function GroupPanel({
     let done = null as ServerGroup | null;
     const r = await outcome(group.id, async () => {
       done = must(
-        await api.PATCH('/server-groups/{id}', {
-          params: { path: { id: group.id }, header: { 'If-Match': from.version } },
+        await patchVersioned('/server-groups/{id}', from.version, {
+          path: { id: group.id },
           body: { name: to.name, server_ids: to.server_ids },
         }),
       );

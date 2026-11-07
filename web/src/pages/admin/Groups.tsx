@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, must } from '@/api/client';
+import { api, must, patchVersioned } from '@/api/client';
 import { useServerGroups, useServers } from '@/api/servers';
 import {
   outcome,
@@ -137,8 +137,8 @@ function GroupPanel({
     let done = null as UserGroup | null;
     const r = await outcome(group.id, async () => {
       done = must(
-        await api.PATCH('/user-groups/{id}', {
-          params: { path: { id: group.id }, header: { 'If-Match': from.version } },
+        await patchVersioned('/user-groups/{id}', from.version, {
+          path: { id: group.id },
           body: {
             name: to.name,
             command_list_id: to.command_list_id ?? '',

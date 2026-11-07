@@ -12,6 +12,7 @@ import (
 	"image/color"
 	"image/png"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -923,6 +924,118 @@ func TestOptimisticLocking(t *testing.T) {
 	}
 	if st, reason, _ := f.guarded(f.as(rMR), http.MethodPatch, "/servers/"+f.server, "", map[string]any{"name": "x"}); st != http.StatusForbidden {
 		t.Errorf("moderator without If-Match = %d %s, want 403", st, reason)
+	}
+}
+
+// TestIfMatchRequiredFromSpec reads the versioned writes from
+// api/openapi.yaml: the operations with the parameter IfMatch, which carries
+// x-rcd-required-by-server. Without If-Match each is refused with 428 for
+// the RCON admin, while every other role with a session gets the answer of
+// the rights matrix, never 428: role and scope come before the version
+// (Design 2.1, 3.1, D-051). VersionedPath in web/src/api/client.ts must
+// name the same paths, so the client cannot send one of them without
+// If-Match (UI-007, UI-008, NFR-011).
+func TestIfMatchRequiredFromSpec(t *testing.T) {
+	b, err := os.ReadFile("../../api/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Paths      map[string]map[string]any `yaml:"paths"`
+		Components struct {
+			Parameters map[string]map[string]any `yaml:"parameters"`
+		} `yaml:"components"`
+	}
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	param := doc.Components.Parameters["IfMatch"]
+	if param["x-rcd-required-by-server"] != true {
+		t.Fatalf("parameter IfMatch: x-rcd-required-by-server = %v, want true", param["x-rcd-required-by-server"])
+	}
+	// Required in the file would let the generated wrapper answer 400
+	// before the rights check (D-051).
+	if param["required"] != false {
+		t.Fatalf("parameter IfMatch: required = %v, want false", param["required"])
+	}
+	const ref = "#/components/parameters/IfMatch"
+	var versioned []string
+	paths := map[string]bool{}
+	for path, ops := range doc.Paths {
+		for method, raw := range ops {
+			op, _ := raw.(map[string]any)
+			params, _ := op["parameters"].([]any)
+			for _, p := range params {
+				if m, _ := p.(map[string]any); m["$ref"] == ref {
+					versioned = append(versioned, strings.ToUpper(method)+" "+path)
+					paths[path] = true
+				}
+			}
+		}
+	}
+	slices.Sort(versioned)
+	if len(versioned) == 0 {
+		t.Fatal("no operation uses the parameter IfMatch")
+	}
+
+	// The client lists the same paths.
+	src, err := os.ReadFile("../../web/src/api/client.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := regexp.MustCompile(`(?s)export type VersionedPath =(.*?);`).FindSubmatch(src)
+	if block == nil {
+		t.Fatal("web/src/api/client.ts: type VersionedPath not found")
+	}
+	var client []string
+	for _, m := range regexp.MustCompile(`'([^']+)'`).FindAllSubmatch(block[1], -1) {
+		client = append(client, string(m[1]))
+	}
+	slices.Sort(client)
+	want := slices.Sorted(maps.Keys(paths))
+	if !slices.Equal(client, want) {
+		t.Errorf("VersionedPath in web/src/api/client.ts = %v, want the paths of api/openapi.yaml %v", client, want)
+	}
+
+	rows := map[string]matrixOp{}
+	for _, op := range matrix() {
+		rows[op.method+" "+op.path] = op
+	}
+	f := newRightsFixture(t)
+	for _, name := range versioned {
+		row, ok := rows[name]
+		if !ok || row.req == nil {
+			t.Errorf("%s: no request in the rights matrix", name)
+			continue
+		}
+		r := row.req(f, rA)
+		// The test client names the version only for these paths.
+		if !versionedPath.MatchString(r.path) {
+			t.Errorf("%s: %s does not match versionedPath", name, r.path)
+		}
+		allowed := 0
+		for i, role := range matrixRoles {
+			c := f.c[role]
+			if c == nil || c.cookie == nil {
+				continue
+			}
+			r := row.req(f, role)
+			st, reason, _ := f.guarded(c, row.method, r.path, "", r.body)
+			switch want := row.expect[i]; {
+			case want == 'O':
+				// May write: refused only for the missing version.
+				allowed++
+				if st != http.StatusPreconditionRequired || reason != "precondition_required" {
+					t.Errorf("%s as %s without If-Match = %d %s, want 428 precondition_required", name, role, st, reason)
+				}
+			case st == http.StatusPreconditionRequired || classify(st, reason) != want:
+				// May not write: the rights answer comes first.
+				t.Errorf("%s as %s without If-Match = %d %s, want %c of the rights matrix", name, role, st, reason, want)
+			}
+		}
+		if allowed == 0 {
+			t.Errorf("%s: no role may write it in the rights matrix", name)
+		}
 	}
 }
 
