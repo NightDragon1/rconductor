@@ -29,7 +29,8 @@ Values come from the environment or an `.env` file next to the Compose file:
 runs as a non-root user and reaches the socket through this group. Read the
 number with `stat -c %g /var/run/docker.sock`.
 
-To check the signature of an image:
+To check the signature of an image (needs cosign 3 or newer; cosign 2 does not
+find the signatures and reports "no signatures found"):
 
 ```sh
 cosign verify ghcr.io/nightdragon1/rconductor-panel:1 \
