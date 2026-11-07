@@ -5,9 +5,8 @@ import { api, ApiError, must } from '@/api/client';
 import { useSession } from '@/api/session';
 import {
   addCommands,
-  addLogLines,
+  addDelivery,
   bufferWriter,
-  newLines,
   updateBuffer,
   useBuffer,
   type CmdBlock,
@@ -51,11 +50,14 @@ const latestRefill = new Map<string, number>();
 export function useLogsFeed(id: string, on: boolean) {
   const [write] = useState(bufferWriter);
   useTopic(id && on ? `server.${id}.logs` : undefined, (m) => {
-    const d = m.data as { lines?: unknown; current?: unknown } | undefined;
+    const d = m.data as
+      { lines?: unknown; current?: unknown; first?: unknown; run?: unknown } | undefined;
     if (m.type === 'event' && Array.isArray(d?.lines)) {
       const lines = d.lines.filter((l): l is string => typeof l === 'string');
       const ts = new Date().toISOString();
-      write(id, (b) => addLogLines(b, d.current === true ? newLines(b, lines) : lines, ts));
+      const first = typeof d.first === 'number' ? d.first : undefined;
+      const run = typeof d.run === 'string' ? d.run : undefined;
+      write(id, (b) => addDelivery(b, { lines, current: d.current === true, first, run }, ts));
     }
   });
 }
