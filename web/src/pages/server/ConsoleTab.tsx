@@ -11,6 +11,7 @@ import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  isRunning,
   MAX_COMMANDS,
   ownCommands,
   suggest,
@@ -26,9 +27,9 @@ import { useConsoleFeed } from './useConsoleFeed';
 
 // tone colors a block and its marker on the timeline (CMD-013): own
 // commands, those of others, logs; errors red.
-function tone(b: Block, me?: string): 'own' | 'others' | 'log' | 'error' {
+function tone(b: Block, me: string | undefined, now: number): 'own' | 'others' | 'log' | 'error' {
   if (b.kind === 'log') return 'log';
-  if (b.result !== 'ok') return 'error';
+  if (b.result !== 'ok' && !isRunning(b, now)) return 'error';
   return b.userId === me ? 'own' : 'others';
 }
 const markerClass = {
@@ -47,10 +48,12 @@ const edgeClass = {
 function CommandView({
   b,
   t0,
+  now,
   collapsed,
   onToggle,
 }: {
   b: CmdBlock;
+  now: number;
   t0: 'own' | 'others' | 'log' | 'error';
   collapsed: boolean;
   onToggle: () => void;
@@ -90,10 +93,14 @@ function CommandView({
         <code className="rounded bg-surface-raised px-1.5 py-0.5 font-mono">
           <ForeignText text={b.command} />
         </code>
-        <span className={cn('ml-auto', b.result === 'ok' ? 'text-ok' : 'text-danger')}>
-          {t(`history.result.${b.result}`)}
-          {b.reason && <span className="ml-1 font-mono text-xs">({b.reason})</span>}
-        </span>
+        {isRunning(b, now) ? (
+          <span className="ml-auto text-muted">{t('console.running')}</span>
+        ) : (
+          <span className={cn('ml-auto', b.result === 'ok' ? 'text-ok' : 'text-danger')}>
+            {t(`history.result.${b.result}`)}
+            {b.reason && <span className="ml-1 font-mono text-xs">({b.reason})</span>}
+          </span>
+        )}
         <CopyButton text={copy} target={pre} label={t('console.copy')} />
       </div>
       {!collapsed && (answer || b.truncated) && (
@@ -171,6 +178,12 @@ export function ConsoleTab() {
   const id = server?.id ?? '';
   const hasAgent = !!server?.agent_id;
   const allowed = useAllowedCommands(id, !!id);
+  // Running commands turn into failed ones without any event.
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(i);
+  }, []);
   const [allTracks, setAllTracks] = useState<Record<string, Tracks>>({});
   const tracks = allTracks[id] ?? { own: true, others: true, logs: true };
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -188,7 +201,7 @@ export function ConsoleTab() {
   const [older, setOlder] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   // Logs flow only while their track is shown (G2, UI-009).
-  const { buf, send, loadOlder } = useConsoleFeed(id, hasAgent && tracks.logs);
+  const { buf, send, loadOlder, history } = useConsoleFeed(id, hasAgent && tracks.logs);
 
   const items = visible(buf, { ...tracks, logs: tracks.logs && hasAgent }, filter, me);
   // TanStack Virtual keeps its own state, so the React Compiler skips this
@@ -290,7 +303,7 @@ export function ConsoleTab() {
             className="hidden max-h-[60vh] w-8 shrink-0 flex-col items-center gap-1.5 overflow-y-auto border-r border-border py-3 md:flex"
           >
             {items.map((b, i) => {
-              const k = tone(b, me);
+              const k = tone(b, me, now);
               return (
                 <button
                   key={b.id}
@@ -334,6 +347,17 @@ export function ConsoleTab() {
                 {t('console.older')}
               </Button>
             )}
+            {buf.cursor && buf.cmds.length >= MAX_COMMANDS && (
+              <p className="mb-2 text-sm text-muted">{t('console.olderInHistory')}</p>
+            )}
+            {history.isError && (
+              <div role="alert" className="mb-2 flex items-center gap-2 text-sm text-danger">
+                {t('console.historyFailed')}
+                <Button variant="ghost" size="sm" onClick={() => void history.refetch()}>
+                  {t('console.retry')}
+                </Button>
+              </div>
+            )}
             {buf.loaded && items.length === 0 && (
               <p className="text-sm text-muted">{t('console.empty')}</p>
             )}
@@ -351,8 +375,9 @@ export function ConsoleTab() {
                   >
                     {b.kind === 'cmd' ? (
                       <CommandView
+                        now={now}
                         b={b}
-                        t0={tone(b, me)}
+                        t0={tone(b, me, now)}
                         collapsed={collapsed.has(b.id)}
                         onToggle={() => toggle(b.id)}
                       />

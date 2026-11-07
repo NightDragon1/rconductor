@@ -117,7 +117,7 @@ export function useConsoleFeed(id: string, logs: boolean) {
   // 2.3) and retries: no live event reached this buffer meanwhile. Each
   // confirmed subscription fetches again: only from then on live events come,
   // so nothing can fall between the page and the first event.
-  useQuery({
+  const history = useQuery({
     queryKey: ['console-history', id, confirmed],
     queryFn: () => loadPage(),
     enabled: !!id,
@@ -204,5 +204,5 @@ export function useConsoleFeed(id: string, logs: boolean) {
     isPending: (buf.running ?? 0) > 0,
   };
   const loadOlder = () => (buf.cursor ? loadPage(buf.cursor) : Promise.resolve());
-  return { buf, me, send, loadOlder };
+  return { buf, me, send, loadOlder, history };
 }
