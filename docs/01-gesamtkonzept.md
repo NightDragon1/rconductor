@@ -1,6 +1,6 @@
 # ShadowGhost.NET Game RCONductor – Gesamtkonzept
 
-Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.8, Stand 06.11.2026, Status freigegeben; Änderungen gegenüber 2.7 in Kapitel 17, gegenüber 2.6 in Kapitel 16, gegenüber 2.5 in Kapitel 15, gegenüber 2.4 in Kapitel 14, gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
+Projektname: ShadowGhost.NET Game RCONductor (kurz RCONductor). Dokumentversion 2.9, Stand 07.11.2026, Status freigegeben; Änderungen gegenüber 2.8 in Kapitel 18, gegenüber 2.7 in Kapitel 17, gegenüber 2.6 in Kapitel 16, gegenüber 2.5 in Kapitel 15, gegenüber 2.4 in Kapitel 14, gegenüber 2.3 in Kapitel 13, gegenüber 2.2 in Kapitel 12, gegenüber 2.1 in Kapitel 11, gegenüber 2.0 in Kapitel 10.
 
 ## 1. Einleitung
 
@@ -127,7 +127,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | SRV-004 | Erreichbarkeit | Status je Server: verbunden, Auth-Fehler, offline | Backend | Muss | R1 | 1 |
 | SRV-005 | Spielports | Festlegen, welche Ports Spielports sind, über Spielprofil oder durch RCON-Admin am Server | Backend, Profile | Soll | R1 | 1 |
 | SRV-006 | Laufzeitdaten | Spielerliste und ähnliche Laufzeitdaten werden nicht dauerhaft gespeichert, sondern per Befehl bzw. über den Agent abgerufen und im Cache des Panels gepuffert | Backend | Muss | R1 | 1 |
-| SRV-007 | Verbindungstest | RCON-Admin prüft beim Anlegen und Bearbeiten die eingegebenen RCON-Daten, ohne zu speichern; Ergebnis ok, auth\_failed oder unreachable; mit Audit und Ratenlimit (D-049) | Backend, UI | Soll | R1 | 1 |
+| SRV-007 | Verbindungstest | RCON-Admin prüft beim Anlegen und Bearbeiten die eingegebenen RCON-Daten, ohne zu speichern; ohne eingegebenes Passwort gilt das gespeicherte, auch an einer neuen Adresse (D-050); Ergebnis ok, auth\_failed oder unreachable; mit Audit und Ratenlimit (D-049) | Backend, UI | Soll | R1 | 2 |
 
 ### 2.5 Protokolle
 
@@ -147,6 +147,7 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | CAT-003 | Hot Reload | Profildateien sind die Quelle; beim Start und bei jeder Dateiänderung werden sie in die Datenbank importiert, ohne Neustart des Panels; die Oberfläche arbeitet ausschließlich aus der Datenbank | Backend | Muss | R1 | 1 |
 | CAT-004 | Kategorien | Katalogbefehle kategorisiert (spielerbezogen, Welt, Server, kritisch); daraus Standard-Befehlsliste für Moderatoren | Profile, UI | Soll | R2 | 1 |
 | CAT-005 | Befehlssyntax je Spiel | Spielprofil legt Groß-/Kleinschreibung, Präfixe (z. B. /), Wrapper-Befehle und maximale Befehlslänge fest; Standard: ohne Groß-/Kleinschreibung, führender / wird entfernt | Profile, Backend | Muss | R1 | 1 |
+| CAT-006 | Profilprüfung als Befehl | Das Panel-Binary prüft Profildateien ohne Konfiguration, Datenbank und Netz (panel profile check, auch per docker run mit dem Panel-Image); es nennt alle Probleme mit Zeilennummer und endet bei einem Fehler mit einem Exit-Code ungleich 0 | Profile, Backend | Soll | R1 | 1 |
 
 ### 2.7 Befehlseingabe
 
@@ -213,6 +214,8 @@ Die Anforderungen sind nach Kapiteln gegliedert; jedes Kapitel beschreibt einen 
 | UI-012 | Mobile Nutzung | Karten, Befehlsseite und Konsole auf dem Smartphone voll bedienbar, Mitteilungen ab R2; Verwaltung mobil nur lesend, ausgenommen Sperren, Entsperren und Sitzungen beenden mit Bestätigungsdialog | UI | Soll | R1 | 2 |
 | UI-013 | Passwort einblendbar | Passwortfelder von Anmeldung, Passwortwechsel und Einladung lassen sich kurz einblenden; beim Absenden und nach 10 s sind sie wieder verborgen | UI | Soll | R1 | 1 |
 | UI-014 | Erklärungen einblendbar | Die Erklärungen in den Einstellungen lassen sich ein- und ausblenden; der Zustand gilt je Benutzer im Browser | UI | Kann | R1 | 1 |
+| UI-015 | Versionsanzeige | Die Oberfläche zeigt allen Rollen die Version des Panels im Benutzermenü und in der Seitenleiste; die Version kommt aus GET /auth/session | Backend, UI | Soll | R1 | 1 |
+| UI-016 | Fehlerdetail im Klartext | Lehnt das Backend eine Eingabe als ungültig ab, zeigt die Oberfläche dessen Fehlerdetail statt eines pauschalen Texts; bei fehlenden Rechten, unbekannten Objekten und fehlender Anmeldung bleibt der feste Text | UI | Soll | R1 | 1 |
 
 ### 2.11 Audit und Statistik
 
@@ -406,8 +409,9 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | D-045 | Profilbild als BLOB in der Datenbank, neu kodiert und verkleinert | ein Backup enthält alle veränderlichen Daten; Metadaten wie EXIF entfallen | Datei unter /data |
 | D-046 | Benutzer entstehen nur per Einladung, dazu der Notfall-Admin; das Token steht nur im URL-Fragment | niemand vergibt Passwörter für andere; ein Weg statt zwei; das Token erscheint in keinem Proxy- oder Panel-Log | POST /users mit Passwortvergabe |
 | D-047 | Versionen sind zweistellig (1.0, 1.1); Inkompatibles erhöht die erste Stelle (D-023), alles andere die zweite; Release-Tags wie v1.0, Image-Tags 1 und 1.0. Testversionen 0.x haben nur das Image-Tag 0.x, kein Haupt- oder latest-Tag, sind GitHub-Pre-Releases und stehen nicht im CHANGELOG | die erste Stelle trägt allein die Regel für Panel und Agent, eine dritte Stelle sagt nichts Zusätzliches | dreistellige Versionen (1.0.0) |
-| D-048 | Verwaltung speichert mit explizitem Save sofort; Rückgängig ist eine Gegenänderung binnen 5 s mit eigenem Audit-Eintrag. Kein Rückgängig bei Änderung von Host, Port oder RCON-Passwort; beendete Sessions stellt Rückgängig nicht wieder her | Änderungen sind sofort wirksam und ohne Überraschung; das RCON-Passwort ist nicht lesbar und wird nie im Panel aufgehoben | Senden erst nach 5 s (bis 2.7) |
-| D-049 | Verbindungstest mit unveränderten Daten antwortet aus dem Status der laufenden Verbindung; nur neue oder geänderte Daten lösen einen kurzen Testaufbau aus (nur Authentifizierung, kein Befehl, sofort geschlossen) | PROT-002 bleibt für bestehende Server gewahrt; das gespeicherte Passwort geht nie an eine neue Adresse | immer eine zweite Verbindung |
+| D-048 | Verwaltung speichert mit explizitem Save sofort; Rückgängig ist eine Gegenänderung binnen 5 s mit eigenem Audit-Eintrag. Kein Rückgängig bei Änderung des RCON-Passworts (bis 2.8 auch bei Host und Port); beendete Sessions stellt Rückgängig nicht wieder her | Änderungen sind sofort wirksam und ohne Überraschung; das RCON-Passwort ist nicht lesbar und wird nie im Panel aufgehoben | Senden erst nach 5 s (bis 2.7) |
+| D-049 | Verbindungstest mit unveränderten Daten antwortet aus dem Status der laufenden Verbindung; nur neue oder geänderte Daten lösen einen kurzen Testaufbau aus (nur Authentifizierung, kein Befehl, sofort geschlossen) | PROT-002 bleibt für bestehende Server gewahrt | immer eine zweite Verbindung |
+| D-050 | Der RCON-Admin ändert alle Anwenderdaten im Panel (Server, Servergruppen, Benutzer, Gruppen, Listen, Agents, Einstellungen) ohne zusätzliche Sicherheitshürden: Host oder Port ändern verlangt kein erneutes RCON-Passwort, das gespeicherte bleibt gültig und gilt auch beim Verbindungstest. Es bleiben Account-Sicherheit (eigenes Passwort, Anmeldung, Sessions, Sperre), Bestätigungsdialoge bei destruktiven Aktionen, If-Match und die Regeln des Rollenmodells | der RCON-Admin ist Eigentümer aller Daten; Zusatzeingaben schützen nicht gegen ihn, nur gegen eine gestohlene Session, und die deckt der Sitzungsschutz (Restrisiko R-16) | erneute Passworteingabe bei neuer Adresse (bis 2.8) |
 
 ## 7. Releaseplan
 
@@ -442,6 +446,7 @@ Der Cache liegt nur im Arbeitsspeicher des Panels und wird nach einem Neustart n
 | 2.6 | 06.11.2026 | Freigabe durch Rob: D-037 und Design 6.5 ohne Verweis auf Mockups, D-047 um Testversionen 0.x ergänzt (Kapitel 15). Keine Anforderung ändert sich |
 | 2.7 | 06.11.2026 | Freigabe durch Rob: Ergebnisse der Abnahme und des Reviews des Bedrohungsmodells eingearbeitet (Kapitel 16); Revision 2 für CAT-002, AGT-013, AUD-001, NFR-009; Revision 3 für SEC-013 |
 | 2.8 | 06.11.2026 | Freigabe durch Rob: Funde aus dem Test von 0.9 eingearbeitet (Kapitel 17); Revision 2 für AUTH-006, AGT-002, PROT-002, UI-008; Revision 3 für UI-001, UI-004; SRV-007, UI-013, UI-014, D-048 und D-049 neu; D-037 und D-044 geändert |
+| 2.9 | 07.11.2026 | Freigabe durch Rob: Grundsatz D-050 für den RCON-Admin, Funde F-19, F-20, F-23 vor 1.0 (Kapitel 18); Revision 2 für SRV-007; UI-015, UI-016, CAT-006 und D-050 neu; D-048 und D-049 geändert; Restrisiko R-16 |
 
 ## 10. Änderungen in Version 2.1
 
@@ -633,3 +638,16 @@ Aus dem Test von 0.9 auf hydra.
 | 11 | Nachtrag: Betriebsgrenzen und Zeiten als Einstellung mit Standard und Mindestwert; Standardwerte unverändert (Inventar der Grenzen) | Design 5.2, 5.6 |
 | 12 | Nachtrag: Verzögerung je Konto wächst bis 30 s; Grenze für falsche Passwörter beim Passwortwechsel | Design 3.7, Sicherheit R-11 |
 | 13 | Nachtrag: logs.follow mit eigenem Bucket je Container | Design 1.6, 5.3 |
+
+## 18. Änderungen in Version 2.9
+
+Grundsatz für den RCON-Admin und Funde vor 1.0.
+
+| Nr. | Änderung | Fundstelle in 2.9 |
+| --- | --- | --- |
+| 1 | Der RCON-Admin ändert Anwenderdaten ohne zusätzliche Sicherheitshürden; Account-Sicherheit, Bestätigungsdialoge, If-Match und Rollenmodell bleiben | D-050 |
+| 2 | Host oder Port ändern verlangt kein erneutes RCON-Passwort; das gespeicherte gilt weiter, auch beim Verbindungstest an der neuen Adresse; ersetzt Kapitel 16 Nr. 11 | SRV-007, D-049, D-050, Design 2.2, Sicherheit T-011, R-16, Abnahme SRV-007 |
+| 3 | Rückgängig auch nach Änderung von Host oder Port; ohne Rückgängig bleibt nur die Änderung des RCON-Passworts | D-048, Design 4.1 |
+| 4 | Version des Panels in der Oberfläche für alle Rollen (F-19) | UI-015, Design 2.2, Abnahme UI-015 |
+| 5 | Fehlerdetail des Backends im Klartext statt eines pauschalen Texts (F-20) | UI-016, Design 2.1, Abnahme UI-016 |
+| 6 | Profilprüfung als Befehl mit Zeilennummern und Exit-Code (F-23) | CAT-006, Design 7.1, Abnahme CAT-006 |

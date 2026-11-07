@@ -1,6 +1,6 @@
 # Abnahmekriterien R1
 
-Dokumentversion 2.8, freigegeben; Änderungen gegenüber 2.7 siehe Gesamtkonzept, Kapitel 17, gegenüber 2.6 Kapitel 16, gegenüber 2.5 Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
+Dokumentversion 2.9, freigegeben; Änderungen gegenüber 2.8 siehe Gesamtkonzept, Kapitel 18, gegenüber 2.7 Kapitel 17, gegenüber 2.6 Kapitel 16, gegenüber 2.5 Kapitel 15, gegenüber 2.4 Kapitel 14, gegenüber 2.3 Kapitel 13, gegenüber 2.2 Kapitel 12, gegenüber 2.1 Kapitel 11, gegenüber 2.0 Kapitel 10. Jede Anforderung mit Target R1 gilt als erfüllt, wenn ihr Kriterium in der genannten Prüfart besteht. Kriterien beziehen sich auf die aktuelle Revision der Anforderung.
 
 | Prüfart | Bedeutung |
 | --- | --- |
@@ -79,7 +79,7 @@ Dokumentversion 2.8, freigegeben; Änderungen gegenüber 2.7 siehe Gesamtkonzept
 | SRV-004 | Bei falschem Passwort zeigt der Server Auth-Fehler, bei gestopptem Spiel offline, sonst verbunden; der Wechsel ist binnen 10 s sichtbar | Integration |
 | SRV-005 | Spielports kommen aus dem Profil und lassen sich je Server überschreiben | Integration |
 | SRV-006 | Spielerliste und Laufzeitdaten stehen in keiner Tabelle; nach einem Panel-Neustart werden sie neu abgefragt | Review, Integration |
-| SRV-007 | Verbindungstest liefert ok, auth\_failed und unreachable je nach Lage, ohne etwas zu speichern; nur für RCON-Admin; gespeichertes Passwort geht nie an eine neue Adresse; Ratenlimit greift; Audit-Eintrag ohne Passwort | Integration, E2E |
+| SRV-007 | Verbindungstest liefert ok, auth\_failed und unreachable je nach Lage, ohne etwas zu speichern; nur für RCON-Admin; ohne eingegebenes Passwort testet er mit dem gespeicherten, auch an einer neuen Adresse; Host oder Port ändern ohne Passwort behält das gespeicherte und lässt sich rückgängig machen; Ratenlimit greift; Audit-Eintrag ohne Passwort | Integration, E2E |
 | PROT-001 | Befehle an einen Minecraft-Testserver liefern dieselbe Antwort wie ein direkter RCON-Client, auch bei Antworten über 4 KB | Integration |
 | PROT-002 | Bei 3 Benutzern, die gleichzeitig je 20 Befehle senden, besteht genau eine RCON-Verbindung und jede Antwort landet beim richtigen Absender; nach einem Spielneustart verbindet sich das Panel selbst; ein Verbindungstest mit unveränderten Daten baut keine zweite Verbindung auf | Integration |
 
@@ -91,6 +91,7 @@ Dokumentversion 2.8, freigegeben; Änderungen gegenüber 2.7 siehe Gesamtkonzept
 | CAT-002 | Ein Befehl, der in keinem Katalog steht, lässt sich in eine Befehlsliste aufnehmen und senden; der RCON-Admin sendet auch Befehle frei, die ein Katalogpfad einschränken würde | Integration |
 | CAT-003 | Eine geänderte Profildatei in /data/profiles ist ohne Neustart binnen 5 s in der Oberfläche sichtbar; eine fehlerhafte Änderung lässt den alten Stand aktiv | Integration |
 | CAT-005 | Mit case\_sensitive=false wird KICK wie kick behandelt; ein führender / wird entfernt; ein Befehl über max\_length wird abgelehnt | Unit |
+| CAT-006 | panel profile check nennt für eine fehlerhafte Datei alle Probleme mit Zeilennummer und endet mit Exit-Code 1; die mitgelieferten Profile bestehen mit 0; ohne Konfiguration lauffähig | Unit |
 
 ## 6. Befehle (2.7)
 
@@ -140,6 +141,8 @@ Dokumentversion 2.8, freigegeben; Änderungen gegenüber 2.7 siehe Gesamtkonzept
 | UI-012 | Bei 390 px Breite sind Befehlsseite, Karten und Konsole ohne horizontales Scrollen bedienbar; Tippflächen sind mindestens 44 px; Verwaltung ist nur lesbar, ausgenommen Sperren, Entsperren und Sitzungen beenden mit Bestätigungsdialog | E2E |
 | UI-013 | Passwort lässt sich bei Anmeldung, Passwortwechsel und Einladung einblenden und ist beim Absenden und nach 10 s wieder verborgen | Unit, E2E |
 | UI-014 | Erklärungen in den Einstellungen lassen sich ausblenden; der Zustand bleibt nach dem Neuladen | Unit |
+| UI-015 | Jede Rolle sieht die Version aus GET /auth/session im Benutzermenü und in der Seitenleiste | Unit, E2E |
+| UI-016 | Eine als ungültig abgelehnte Eingabe zeigt das Fehlerdetail des Backends; bei forbidden, not\_found und unauthenticated bleibt der feste Text | Unit, E2E |
 | AUD-001 | Befehle, Ablehnungen, Agent-Aktionen, Verwaltungsänderungen und Anmeldungen erzeugen Einträge mit Ergebnis, ein Befehl cmd.sent und cmd.result, eine Sperre einen für alle abgewiesenen Versuche; bei Datenbanksperre über 2 min steht der Eintrag vollständig als audit.entry\_lost im Log | Integration |
 | AUD-003 | Einträge älter als die Frist (Standard 90 Tage) sind nach dem nächsten Aufräumlauf entfernt; nur der RCON-Admin kann die Frist ändern | Integration |
 | AUD-004 | Ein Server-Admin sieht nur Einträge seines Scopes; der Versuch, die Frist zu ändern, wird abgelehnt | Integration |
