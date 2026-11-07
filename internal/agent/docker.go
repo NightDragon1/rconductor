@@ -432,7 +432,9 @@ func (d *Docker) allow(ctx context.Context, name, typ string) (container.Summary
 		d.log.Warn("container not resolved", slog.String("container", name), slog.Any("err", err))
 		return s, agentproto.CodeNotFound
 	}
-	if !d.limiter.allow(name) {
+	// Following only reads and has its own limit: switching between
+	// console and logs must not use up the actions (#155).
+	if typ != agentproto.TypeLogsFollow && !d.limiter.allow(name) {
 		return s, agentproto.CodeRateLimited
 	}
 	return s, ""

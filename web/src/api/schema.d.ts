@@ -2916,6 +2916,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             422: components["responses"]["Invalid"];
+            429: components["responses"]["RateLimited"];
             503: components["responses"]["Busy"];
         };
     };

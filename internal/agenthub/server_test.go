@@ -10,11 +10,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -461,5 +463,46 @@ func TestOtherRequestsEndTheConnection(t *testing.T) {
 	}
 	if !bytes.Contains(answer, []byte("404")) {
 		t.Errorf("answer = %q", answer)
+	}
+}
+
+// failingListener fails Accept once, then is closed.
+type failingListener struct {
+	net.Listener
+	calls atomic.Int32
+}
+
+func (l *failingListener) Accept() (net.Conn, error) {
+	if l.calls.Add(1) == 1 {
+		return nil, errors.New("too many open files")
+	}
+	return l.Listener.Accept()
+}
+
+// TestV4AcceptErrorKeepsTheLoop covers #158: a failed Accept neither ends the
+// loop for good nor closes the channel handshakes send on.
+func TestV4AcceptErrorKeepsTheLoop(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := New(nil, slog.New(slog.DiscardHandler), Options{})
+	fl := &failingListener{Listener: ln}
+	l := newHandshakeListener(ctx, fl, &tls.Config{MinVersion: tls.VersionTLS13}, h)
+	c, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	for deadline := time.Now().Add(5 * time.Second); fl.calls.Load() < 3; time.Sleep(5 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("Accept called %d times", fl.calls.Load())
+		}
+	}
+	cancel()
+	if _, err := l.Accept(); !errors.Is(err, net.ErrClosed) {
+		t.Errorf("after the end: %v", err)
 	}
 }

@@ -38,7 +38,7 @@ func TestLoginDelay(t *testing.T) {
 	for i := range 6 {
 		_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", clientAt(fmt.Sprintf("192.0.2.%d", i+1)))
 	}
-	want := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 4 * time.Second}
+	want := []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}
 	if !slices.Equal(f.delays, want) {
 		t.Errorf("delays = %v, want %v", f.delays, want)
 	}
@@ -48,7 +48,7 @@ func TestLoginDelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, _ = f.svc.Login(ctx, "Mod", "wrong password!!", clientAt("192.0.2.50"))
-	if !slices.Equal(f.delays, []time.Duration{4 * time.Second, 4 * time.Second}) {
+	if !slices.Equal(f.delays, []time.Duration{16 * time.Second, 16 * time.Second}) {
 		t.Errorf("delays after success = %v", f.delays)
 	}
 }
@@ -89,7 +89,7 @@ func TestLockoutPerAccountAndClient(t *testing.T) {
 	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, owner); err != nil {
 		t.Fatalf("owner locked out: %v", err)
 	}
-	if len(f.delays) != 1 || f.delays[0] != 4*time.Second {
+	if len(f.delays) != 1 || f.delays[0] != 8*time.Second {
 		t.Errorf("owner delay = %v", f.delays)
 	}
 
@@ -569,7 +569,7 @@ func TestOwnerStaysAfterAnAttackOnTheLine(t *testing.T) {
 	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, clientAt("203.0.113.51")); err != nil {
 		t.Fatalf("owner after the attack: %v", err)
 	}
-	if !slices.Equal(f.delays, []time.Duration{overflowGap, 4 * time.Second}) {
+	if !slices.Equal(f.delays, []time.Duration{overflowGap, 8 * time.Second}) {
 		t.Errorf("delays of the owner = %v, want the line and the delay of the account", f.delays)
 	}
 }
@@ -827,8 +827,8 @@ func TestOwnerLoginGivesNoAttempts(t *testing.T) {
 	if _, _, err := f.svc.Login(ctx, "Mod", testPassword, owner); err != nil {
 		t.Fatalf("owner: %v", err)
 	}
-	if len(f.delays) != 1 || f.delays[0] != 4*time.Second {
-		t.Errorf("delay after the owner's logins = %v, want 4s", f.delays)
+	if len(f.delays) != 1 || f.delays[0] != 8*time.Second {
+		t.Errorf("delay after the owner's logins = %v, want 8s", f.delays)
 	}
 }
 
@@ -1147,5 +1147,22 @@ func TestV3FailedLoginsAreAuditedUnderLoad(t *testing.T) {
 	wg.Wait()
 	if n, want := f.count(t, `SELECT count(*) FROM audit_log`)-before, int(failed.Load()); n != want || want == 0 {
 		t.Errorf("%d audit rows for %d failed logins", n, want)
+	}
+}
+
+// TestR11DelayGrowsOverAddresses covers #162: failures from many addresses
+// make the delay of the account grow to its end, and nobody is locked out.
+func TestR11DelayGrowsOverAddresses(t *testing.T) {
+	th := newThrottle()
+	lim := limits(5, time.Hour)
+	now := time.Now()
+	want := []time.Duration{0, 0, time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, maxAccountDelay, maxAccountDelay}
+	for i, d := range want {
+		ip := netip.AddrFrom4([4]byte{10, 0, 0, byte(i + 1)})
+		delay, locked := th.check("victim", ip, now, lim.lockout)
+		if delay != d || locked != 0 {
+			t.Errorf("failure %d: delay %v, locked %v", i, delay, locked)
+		}
+		th.fail("victim", ip, now, lim, ticket{})
 	}
 }
