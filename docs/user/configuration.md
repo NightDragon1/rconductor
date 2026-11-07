@@ -41,7 +41,7 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_EMERGENCY_ADMIN` | boolean | `true` | boolean | emergency admin enabled |
 | `RCD_EMERGENCY_ADMIN_RESET` | boolean | `false` | boolean | on start, a new initial password for the emergency admin, its sessions end and a lock is lifted; remove it afterwards |
 | `RCD_PASSWORD_HASH_CONCURRENCY` | number | `2` | 1 to 2 | password hashes computed at once, each takes 64 MiB of RAM |
-| `RCD_MAX_CONNECTIONS` | number | `512` | 16 to 65536 | open connections of the web port, WebSockets included; further ones wait until one ends |
+| `RCD_MAX_CONNECTIONS` | number | `512` | 16 to 65536 | open connections of the web port, WebSockets included; further ones wait until one ends. A connection can hold up to 256 KiB of a request body, so 512 take up to 128 MiB: raise `mem_limit` of the panel along with this value |
 | `RCD_MAX_CLIENT_CONNECTIONS` | number | `128` | 1 to 65536 | open connections of one client address, an IPv6 /64 counts as one; further ones are closed; trusted proxies have no limit of their own |
 | `RCD_MAX_ANONYMOUS_CONNECTION_SECONDS` | number | `30` | 10 to 3600 | a connection without a valid session ends after this time, once its running request is done; behind a trusted proxy the proxy address is exempt |
 | `RCD_RCON_PROBE_SECONDS` | number | 2 | 1 to 60 | how often an idle RCON connection is read |
@@ -74,6 +74,8 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_MAX_LOG_FOLLOWS` | number | 16 | 1 to 256 | live logs at once |
 | `RCD_ACTIONS_PER_MINUTE` | number | 10 | 1 to 600 | start, stop, restart per container and minute |
 | `RCD_ACTIONS_BURST` | number | 3 | 1 to 100 | of those in one go |
+| `RCD_FOLLOWS_PER_MINUTE` | number | 60 | 1 to 600 | starts of live logs per container and minute |
+| `RCD_FOLLOWS_BURST` | number | 20 | 1 to 100 | of those in one go |
 | `RCD_DOCKER_HOST` | URL | `unix:///var/run/docker.sock` | Docker address, also a socket proxy such as `tcp://socket-proxy:2375` | Docker API |
 | `RCD_SECRETS_DIR` | path | `/secrets` | directory | agent key and pairing |
 | `RCD_LOG_LEVEL` | text | `info` | `debug`, `info`, `warn`, `error` | log level |

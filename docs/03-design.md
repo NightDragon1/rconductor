@@ -78,7 +78,7 @@ Fehlercodes: forbidden (Container nicht freigegeben oder Operation nicht erlaubt
 - Jeder Auftrag wird gegen die Label-Freigabe des Containers geprüft, auch wenn das Panel ihn bereits geprüft hat.
 - Nur die Operationen aus 1.5 sind möglich; unbekannte Typen werden mit unsupported beantwortet.
 - Regex nur RE2, mit Zeilenlimit und Timeout; zurück geht nur der Treffer.
-- Aufträge je Container sind in der Rate begrenzt.
+- Aufträge je Container sind in der Rate begrenzt. logs.follow hat einen eigenen, großzügigen Bucket (RCD\_FOLLOWS\_PER\_MINUTE, RCD\_FOLLOWS\_BURST), damit das Umschalten zwischen Konsole und Logs keine Aktionen verbraucht.
 - Container werden über ihren Namen angesprochen; der Agent löst Namen bei jedem Auftrag neu auf und prüft dabei das Label. Ein Container ohne Label existiert für ihn nicht.
 
 Grenzen (SEC-007):
@@ -382,6 +382,7 @@ Ein täglicher Job entfernt Audit-Einträge nach Ablauf der Frist (Standard 90 T
 | RCD\_LABEL | rconductor.manage=true | Label, das einen Container freigibt |
 | RCD\_AGENT\_MAX\_BACKOFF\_SECONDS, RCD\_AGENT\_DIAL\_TIMEOUT\_SECONDS | 120, 15 | Wiederverbindung des Agents (1.1) |
 | RCD\_METRICS\_INTERVAL\_SECONDS, RCD\_MAX\_LOG\_FOLLOWS, RCD\_ACTIONS\_PER\_MINUTE, RCD\_ACTIONS\_BURST | 10, 16, 10, 3 | Messwerte, Live-Logs und Aktionen je Container (1.5, 1.6) |
+| RCD\_FOLLOWS\_PER\_MINUTE, RCD\_FOLLOWS\_BURST | 60, 20 | logs.follow je Container (1.6) |
 | RCD\_DOCKER\_HOST | unix:///var/run/docker.sock | Zugang zum Docker-Daemon |
 | RCD\_SECRETS\_DIR | /secrets | Agent-Schlüssel und gepinnter Panel-Schlüssel |
 | RCD\_LOG\_LEVEL, RCD\_LOG\_FORMAT | info, text | wie beim Panel |

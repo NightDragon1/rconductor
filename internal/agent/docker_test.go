@@ -352,3 +352,22 @@ func TestK3FollowOutsideTheOrderLimit(t *testing.T) {
 		}
 	}
 }
+
+// TestC4FollowHasItsOwnLimit: switching often stays free of the actions but
+// does not go without bound. Failed before the fix: no limit at all.
+func TestC4FollowHasItsOwnLimit(t *testing.T) {
+	d, _, _ := newTestDocker(t)
+	follow := func() string {
+		r, _ := order(t, d, agentproto.TypeLogsFollow, agentproto.LogsFollow{Container: "mc"})
+		_, _ = order(t, d, agentproto.TypeLogsStop, agentproto.LogsFollow{Container: "mc"})
+		return r.Code
+	}
+	for i := range 20 {
+		if code := follow(); code != agentproto.CodeOK {
+			t.Fatalf("follow %d = %s", i, code)
+		}
+	}
+	if code := follow(); code != agentproto.CodeRateLimited {
+		t.Errorf("follow over the burst = %s", code)
+	}
+}

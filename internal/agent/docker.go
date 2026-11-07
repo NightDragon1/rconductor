@@ -53,8 +53,12 @@ type Docker struct {
 	labelKey   string
 	labelValue string
 	limiter    *orderLimiter
-	metrics    time.Duration
-	maxFollows int
+	// followLimiter is for logs.follow: switching between console and logs
+	// must not use up the actions of a container (#155), and still costs
+	// calls to Docker (C4).
+	followLimiter *orderLimiter
+	metrics       time.Duration
+	maxFollows    int
 
 	mu      sync.Mutex
 	follows map[string]context.CancelFunc
@@ -83,9 +87,16 @@ func newDocker(api dockerAPI, cfg config.Agent, log *slog.Logger) *Docker {
 	if cfg.MaxFollows > 0 {
 		follows = cfg.MaxFollows
 	}
+	followRate, followBurst := 60, 20
+	if cfg.FollowsPerMinute > 0 {
+		followRate = cfg.FollowsPerMinute
+	}
+	if cfg.FollowsBurst > 0 {
+		followBurst = cfg.FollowsBurst
+	}
 	return &Docker{
 		api: api, log: log, labelKey: cfg.LabelKey, labelValue: cfg.LabelValue, maxFollows: follows,
-		limiter: newOrderLimiter(orders, burst), metrics: metrics, follows: map[string]context.CancelFunc{},
+		limiter: newOrderLimiter(orders, burst), followLimiter: newOrderLimiter(followRate, followBurst), metrics: metrics, follows: map[string]context.CancelFunc{},
 	}
 }
 
@@ -432,9 +443,11 @@ func (d *Docker) allow(ctx context.Context, name, typ string) (container.Summary
 		d.log.Warn("container not resolved", slog.String("container", name), slog.Any("err", err))
 		return s, agentproto.CodeNotFound
 	}
-	// Following only reads and has its own limit: switching between
-	// console and logs must not use up the actions (#155).
-	if typ != agentproto.TypeLogsFollow && !d.limiter.allow(name) {
+	limiter := d.limiter
+	if typ == agentproto.TypeLogsFollow {
+		limiter = d.followLimiter
+	}
+	if !limiter.allow(name) {
 		return s, agentproto.CodeRateLimited
 	}
 	return s, ""
