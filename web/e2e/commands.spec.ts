@@ -17,7 +17,7 @@ async function open(page: Page, state: StackState, user: string) {
 test('the moderator sees his list as cards with fields (CMD-003)', async ({ page, state }) => {
   await open(page, state, 'mod');
   await expect(cards(page)).toHaveCount(6);
-  for (const path of ['list', 'kick', 'whitelist add', 'say', 'time set', 'weather']) {
+  for (const path of ['list', 'kick', 'whitelist add', 'say', 'time set', 'setidletimeout']) {
     await expect(card(page, path)).toBeVisible();
   }
   const kick = card(page, 'kick');
@@ -26,10 +26,10 @@ test('the moderator sees his list as cards with fields (CMD-003)', async ({ page
   await expect(kick.getByLabel('reason (optional)')).toBeVisible();
   // choice is a switch with the profile's values.
   const time = card(page, 'time set');
-  await expect(time.getByRole('radio')).toHaveText(['day', 'night']);
+  await expect(time.getByRole('radio')).toHaveText(['day', 'noon', 'night', 'midnight']);
   await expect(time.getByRole('button', { name: 'Run' })).toBeDisabled();
   // A command without catalog entry gets a free field (Design 7.3).
-  await expect(card(page, 'weather').getByLabel('Arguments')).toBeVisible();
+  await expect(card(page, 'setidletimeout').getByLabel('Arguments')).toBeVisible();
 });
 
 test('players come from the player list; the answer shows in the history (CMD-003)', async ({
@@ -52,18 +52,18 @@ test('players come from the player list; the answer shows in the history (CMD-00
   await expect(entry).toContainText('Done: kick Steve spam in chat');
 
   const time = card(page, 'time set');
-  await time.getByRole('radio', { name: 'night' }).click();
+  await time.getByRole('radio', { name: 'night', exact: true }).click();
   await time.getByRole('button', { name: 'Run' }).click();
   await expect(mine(page).getByRole('listitem').first()).toContainText('time set night');
 
-  const weather = card(page, 'weather');
-  await weather.getByLabel('Arguments').fill('clear 600');
-  await weather.getByRole('button', { name: 'Run' }).click();
-  await expect(mine(page).getByRole('listitem').first()).toContainText('weather clear 600');
+  const idle = card(page, 'setidletimeout');
+  await idle.getByLabel('Arguments').fill('10');
+  await idle.getByRole('button', { name: 'Run' }).click();
+  await expect(mine(page).getByRole('listitem').first()).toContainText('setidletimeout 10');
 
   await mine(page).getByRole('link', { name: 'Show all' }).click();
   await expect(page).toHaveURL(/\/history$/);
-  await expect(page.getByRole('region', { name: 'History' })).toContainText('weather clear 600');
+  await expect(page.getByRole('region', { name: 'History' })).toContainText('setidletimeout 10');
 });
 
 test('a player field takes only player names (revision 2.4 candidate 19)', async ({
@@ -95,7 +95,7 @@ test('the supporter sees only passable commands (CMD-003, ROLE-007)', async ({ p
     await expect(card(page, path)).toBeVisible();
   }
   await expect(card(page, 'kick')).toHaveCount(0);
-  await expect(card(page, 'weather')).toHaveCount(0);
+  await expect(card(page, 'setidletimeout')).toHaveCount(0);
   await card(page, 'list').getByRole('button', { name: 'Run' }).click();
   await expect(mine(page).getByRole('listitem').first()).toContainText(
     'There are 2 of a max of 20',
