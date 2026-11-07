@@ -93,6 +93,7 @@ type Agent struct {
 	// this by hand. Values below the minimum come only that way.
 	MaxBackoff, DialTimeout, MetricsInterval time.Duration
 	MaxFollows, OrdersPerMinute, OrdersBurst int
+	FollowsPerMinute, FollowsBurst           int
 	Log                                      Log
 }
 
@@ -167,18 +168,20 @@ func LoadPanel(env Lookup, readFile ReadFile) (Panel, error) {
 func LoadAgent(env Lookup, readFile ReadFile) (Agent, error) {
 	r := reader{env: env, readFile: readFile}
 	c := Agent{
-		PairingToken:    r.secret("RCD_PAIRING_TOKEN"),
-		PanelAddr:       r.str("RCD_PANEL_ADDR", ""),
-		Name:            r.str("RCD_AGENT_NAME", ""),
-		DockerHost:      r.str("RCD_DOCKER_HOST", "unix:///var/run/docker.sock"),
-		MaxBackoff:      r.seconds("RCD_AGENT_MAX_BACKOFF_SECONDS", 120, 5, 3600),
-		DialTimeout:     r.seconds("RCD_AGENT_DIAL_TIMEOUT_SECONDS", 15, 1, 120),
-		MetricsInterval: r.seconds("RCD_METRICS_INTERVAL_SECONDS", 10, 1, 300),
-		MaxFollows:      r.integer("RCD_MAX_LOG_FOLLOWS", 16, 1, 256),
-		OrdersPerMinute: r.integer("RCD_ACTIONS_PER_MINUTE", 10, 1, 600),
-		OrdersBurst:     r.integer("RCD_ACTIONS_BURST", 3, 1, 100),
-		SecretsDir:      r.str("RCD_SECRETS_DIR", "/secrets"),
-		Log:             r.log(),
+		PairingToken:     r.secret("RCD_PAIRING_TOKEN"),
+		PanelAddr:        r.str("RCD_PANEL_ADDR", ""),
+		Name:             r.str("RCD_AGENT_NAME", ""),
+		DockerHost:       r.str("RCD_DOCKER_HOST", "unix:///var/run/docker.sock"),
+		MaxBackoff:       r.seconds("RCD_AGENT_MAX_BACKOFF_SECONDS", 120, 5, 3600),
+		DialTimeout:      r.seconds("RCD_AGENT_DIAL_TIMEOUT_SECONDS", 15, 1, 120),
+		MetricsInterval:  r.seconds("RCD_METRICS_INTERVAL_SECONDS", 10, 1, 300),
+		MaxFollows:       r.integer("RCD_MAX_LOG_FOLLOWS", 16, 1, 256),
+		OrdersPerMinute:  r.integer("RCD_ACTIONS_PER_MINUTE", 10, 1, 600),
+		OrdersBurst:      r.integer("RCD_ACTIONS_BURST", 3, 1, 100),
+		FollowsPerMinute: r.integer("RCD_FOLLOWS_PER_MINUTE", 60, 1, 600),
+		FollowsBurst:     r.integer("RCD_FOLLOWS_BURST", 20, 1, 100),
+		SecretsDir:       r.str("RCD_SECRETS_DIR", "/secrets"),
+		Log:              r.log(),
 	}
 	label := r.str("RCD_LABEL", "rconductor.manage=true")
 	key, value, ok := strings.Cut(label, "=")

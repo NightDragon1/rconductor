@@ -352,3 +352,70 @@ func TestK3FollowOutsideTheOrderLimit(t *testing.T) {
 		}
 	}
 }
+
+// TestC4FollowHasItsOwnLimit: switching often stays free of the actions but
+// does not go without bound. Failed before the fix: no limit at all.
+func TestC4FollowHasItsOwnLimit(t *testing.T) {
+	d, _, _ := newTestDocker(t)
+	follow := func() string {
+		r, _ := order(t, d, agentproto.TypeLogsFollow, agentproto.LogsFollow{Container: "mc"})
+		_, _ = order(t, d, agentproto.TypeLogsStop, agentproto.LogsFollow{Container: "mc"})
+		return r.Code
+	}
+	for i := range 20 {
+		if code := follow(); code != agentproto.CodeOK {
+			t.Fatalf("follow %d = %s", i, code)
+		}
+	}
+	if code := follow(); code != agentproto.CodeRateLimited {
+		t.Errorf("follow over the burst = %s", code)
+	}
+}
+
+// stallingSender holds a send until told, then notes whether its context
+// still stood.
+type stallingSender struct {
+	entered, release chan struct{}
+	err              chan error
+}
+
+func (s *stallingSender) Send(ctx context.Context, _, _ string, _ any) error {
+	s.entered <- struct{}{}
+	<-s.release
+	s.err <- ctx.Err()
+	return nil
+}
+
+// stringStream is a log stream that ends when closed.
+type stringStream struct {
+	io.Reader
+	done chan struct{}
+}
+
+func (s stringStream) Close() error { close(s.done); return nil }
+
+// TestLogsStopDuringASendKeepsTheSession: a stop that comes while lines are
+// on their way must not cancel the write. coder/websocket closes the whole
+// connection when the context of a write ends during it, so the agent lost
+// the panel (TestAgentThroughSocketProxy in CI). Failed before the fix: the
+// send ran under the context of the follow.
+func TestLogsStopDuringASendKeepsTheSession(t *testing.T) {
+	d, _, _ := newTestDocker(t)
+	session, end := context.WithCancel(context.Background())
+	defer end()
+	fctx, cancel := context.WithCancel(session)
+	d.mu.Lock()
+	d.follows["mc"] = cancel
+	d.mu.Unlock()
+	pr, pw := io.Pipe()
+	s := &stallingSender{entered: make(chan struct{}), release: make(chan struct{}), err: make(chan error, 1)}
+	go d.pump(fctx, session, stringStream{Reader: pr, done: make(chan struct{})}, "mc", "ref", s)
+	go func() { _, _ = io.WriteString(pw, "a line\n") }()
+	<-s.entered
+	d.stopFollow("mc")
+	close(s.release)
+	if err := <-s.err; err != nil {
+		t.Errorf("the send lost its context: %v", err)
+	}
+	_ = pw.Close()
+}

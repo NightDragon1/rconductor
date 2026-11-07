@@ -362,3 +362,31 @@ func TestR5B12PictureReadsStayWithinThePool(t *testing.T) {
 		t.Errorf("%d database connections at once, want 1 to 32", n)
 	}
 }
+
+// deadlineWriter records the write deadline set on it.
+type deadlineWriter struct {
+	http.ResponseWriter
+	deadline time.Time
+}
+
+func (d *deadlineWriter) SetWriteDeadline(t time.Time) error {
+	d.deadline = t
+	return nil
+}
+
+// TestV5ActionOutlivesTheWriteDeadline covers #158: the answer of an action
+// that takes its 70 s can still be written. Failed before the fix: no deadline
+// was set, the 60 s of the server held.
+func TestV5ActionOutlivesTheWriteDeadline(t *testing.T) {
+	h := withBodyLimit(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	for path, set := range map[string]bool{"/api/v1/servers/x/actions": true, "/api/v1/servers": false} {
+		w := &deadlineWriter{ResponseWriter: httptest.NewRecorder()}
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}")))
+		if set != !w.deadline.IsZero() {
+			t.Errorf("%s: deadline %v", path, w.deadline)
+		}
+		if set && time.Until(w.deadline) < 70*time.Second {
+			t.Errorf("%s: only %v", path, time.Until(w.deadline))
+		}
+	}
+}

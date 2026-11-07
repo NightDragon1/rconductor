@@ -53,8 +53,12 @@ type Docker struct {
 	labelKey   string
 	labelValue string
 	limiter    *orderLimiter
-	metrics    time.Duration
-	maxFollows int
+	// followLimiter is for logs.follow: switching between console and logs
+	// must not use up the actions of a container (#155), and still costs
+	// calls to Docker (C4).
+	followLimiter *orderLimiter
+	metrics       time.Duration
+	maxFollows    int
 
 	mu      sync.Mutex
 	follows map[string]context.CancelFunc
@@ -83,9 +87,16 @@ func newDocker(api dockerAPI, cfg config.Agent, log *slog.Logger) *Docker {
 	if cfg.MaxFollows > 0 {
 		follows = cfg.MaxFollows
 	}
+	followRate, followBurst := 60, 20
+	if cfg.FollowsPerMinute > 0 {
+		followRate = cfg.FollowsPerMinute
+	}
+	if cfg.FollowsBurst > 0 {
+		followBurst = cfg.FollowsBurst
+	}
 	return &Docker{
 		api: api, log: log, labelKey: cfg.LabelKey, labelValue: cfg.LabelValue, maxFollows: follows,
-		limiter: newOrderLimiter(orders, burst), metrics: metrics, follows: map[string]context.CancelFunc{},
+		limiter: newOrderLimiter(orders, burst), followLimiter: newOrderLimiter(followRate, followBurst), metrics: metrics, follows: map[string]context.CancelFunc{},
 	}
 }
 
@@ -432,9 +443,11 @@ func (d *Docker) allow(ctx context.Context, name, typ string) (container.Summary
 		d.log.Warn("container not resolved", slog.String("container", name), slog.Any("err", err))
 		return s, agentproto.CodeNotFound
 	}
-	// Following only reads and has its own limit: switching between
-	// console and logs must not use up the actions (#155).
-	if typ != agentproto.TypeLogsFollow && !d.limiter.allow(name) {
+	limiter := d.limiter
+	if typ == agentproto.TypeLogsFollow {
+		limiter = d.followLimiter
+	}
+	if !limiter.allow(name) {
 		return s, agentproto.CodeRateLimited
 	}
 	return s, ""
@@ -532,11 +545,14 @@ func (d *Docker) follow(ctx context.Context, s container.Summary, name, ref stri
 		return agentproto.CodeError, "logs not readable"
 	}
 	d.log.Info("following container logs", logging.Event(logging.LogsFollowStart), slog.String("container", name))
-	go d.pump(fctx, r, name, ref, out)
+	go d.pump(fctx, ctx, r, name, ref, out)
 	return agentproto.CodeOK, ""
 }
 
-func (d *Docker) pump(ctx context.Context, r io.ReadCloser, name, ref string, out Sender) {
+// pump sends the lines of a follow until ctx ends. Sends run under session,
+// not ctx: coder/websocket closes the connection when the context of a write
+// ends during it, so a logs.stop in the middle of a send would end the session.
+func (d *Docker) pump(ctx, session context.Context, r io.ReadCloser, name, ref string, out Sender) {
 	defer func() {
 		_ = r.Close()
 		d.stopFollow(name)
@@ -563,7 +579,7 @@ func (d *Docker) pump(ctx context.Context, r io.ReadCloser, name, ref string, ou
 		}
 		ls, cut := agentproto.LimitLines(batch)
 		batch = nil
-		_ = out.Send(ctx, agentproto.TypeLogLines, ref, agentproto.LogLines{Container: name, Lines: ls, Truncated: cut})
+		_ = out.Send(session, agentproto.TypeLogLines, ref, agentproto.LogLines{Container: name, Lines: ls, Truncated: cut})
 	}
 	for {
 		select {
