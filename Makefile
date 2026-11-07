@@ -56,7 +56,7 @@ test-e2e:
 	cd web && npm ci --no-audit --no-fund && npm run build && npx playwright install chromium && npx playwright test
 
 # The measurements behind the residual risks (Sicherheit chapter 5). They take
-# minutes, so they are in no check.
+# minutes, so they are in no check; measure-login runs in CI stage 3.
 measure-login:
 	go test -tags measure -count=1 -v -timeout 30m -run TestMeasure ./internal/auth
 

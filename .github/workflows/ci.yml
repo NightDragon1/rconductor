@@ -3,8 +3,8 @@
 # Three stages (scripts/ci-scope.sh decides):
 #   1. every run: SPDX, Go lint, Go test, web lint and test, govulncheck
 #   2. push to main and pull requests: integration, E2E, amd64 image
-#   3. nightly, manual and tags: arm64 images and Minecraft, and everything
-#      else regardless of paths
+#   3. nightly, manual and tags: arm64 images, Minecraft and the long tests
+#      in real time, and everything else regardless of paths
 # E2E follows the changed paths; Minecraft also runs in stage 2 when RCON or
 # profiles change. release.yml calls this before publishing; images are only
 # built here, never pushed.
@@ -290,6 +290,20 @@ jobs:
           build-args: VERSION=0.0.0-ci+${{ github.sha }}
           cache-from: type=gha,scope=arm64-${{ matrix.target }}
           cache-to: type=gha,scope=arm64-${{ matrix.target }},mode=max,ignore-error=true
+
+  long-tests:
+    name: Long tests
+    needs: scope
+    if: needs.scope.outputs.stage3 == 'true'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make measure-login
 
   minecraft:
     name: Minecraft walking skeleton

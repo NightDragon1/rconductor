@@ -132,6 +132,10 @@ Das freigegebene Konzept liegt in docs/ und ist verbindlich; die gültige Versio
   Merge, Abnahme oder Release. Ergebnisse beim nächsten Bericht nachreichen.
 - Fehler zuerst reproduzieren, dann gezielt beheben; keine Komplettläufe als
   Fehlersuche.
+- Neue Grenzen und Zeiten sind Einstellungen mit Standard und validiertem Mindestwert;
+  kleinere Werte nur über Test-Konstruktor oder Test-Konfiguration, nie per Env in
+  Produktion. Zeit in Tests über injizierte Uhr oder testing/synctest, kein echtes Sleep.
+  Feste Werte bleiben nur Protokollgrößen, Krypto-Parameter und Feldlängen.
 - Definition of Done für Tests: neben dem Normalfall auch Reihenfolge- und
   Nebenläufigkeitsfälle und Missbrauch (große Eingaben, parallele Anfragen, fehlende
   Pflichtfelder), wo die Anforderung sie berührt.
