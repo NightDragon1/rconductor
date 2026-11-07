@@ -17,6 +17,8 @@ import (
 
 // Limits of profile pictures (AUTH-009, decision M1).
 const (
+	// maxJPEGScans is far above what encoders write, usually at most 10.
+	maxJPEGScans    = 64
 	MaxAvatarBytes  = 1 << 20
 	maxAvatarPixels = 4096
 	avatarSize      = 512
@@ -56,6 +58,9 @@ func processAvatar(ctx context.Context, data []byte) ([]byte, string, error) {
 	if cfg.ColorModel == color.CMYKModel {
 		return nil, "", &InvalidError{Detail: "a profile picture is in RGB or grayscale"}
 	}
+	if format == "jpeg" && jpegScans(data) > maxJPEGScans {
+		return nil, "", &InvalidError{Detail: "the image cannot be read"}
+	}
 	weight := int64(cfg.Width) * int64(cfg.Height) * avatarBytesPerPixel
 	wait, cancel := context.WithTimeout(ctx, avatarDecodeWait)
 	defer cancel()
@@ -75,6 +80,13 @@ func processAvatar(ctx context.Context, data []byte) ([]byte, string, error) {
 	}
 	err = png.Encode(&out, img)
 	return out.Bytes(), "image/png", err
+}
+
+// jpegScans counts the start-of-scan markers. Each scan of a progressive JPEG
+// goes over the whole picture and the decoder knows no time limit (B1-3). In
+// the coded data 0xFF is followed by 0, so the count is never too low.
+func jpegScans(data []byte) int {
+	return bytes.Count(data, []byte{0xFF, 0xDA})
 }
 
 // downscale shrinks img to fit into size × size by averaging the source
