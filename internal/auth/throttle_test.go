@@ -1166,3 +1166,21 @@ func TestR11DelayGrowsOverAddresses(t *testing.T) {
 		th.fail("victim", ip, now, lim, ticket{})
 	}
 }
+
+// TestB5LineStaysBelowARequestTimeout: gap and places together cannot make a
+// wait longer than a request lasts, whatever the settings say.
+func TestB5LineStaysBelowARequestTimeout(t *testing.T) {
+	for _, l := range []loginLimits{
+		{overflowGap: 10 * time.Second, overflowLine: 1000},
+		{overflowGap: 10 * time.Second},
+		{overflowLine: 1000},
+		{},
+	} {
+		if d := time.Duration(l.line()) * l.gap(); d > maxLineWait {
+			t.Errorf("%+v: line of %v", l, d)
+		}
+	}
+	if (loginLimits{}).line() != overflowLine {
+		t.Error("the default changed")
+	}
+}
