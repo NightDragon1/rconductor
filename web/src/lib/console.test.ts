@@ -3,7 +3,9 @@ import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   addCommands,
+  addDelivery,
   addLogLines,
+  GAP_LINE,
   bufferOwner,
   bufferWriter,
   newLines,
@@ -18,6 +20,7 @@ import {
   useBuffer,
   visible,
   type CmdBlock,
+  type ConsoleBuffer,
 } from './console';
 
 const at = (s: number) => new Date(Date.UTC(2026, 10, 3, 12, 0, s)).toISOString();
@@ -195,5 +198,67 @@ describe('bufferWriter (Design 6.3)', () => {
     late('s', (b) => ({ ...b, running: 3 }));
     expect(buffers('s').running).toBeUndefined();
     bufferOwner(undefined);
+  });
+});
+
+describe('log lines by number', () => {
+  const ts = '2026-11-06T10:00:00Z';
+  const lines = (b: ConsoleBuffer) => b.logs.flatMap((l) => l.lines);
+  const held = (n: number) =>
+    addDelivery(
+      emptyBuffer,
+      { lines: Array.from({ length: n }, () => 'tick'), first: 1, run: 'r' },
+      ts,
+    );
+
+  it('keeps repeated lines after coming back (#157)', () => {
+    const again = Array.from({ length: 50 }, () => 'tick');
+    const b = addDelivery(held(50), { lines: again, first: 11, run: 'r', current: true }, ts);
+    expect(lines(b)).toHaveLength(60);
+    expect(b.logPos).toEqual({ run: 'r', last: 60 });
+  });
+
+  it('takes nothing twice from a repeated subscription (#149)', () => {
+    const b = held(3);
+    const same = addDelivery(b, { lines: ['tick'], first: 3, run: 'r', current: true }, ts);
+    expect(lines(same)).toHaveLength(3);
+  });
+
+  it('marks a gap (K-6)', () => {
+    const b = addDelivery(held(3), { lines: ['n'], first: 9, run: 'r' }, ts);
+    expect(lines(b).slice(-2)).toEqual([GAP_LINE, 'n']);
+  });
+
+  it('starts over with a new count, by text for a new subscription', () => {
+    const b = addDelivery(
+      held(2),
+      { lines: ['tick', 'new'], first: 1, run: 's', current: true },
+      ts,
+    );
+    expect(lines(b)).toEqual(['tick', 'tick', 'new']);
+    expect(b.logPos).toEqual({ run: 's', last: 2 });
+  });
+
+  it('does not repeat lines after Clear (K-7)', () => {
+    const cleared = { ...held(3), logs: [] };
+    const b = addDelivery(cleared, { lines: ['tick'], first: 3, run: 'r', current: true }, ts);
+    expect(lines(b)).toEqual([]);
+  });
+});
+
+describe('earlier lines', () => {
+  const ts = '2026-11-06T10:00:00Z';
+  const lines = (b: ConsoleBuffer) => b.logs.flatMap((l) => l.lines);
+
+  it('do not double a buffer the tail goes past (#154)', () => {
+    const b = addLogLines(emptyBuffer, ['h1', 'h2', 'h3'], ts);
+    const after = prependTail(b, ['e1', 'h1', 'h2', 'h3', 'n1']);
+    expect(lines(after)).toEqual(['e1', 'h1', 'h2', 'h3']);
+  });
+
+  it('stay out of a full buffer (K-7)', () => {
+    const full = Array.from({ length: MAX_LOG_LINES }, (_, i) => `l${i}`);
+    const b = addLogLines(emptyBuffer, full, ts);
+    expect(prependTail(b, ['x', 'y'])).toBe(b);
   });
 });

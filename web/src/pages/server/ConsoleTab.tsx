@@ -171,7 +171,8 @@ export function ConsoleTab() {
   const id = server?.id ?? '';
   const hasAgent = !!server?.agent_id;
   const allowed = useAllowedCommands(id, !!id);
-  const [tracks, setTracks] = useState<Tracks>({ own: true, others: true, logs: true });
+  const [allTracks, setAllTracks] = useState<Record<string, Tracks>>({});
+  const tracks = allTracks[id] ?? { own: true, others: true, logs: true };
   const [filters, setFilters] = useState<Record<string, string>>({});
   const filter = filters[id] ?? '';
   const setFilter = (text: string) => setFilters((f) => ({ ...f, [id]: text }));
@@ -248,7 +249,7 @@ export function ConsoleTab() {
     <button
       type="button"
       aria-pressed={tracks[key]}
-      onClick={() => setTracks((x) => ({ ...x, [key]: !x[key] }))}
+      onClick={() => setAllTracks((a) => ({ ...a, [id]: { ...tracks, [key]: !tracks[key] } }))}
       className={cn(
         'flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm max-md:min-h-11',
         tracks[key] ? 'border-accent text-text' : 'border-control text-muted',
