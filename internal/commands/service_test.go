@@ -227,6 +227,35 @@ func TestWrapperRefused(t *testing.T) {
 	}
 }
 
+// TestWrapperNamespacePrefixRefusedB1 covers CMD-005 in the pipeline: a
+// list entry with a namespace prefix in front of a wrapper does not let it
+// through, and the command page leaves it out; admins may send it.
+func TestWrapperNamespacePrefixRefusedB1(t *testing.T) {
+	w := newWorld(t)
+	w.exec(`INSERT INTO command_list_entries (id, command_list_id, path, passable) VALUES ('ens', 'l', 'minecraft:execute', 1)`)
+	w.c.Invalidate()
+	for _, who := range []string{"m", "sup"} {
+		if _, err := w.send(who, "minecraft:execute as @a run say hi"); reason(err) != ReasonWrapperBlocked {
+			t.Errorf("%s namespaced wrapper: %v", who, err)
+		}
+	}
+	logtest.Wait(t, w.logs, `"reason":"wrapper_blocked"`)
+	for _, who := range []string{"m", "sup"} {
+		a, err := w.svc.AllowedCommands(context.Background(), w.as(who), w.server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range a.Commands {
+			if c.Path == "minecraft:execute" {
+				t.Errorf("%s sees the namespaced wrapper on the command page", who)
+			}
+		}
+	}
+	if _, err := w.send("admin", "minecraft:execute as @a run say hi"); err != nil {
+		t.Errorf("admin namespaced wrapper: %v", err)
+	}
+}
+
 // TestSupporterPassableOnly covers the sending part of ROLE-007.
 func TestSupporterPassableOnly(t *testing.T) {
 	w := newWorld(t)

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1
+
+- Wrappers are also refused with a namespace prefix such as minecraft:execute (CMD-005).
+
 ## 1.0
 
 First release.

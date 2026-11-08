@@ -92,13 +92,20 @@ func equal(a, b string, caseSensitive bool) bool {
 
 // IsWrapper reports whether the command name is a wrapper of the profile,
 // such as Minecraft's execute; wrappers are always refused for moderators
-// and supporters, whatever their list says (CMD-005, D-026).
+// and supporters, whatever their list says (CMD-005, D-026). A namespace
+// prefix in front of the name counts as the name alone: minecraft:execute
+// and foo:execute are execute, whatever the namespace (Design 3.3).
 func IsWrapper(tokens []string, syn Syntax) bool {
 	if len(tokens) == 0 {
 		return false
 	}
+	name := tokens[0]
+	bare := ""
+	if i := strings.LastIndexByte(name, ':'); i >= 0 {
+		bare = name[i+1:]
+	}
 	for _, w := range syn.Wrappers {
-		if equal(tokens[0], w, syn.CaseSensitive) {
+		if equal(name, w, syn.CaseSensitive) || (bare != "" && equal(bare, w, syn.CaseSensitive)) {
 			return true
 		}
 	}
