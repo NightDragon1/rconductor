@@ -114,6 +114,7 @@ are written like `24h`, `15m`, `30s`.
 | `ws.max_sockets_per_session` | number | 20 | 1 to 100 | WebSockets per session; beyond it the oldest closes |
 | `ws.max_subscriptions_per_socket` | number | 16 | 1 to 64 | subscriptions per WebSocket |
 | `servers.connection_test_per_minute` | number | 10 | 1 to 120 | connection tests per user and minute |
+| `commands.templates_per_server` | number | 100 | 1 to 1000 | command templates per server |
 | `agents.fingerprint_pairing` | boolean | off | on, off | pairing by fingerprint; closes itself after 30 minutes |
 | `agent.version_retry` | duration | 30s | 5s to 1h | how often the panel asks the agent again for the game version; each attempt reads only the log since the last one |
 | `agent.version_window` | duration | 10m | 1m to 24h | how long the panel looks for the game version after it first sees a container run |
