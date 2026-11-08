@@ -149,10 +149,12 @@ func (s *Service) SetTimeout(d time.Duration) {
 
 type payload struct {
 	Command string `json:"command"`
+	BatchID string `json:"batch_id,omitempty"`
 }
 
 type resultPayload struct {
 	RequestID  string `json:"request_id"`
+	BatchID    string `json:"batch_id,omitempty"`
 	Response   string `json:"response,omitempty"`
 	Truncated  bool   `json:"truncated,omitempty"`
 	DurationMS int64  `json:"duration_ms"`
@@ -209,11 +211,15 @@ func (s *Service) syntax(ctx context.Context, serverID string) (Syntax, error) {
 }
 
 func (s *Service) attrs(req users.Request, serverID string) []any {
-	return []any{
+	out := []any{
 		slog.String(logging.KeyRequestID, req.RequestID), slog.String(logging.KeySession, req.SessionRef),
 		slog.String(logging.KeyUser, req.Pseudonym), slog.String(logging.KeyRole, string(req.Actor.Role)),
 		slog.String(logging.KeyServer, serverID),
 	}
+	if req.BatchID != "" {
+		out = append(out, slog.String(logging.KeyBatch, req.BatchID))
+	}
+	return out
 }
 
 // Audit actions of a command. The audit log is append-only: cmd.sent
@@ -239,7 +245,7 @@ func (s *Service) entry(ctx context.Context, req users.Request, serverID, action
 func (s *Service) deny(ctx context.Context, req users.Request, serverID, command, reason string, retry time.Duration) error {
 	s.log.Info("command refused", append(s.attrs(req, serverID), logging.Event(logging.CmdDenied), slog.String(logging.KeyReason, reason))...)
 	if err := s.entry(ctx, req, serverID, ActionDenied, audit.Entry{
-		Payload: payload{Command: command}, Result: audit.ResultDenied, Reason: reason,
+		Payload: payload{Command: command, BatchID: req.BatchID}, Result: audit.ResultDenied, Reason: reason,
 	}); err != nil {
 		return err
 	}
@@ -325,7 +331,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	// 9 and 10: marked with request ID, session, user and role; audit
 	// before sending (CMD-007).
 	s.log.Info("command accepted", append(s.attrs(req, serverID), logging.Event(logging.CmdAccepted))...)
-	if err := s.entry(ctx, req, serverID, ActionSent, audit.Entry{Payload: payload{Command: cmd}, Result: audit.ResultOK}); err != nil {
+	if err := s.entry(ctx, req, serverID, ActionSent, audit.Entry{Payload: payload{Command: cmd, BatchID: req.BatchID}, Result: audit.ResultOK}); err != nil {
 		return Result{}, err
 	}
 	// 11: one connection, one queue per server.
@@ -362,7 +368,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	if aerr := s.entry(context.WithoutCancel(ctx), req, serverID, ActionResult, audit.Entry{
 		TargetType: "command", TargetID: req.RequestID, Result: audit.Result(outcome), Reason: reason,
 		Payload: resultPayload{
-			RequestID: req.RequestID, Response: res.Response, Truncated: res.Truncated,
+			RequestID: req.RequestID, BatchID: req.BatchID, Response: res.Response, Truncated: res.Truncated,
 			DurationMS: s.now().Sub(start).Milliseconds(),
 		},
 	}); aerr != nil {

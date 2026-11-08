@@ -411,6 +411,11 @@ func matrix() []matrixOp {
 		{"POST", "/servers/{id}/commands", "OONOOOUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/servers/" + f.server + "/commands", body: map[string]string{"command": "say hi"}}
 		}, false},
+		// One command to several servers (CMD-010): admins only; a server
+		// outside the scope is a result not_found, not a refusal.
+		{"POST", "/commands/multi", "OOOFFFUP", func(f *rightsFixture, _ string) request {
+			return request{path: "/commands/multi", body: map[string]any{"server_ids": []string{f.server}, "command": "say hi"}}
+		}, false},
 		// Command templates (CMD-008): everyone in scope reads, admins
 		// change.
 		{"GET", "/servers/{id}/templates", "OONOOOUP", serverPath("/templates"), false},

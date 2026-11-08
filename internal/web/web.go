@@ -94,7 +94,7 @@ func NewHandler(opts Options) http.Handler {
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,
-		Middlewares: []api.MiddlewareFunc{srv.limitBodies, srv.requireSession, srv.checkOrigin},
+		Middlewares: []api.MiddlewareFunc{strictBodies, srv.limitBodies, srv.requireSession, srv.checkOrigin},
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			WriteProblem(w, http.StatusBadRequest, api.ReasonCodeInvalid, err.Error())
 		},

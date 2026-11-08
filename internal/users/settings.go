@@ -70,6 +70,17 @@ const (
 	MinTemplatesPerServer     = 1
 )
 
+// Commands to several servers at once (CMD-010, D-069): servers per call
+// and runs at the same time.
+const (
+	SettingMultiMaxServers = "commands.multi_max_servers"
+	DefaultMultiMaxServers = 50
+	MinMultiMaxServers     = 1
+	SettingMultiParallel   = "commands.multi_parallel"
+	DefaultMultiParallel   = 8
+	MinMultiParallel       = 1
+)
+
 // rule checks one setting value; it returns the value to store.
 type rule func(raw json.RawMessage) (any, error)
 
@@ -141,6 +152,8 @@ var settingRules = map[string]rule{
 	SettingSMTPTimeout:             durationRule(MinSMTPTimeout, 5*time.Minute),
 	SettingSMTPTestPerMinute:       intRule(MinSMTPTestPerMinute, 60),
 	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
+	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
+	SettingMultiParallel:           intRule(MinMultiParallel, 64),
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and
@@ -160,6 +173,8 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingWSMaxSubs:          DefaultWSMaxSubs,
 		SettingConnectionTests:    DefaultConnectionTests,
 		SettingTemplatesPerServer: DefaultTemplatesPerServer,
+		SettingMultiMaxServers:    DefaultMultiMaxServers,
+		SettingMultiParallel:      DefaultMultiParallel,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
