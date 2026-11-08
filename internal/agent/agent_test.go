@@ -50,8 +50,12 @@ type fakeBackend struct {
 	orders []string
 }
 
-func (b *fakeBackend) Name() string           { return "docker" }
-func (b *fakeBackend) Capabilities() []string { return []string{agentproto.CapMetrics} }
+func (b *fakeBackend) Name() string { return "docker" }
+
+// Capabilities: logs lets logs.tail through the panel to the backend (AGT-013).
+func (b *fakeBackend) Capabilities() []string {
+	return []string{agentproto.CapLogs, agentproto.CapMetrics}
+}
 
 func (b *fakeBackend) Run(ctx context.Context, out Sender) error {
 	b.mu.Lock()
