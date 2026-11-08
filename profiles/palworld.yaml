@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/thijsvanloef/palworld-server-docker/blob/main/scripts/helper_functions.sh
+# source: https://github.com/thijsvanloef/palworld-server-docker/blob/main/README.md
+# source: https://berrybyte.net/wiki/games/palworld/all-admin-commands
+# source: https://xgamingserver.com/tools/palworld/admin-commands
+
+schema: 1
+id: palworld
+name: Palworld
+kind: generic
+match:
+  images: ["thijsvanloef/palworld-server-docker*"]
+# RCON is deprecated by Pocketpair in favour of the REST API (HTTP
+# profile later). No players block: ShowPlayers prints CSV, one line per
+# player. Commands are sent without "/" (the default prefix removal does it).
+protocol:
+  type: source-rcon
+  default_port: 25575
+ports:
+  game:
+    - { port: 8211, proto: udp, name: game }
+    - { port: 27015, proto: udp, name: query }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: []
+stop:
+  command: Shutdown 1
+catalog:
+  - path: ShowPlayers
+    description: List players (name, player uid, Steam id)
+  - path: Info
+    description: Show server name and version
+  - path: Save
+    description: Save the world
+  - path: KickPlayer
+    description: Kick a player by Steam id
+    params:
+      - { name: steam_id, type: text }
+  - path: BanPlayer
+    description: Ban a player by Steam id
+    params:
+      - { name: steam_id, type: text }
+  - path: UnBanPlayer
+    description: Unban a player by Steam id
+    params:
+      - { name: steam_id, type: text }
+  - path: Broadcast
+    description: Message to all players (spaces arrive as underscores over RCON)
+    params:
+      - { name: text, type: text }
+  - path: Shutdown
+    description: Shut down after N seconds with a message
+    params:
+      - { name: seconds, type: number, min: 1 }
+      - { name: message, type: text, optional: true }
+  - path: DoExit
+    description: Stop the server immediately without saving

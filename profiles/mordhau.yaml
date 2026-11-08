@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://pingperfect.com/knowledgebase/782/Mordhau--RCON-Commands-and-How-to-Use-RCON.html
+# source: https://help.freakhosting.com/games/mordhau/using-rcon-for-mordhau.md
+
+schema: 1
+id: mordhau
+name: Mordhau
+kind: generic
+# Game.ini [/Script/Mordhau.MordhauGameSession] RconPort=0 means off and
+# there is no default; 7788 is the example of the source (open in INDEX).
+# No players block: playerlist prints one line per player.
+protocol:
+  type: source-rcon
+  default_port: 7788
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: []
+stop:
+  command: shutdown
+catalog:
+  # --- Players ---
+  - path: playerlist
+    description: List players with PlayFab id, name, ping and team
+  - path: kick
+    description: Kick a player (name or PlayFab id), then reason
+    params:
+      - { name: target_and_reason, type: text }
+  - path: ban
+    description: Ban a player (name or PlayFab id, reason, minutes)
+    params:
+      - { name: target_reason_minutes, type: text }
+  - path: unban
+    description: Unban a PlayFab id
+    params:
+      - { name: playfab_id, type: text }
+  - path: mute
+    description: Mute a player (name or PlayFab id, minutes)
+    params:
+      - { name: target_and_minutes, type: text }
+  - path: unmute
+    description: Unmute a PlayFab id
+    params:
+      - { name: playfab_id, type: text }
+  - path: banlist
+    description: Show bans
+  - path: mutelist
+    description: Show mutes
+  - path: adminlist
+    description: Show admins
+  - path: addadmin
+    description: Add an admin (name or PlayFab id)
+    params:
+      - { name: target, type: text }
+  - path: removeadmin
+    description: Remove an admin (name or PlayFab id)
+    params:
+      - { name: target, type: text }
+  - path: killplayer
+    description: Kill a player (name or PlayFab id)
+    params:
+      - { name: target, type: text }
+  - path: changeteam
+    description: Move a player to a team (name or PlayFab id, team)
+    params:
+      - { name: target_and_team, type: text }
+  - path: renameplayer
+    description: Rename a player (name or PlayFab id, new name)
+    params:
+      - { name: target_and_name, type: text }
+  # --- Match ---
+  - path: say
+    description: Message to all players
+    params:
+      - { name: text, type: text }
+  - path: changelevel
+    description: Change the map
+    params:
+      - { name: map, type: text }
+  - path: maplist
+    description: Show the map rotation
+  - path: getmatchduration
+    description: Show the match duration
+  - path: extendmatchduration
+    description: Extend the match by N seconds
+    params:
+      - { name: seconds, type: number, min: 1 }
+  - path: addbots
+    description: Add bots (amount, team)
+    params:
+      - { name: amount, type: number, min: 1 }
+      - { name: team, type: choice, values: ["0", "1"], optional: true }
+  - path: removebots
+    description: Remove bots (amount, team)
+    params:
+      - { name: amount, type: number, min: 1 }
+      - { name: team, type: choice, values: ["0", "1"], optional: true }
+  - path: scoreboard
+    description: Show the scoreboard
+  - path: chatlog
+    description: Show the last N chat messages
+    params:
+      - { name: count, type: number, min: 1 }
+  # --- Server ---
+  - path: info
+    description: Show server information
+  - path: stats
+    description: Show server statistics
+  - path: alive
+    description: Check that RCON answers
+  - path: shutdown
+    description: Shut down the server

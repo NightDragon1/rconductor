@@ -1,0 +1,93 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://xgamingserver.com/docs/squad/admin-console-commands
+# source: https://low.ms/knowledgebase/squad-server-configuration
+
+schema: 1
+id: squad
+name: Squad
+kind: generic
+# Rcon.cfg example port 21114; hosters often use game port + 1.
+# No players block: ListPlayers prints one line per player.
+protocol:
+  type: source-rcon
+  default_port: 21114
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: []
+catalog:
+  - path: ListPlayers
+    description: List players with id, name and Steam id
+  - path: AdminKick
+    description: Kick by name or Steam id, with reason
+    params:
+      - { name: name_or_steam_id, type: text }
+  - path: AdminKickById
+    description: Kick by player id, with reason
+    params:
+      - { name: id, type: number, min: 0 }
+      - { name: reason, type: text }
+  - path: AdminBan
+    description: Ban by name or Steam id (length 0 = permanent, 1d, 1M), with reason
+    params:
+      - { name: target_length_reason, type: text }
+  - path: AdminBanById
+    description: Ban by player id (length 0 = permanent, 1d, 1M), with reason
+    params:
+      - { name: id, type: number, min: 0 }
+      - { name: length_and_reason, type: text }
+  - path: AdminWarn
+    description: Warn by name or Steam id, with message
+    params:
+      - { name: target_and_message, type: text }
+  - path: AdminWarnById
+    description: Warn by player id, with message
+    params:
+      - { name: id, type: number, min: 0 }
+      - { name: message, type: text }
+  - path: AdminBroadcast
+    description: Message to all players
+    params:
+      - { name: text, type: text }
+  - path: AdminForceTeamChange
+    description: Force a team change by name or Steam id
+    params:
+      - { name: name_or_steam_id, type: text }
+  - path: AdminForceTeamChangeById
+    description: Force a team change by player id
+    params:
+      - { name: id, type: number, min: 0 }
+  - path: AdminDisbandSquad
+    description: Disband a squad (team 1|2, squad index)
+    params:
+      - { name: team, type: choice, values: ["1", "2"] }
+      - { name: squad, type: number, min: 1 }
+  - path: AdminRemovePlayerFromSquad
+    description: Remove a player from their squad by name
+    params:
+      - { name: name, type: text }
+  - path: AdminRemovePlayerFromSquadById
+    description: Remove a player from their squad by player id
+    params:
+      - { name: id, type: number, min: 0 }
+  - path: AdminChangeLayer
+    description: Change the layer now
+    params:
+      - { name: layer, type: text }
+  - path: AdminSetNextLayer
+    description: Set the next layer
+    params:
+      - { name: layer, type: text }
+  - path: AdminEndMatch
+    description: End the match
+  - path: AdminRestartMatch
+    description: Restart the match
+  - path: AdminListDisconnectedPlayers
+    description: List recently disconnected players
+  - path: ShowNextMap
+    description: Show the current and next map
+  - path: AdminSlomo
+    description: Set time dilation (1 = normal)
+    params:
+      - { name: factor, type: text }

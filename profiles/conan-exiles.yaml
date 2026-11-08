@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://www.conanexiles.com/?p=4957
+# source: https://pingperfect.com/index.php/knowledgebase/743/Conan-Exiles--RCON-Commands.html
+
+schema: 1
+id: conan-exiles
+name: Conan Exiles
+kind: generic
+# No players block: listplayers prints one line per player.
+protocol:
+  type: source-rcon
+  default_port: 25575
+ports:
+  game:
+    - { port: 7777, proto: udp, name: game }
+    - { port: 27015, proto: udp, name: query }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  # con <player id> <command> runs a console command as that player;
+  # sql <query> runs SQL on the game database.
+  wrappers: [con, sql]
+catalog:
+  - path: listplayers
+    description: List players with index, names, user id and platform id
+  - path: kickplayer
+    description: Kick a player (index|name|userid|platformid|player, then id and message)
+    params:
+      - { name: by, type: choice, values: [index, name, userid, platformid, player] }
+      - { name: id_and_message, type: text }
+  - path: banplayer
+    description: Ban a player (index|name|userid|platformid|player, then id and message)
+    params:
+      - { name: by, type: choice, values: [index, name, userid, platformid, player] }
+      - { name: id_and_message, type: text }
+  - path: unbanplayer
+    description: Unban a user id or platform id
+    params:
+      - { name: id, type: text }
+  - path: listbans
+    description: List bans
+  - path: whitelistplayer
+    description: Whitelist a user id or platform id
+    params:
+      - { name: id, type: text }
+  - path: unwhitelistplayer
+    description: Remove a user id or platform id from the whitelist
+    params:
+      - { name: id, type: text }
+  - path: broadcast
+    description: Message to all players
+    params:
+      - { name: text, type: text }
+  - path: help
+    description: List RCON commands, optional name filter
+    params:
+      - { name: filter, type: text, optional: true }

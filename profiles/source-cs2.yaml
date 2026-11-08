@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://developer.valvesoftware.com/wiki/List_of_console_scripting_commands
+# source: https://supercraft.host/wiki/counter-strike-2/rcon-commands/
+
+schema: 1
+id: source-cs2
+name: Counter-Strike 2
+kind: specific
+# Layer on source-engine.
+protocol:
+  type: source-rcon
+  default_port: 27015
+syntax:
+  # Source 2 composes commands with "|" as well as ";". Lists are not
+  # merged across profiles, so ";" is repeated here.
+  separators: [";", "|"]
+  # Source 2 commands that run other commands; in doubt, marked.
+  wrappers: [execute_command_every_frame, url_execute]
+catalog:
+  - path: host_workshop_map
+    description: Load a Workshop map by id
+    params:
+      - { name: workshop_id, type: text }
+  - path: mp_warmup_end
+    description: End the warmup
+  - path: mp_startmatch
+    description: Start the match
+  - path: mp_endmatch
+    description: End the match
+  - path: mp_swapteams
+    description: Swap the teams
+  - path: mp_scrambleteams
+    description: Scramble the teams
+  - path: say_team
+    description: Message to the server's team chat
+    params:
+      - { name: text, type: text }
+  - path: bot_add
+    description: Add a bot
+  - path: bot_kick
+    description: Kick all bots

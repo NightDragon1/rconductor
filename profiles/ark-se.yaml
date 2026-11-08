@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://xgamingserver.com/docs/ark-survival-evolved/rcon-setup
+# source: https://github.com/arkmanager/ark-server-tools/blob/master/tools/arkmanager
+# source: https://github.com/arkmanager/ark-server-tools/blob/master/tools/instance.cfg.example
+# source: https://www.survivalservers.com/wiki/ARK:_Survival_Ascended_Admin_Commands
+
+schema: 1
+id: ark-se
+name: "ARK: Survival Evolved"
+kind: generic
+# No players block: ListPlayers prints one line per player
+# ("0. Name, SteamID"); the panel reads only a single-line list.
+# Kick/ban take the Steam id, not the name, so no player params.
+protocol:
+  type: source-rcon
+  default_port: 27020
+ports:
+  game:
+    - { port: 7777, proto: udp, name: game }
+    - { port: 7778, proto: udp, name: raw }
+    - { port: 27015, proto: udp, name: query }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  # admincheat/cheat run the following console command; ScriptCommand
+  # passes arbitrary input to mods. In doubt, marked.
+  wrappers: [admincheat, cheat, scriptcommand]
+stop:
+  command: DoExit
+catalog:
+  - path: ListPlayers
+    description: List connected players with their Steam ids
+  - path: KickPlayer
+    description: Kick a player by Steam id
+    params:
+      - { name: steam_id, type: text }
+  - path: BanPlayer
+    description: Ban a player by Steam id
+    params:
+      - { name: steam_id, type: text }
+  - path: UnbanPlayer
+    description: Unban a player by Steam id
+    params:
+      - { name: steam_id, type: text }
+  - path: Broadcast
+    description: Show a message to all players
+    params:
+      - { name: text, type: text }
+  - path: SaveWorld
+    description: Save the world
+  - path: DoExit
+    description: Shut down the server (run SaveWorld first)
+  - path: SetTimeOfDay
+    description: Set the time of day (hh:mm)
+    params:
+      - { name: time, type: text }
+  - path: DestroyWildDinos
+    description: Remove all wild creatures so they respawn

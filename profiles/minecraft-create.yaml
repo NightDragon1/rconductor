@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/Creators-of-Create/Create/tree/mc1.20.1/dev/src/main/java/com/simibubi/create/infrastructure/command
+
+schema: 1
+id: minecraft-create
+name: Create
+kind: specific
+# Layer on minecraft-forge or minecraft-neoforge. Create also registers
+# /c as a short form of /create.
+# Note: "create util replaceInCommandBlocks" rewrites command block
+# contents; the wrapper check sees only the first token, so it is not
+# listed as a wrapper (it would block all of /create). See INDEX.md.
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: create trains
+    description: List all trains and their positions
+  - path: create train remove
+    description: Remove a train by id
+    params:
+      - { name: train, type: text }
+  - path: create coupling removeAll
+    description: Remove all couplings of a minecart (entity selector)
+    params:
+      - { name: cart, type: text }
+  - path: create highlight
+    description: Highlight a block that failed to assemble a contraption
+    params:
+      - { name: pos_and_players, type: text, optional: true }
+  - path: create debuginfo
+    description: Show debug information for bug reports
+  - path: create clone
+    description: Clone blocks incl. contraptions (begin, end, destination)
+    params:
+      - { name: args, type: text }
+  - path: create glue
+    description: Add super glue between two positions
+    params:
+      - { name: from_and_to, type: text }
+  - path: create passenger
+    description: Seat an entity on a contraption (rider, vehicle, optional seat index)
+    params:
+      - { name: args, type: text }

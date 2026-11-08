@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/FTBTeam/FTB-Chunks/blob/main/common/src/main/java/dev/ftb/mods/ftbchunks/command/AdminCommand.java
+# source: https://github.com/FTBTeam/FTB-Chunks/tree/1.20.1/main (cross-check of command names)
+
+schema: 1
+id: minecraft-ftb-chunks
+name: FTB Chunks
+kind: specific
+# Layer on minecraft-forge or minecraft-neoforge. Only admin commands that
+# work from the console; claim/unclaim/load act on the sender's position.
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: ftbchunks admin extra_claim_chunks
+    description: Get, set or add extra claimable chunks for a player
+    params:
+      - { name: player, type: player }
+      - { name: action, type: choice, values: [get, set, add] }
+      - { name: number, type: number, optional: true }
+  - path: ftbchunks admin extra_force_load_chunks
+    description: Get, set or add extra force-loadable chunks for a player
+    params:
+      - { name: player, type: player }
+      - { name: action, type: choice, values: [get, set, add] }
+      - { name: number, type: number, optional: true }
+  - path: ftbchunks admin unclaim_everything
+    description: Remove all claims of all teams
+  - path: ftbchunks admin unload_everything
+    description: Remove all force-loads of all teams
+  - path: ftbchunks admin unclaim_dimension
+    description: Remove all claims in a dimension (newer versions)
+    params:
+      - { name: dimension, type: text, optional: true }
+  - path: ftbchunks admin view_loaded_chunks
+    description: Show force-loaded chunks, optional reset and dimension
+    params:
+      - { name: args, type: text, optional: true }
+  - path: ftbchunks admin bypass_protection
+    description: Toggle claim protection bypass for the sender (player only)

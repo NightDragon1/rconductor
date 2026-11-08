@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/lucko/spark/tree/master/spark-common/src/main/java/me/lucko/spark/common/command/modules
+# source: https://github.com/lucko/spark/blob/master/spark-minecraft/src/main/java/me/lucko/spark/minecraft/plugin/MinecraftServerSparkPlugin.java
+
+schema: 1
+id: minecraft-spark
+name: spark (profiler)
+kind: specific
+# Layer on any loader or Paper.
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: spark tps
+    description: Show TPS, tick durations and CPU usage
+  - path: spark health
+    description: Generate a health report (CPU, memory, disk, TPS)
+  - path: spark ping
+    description: Show player ping, optional player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: spark profiler start
+    description: Start the profiler (options such as --timeout <s>, --thread *, --only-ticks-over <ms>, --alloc)
+    params:
+      - { name: options, type: text, optional: true }
+  - path: spark profiler stop
+    description: Stop the profiler and upload the report
+  - path: spark profiler info
+    description: Show the state of the running profiler
+  - path: spark profiler open
+    description: Open the running profiler in the viewer
+  - path: spark profiler cancel
+    description: Cancel the running profiler
+  - path: spark tickmonitor
+    description: Toggle tick monitoring
+  - path: spark gc
+    description: Show garbage collector statistics
+  - path: spark gcmonitor
+    description: Toggle GC monitoring
+  - path: spark heapsummary
+    description: Upload a heap summary
+  - path: spark heapdump
+    description: Write a full heap dump to disk
+  - path: spark activity
+    description: Show the spark activity log

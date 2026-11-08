@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/MinecraftForge/MinecraftForge/tree/1.20.x/src/main/java/net/minecraftforge/server/command
+# source: https://github.com/MinecraftForge/MinecraftForge/tree/1.12.x/src/main/java/net/minecraftforge/server/command
+
+schema: 1
+id: minecraft-forge
+name: Minecraft Forge
+kind: generic
+# Layer on minecraft-java (1.13+) or minecraft-java-legacy (1.12.2).
+# No match.images: Forge runs on itzg/minecraft-server (TYPE=FORGE).
+# No version.pattern: the Minecraft version from the base profile stays
+# visible; Forge logs "Forge mod loading, version X, for MC Y" (1.13+).
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: forge tps
+    description: Show tick time and TPS, overall or for one dimension
+    params:
+      - { name: dimension, type: text, optional: true }
+  - path: forge track start
+    description: Track tick cost of block entities (te) or entities for N seconds
+    params:
+      - { name: type, type: choice, values: [te, entity] }
+      - { name: seconds, type: number, min: 1 }
+  - path: forge track reset
+    description: Reset tracking data
+    params:
+      - { name: type, type: choice, values: [te, entity] }
+  - path: forge track te
+    description: Show block-entity tracking results
+  - path: forge track entity
+    description: Show entity tracking results
+  - path: forge entity list
+    description: List entity counts, optional filter and dimension
+    params:
+      - { name: filter_and_dimension, type: text, optional: true }
+  - path: forge generate
+    description: Pre-generate chunks (x y z, chunk count, optional dimension and interval)
+    params:
+      - { name: args, type: text }
+  - path: forge dimensions
+    description: List dimensions by type
+  - path: forge mods
+    description: List loaded mods (1.13+)
+  - path: forge tags
+    description: Query registry tags (registry, then list/get/query, 1.18+)
+    params:
+      - { name: args, type: text }
+  - path: forge setdimension
+    description: Move an entity to a dimension (1.12.2 only)
+    params:
+      - { name: entity_and_dimension, type: text }

@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/FTBTeam/FTB-Essentials/tree/main/common/src/main/java/dev/ftb/mods/ftbessentials/commands
+# source: https://github.com/FTBTeam/FTB-Essentials/tree/1.20.1/main (cross-check of command names)
+
+schema: 1
+id: minecraft-ftb-essentials
+name: FTB Essentials
+kind: specific
+# Layer on minecraft-forge or minecraft-neoforge. Commands are top-level;
+# newer versions can register them under /ftbessentials instead (startup
+# config register_to_namespace), then prefix the paths accordingly.
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: heal
+    description: Fully heal a player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: feed
+    description: Fill a player's hunger
+    params:
+      - { name: player, type: player, optional: true }
+  - path: extinguish
+    description: Extinguish a burning player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: fly
+    description: Toggle flight for a player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: god
+    description: Toggle invulnerability for a player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: speed
+    description: Set a walk speed boost in percent, optional player after it
+    params:
+      - { name: boost_and_player, type: text }
+  - path: invsee
+    description: Open a player's inventory (player sender only)
+    params:
+      - { name: player, type: player }
+  - path: enderchest
+    description: Open a player's ender chest (player sender only)
+    params:
+      - { name: player, type: player, optional: true }
+  - path: mute
+    description: Mute a player, optional duration after it
+    params:
+      - { name: player, type: player }
+      - { name: until, type: text, optional: true }
+  - path: unmute
+    description: Unmute a player
+    params:
+      - { name: player, type: player }
+  - path: nicknamefor
+    description: Set or clear a player's nickname
+    params:
+      - { name: player, type: player }
+      - { name: nickname, type: text, optional: true }
+  - path: listhomes
+    description: List a player's homes
+    params:
+      - { name: player, type: player, optional: true }
+  - path: listwarps
+    description: List all warps
+  - path: kit list
+    description: List kits
+  - path: kit show
+    description: Show the items of a kit
+    params:
+      - { name: name, type: text }
+  - path: kit give
+    description: Give a kit to a player
+    params:
+      - { name: player, type: player }
+      - { name: name, type: text }
+  - path: kit delete
+    description: Delete a kit
+    params:
+      - { name: name, type: text }
+  - path: kit reset_cooldown
+    description: Reset a kit cooldown (kit, optional player)
+    params:
+      - { name: name_and_player, type: text }
+  - path: leaderboard
+    description: Show a leaderboard (e.g. deaths, time_played)
+    params:
+      - { name: stat, type: text }

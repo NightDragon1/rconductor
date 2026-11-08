@@ -1,0 +1,202 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://wiki.ronlab.site/content/minecraftwiki_en_all_maxi_2025-11/Commands/execute_(old)
+# source: https://wiki.ronlab.site/content/minecraftwiki_en_all_maxi_2025-11/Commands/function
+# source: https://gist.github.com/maxaxik/b25876b1c5770773715605f738004a52
+# source: profiles/minecraft-gtnh.yaml (list output and version line of the pre-1.13 server)
+
+schema: 1
+id: minecraft-java-legacy
+name: Minecraft (Java Edition 1.12.2)
+kind: generic
+# No match.images: 1.12.2 runs on the same image as current versions
+# (itzg/minecraft-server, VERSION=1.12.2); chosen when the server is created.
+protocol:
+  type: source-rcon
+  default_port: 25575
+ports:
+  game:
+    - { port: 25565, proto: tcp, name: game }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  # execute <entity> <x> <y> <z> <command> runs any command; function
+  # (added in 1.12) runs the commands of a function file.
+  wrappers: [execute, function]
+  player_pattern: "^[A-Za-z0-9_]{1,16}$"
+players:
+  command: list
+  # "There are 1/20 players online:" followed by the names on the next line.
+  pattern: "players online:\\s*(.*)$"
+  separator: ", "
+stop:
+  command: stop
+version:
+  pattern: "Starting minecraft server version (\\S+)"
+formatting: minecraft
+catalog:
+  # --- Players ---
+  - path: list
+    description: Show players online
+  - path: whitelist add
+    description: Add a player to the whitelist
+    params:
+      - { name: player, type: player }
+  - path: whitelist remove
+    description: Remove a player from the whitelist
+    params:
+      - { name: player, type: player }
+  - path: whitelist list
+    description: Show the whitelist
+  - path: whitelist
+    description: Toggle or reload the whitelist
+    params:
+      - { name: action, type: choice, values: ["on", "off", reload] }
+  - path: kick
+    description: Kick a player from the server
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
+  - path: ban
+    description: Ban a player
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
+  - path: pardon
+    description: Unban a player
+    params:
+      - { name: player, type: player }
+  - path: ban-ip
+    description: Ban an IP address or the IP of an online player, optional reason after it
+    params:
+      - { name: target_and_reason, type: text }
+  - path: pardon-ip
+    description: Unban an IP address
+    params:
+      - { name: ip, type: text }
+  - path: banlist
+    description: Show banned players or IPs
+    params:
+      - { name: type, type: choice, values: [players, ips], optional: true }
+  - path: op
+    description: Grant operator status
+    params:
+      - { name: player, type: player }
+  - path: deop
+    description: Revoke operator status
+    params:
+      - { name: player, type: player }
+  - path: gamemode
+    description: Set a player's game mode
+    params:
+      - { name: mode, type: choice, values: [survival, creative, adventure, spectator] }
+      - { name: player, type: player }
+  - path: tp
+    description: Teleport a player to another player
+    params:
+      - { name: player, type: player }
+      - { name: target, type: player }
+  - path: give
+    description: Give an item (item id, optional amount, data value and data tag after it)
+    params:
+      - { name: player, type: player }
+      - { name: item_and_count, type: text }
+  - path: clear
+    description: Clear a player's inventory
+    params:
+      - { name: player, type: player }
+  - path: effect
+    description: Clear a player's status effects (pre-1.13 syntax effect <player> clear)
+    params:
+      - { name: player, type: player }
+      - { name: action, type: choice, values: [clear] }
+  - path: xp
+    description: Give experience, amount and player (append L for levels, e.g. 5L Steve)
+    params:
+      - { name: amount_and_player, type: text }
+  - path: kill
+    description: Kill a player
+    params:
+      - { name: player, type: player }
+  # --- World ---
+  - path: time set
+    description: Set the time of day (day, night or ticks)
+    params:
+      - { name: time, type: text }
+  - path: time add
+    description: Advance time by ticks
+    params:
+      - { name: ticks, type: number, min: 0 }
+  - path: time query
+    description: Show daytime, gametime or day
+    params:
+      - { name: value, type: choice, values: [daytime, gametime, day] }
+  - path: weather
+    description: Set the weather
+    params:
+      - { name: type, type: choice, values: [clear, rain, thunder] }
+      - { name: duration, type: number, min: 1, optional: true }
+  - path: toggledownfall
+    description: Toggle rain
+  - path: difficulty
+    description: Set the difficulty
+    params:
+      - { name: level, type: choice, values: [peaceful, easy, normal, hard] }
+  - path: defaultgamemode
+    description: Set the default game mode for new players
+    params:
+      - { name: mode, type: choice, values: [survival, creative, adventure, spectator] }
+  - path: gamerule
+    description: Set or show a game rule (rule and optional value, e.g. keepInventory true)
+    params:
+      - { name: rule_and_value, type: text }
+  - path: setworldspawn
+    description: Set the world spawn point (x y z)
+    params:
+      - { name: xyz, type: text, optional: true }
+  - path: spawnpoint
+    description: Set a player's spawn point (player, then x y z)
+    params:
+      - { name: player, type: player }
+      - { name: xyz, type: text, optional: true }
+  - path: worldborder set
+    description: Set the world border diameter, optional time after it
+    params:
+      - { name: size_and_time, type: text }
+  - path: worldborder get
+    description: Show the world border diameter
+  - path: seed
+    description: Show the world seed
+  # --- Messaging ---
+  - path: say
+    description: Message to all players
+    params:
+      - { name: text, type: text }
+  - path: tell
+    description: Private message to a player
+    params:
+      - { name: player, type: player }
+      - { name: text, type: text }
+  - path: title
+    description: Show a title on a player's screen (JSON text)
+    params:
+      - { name: player, type: player }
+      - { name: position, type: choice, values: [title, subtitle, actionbar] }
+      - { name: json, type: text }
+  # --- Server ---
+  - path: save-all
+    description: Save the world to disk
+    params:
+      - { name: mode, type: choice, values: [flush], optional: true }
+  - path: save-off
+    description: Disable automatic world saving (before backups)
+  - path: save-on
+    description: Enable automatic world saving
+  - path: setidletimeout
+    description: Kick idle players after N minutes (0 = off)
+    params:
+      - { name: minutes, type: number, min: 0 }
+  - path: debug
+    description: Start or stop the profiler
+    params:
+      - { name: action, type: choice, values: [start, stop] }
