@@ -44,6 +44,9 @@ func TestNoSecretsInTheLogs(t *testing.T) {
 	anon.must(http.MethodPost, "/invites/redeem", map[string]string{"token": inv.Token, "pseudonym": "mod", "password": invited}, &user, http.StatusCreated)
 	moderator := login(t, s.base, "mod", invited)
 	secrets = append(secrets, inv.Token, invited, moderator.cookie.Value)
+	// A login with the own session cookie sent along ends that session
+	// (AUTH-006, D-043): neither cookie may reach the log.
+	secrets = append(secrets, reloginWith(t, s.base, moderator.cookie, "mod", invited).Value)
 
 	// A temporary password and a change of password.
 	var reset struct{ Password string }
@@ -73,7 +76,7 @@ func TestNoSecretsInTheLogs(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- a.Run(ctx) }()
 	logtest.Wait(t, &agentLogs, `"event":"agent.handshake"`)
-	logtest.Wait(t, s.logs, `"event":"agent.connected"`, `"event":"auth.login.failed"`, `"event":"cmd.response"`)
+	logtest.Wait(t, s.logs, `"event":"agent.connected"`, `"event":"auth.login.failed"`, `"event":"cmd.response"`, `"event":"auth.session.revoked"`)
 	time.Sleep(200 * time.Millisecond) // lines that follow the last event
 	stop()
 	if err := <-done; err != nil {
@@ -90,4 +93,36 @@ func TestNoSecretsInTheLogs(t *testing.T) {
 			}
 		}
 	}
+}
+
+// reloginWith logs in while sending cookie along, as a browser with an
+// open session does, and returns the new session cookie.
+func reloginWith(t *testing.T, base string, cookie *http.Cookie, pseudonym, password string) *http.Cookie {
+	t.Helper()
+	body := strings.NewReader(`{"pseudonym":"` + pseudonym + `","password":"` + password + `"}`)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, base+"/api/v1/auth/login", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", base)
+	req.AddCookie(cookie)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login with cookie sent along = %d", resp.StatusCode)
+	}
+	var fresh *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == cookie.Name && c.Value != "" {
+			fresh = c
+		}
+	}
+	if fresh == nil || fresh.Value == cookie.Value {
+		t.Fatalf("login with cookie sent along gave no new session: %v", resp.Header.Values("Set-Cookie"))
+	}
+	return fresh
 }

@@ -75,6 +75,10 @@ type Client struct {
 	IP        netip.Addr
 	UserAgent string
 	RequestID string
+	// SessionToken is the session cookie the browser sent along with the
+	// login, if any. A login ends that session when it belongs to the same
+	// user (AUTH-006, D-043). Never logged (SEC-012).
+	SessionToken string
 }
 
 // Service logs users in and out and resolves session cookies.
@@ -370,9 +374,25 @@ func (s *Service) createSession(ctx context.Context, u sqlitedb.GetLoginUserRow,
 	}); err != nil {
 		return "", Principal{}, err
 	}
+	// The session the browser sent along ends with the login when it is the
+	// user's own; a session of another user stays (AUTH-006, D-043).
+	var ended []string
+	if c.SessionToken != "" {
+		if ended, err = q.DeleteSessionOfUser(ctx, sqlitedb.DeleteSessionOfUserParams{
+			IDHash: HashToken(c.SessionToken), UserID: u.ID,
+		}); err != nil {
+			return "", Principal{}, fmt.Errorf("end previous session: %w", err)
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return "", Principal{}, fmt.Errorf("create session: %w", err)
 	}
+	for _, h := range ended {
+		s.log.Info("session ended", logging.Event(logging.AuthSessionRevoked),
+			slog.String(logging.KeyRequestID, c.RequestID), slog.String(logging.KeySession, h[:8]),
+			slog.String("user_id", u.ID), slog.String("cause", "login"))
+	}
+	s.sessionsEnded(ended...)
 	return token, Principal{
 		UserID: u.ID, Pseudonym: u.Pseudonym, Role: u.Role, IsEmergency: u.IsEmergency == 1,
 		MustChangePassword: u.MustChangePassword == 1,
