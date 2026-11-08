@@ -207,6 +207,9 @@ func TestDisableAndDelete(t *testing.T) {
 	if err := f.svc.Delete(ctx, f.as("sa"), f.ids["m"]); err != nil {
 		t.Fatal(err)
 	}
+	if !slices.Contains(f.revoked, f.ids["m"]) {
+		t.Error("sessions of the deleted user not ended")
+	}
 	if _, err := f.svc.Get(ctx, f.as("sa"), f.ids["m"]); !errors.Is(err, ErrNotFound) {
 		t.Errorf("deleted user still visible: %v", err)
 	}

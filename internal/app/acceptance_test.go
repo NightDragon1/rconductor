@@ -203,6 +203,14 @@ func TestRateLimitOverTheAPI(t *testing.T) {
 func (f *rightsFixture) liveSession(name string) (id string, c *client, closed <-chan error) {
 	f.t.Helper()
 	id = f.invite(rA, "server_admin", name)
+	c, closed = f.liveSessionOf(name)
+	return id, c, closed
+}
+
+// liveSessionOf logs an existing user in and opens a WebSocket with that
+// session; closed reports when the socket ends.
+func (f *rightsFixture) liveSessionOf(name string) (c *client, closed <-chan error) {
+	f.t.Helper()
 	c = login(f.t, f.base, name, matrixPassword)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -225,7 +233,7 @@ func (f *rightsFixture) liveSession(name string) (id string, c *client, closed <
 			}
 		}
 	}()
-	return id, c, done
+	return c, done
 }
 
 func (f *rightsFixture) wantEnded(what string, c *client, closed <-chan error) {
@@ -252,6 +260,65 @@ func TestLockAndResetEndSessions(t *testing.T) {
 	id, c, closed = f.liveSession("reset-user")
 	f.as(rA).must(http.MethodPost, "/users/"+id+"/password-reset", nil, nil, http.StatusOK)
 	f.wantEnded("reset", c, closed)
+}
+
+// TestRightsChangesEndSessions covers AUTH-006 and D-044 for the changes
+// that end sessions besides a lock: deleting the user, deleting a user
+// group the user is in, changing the group membership through the
+// assignments and changing a supporter's grants. Each time the session
+// answers 401 and its open WebSocket closes.
+func TestRightsChangesEndSessions(t *testing.T) {
+	f := newRightsFixture(t)
+	admin := f.as(rA)
+	ok := func(what string, status int) {
+		t.Helper()
+		if status < 200 || status > 299 {
+			t.Fatalf("%s = %d", what, status)
+		}
+	}
+	// group creates a moderator group with the fixture's list.
+	group := func(name string) string {
+		t.Helper()
+		var g struct{ ID string }
+		admin.must(http.MethodPost, "/user-groups", map[string]any{"name": name, "kind": "moderator", "command_list_id": f.list}, &g, http.StatusCreated)
+		return g.ID
+	}
+
+	t.Run("user deleted", func(t *testing.T) {
+		id, c, closed := f.liveSession("deleted-user")
+		ok("delete user", admin.call(http.MethodDelete, "/users/"+id, nil, nil))
+		f.wantEnded("delete user", c, closed)
+	})
+
+	t.Run("user group deleted", func(t *testing.T) {
+		id := f.invite(rA, "moderator", "member-of-deleted")
+		g := group("deleted-group")
+		ok("fill group", admin.call(http.MethodPatch, "/user-groups/"+g, map[string]any{
+			"members": []string{id}, "grants": []map[string]string{{"server_id": f.server}},
+		}, nil))
+		c, closed := f.liveSessionOf("member-of-deleted")
+		ok("delete group", admin.call(http.MethodDelete, "/user-groups/"+g, nil, nil))
+		f.wantEnded("delete group", c, closed)
+	})
+
+	t.Run("membership through assignments", func(t *testing.T) {
+		id := f.invite(rA, "moderator", "moved-member")
+		first, second := group("first-group"), group("second-group")
+		ok("assign first", admin.call(http.MethodPut, "/users/"+id+"/assignments", map[string]any{"groups": []string{first}}, nil))
+		c, closed := f.liveSessionOf("moved-member")
+		ok("assign second", admin.call(http.MethodPut, "/users/"+id+"/assignments", map[string]any{"groups": []string{second}}, nil))
+		f.wantEnded("membership", c, closed)
+	})
+
+	t.Run("supporter grants", func(t *testing.T) {
+		id := f.invite(rMR, "supporter", "granted-supporter")
+		mod := f.as(rMR)
+		grant := []map[string]string{{"moderator_id": f.ids[rMR], "server_id": f.server}}
+		ok("grant", mod.call(http.MethodPut, "/users/"+id+"/assignments", map[string]any{"supporter_grants": grant}, nil))
+		c, closed := f.liveSessionOf("granted-supporter")
+		ok("withdraw grant", mod.call(http.MethodPut, "/users/"+id+"/assignments", map[string]any{"supporter_grants": []map[string]string{}}, nil))
+		f.wantEnded("supporter grants", c, closed)
+	})
 }
 
 // TestRoleLimitsOverTheAPI covers ROLE-006 and ROLE-008: nobody creates,
