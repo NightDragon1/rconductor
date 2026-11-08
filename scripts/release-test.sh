@@ -56,14 +56,25 @@ for v in 0.10 1.0 12.34; do
     [ "$len" -le 100 ] || { echo "short $v $kind: $len characters, over 100" >&2; fails=$((fails + 1)); }
   done
 done
-expect "overview of a test version" "$(grep -v '^Tags: ' deploy/dockerhub/overview.md | cat -s)" "$(hub 0.10 agent)"
+expect "overview of a test version carries the notice" 1 "$(hub 0.10 agent | grep -c '^> \*\*Status: pre-release')"
+expect "overview of a test version has the quick start" 1 "$(hub 0.10 agent | grep -c '^## Quick start$')"
+# The quick start is the one of README.md, with absolute links only, and
+# the whole text fits into Docker Hub (PRJ-004).
+section() { awk '/^## / { on = ($0 == "## Quick start") } on'; }
+for v in 0.10 1.0; do
+  expect "overview of $v has the quick start of the README" "$(section < README.md)" "$(hub "$v" panel | section)"
+  expect "overview of $v has no marker left" 0 "$(hub "$v" agent | grep -c '<!--')"
+  expect "overview of $v has only absolute links" 0 "$(hub "$v" panel | grep -o '](\([^)]*\))' | grep -vc '^](https://')"
+  len=$(hub "$v" panel | wc -m)
+  [ "$len" -le 25000 ] || { echo "overview $v: $len characters, over 25000" >&2; fails=$((fails + 1)); }
+done
 expect "a test version has no line of stable tags" 0 "$(hub 0.10 agent | grep -c '^Tags: ')"
 expect "overview of 1.0 names the tags" 1 "$(hub 1.0 panel | grep -c '^Tags: `1` (newest 1.x)')"
 if hub 1.0 panel | grep -qi -e pre-release -e '^>'; then
   echo "the overview of 1.0 must not carry the pre-release notice" >&2
   fails=$((fails + 1))
 fi
-expect "overview of 1.0 keeps the links" 3 "$(hub 1.0 panel | grep -c '^- ')"
+expect "overview of 1.0 keeps the links" 4 "$(hub 1.0 panel | grep -c '^- ')"
 expect "overview of 1.0 has no double blank line" 0 "$(hub 1.0 panel | awk 'p == "" && $0 == "" { n++ } { p = $0 } END { print n + 0 }')"
 for bad in "1.0 web" "1.0.0 panel" "v1.0 panel" "latest agent"; do
   # shellcheck disable=SC2086 # split on purpose
