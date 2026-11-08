@@ -63,6 +63,7 @@ const keyTexts = [
   'login_overflow_line',
   'profiles_poll_interval',
   'servers_connection_test_per_minute',
+  'servers_http_parallel',
   'session_idle_timeout',
   'session_max_lifetime',
   'smtp_test_per_minute',

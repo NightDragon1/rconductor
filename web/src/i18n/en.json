@@ -811,6 +811,10 @@
         "label": "Templates per server",
         "help": "How many command templates one server may have."
       },
+      "servers_http_parallel": {
+        "label": "Requests at once (HTTPS API)",
+        "help": "How many commands go to one game server with an HTTPS API at the same time."
+      },
       "servers_connection_test_per_minute": {
         "label": "Connection tests per minute",
         "help": "How often one user may test RCON data in the server dialog."
