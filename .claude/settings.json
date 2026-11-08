@@ -39,6 +39,7 @@
       "Bash(gh api -X DELETE repos/*/keys*)",
       "Bash(gh api -X PUT repos/*/keys*)",
       "Bash(gh api -X PATCH repos/*/keys*)",
+      "Bash(gh api -X *)",
       "Bash(gh api * -X DELETE*)",
       "Bash(gh api * -X PUT*)",
       "Bash(gh api * -X PATCH*)",
