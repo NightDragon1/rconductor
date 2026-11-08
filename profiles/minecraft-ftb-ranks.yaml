@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/FTBTeam/FTB-Ranks/tree/main/common/src/main/java/dev/ftb/mods/ftbranks/commands
+# source: https://github.com/FTBTeam/FTB-Ranks/tree/1.20.1/main (cross-check of command names)
+
+schema: 1
+id: minecraft-ftb-ranks
+name: FTB Ranks
+kind: specific
+# Layer on minecraft-forge or minecraft-neoforge (also Fabric builds).
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: ftbranks reload
+    description: Reload ranks from disk
+  - path: ftbranks list_all_ranks
+    description: List all ranks
+  - path: ftbranks list_ranks_of
+    description: List the ranks of a player
+    params:
+      - { name: player, type: player }
+  - path: ftbranks list_players_with
+    description: List players with a rank
+    params:
+      - { name: rank, type: text }
+  - path: ftbranks show_rank
+    description: Show a rank's id, name, power, condition and nodes
+    params:
+      - { name: rank, type: text }
+  - path: ftbranks create
+    description: Create a rank, optional power after the name
+    params:
+      - { name: name_and_power, type: text }
+  - path: ftbranks delete
+    description: Delete a rank
+    params:
+      - { name: rank, type: text }
+  - path: ftbranks add
+    description: Add a player to a rank
+    params:
+      - { name: player, type: player }
+      - { name: rank, type: text }
+  - path: ftbranks remove
+    description: Remove a player from a rank
+    params:
+      - { name: player, type: player }
+      - { name: rank, type: text }
+  - path: ftbranks node add
+    description: Add a permission node to a rank (rank, node, optional value)
+    params:
+      - { name: rank_node_value, type: text }
+  - path: ftbranks node remove
+    description: Remove a permission node from a rank (rank, node)
+    params:
+      - { name: rank_and_node, type: text }
+  - path: ftbranks node list
+    description: List a rank's permission nodes
+    params:
+      - { name: rank, type: text }
+  - path: ftbranks condition
+    description: Set a rank's condition (rank, condition)
+    params:
+      - { name: rank_and_condition, type: text }
+  - path: ftbranks edit
+    description: Change a rank's name or power (newer versions; rank, name|power, value)
+    params:
+      - { name: args, type: text }
+  - path: ftbranks refresh_readme
+    description: Regenerate the FTB Ranks README file

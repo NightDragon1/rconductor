@@ -1,0 +1,145 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://pzwiki.net/wiki/Admin_commands
+# source: https://pzwiki.net/wiki/Server_Settings
+
+schema: 1
+id: project-zomboid
+name: Project Zomboid
+kind: generic
+# No players block: players prints one name per line. Names with spaces
+# must be quoted ("user name"); no player_pattern for that reason.
+protocol:
+  type: source-rcon
+  default_port: 27015
+ports:
+  game:
+    - { port: 16261, proto: udp, name: game }
+    - { port: 8766, proto: udp, name: steam1 }
+    - { port: 8767, proto: udp, name: steam2 }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: []
+stop:
+  command: quit
+catalog:
+  # --- Players ---
+  - path: players
+    description: List connected players
+  - path: kickuser
+    description: Kick a player, optional reason as -r "reason"
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
+  - path: banuser
+    description: Ban a player (options -ip, -r "reason")
+    params:
+      - { name: player, type: player }
+      - { name: options, type: text, optional: true }
+  - path: unbanuser
+    description: Unban a player
+    params:
+      - { name: player, type: player }
+  - path: banid
+    description: Ban a Steam id
+    params:
+      - { name: steam_id, type: text }
+  - path: unbanid
+    description: Unban a Steam id
+    params:
+      - { name: steam_id, type: text }
+  - path: addusertowhitelist
+    description: Add a connected user to the whitelist
+    params:
+      - { name: player, type: player }
+  - path: removeuserfromwhitelist
+    description: Remove a user from the whitelist
+    params:
+      - { name: player, type: player }
+  - path: adduser
+    description: Create a whitelist account (name, then password)
+    params:
+      - { name: player, type: player }
+      - { name: password, type: text }
+  - path: setaccesslevel
+    description: Set a player's access level (none removes it)
+    params:
+      - { name: player, type: player }
+      - { name: level, type: choice, values: [admin, moderator, overseer, gm, observer, none] }
+  - path: grantadmin
+    description: Grant admin rights
+    params:
+      - { name: player, type: player }
+  - path: removeadmin
+    description: Remove admin rights
+    params:
+      - { name: player, type: player }
+  - path: voiceban
+    description: Block or allow voice chat for a player (-true / -false)
+    params:
+      - { name: player, type: player }
+      - { name: value, type: choice, values: [-true, -false] }
+  - path: godmode
+    description: Toggle invincibility for a player (-true / -false)
+    params:
+      - { name: player, type: player }
+      - { name: value, type: choice, values: [-true, -false], optional: true }
+  - path: invisible
+    description: Toggle invisibility for a player (-true / -false)
+    params:
+      - { name: player, type: player }
+      - { name: value, type: choice, values: [-true, -false], optional: true }
+  - path: noclip
+    description: Toggle noclip for a player (-true / -false)
+    params:
+      - { name: player, type: player }
+      - { name: value, type: choice, values: [-true, -false], optional: true }
+  - path: teleport
+    description: Teleport player 1 to player 2
+    params:
+      - { name: player, type: player }
+      - { name: target, type: player }
+  - path: additem
+    description: Give an item (player, module.item, optional count)
+    params:
+      - { name: player, type: player }
+      - { name: item_and_count, type: text }
+  - path: addxp
+    description: Give XP to a perk (player, perk=xp)
+    params:
+      - { name: player, type: player }
+      - { name: perk_xp, type: text }
+  # --- World ---
+  - path: servermsg
+    description: Message to all players (quote the text)
+    params:
+      - { name: text, type: text }
+  - path: createhorde
+    description: Spawn a horde near a player (count, then player)
+    params:
+      - { name: count, type: number, min: 1 }
+      - { name: player, type: player, optional: true }
+  - path: chopper
+    description: Start a helicopter event on a random player
+  - path: gunshot
+    description: Play a gunshot near a random player
+  - path: startrain
+    description: Start rain
+  - path: stoprain
+    description: Stop rain
+  # --- Server ---
+  - path: save
+    description: Save the world
+  - path: quit
+    description: Save and shut down the server
+  - path: showoptions
+    description: Show server options and values
+  - path: changeoption
+    description: Change a server option (option, then "value")
+    params:
+      - { name: option_and_value, type: text }
+  - path: reloadoptions
+    description: Reload server options and send them to clients
+  - path: checkModsNeedUpdate
+    description: Check whether mods need an update (result in DebugLog-server.txt)

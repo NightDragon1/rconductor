@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://wiki.factorio.com/Console
+# source: https://wiki.factorio.com/Command_line_parameters
+# source: https://github.com/factoriotools/factorio-docker/blob/master/README.md
+
+schema: 1
+id: factorio
+name: Factorio
+kind: generic
+match:
+  images: ["factoriotools/factorio*"]
+# Factorio has no default RCON port (--rcon-port is required); 27015 is
+# the port of the factoriotools image. No players block: "/players online"
+# prints one name per line.
+protocol:
+  type: source-rcon
+  default_port: 27015
+ports:
+  game:
+    - { port: 34197, proto: udp, name: game }
+syntax:
+  case_sensitive: false
+  # Input without "/" is sent as a chat message, so the slash must stay.
+  strip_prefix: ""
+  max_length: 1000
+  # Lua console: /c, /command, /sc, /silent-command, /mc, /measured-command.
+  wrappers: ["/c", "/command", "/sc", "/silent-command", "/mc", "/measured-command"]
+stop:
+  command: /quit
+catalog:
+  # --- Players ---
+  - path: /players
+    description: List players (online/o or count/c)
+    params:
+      - { name: filter, type: choice, values: [online, o, count, c], optional: true }
+  - path: /kick
+    description: Kick a player with a reason
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text }
+  - path: /ban
+    description: Ban a player with a reason
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text }
+  - path: /unban
+    description: Unban a player
+    params:
+      - { name: player, type: player }
+  - path: /bans
+    description: List banned players
+  - path: /promote
+    description: Make a player admin
+    params:
+      - { name: player, type: player }
+  - path: /demote
+    description: Remove admin rights
+    params:
+      - { name: player, type: player }
+  - path: /admins
+    description: List admins
+  - path: /whitelist
+    description: Whitelist (add, remove, get, clear; an empty whitelist is off)
+    params:
+      - { name: action, type: choice, values: [add, remove, get, clear] }
+      - { name: player, type: player, optional: true }
+  - path: /mute
+    description: Mute a player
+    params:
+      - { name: player, type: player }
+  - path: /unmute
+    description: Unmute a player
+    params:
+      - { name: player, type: player }
+  - path: /mutes
+    description: List muted players
+  - path: /purge
+    description: Delete all chat messages of a player
+    params:
+      - { name: player, type: player }
+  - path: /permissions
+    description: Permission groups (add-player, remove-player, create-group, ... with parameters)
+    params:
+      - { name: args, type: text }
+  # --- Messaging ---
+  - path: /shout
+    description: Message to all players
+    params:
+      - { name: text, type: text }
+  - path: /whisper
+    description: Private message to a player
+    params:
+      - { name: player, type: player }
+      - { name: text, type: text }
+  # --- Server ---
+  - path: /server-save
+    description: Save the game on the server
+  - path: /save
+    description: Save the game under a name (server console)
+    params:
+      - { name: name, type: text, optional: true }
+  - path: /quit
+    description: Stop the server (server console)
+  - path: /config
+    description: Get or set a server option (get/set, option, value)
+    params:
+      - { name: args, type: text }
+  - path: /seed
+    description: Show the map seed
+  - path: /time
+    description: Show the age of the map
+  - path: /version
+    description: Show the game version
+  - path: /evolution
+    description: Show enemy evolution, optional surface
+    params:
+      - { name: surface, type: text, optional: true }

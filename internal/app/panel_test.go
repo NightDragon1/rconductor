@@ -135,7 +135,9 @@ func TestPanelStartupSequence(t *testing.T) {
 	}
 
 	got := strings.Join(events(t, first.String()), " ")
-	want := "app.start db.migrate.start db.migrate.done key.created profile.imported profile.imported auth.initial_password.issued key.created app.ready"
+	// One profile.imported per shipped profile.
+	want := "app.start db.migrate.start db.migrate.done key.created " +
+		strings.Repeat("profile.imported ", shippedProfiles(t)) + "auth.initial_password.issued key.created app.ready"
 	if got != want {
 		t.Errorf("first start events = %q, want %q", got, want)
 	}
@@ -300,4 +302,20 @@ func TestEmergencyAdminRecovery(t *testing.T) {
 	if code := login(addr, m[0][1]); code != http.StatusOK {
 		t.Errorf("new password = %d", code)
 	}
+}
+
+// shippedProfiles is the number of profile files the panel ships.
+func shippedProfiles(t *testing.T) int {
+	t.Helper()
+	entries, err := os.ReadDir("../../profiles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".yaml") {
+			n++
+		}
+	}
+	return n
 }

@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/neoforged/NeoForge/tree/1.21.1/src/main/java/net/neoforged/neoforge/server/command
+
+schema: 1
+id: minecraft-neoforge
+name: Minecraft NeoForge
+kind: generic
+# Layer on minecraft-java. No match.images: runs on itzg/minecraft-server
+# (TYPE=NEOFORGE). No version.pattern: the base profile keeps the
+# Minecraft version; NeoForge logs "NeoForge mod loading, version X, for MC Y".
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: neoforge tps
+    description: Show tick time and TPS, overall or for one dimension
+    params:
+      - { name: dimension, type: text, optional: true }
+  - path: neoforge track start
+    description: Track tick cost of block entities or entities for N seconds
+    params:
+      - { name: type, type: choice, values: [blockentity, entity] }
+      - { name: seconds, type: number, min: 1 }
+  - path: neoforge track reset
+    description: Reset tracking data
+    params:
+      - { name: type, type: choice, values: [blockentity, entity] }
+  - path: neoforge track blockentity
+    description: Show block-entity tracking results
+  - path: neoforge track entity
+    description: Show entity tracking results
+  - path: neoforge entity list
+    description: List entity counts, optional filter and dimension
+    params:
+      - { name: filter_and_dimension, type: text, optional: true }
+  - path: neoforge generate start
+    description: Pre-generate chunks (position, chunk radius 1-2500, optional progress bar true/false)
+    params:
+      - { name: args, type: text }
+  - path: neoforge generate stop
+    description: Stop chunk pre-generation
+  - path: neoforge generate status
+    description: Show chunk pre-generation progress
+  - path: neoforge dimensions
+    description: List dimensions by type
+  - path: neoforge mods
+    description: List loaded mods
+  - path: neoforge tags
+    description: Query registry tags (registry, then list/get/query)
+    params:
+      - { name: args, type: text }
+  - path: neoforge dump registry
+    description: Dump a registry to a file
+    params:
+      - { name: registry, type: text }
+  - path: neoforge day speed set
+    description: Set the day speed (default, realtime or factor 0-1000)
+    params:
+      - { name: speed, type: text }
+  - path: neoforge day length set
+    description: Set the day length (default, realtime or minutes 1-1440)
+    params:
+      - { name: length, type: text }
+  - path: neoforge data_components list
+    description: List data components of the held item

@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/io/papermc/paper/command/PaperCommand.java
+# source: https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/io/papermc/paper/command/PaperCommands.java
+# source: https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/org/spigotmc/SpigotConfig.java
+# source: https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
+
+schema: 1
+id: minecraft-paper
+name: Minecraft Paper (Spigot/Bukkit)
+kind: generic
+# Layer on minecraft-java. No match.images: Paper runs on
+# itzg/minecraft-server (TYPE=PAPER). Paper keeps the vanilla line
+# "Starting minecraft server version", so no own version.pattern.
+protocol:
+  type: source-rcon
+  default_port: 25575
+syntax:
+  # Bukkit registers every vanilla command also as minecraft:<name>; the
+  # wrapper check compares only the first token, so the namespaced forms
+  # must be listed. Wrappers are united across profiles, execute, function,
+  # return and schedule come from minecraft-java once it lists them.
+  wrappers: ["minecraft:execute", "minecraft:function", "minecraft:return", "minecraft:schedule"]
+catalog:
+  - path: tps
+    description: Show TPS for the last 1, 5 and 15 minutes
+  - path: mspt
+    description: Show tick times (milliseconds per tick)
+  - path: version
+    description: Show the server version, or a plugin's version
+    params:
+      - { name: plugin, type: text, optional: true }
+  - path: plugins
+    description: List installed plugins
+  - path: restart
+    description: Restart the server (Spigot restart script must be set)
+  - path: reload
+    description: Bukkit reload of plugins and config (unsafe; "reload confirm")
+    params:
+      - { name: confirm, type: choice, values: [confirm], optional: true }
+  - path: paper version
+    description: Show the Paper build
+  - path: paper heap
+    description: Write a heap dump
+  - path: paper entity list
+    description: List entity counts per world, optional filter and world
+    params:
+      - { name: filter_and_world, type: text, optional: true }
+  - path: paper reload
+    description: Reload Paper config files
+  - path: paper dumpplugins
+    description: Dump plugin information to a file
+  - path: paper syncloadinfo
+    description: Dump synchronous chunk load information
+  - path: paper mobcaps
+    description: Show mob caps per world
+    params:
+      - { name: world, type: text, optional: true }
+  - path: paper playermobcaps
+    description: Show a player's mob caps
+    params:
+      - { name: player, type: player, optional: true }
+  - path: paper dumplisteners
+    description: Dump registered event listeners

@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/StunlockStudios/vrising-dedicated-server-instructions/blob/master/1.1.x-pc/INSTRUCTIONS.md
+
+schema: 1
+id: v-rising
+name: V Rising
+kind: generic
+# RCON offers only the commands below; kick/ban exist only in the
+# in-game admin console. No player list over RCON.
+protocol:
+  type: source-rcon
+  default_port: 25575
+ports:
+  game:
+    - { port: 27015, proto: udp, name: game }
+    - { port: 27016, proto: udp, name: query }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: []
+catalog:
+  - path: help
+    description: List commands or show help for one
+    params:
+      - { name: command, type: text, optional: true }
+  - path: announce
+    description: Message to all players
+    params:
+      - { name: text, type: text }
+  - path: announcerestart
+    description: Announce a restart in N minutes (localized message)
+    params:
+      - { name: minutes, type: number, min: 1 }
+  - path: shutdown
+    description: Schedule a shutdown (message times, then message)
+    params:
+      - { name: args, type: text }
+  - path: cancelshutdown
+    description: Cancel a scheduled shutdown, optional message
+    params:
+      - { name: message, type: text, optional: true }
+  - path: name
+    description: Change the server name at runtime
+    params:
+      - { name: name, type: text }
+  - path: description
+    description: Change the server description at runtime
+    params:
+      - { name: description, type: text }
+  - path: password
+    description: Set, change or clear (--clear) the server password
+    params:
+      - { name: password, type: text, optional: true }
+  - path: version
+    description: Show the server version
+  - path: time
+    description: Show the server time

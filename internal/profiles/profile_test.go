@@ -96,6 +96,25 @@ func TestShippedProfiles(t *testing.T) {
 		if p.ID+".yaml" != e.Name() {
 			t.Errorf("%s has id %s", e.Name(), p.ID)
 		}
+		// Every shipped profile names its kind (CAT-007).
+		if !strings.Contains(string(data), "\nkind: ") {
+			t.Errorf("%s names no kind", e.Name())
+		}
+	}
+}
+
+// TestShippedProfilesAreListed keeps the list of shipped profiles in the
+// user documentation complete (DOC-005).
+func TestShippedProfilesAreListed(t *testing.T) {
+	doc, err := os.ReadFile("../../docs/user/technical.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir("../../profiles")
+	for _, e := range entries {
+		if isProfileFile(e.Name()) && !strings.Contains(string(doc), "| `"+strings.TrimSuffix(e.Name(), ".yaml")+"` |") {
+			t.Errorf("%s is not listed in docs/user/technical.md", e.Name())
+		}
 	}
 }
 

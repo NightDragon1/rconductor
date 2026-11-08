@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/mschnitzer/ark-survival-ascended-linux-container-image/blob/main/README.md
+# source: https://www.survivalservers.com/wiki/ARK:_Survival_Ascended_Admin_Commands
+
+schema: 1
+id: ark-sa
+name: "ARK: Survival Ascended"
+kind: generic
+match:
+  images: ["mschnitzer/asa-linux-server*"]
+# No players block: ListPlayers prints one line per player; the panel
+# reads only a single-line list. Kick/ban take the player id (EOS id).
+protocol:
+  type: source-rcon
+  default_port: 27020
+ports:
+  game:
+    - { port: 7777, proto: udp, name: game }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: [admincheat, cheat, scriptcommand]
+stop:
+  command: DoExit
+catalog:
+  - path: ListPlayers
+    description: List connected players with their player ids
+  - path: KickPlayer
+    description: Kick a player by player id
+    params:
+      - { name: player_id, type: text }
+  - path: BanPlayer
+    description: Ban a player by player id
+    params:
+      - { name: player_id, type: text }
+  - path: UnbanPlayer
+    description: Unban a player by player id
+    params:
+      - { name: player_id, type: text }
+  - path: Broadcast
+    description: Show a message to all players
+    params:
+      - { name: text, type: text }
+  - path: SaveWorld
+    description: Save the world
+  - path: DoExit
+    description: Shut down the server (run SaveWorld first)
+  - path: SetTimeOfDay
+    description: Set the time of day (hh:mm)
+    params:
+      - { name: time, type: text }
+  - path: DestroyWildDinos
+    description: Remove all wild creatures so they respawn
