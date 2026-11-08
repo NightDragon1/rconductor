@@ -3,6 +3,8 @@
 schema: 1
 id: minecraft-gtnh
 name: Minecraft GT New Horizons (1.7.10)
+# A modpack: it ranks above a generic Minecraft profile (CAT-007).
+kind: specific
 # No match.images: GTNH usually runs on the same image as vanilla
 # (itzg/minecraft-server), so the profile is chosen when the server is created.
 protocol:
