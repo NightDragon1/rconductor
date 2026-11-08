@@ -3,18 +3,18 @@ import type { Page } from '@playwright/test';
 import { expect, login, secret, test } from './fixtures';
 
 // UI-011: the visible entries per role are exactly those of the table in
-// Design 6.2 (R1 rows; topology and messages are R2). Entries without the
-// right are hidden, not greyed.
+// Design 6.2 (topology since 1.1, UI-010; messages are R2). Entries
+// without the right are hidden, not greyed.
 const design62: Record<string, { main: string[]; admin: string[] }> = {
   // RCON admin: everything.
   admin: {
-    main: ['Overview', 'Servers', 'Audit'],
+    main: ['Overview', 'Servers', 'Topology', 'Audit'],
     admin: ['Users', 'Groups', 'Command lists', 'Servers and groups', 'Agents', 'Settings'],
   },
   // Server admin: users (his moderators and supporters), moderator
   // groups, own lists, servers read-only in scope; no agents, no settings.
   sadmin: {
-    main: ['Overview', 'Servers', 'Audit'],
+    main: ['Overview', 'Servers', 'Topology', 'Audit'],
     admin: ['Users', 'Groups', 'Command lists', 'Servers and groups'],
   },
   // Moderator with supporters on (global and for him): his supporters.
@@ -84,7 +84,7 @@ test('moderator without the global supporter switch', async ({ page, playwright,
 test('pages outside the role do not exist', async ({ page, state }) => {
   await login(page, 'mod', secret(state, 'mod'));
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
-  for (const path of ['admin/agents', 'admin/settings', 'audit', 'admin/groups']) {
+  for (const path of ['admin/agents', 'admin/settings', 'audit', 'admin/groups', 'topology']) {
     await page.goto(path);
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   }

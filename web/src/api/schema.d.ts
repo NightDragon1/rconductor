@@ -1051,6 +1051,22 @@ export interface components {
             capabilities?: string[];
             /** @description Named volumes of the container (AGT-007); the size only once the agent measured it, without the capability volumes.size never. */
             volumes?: components["schemas"]["VolumeRuntime"][];
+            /** @description Ports of the container (UI-005): the server admin gets the game ports, the RCON admin also the RCON port and every other published port. */
+            ports?: components["schemas"]["PortRuntime"][];
+        };
+        PortRuntime: {
+            /** @enum {string} */
+            kind: "game" | "rcon" | "other";
+            /** @description Name of a game port from the profile or the server. */
+            name?: string;
+            /** @description Port inside the container. */
+            private: number;
+            /** @description Port on the host; missing when the port is not published. */
+            public?: number;
+            /** @description Foreign data from the agent for other ports (SEC-006). */
+            proto: string;
+            /** @description steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host. */
+            steam_url?: string;
         };
         VolumeRuntime: {
             /** @description Foreign data from the agent (SEC-006). */

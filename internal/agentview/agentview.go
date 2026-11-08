@@ -32,7 +32,9 @@ type Agents interface {
 // Bus publishes to the WebSocket topics.
 type Bus interface {
 	PublishAgentData(serverID, kind string, data any)
-	PublishRuntime(serverID string, full, reduced any)
+	// PublishRuntime sends the runtime data of a server in the view of
+	// the RCON admin, of the server admin in scope and of the other roles.
+	PublishRuntime(serverID string, rcon, admin, reduced any)
 }
 
 // ContainerRuntime is the agent part of a server's runtime data; only
@@ -54,6 +56,9 @@ type ContainerRuntime struct {
 	Capabilities *[]string `json:"capabilities,omitempty"`
 	// Volumes of the container with the sizes the agent measured (AGT-007).
 	Volumes []VolumeView `json:"volumes,omitempty"`
+	// Ports of the container: game ports for the server admin, all
+	// relevant ones for the RCON admin (UI-005).
+	Ports []PortView `json:"ports,omitempty"`
 }
 
 // Runtime is what cards and the server head show (revision 2.4 candidates
@@ -138,8 +143,17 @@ func (v *View) SetPlayers(p *cache.Cache) {
 }
 
 // Runtime returns the runtime data of a server; agentData adds the
-// container part.
+// container part in the view of the RCON admin.
 func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Runtime {
+	if agentData {
+		return v.RuntimeFor(ctx, serverID, LevelRCONAdmin)
+	}
+	return v.RuntimeFor(ctx, serverID, LevelPlayers)
+}
+
+// RuntimeFor returns the runtime data of a server for a level (UI-005,
+// UI-006).
+func (v *View) RuntimeFor(ctx context.Context, serverID string, level Level) Runtime {
 	rt := Runtime{Kind: "runtime", ServerID: serverID}
 	if v.players != nil {
 		if p, ok := v.players.Cached(serverID); ok && !p.Unknown {
@@ -148,13 +162,15 @@ func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Run
 		}
 	}
 	rt.GameVersion = v.gameVersion(serverID)
-	if !agentData {
+	if level < LevelServerAdmin {
 		return rt
 	}
-	agentID, name, ok := v.container(ctx, serverID)
-	if !ok {
+	srv, err := v.st.Queries.GetServer(ctx, serverID)
+	if err != nil || !srv.AgentID.Valid || !srv.ContainerName.Valid {
 		return rt
 	}
+	agentID, name := srv.AgentID.String, srv.ContainerName.String
+	var snapshot []agentproto.Port
 	cr := &ContainerRuntime{Name: name, State: cache.StateUnknown, AgentConnected: v.data.Connected(agentID), Stale: true}
 	if caps, ok := v.agents.Capabilities(agentID); ok {
 		c := append([]string{}, caps...)
@@ -165,6 +181,7 @@ func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Run
 		if len(c.Volumes) > 0 {
 			cr.Volumes = v.volumesOf(agentID, c.Volumes)
 		}
+		snapshot = c.Ports
 		if !c.StartedAt.IsZero() {
 			t := c.StartedAt
 			cr.StartedAt = &t
@@ -173,6 +190,9 @@ func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Run
 	if m, ok := v.data.Metric(agentID, name); ok {
 		cpu, mem, limit, at := m.CPUPercent, m.MemBytes, m.MemLimit, m.At
 		cr.CPUPercent, cr.MemBytes, cr.MemLimit, cr.MetricsAt, cr.Stale = &cpu, &mem, &limit, &at, m.Stale
+	}
+	if ports := v.portsOf(ctx, srv, snapshot, level); len(ports) > 0 {
+		cr.Ports = ports
 	}
 	rt.Container = cr
 	return rt
@@ -196,7 +216,8 @@ func (v *View) Containers(agentID string) ([]Container, bool) {
 }
 
 func (v *View) publishRuntime(ctx context.Context, serverID string) {
-	v.bus.PublishRuntime(serverID, v.Runtime(ctx, serverID, true), v.Runtime(ctx, serverID, false))
+	v.bus.PublishRuntime(serverID, v.RuntimeFor(ctx, serverID, LevelRCONAdmin),
+		v.RuntimeFor(ctx, serverID, LevelServerAdmin), v.RuntimeFor(ctx, serverID, LevelPlayers))
 }
 
 // New wires the cache's notifications to the bus.

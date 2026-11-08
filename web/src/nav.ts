@@ -4,6 +4,7 @@ import {
   FileClock,
   LayoutGrid,
   ListChecks,
+  Network,
   Server,
   Settings,
   ShieldCheck,
@@ -37,6 +38,7 @@ const rconAdmin = (r: Role) => r === 'rcon_admin';
 export const mainNav: NavEntry[] = [
   { to: '/', key: 'overview', icon: LayoutGrid, allowed: () => true },
   { to: '/servers', key: 'servers', icon: Server, allowed: () => true },
+  { to: '/topology', key: 'topology', icon: Network, allowed: admins },
   { to: '/audit', key: 'audit', icon: FileClock, allowed: admins },
 ];
 

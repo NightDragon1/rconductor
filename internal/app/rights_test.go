@@ -659,6 +659,63 @@ func TestGameVersionAndVolumesByRole(t *testing.T) {
 	}
 }
 
+// TestPortsAndTopologyByRole extends the matrix by UI-005 and UI-010: the
+// RCON admin sees game ports, the RCON port and every published port, the
+// server admin in scope only the game ports, moderator and supporter none;
+// for the topology the server admin gets the agent's state but never its
+// name (F10), the RCON admin both.
+func TestPortsAndTopologyByRole(t *testing.T) {
+	f := newRightsFixture(t)
+	pairAgent(t, f.as(rA), f.agentAddr, f.server, &hostBackend{ports: []agentproto.Port{
+		{Private: 25565, Public: 30000, Proto: "tcp"}, {Private: 8123, Public: 8123, Proto: "tcp"},
+	}})
+	kinds := func(role string) (int, []string) {
+		var s struct {
+			Runtime struct {
+				Container *struct {
+					Ports []struct{ Kind string }
+				}
+			}
+		}
+		status := f.as(role).call(http.MethodGet, "/servers/"+f.server, nil, &s)
+		if s.Runtime.Container == nil {
+			return status, nil
+		}
+		var out []string
+		for _, p := range s.Runtime.Container.Ports {
+			out = append(out, p.Kind)
+		}
+		return status, out
+	}
+	for role, want := range map[string][]string{
+		rA:  {"game", "rcon", "other"},
+		rSI: {"game"},
+		rMR: nil, rMN: nil, rSU: nil,
+	} {
+		if status, got := kinds(role); status != http.StatusOK || !slices.Equal(got, want) {
+			t.Errorf("%s: %d ports %v, want %v", role, status, got, want)
+		}
+	}
+	if status, _ := kinds(rSO); status != http.StatusNotFound {
+		t.Errorf("%s: %d, want 404", rSO, status)
+	}
+
+	// Topology: the server admin reads no agent, so no name reaches him.
+	if status, _ := f.raw(rSI, http.MethodGet, "/agents", nil); status != http.StatusForbidden {
+		t.Errorf("server admin reads the agents: %d", status)
+	}
+	for _, path := range []string{"/servers", "/servers/" + f.server} {
+		status, b := f.rawBody(rSI, http.MethodGet, path, nil)
+		body := string(b)
+		if status != http.StatusOK || strings.Contains(body, "host-1") || !strings.Contains(body, `"agent_connected":true`) {
+			t.Errorf("server admin %s: %d %s", path, status, body)
+		}
+	}
+	if status, b := f.rawBody(rA, http.MethodGet, "/agents", nil); status != http.StatusOK || !strings.Contains(string(b), "host-1") {
+		t.Errorf("RCON admin agents: %d %s", status, b)
+	}
+}
+
 // TestCapabilitiesByRole extends the matrix by the field capabilities of
 // the runtime data (AGT-013): RCON admin and the server admin in scope see
 // it with the container part, moderator and supporter get neither

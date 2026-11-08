@@ -9,6 +9,7 @@ Entries you may not use are hidden, not greyed out.
 | --- | --- | --- | --- | --- |
 | Overview | yes | yes | yes | yes |
 | Servers | all | in scope | own | own |
+| Topology | yes | in scope, agents without name | – | – |
 | Audit | yes | in scope | – | – |
 | Users | yes | moderators, supporters | supporters, if released | – |
 | Groups | yes | moderator groups | – | – |
@@ -22,9 +23,25 @@ password.
 
 ## Overview
 
-Cards show each server with status, load and players. The RCON admin also gets a
+Cards show each server with status, load, players, the game version and, for
+admins, the game ports. The RCON admin also gets a
 health overview: restart loops, disconnected agents, RCON errors and locked users,
 each with a link to the object. Values that are out of date are marked, not hidden.
+
+## Topology
+
+The topology shows host → agent → game server, by server group, and follows
+status changes live. Servers without an agent are listed on their own. The server
+admin sees the agents of his servers as "Agent" with their state, without names.
+
+## Ports and volumes
+
+The server admin sees the game ports of his servers, the RCON admin also the RCON
+port and every other published port of the container. A port that is not
+published on the host is marked so. If the game profile sets `ports.steam_connect:
+true`, a published game port gets a Connect link (`steam://connect/<host>:<port>`,
+with the server's host). Volumes show with name and, once the agent has measured
+it, their size and when it was measured.
 
 ## Server page
 
@@ -34,7 +51,7 @@ restart mechanism is in place, such as Docker `restart: unless-stopped`.
 
 | Tab | For | Content |
 | --- | --- | --- |
-| Overview | all | status, players, and load for admins |
+| Overview | all | status, players and game version; for admins load, ports and volumes with their size and its age |
 | Console | admins | free input, one block per command, timeline, tracks for own commands, others' commands and logs |
 | Commands | moderators, supporters | allowed commands as cards with fields; player names come from the player list |
 | Logs | admins | container logs over the agent, only while the view is open |

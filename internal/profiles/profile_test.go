@@ -174,3 +174,20 @@ func TestRequiredFieldsAreChecked(t *testing.T) {
 		t.Errorf("profile without a separator: %v", err)
 	}
 }
+
+// TestSteamConnect covers the switch ports.steam_connect of UI-005: off
+// by default, on when set, and only a boolean.
+func TestSteamConnect(t *testing.T) {
+	p, err := Parse([]byte(design74))
+	if err != nil || p.Ports.SteamConnect {
+		t.Fatalf("default: %v %v", p.Ports.SteamConnect, err)
+	}
+	on := strings.Replace(design74, "ports:\n  game:", "ports:\n  steam_connect: true\n  game:", 1)
+	if p, err = Parse([]byte(on)); err != nil || !p.Ports.SteamConnect {
+		t.Errorf("on: %v %v", err, p)
+	}
+	bad := strings.Replace(design74, "ports:\n  game:", "ports:\n  steam_connect: \"yes please\"\n  game:", 1)
+	if _, err := Parse([]byte(bad)); err == nil {
+		t.Error("a string as steam_connect accepted")
+	}
+}

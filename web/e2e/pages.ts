@@ -6,6 +6,7 @@ export const pages: Record<string, string[]> = {
   admin: [
     '',
     'servers',
+    'topology',
     'audit',
     'profile',
     'admin/users',
@@ -15,7 +16,7 @@ export const pages: Record<string, string[]> = {
     'admin/agents',
     'admin/settings',
   ],
-  sadmin: ['', 'admin/users', 'admin/groups', 'admin/command-lists', 'admin/servers'],
+  sadmin: ['', 'topology', 'admin/users', 'admin/groups', 'admin/command-lists', 'admin/servers'],
   mod: ['', 'servers', 'admin/users'],
   sup: ['', 'servers'],
 };

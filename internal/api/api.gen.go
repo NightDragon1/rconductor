@@ -169,6 +169,27 @@ func (e HistoryEntryResult) Valid() bool {
 	}
 }
 
+// Defines values for PortRuntimeKind.
+const (
+	PortRuntimeKindGame  PortRuntimeKind = "game"
+	PortRuntimeKindOther PortRuntimeKind = "other"
+	PortRuntimeKindRcon  PortRuntimeKind = "rcon"
+)
+
+// Valid indicates whether the value is a known member of the PortRuntimeKind enum.
+func (e PortRuntimeKind) Valid() bool {
+	switch e {
+	case PortRuntimeKindGame:
+		return true
+	case PortRuntimeKindOther:
+		return true
+	case PortRuntimeKindRcon:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProfileParamType.
 const (
 	Choice ProfileParamType = "choice"
@@ -624,12 +645,15 @@ type ContainerRuntime struct {
 	CpuPercent   *float64  `json:"cpu_percent,omitempty"`
 
 	// Image Foreign data from the agent (SEC-006).
-	Image        *string    `json:"image,omitempty"`
-	MemBytes     *int64     `json:"mem_bytes,omitempty"`
-	MemLimit     *int64     `json:"mem_limit,omitempty"`
-	MetricsAt    *time.Time `json:"metrics_at,omitempty"`
-	Name         string     `json:"name"`
-	RestartCount int        `json:"restart_count"`
+	Image     *string    `json:"image,omitempty"`
+	MemBytes  *int64     `json:"mem_bytes,omitempty"`
+	MemLimit  *int64     `json:"mem_limit,omitempty"`
+	MetricsAt *time.Time `json:"metrics_at,omitempty"`
+	Name      string     `json:"name"`
+
+	// Ports Ports of the container (UI-005): the server admin gets the game ports, the RCON admin also the RCON port and every other published port.
+	Ports        *[]PortRuntime `json:"ports,omitempty"`
+	RestartCount int            `json:"restart_count"`
 
 	// RestartLoop At least three starts within ten minutes (UI-003).
 	RestartLoop bool       `json:"restart_loop"`
@@ -801,6 +825,29 @@ type PlayerList struct {
 	Stale     bool       `json:"stale"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
+
+// PortRuntime defines model for PortRuntime.
+type PortRuntime struct {
+	Kind PortRuntimeKind `json:"kind"`
+
+	// Name Name of a game port from the profile or the server.
+	Name *string `json:"name,omitempty"`
+
+	// Private Port inside the container.
+	Private int `json:"private"`
+
+	// Proto Foreign data from the agent for other ports (SEC-006).
+	Proto string `json:"proto"`
+
+	// Public Port on the host; missing when the port is not published.
+	Public *int `json:"public,omitempty"`
+
+	// SteamUrl steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host.
+	SteamUrl *string `json:"steam_url,omitempty"`
+}
+
+// PortRuntimeKind defines model for PortRuntime.Kind.
+type PortRuntimeKind string
 
 // Problem Problem Details for HTTP APIs (RFC 9457).
 type Problem struct {

@@ -74,9 +74,11 @@ type Protocol struct {
 	DefaultPort int    `yaml:"default_port"`
 }
 
-// Ports lists the game ports (SRV-005).
+// Ports lists the game ports (SRV-005); SteamConnect offers a
+// steam://connect link to a published game port (UI-005, 1.1).
 type Ports struct {
-	Game []GamePort `yaml:"game" json:"game"`
+	Game         []GamePort `yaml:"game" json:"game"`
+	SteamConnect bool       `yaml:"steam_connect" json:"steam_connect,omitempty"`
 }
 
 // GamePort is one game port.

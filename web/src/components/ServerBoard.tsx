@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useProfiles, useServerGroups, type Server, type ServerGroup } from '@/api/servers';
+import { byGroups } from '@/lib/groups';
+import { useProfiles, useServerGroups, type Server } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { useLiveServers } from '@/api/live-servers';
 import { ServerCard } from '@/components/ServerCard';
@@ -86,19 +87,6 @@ function GroupFrame({
       {children}
     </section>
   );
-}
-
-// byGroups sorts the cards into their server groups (Gesamtkonzept 5);
-// a server in two groups shows in both, servers without a group last.
-function byGroups(servers: Server[], groups: ServerGroup[]) {
-  const ids = new Set(servers.map((s) => s.id));
-  const out = [...groups]
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((g) => ({ group: g, servers: servers.filter((s) => g.server_ids.includes(s.id)) }))
-    .filter((g) => g.servers.length > 0);
-  const grouped = new Set(out.flatMap((g) => g.servers.map((s) => s.id)));
-  const rest = servers.filter((s) => ids.has(s.id) && !grouped.has(s.id));
-  return { groups: out, rest };
 }
 
 // ServerBoard is a page of server cards with a search: the overview and

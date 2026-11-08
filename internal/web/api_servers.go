@@ -12,6 +12,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/servers"
 )
@@ -273,7 +274,7 @@ func actionError(err error) error {
 
 // RuntimeSource provides the runtime data of a server (agentview).
 type RuntimeSource interface {
-	Runtime(ctx context.Context, serverID string, agentData bool) agentview.Runtime
+	RuntimeFor(ctx context.Context, serverID string, level agentview.Level) agentview.Runtime
 	Containers(agentID string) ([]agentview.Container, bool)
 }
 
@@ -285,7 +286,16 @@ func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Serv
 	if s.runtime == nil {
 		return out
 	}
-	rt := s.runtime.Runtime(ctx, sv.ID, sv.Detailed)
+	// The details are for the admins in scope; all ports only for the RCON
+	// admin (UI-005, UI-006).
+	level := agentview.LevelPlayers
+	if sv.Detailed {
+		level = agentview.LevelServerAdmin
+		if p, _ := principal(ctx); perm.Role(p.Role) == perm.RCONAdmin {
+			level = agentview.LevelRCONAdmin
+		}
+	}
+	rt := s.runtime.RuntimeFor(ctx, sv.ID, level)
 	id, _ := uuid.Parse(rt.ServerID)
 	ar := &api.ServerRuntime{Kind: api.Runtime, ServerId: id, Players: rt.Players, PlayersAt: rt.PlayersAt}
 	if rt.PlayersStale {
@@ -314,6 +324,23 @@ func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Serv
 				vols = append(vols, vr)
 			}
 			ac.Volumes = &vols
+		}
+		if len(c.Ports) > 0 {
+			ports := make([]api.PortRuntime, 0, len(c.Ports))
+			for _, p := range c.Ports {
+				pr := api.PortRuntime{Kind: api.PortRuntimeKind(p.Kind), Private: p.Private, Proto: p.Proto}
+				if p.Name != "" {
+					pr.Name = &p.Name
+				}
+				if p.Public > 0 {
+					pr.Public = &p.Public
+				}
+				if p.SteamURL != "" {
+					pr.SteamUrl = &p.SteamURL
+				}
+				ports = append(ports, pr)
+			}
+			ac.Ports = &ports
 		}
 		if c.MemBytes != nil {
 			v := int64(min(*c.MemBytes, 1<<62)) //nolint:gosec // bounded

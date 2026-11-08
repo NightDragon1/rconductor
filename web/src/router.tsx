@@ -25,6 +25,7 @@ import { ServersPage } from '@/pages/Servers';
 import { AgentsPage } from '@/pages/admin/Agents';
 import { SettingsPage } from '@/pages/admin/Settings';
 import { AuditPage } from '@/pages/Audit';
+import { TopologyPage } from '@/pages/Topology';
 import { ProfilePage } from '@/pages/Profile';
 import { CommandListsPage } from '@/pages/admin/CommandLists';
 import { ServersAdminPage } from '@/pages/admin/ServersAdmin';
@@ -109,6 +110,7 @@ function guarded(path: string, key: string, component?: () => React.JSX.Element 
 }
 
 const pages = [
+  guarded('/topology', 'topology', TopologyPage),
   guarded('/audit', 'audit', AuditPage),
   guarded('/admin/users', 'users', UsersPage),
   guarded('/admin/groups', 'groups', GroupsPage),
