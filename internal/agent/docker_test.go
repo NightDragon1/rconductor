@@ -547,3 +547,49 @@ func TestVolumeSizes(t *testing.T) {
 		t.Errorf("disk usage calls = %d, want one per order", fd.diskUsage)
 	}
 }
+
+// TestAnswersOnlyOnRequest covers AGT-013 for the new answers of 1.1:
+// version.found and volume.sizes come only as the answer to the panel's
+// order, with its ID as ref, never from the agent's own loop. A panel 1.0
+// knows neither type and would end the session on an unasked one.
+func TestAnswersOnlyOnRequest(t *testing.T) {
+	d, fd, _ := newTestDocker(t)
+	d.metrics = 10 * time.Millisecond
+	fd.tty, fd.logs = true, []byte("Starting minecraft server version 1.21.4\n")
+	fd.volumes = []volume.Volume{{Name: "mc-data", UsageData: &volume.UsageData{Size: 1}}}
+	rec := &recorder{}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- d.Run(ctx, rec) }()
+	fd.events <- events.Message{Type: "container", Action: "start", Actor: events.Actor{ID: "id-mc", Attributes: map[string]string{"name": "mc"}}}
+	waitFor(t, "loop output", func() bool {
+		return len(rec.of(agentproto.TypeContainerEvent)) == 1 && len(rec.of(agentproto.TypeMetrics)) >= 3
+	})
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if n := len(rec.of(agentproto.TypeVersionFound)) + len(rec.of(agentproto.TypeVolumeSizes)); n != 0 {
+		t.Fatalf("the loop sent %d answers without an order", n)
+	}
+
+	d.limiter = newOrderLimiter(100, 100)
+	for _, o := range []struct {
+		typ, answer string
+		payload     any
+	}{
+		{agentproto.TypeVersionDetect, agentproto.TypeVersionFound, agentproto.VersionDetect{Container: "mc", Pattern: `version (\S+)`}},
+		{agentproto.TypeVolumesSize, agentproto.TypeVolumeSizes, agentproto.VolumesSize{}},
+	} {
+		e, err := agentproto.New(o.typ, "", o.payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := &recorder{}
+		d.Handle(context.Background(), e, rec)
+		answers := rec.of(o.answer)
+		if len(answers) != 1 || answers[0].Ref != e.ID {
+			t.Errorf("%s: answers %+v, want one with ref %s", o.typ, answers, e.ID)
+		}
+	}
+}
