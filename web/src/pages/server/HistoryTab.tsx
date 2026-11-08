@@ -70,8 +70,13 @@ export function HistoryTab() {
   const entries = history.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <section aria-label={t('history.title')} className="flex flex-col gap-3">
-      <label className="flex items-center gap-2 self-start text-sm max-md:py-2">
-        <input type="checkbox" checked={own} onChange={(e) => setOwn(e.target.checked)} />
+      <label className="flex min-h-11 items-center gap-2 self-start text-sm">
+        <input
+          type="checkbox"
+          className="max-md:size-11"
+          checked={own}
+          onChange={(e) => setOwn(e.target.checked)}
+        />
         {t('history.ownOnly')}
       </label>
       {history.isPending && <p className="text-muted">{t('app.loading')}</p>}
