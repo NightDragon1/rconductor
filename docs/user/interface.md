@@ -67,13 +67,26 @@ restart mechanism is in place, such as Docker `restart: unless-stopped`.
 | Tab | For | Content |
 | --- | --- | --- |
 | Overview | all | status, players and game version; for admins load, ports and volumes with their size and its age |
-| Console | admins | free input, one block per command, timeline, tracks for own commands, others' commands and logs |
-| Commands | moderators, supporters | allowed commands as cards with fields; player names come from the player list |
+| Console | admins | free input, one block per command, timeline, tracks for own commands, others' commands and logs; templates |
+| Commands | moderators, supporters | allowed commands and templates as cards with fields; player names come from the player list |
 | Logs | admins | container logs over the agent, only while the view is open |
 | History | all | past commands by role (see [roles](roles.md#who-sees-what)); a switch shows only your own |
 
 In the console, Tab takes the first suggestion and the arrow keys walk through your
 own commands.
+
+### Templates
+
+A template is a command with placeholders, such as `kick {player} {reason}`. The
+RCON admin and the server admin keep the templates of a server under Templates in
+the console: new, edit, delete. Placeholders are `{name}` in lower case; `{player}`
+picks from the player list; the first word is fixed text. A name is used once per
+server. A filled template goes to the input line.
+
+Moderators and supporters see the templates whose fixed part, the words before the
+first placeholder, is a command of their list, by whole words: `kick` allows
+`kick {player}`, not `kickall {player}`. A filled template is checked like a typed
+command, so a value the list or the game profile does not allow is refused.
 
 ## Administration
 

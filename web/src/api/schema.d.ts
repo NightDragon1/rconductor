@@ -339,6 +339,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/servers/{id}/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Command templates of the server (CMD-008).
+         * @description RCON admin and server admin in scope get all templates of the server. Moderators and supporters get only templates whose fixed part, the tokens before the first placeholder, is allowed by the list that applies to them, matched by whole tokens like a command (CMD-004). Orientation only: the interface fills the placeholders and sends the command through POST /servers/{id}/commands, where the pipeline checks it like a typed one (D-068).
+         */
+        get: operations["listTemplates"];
+        put?: never;
+        /**
+         * Create a command template; RCON admin, server admin in scope.
+         * @description Placeholders are {name} with a lower-case name; the first token is fixed text. The name is unique per server among templates that are not deleted. A server has at most commands.templates_per_server templates.
+         */
+        post: operations["createTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/servers/{id}/templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+                template_id: components["parameters"]["TemplateID"];
+            };
+            cookie?: never;
+        };
+        /** One template, for whoever may see it (D-068). */
+        get: operations["getTemplate"];
+        put?: never;
+        post?: never;
+        /** Delete a template (soft delete). */
+        delete: operations["deleteTemplate"];
+        options?: never;
+        head?: never;
+        /** Change name or text of a template. */
+        patch: operations["updateTemplate"];
+        trace?: never;
+    };
     "/servers/{id}/players": {
         parameters: {
             query?: never;
@@ -1592,6 +1640,30 @@ export interface components {
             owner_id: string;
             entries: components["schemas"]["CommandListEntry"][];
         };
+        Template: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            server_id: string;
+            name: string;
+            /** @description The command with placeholders such as {player}. */
+            template: string;
+            /** @description Names of the placeholders in order, each once. */
+            placeholders: string[];
+            /** @description Version of the stored object for optimistic locking; send it as If-Match when changing the template. */
+            version: string;
+        };
+        TemplateList: {
+            items: components["schemas"]["Template"][];
+        };
+        TemplateInput: {
+            name: string;
+            template: string;
+        };
+        TemplateUpdate: {
+            name?: string;
+            template?: string;
+        };
         CommandListList: {
             items: components["schemas"]["CommandList"][];
         };
@@ -1829,6 +1901,7 @@ export interface components {
         IfMatch: string;
         AgentID: string;
         ServerID: string;
+        TemplateID: string;
         ServerGroupID: string;
         InviteID: string;
         CommandListID: string;
@@ -2398,6 +2471,147 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+        };
+    };
+    listTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The templates. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateInput"];
+            };
+        };
+        responses: {
+            /** @description The new template. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+                template_id: components["parameters"]["TemplateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The template. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+                template_id: components["parameters"]["TemplateID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ServerID"];
+                template_id: components["parameters"]["TemplateID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed template. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Template"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+            428: components["responses"]["PreconditionRequired"];
         };
     };
     getPlayers: {

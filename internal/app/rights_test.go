@@ -61,6 +61,7 @@ type rightsFixture struct {
 	group, list     string
 	pwchangeTemp    string
 	freshName       int
+	tmpl            string
 	// agentAddr is the panel's agent port.
 	agentAddr string
 }
@@ -155,6 +156,24 @@ func (f *rightsFixture) freshServer() string {
 		"name": f.unique("srv"), "profile_id": f.profile(), "host": "127.0.0.1", "port": 1, "password": "x",
 	}, &s, http.StatusCreated)
 	return s.ID
+}
+
+// template is a command template of the server for the matrix, made
+// once; freshTemplate makes a new one.
+func (f *rightsFixture) template() string {
+	if f.tmpl == "" {
+		f.tmpl = f.freshTemplate()
+	}
+	return f.tmpl
+}
+
+func (f *rightsFixture) freshTemplate() string {
+	f.t.Helper()
+	var t struct{ ID string }
+	f.as(rA).must(http.MethodPost, "/servers/"+f.server+"/templates", map[string]string{
+		"name": f.unique("tmpl"), "template": "say {text}",
+	}, &t, http.StatusCreated)
+	return t.ID
 }
 
 func (f *rightsFixture) profile() string {
@@ -391,6 +410,24 @@ func matrix() []matrixOp {
 		{"GET", "/servers/{id}/commands", "OONOOOUP", serverPath("/commands"), false},
 		{"POST", "/servers/{id}/commands", "OONOOOUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/servers/" + f.server + "/commands", body: map[string]string{"command": "say hi"}}
+		}, false},
+		// Command templates (CMD-008): everyone in scope reads, admins
+		// change.
+		{"GET", "/servers/{id}/templates", "OONOOOUP", serverPath("/templates"), false},
+		{"POST", "/servers/{id}/templates", "OONFFFUP", func(f *rightsFixture, _ string) request {
+			return request{path: "/servers/" + f.server + "/templates", body: map[string]string{"name": f.unique("t"), "template": "say {text}"}}
+		}, false},
+		{"GET", "/servers/{id}/templates/{template_id}", "OONOOOUP", func(f *rightsFixture, _ string) request {
+			return request{path: "/servers/" + f.server + "/templates/" + f.template()}
+		}, false},
+		{"PATCH", "/servers/{id}/templates/{template_id}", "OONFFFUP", func(f *rightsFixture, _ string) request {
+			return request{path: "/servers/" + f.server + "/templates/" + f.template(), body: map[string]string{"template": "say {text}"}}
+		}, false},
+		{"DELETE", "/servers/{id}/templates/{template_id}", "OONFFFUP", func(f *rightsFixture, role string) request {
+			if role == rA || role == rSI {
+				return request{path: "/servers/" + f.server + "/templates/" + f.freshTemplate()}
+			}
+			return request{path: "/servers/" + f.server + "/templates/" + f.template()}
 		}, false},
 		{"GET", "/servers/{id}/players", "OONOOOUP", serverPath("/players"), false},
 		{"GET", "/servers/{id}/history", "OONOOOUP", serverPath("/history"), false},

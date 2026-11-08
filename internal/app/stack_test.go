@@ -338,7 +338,7 @@ func TestThroughTheStack(t *testing.T) {
 
 // versionedPath names the objects saved as a whole with optimistic
 // locking (revision 2.4 candidate 24).
-var versionedPath = regexp.MustCompile(`^/(user-groups|command-lists|servers|server-groups)/[^/?]+$|^/settings$|^/settings/smtp$`)
+var versionedPath = regexp.MustCompile(`^/(user-groups|command-lists|servers|server-groups)/[^/?]+$|^/servers/[^/?]+/templates/[^/?]+$|^/settings$|^/settings/smtp$`)
 
 // version reads the current version of a versioned object with the
 // client's session, for If-Match; empty if the session cannot read it.

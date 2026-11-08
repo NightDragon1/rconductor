@@ -11,6 +11,7 @@
 - Mail over SMTP: the RCON admin sets up host, port, encryption (STARTTLS, SSL/TLS or none), user, password and sender and sends a test mail from the settings (NFR-017).
 - Two-factor sign-in with an authenticator app (TOTP), optional for everyone or required by the RCON admin; recovery by mail to the address in the profile, or a reset by whoever manages the user (AUTH-008).
 - Visibility of commands in the history and the live console is fixed by role: moderators and supporters now see the commands of the other moderators and supporters on their servers; server admins no longer see those of RCON admins. A switch in the history shows only your own (ROLE-009).
+- Command templates with placeholders per server, such as `kick {player} {reason}`: RCON admin and server admin keep them in the console, moderators and supporters use those of their list on the command page; a filled template is checked like a typed command (CMD-008).
 
 ## 1.0
 

@@ -63,6 +63,13 @@ const (
 	MinSMTPTestPerMinute     = 1
 )
 
+// Command templates per server (CMD-008, D-068).
+const (
+	SettingTemplatesPerServer = "commands.templates_per_server"
+	DefaultTemplatesPerServer = 100
+	MinTemplatesPerServer     = 1
+)
+
 // rule checks one setting value; it returns the value to store.
 type rule func(raw json.RawMessage) (any, error)
 
@@ -133,6 +140,7 @@ var settingRules = map[string]rule{
 	auth.SettingRecoveryPerHour:    intRule(auth.MinRecoveryPerHour, 100),
 	SettingSMTPTimeout:             durationRule(MinSMTPTimeout, 5*time.Minute),
 	SettingSMTPTestPerMinute:       intRule(MinSMTPTestPerMinute, 60),
+	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and
@@ -151,6 +159,7 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingWSMaxSockets:       DefaultWSMaxSockets,
 		SettingWSMaxSubs:          DefaultWSMaxSubs,
 		SettingConnectionTests:    DefaultConnectionTests,
+		SettingTemplatesPerServer: DefaultTemplatesPerServer,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
