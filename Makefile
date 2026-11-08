@@ -9,7 +9,7 @@ SQLC_VERSION := 1.31.1
 SQLC ?= sqlc
 export CGO_ENABLED := 0
 
-.PHONY: all build web panel agent images test test-integration integration-tests test-minecraft test-e2e measure-login measure-panel lint vuln generate check
+.PHONY: all build web panel agent images test test-integration integration-tests test-minecraft test-e2e measure-login measure-panel lint vuln generate check check-push stubs
 
 all: lint test web build
 
@@ -64,9 +64,18 @@ measure-login:
 measure-panel:
 	scripts/measure-panel.sh $(MODE) $(SECONDS)
 
-# Full pre-commit gate (also run by the hook in .githooks).
+# Full gate by hand; the pre-push hook runs check-push.
 check:
 	scripts/check.sh
+
+# The pre-push gate: everything of check but the tests.
+check-push:
+	scripts/check.sh --no-tests
+
+# Handlers that are still stubs answering 501 (contract first); the gate
+# review needs none.
+stubs:
+	RCD_REQUIRE_NO_STUBS=1 go test -count=1 -run TestNotImplementedHandlers -v ./internal/web/
 
 lint:
 	go tool -modfile=tools/go.mod golangci-lint run ./...

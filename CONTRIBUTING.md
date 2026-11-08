@@ -8,7 +8,7 @@ the design and the release plan. Report vulnerabilities as described in
 ## Setup
 
 You need Go, Node.js and Docker in the versions from `go.mod`, the workflows
-and `web/package.json`. Enable the pre-commit hook once per clone:
+and `web/package.json`. Enable the hooks once per clone:
 
 ```sh
 git config core.hooksPath .githooks
@@ -16,7 +16,8 @@ git config core.hooksPath .githooks
 
 ## Checks
 
-Run this before every commit; the hook does it too:
+The pre-commit hook runs lint and tests of the changed packages; the
+pre-push hook runs `scripts/check.sh --no-tests`. The full run by hand:
 
 ```sh
 make check

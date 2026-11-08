@@ -29,6 +29,8 @@ coverage.out
 
 # Local working rules of Claude Code, not public
 /CLAUDE.local.md
+/.claude/commands
+/.claude/worktrees/
 
 # Editors and OS
 .idea/
