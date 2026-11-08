@@ -372,7 +372,7 @@ export interface paths {
         };
         /**
          * Command history of a server, newest first (Design 2.2).
-         * @description RCON admin and server admin see all commands; moderators and supporters only their own in R1.
+         * @description Visible by role (ROLE-009, D-067): the RCON admin sees all commands; a server admin those of server admins, moderators and supporters; moderators and supporters those of each other, never those of server admins or RCON admins. The author counts with his role at the time of the command. own=true keeps only the caller's own; no other parameter widens what a role sees.
          */
         get: operations["getHistory"];
         put?: never;
@@ -2428,6 +2428,7 @@ export interface operations {
     getHistory: {
         parameters: {
             query?: {
+                own?: boolean;
                 limit?: number;
                 cursor?: string;
             };

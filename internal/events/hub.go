@@ -713,16 +713,17 @@ type ConsoleEvent struct {
 }
 
 // PublishConsole sends a finished or refused command to server.<id>.console.
-// RCON admins and server admins see all commands; moderators and supporters
-// only their own in R1 (Design 6.3).
+// Each subscriber gets it only if his rights let him see a command of its
+// author on the server, checked for every message (ROLE-009, D-067).
 func (h *Hub) PublishConsole(serverID string, e commands.Entry) {
 	ev := ConsoleEvent{
 		RequestID: e.RequestID, TS: e.TS, UserID: e.UserID, Pseudonym: e.Pseudonym, Role: e.Role,
 		Command: e.Command, Response: e.Response, Truncated: e.Truncated, Result: e.Result, Reason: e.Reason,
 	}
+	author := perm.AuthorRole(e.Role, "", false)
 	h.each("console", serverID, func(c *client, s *subscription) {
-		role := perm.Role(c.p.Role)
-		if role != perm.RCONAdmin && role != perm.ServerAdmin && e.UserID != c.p.UserID {
+		rights, err := h.perm.For(context.Background(), c.p.UserID)
+		if err != nil || !rights.CommandVisible(serverID, author) {
 			return
 		}
 		h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: ev})

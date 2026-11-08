@@ -352,3 +352,70 @@ func mergeSorted(a, b []string) []string {
 	slices.Sort(out)
 	return slices.Compact(out)
 }
+
+// VisibleAuthors lists the roles whose commands a viewer sees in the
+// history and the live console of a server in scope (ROLE-009, D-067):
+// the RCON admin all; a server admin those of server admins, moderators
+// and supporters; moderators and supporters those of each other, as one
+// pool. Commands of RCON admins only RCON admins see.
+func VisibleAuthors(viewer Role) []Role {
+	switch viewer {
+	case RCONAdmin:
+		return []Role{RCONAdmin, ServerAdmin, Moderator, Supporter}
+	case ServerAdmin:
+		return []Role{ServerAdmin, Moderator, Supporter}
+	case Moderator, Supporter:
+		return []Role{Moderator, Supporter}
+	}
+	return nil
+}
+
+// AuthorRole is the role a command counts with: the role at the time of
+// the command; for entries of 1.0 without it the role stored with the
+// user, also of a deleted one (soft delete, D-028); only without any user
+// record an RCON admin's, so that nobody else sees it (D-067).
+func AuthorRole(atTime, current string, userExists bool) Role {
+	switch {
+	case atTime != "":
+		return Role(atTime)
+	case userExists && current != "":
+		return Role(current)
+	}
+	return RCONAdmin
+}
+
+// CommandVisible reports whether the user of r may see a command of a
+// role on a server: in scope, and the role among VisibleAuthors.
+func (r *Rights) CommandVisible(serverID string, author Role) bool {
+	if _, ok := r.Server(serverID); !ok {
+		return false
+	}
+	return slices.Contains(VisibleAuthors(r.Role), author)
+}
+
+// AuthorRank and MinVisibleRank are VisibleAuthors as numbers, for the
+// query of the history: a viewer sees the commands of authors whose rank
+// is at least his minimum. A test keeps both equal.
+func AuthorRank(author Role) int {
+	switch author {
+	case ServerAdmin:
+		return 1
+	case Moderator, Supporter:
+		return 2
+	}
+	return 0
+}
+
+// MinVisibleRank is the lowest author rank a viewer sees; above every rank
+// for an unknown viewer.
+func MinVisibleRank(viewer Role) int {
+	switch viewer {
+	case RCONAdmin:
+		return 0
+	case ServerAdmin:
+		return 1
+	case Moderator, Supporter:
+		return 2
+	}
+	return 3
+}

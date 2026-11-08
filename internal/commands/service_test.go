@@ -365,7 +365,7 @@ func TestAnswerIsForeignData(t *testing.T) {
 	if r.Response != want || r.Truncated {
 		t.Errorf("response = %q, %v; want %q", r.Response, r.Truncated, want)
 	}
-	h, _, err := w.svc.History(context.Background(), w.as("admin"), w.server, 10, "")
+	h, _, err := w.svc.History(context.Background(), w.as("admin"), w.server, 10, "", false)
 	if err != nil || len(h) == 0 || h[0].Response != want {
 		t.Errorf("history = %+v, %v", h, err)
 	}
@@ -435,14 +435,14 @@ func TestHistory(t *testing.T) {
 	_, _ = w.send("admin", "op steve")
 	_, _ = w.send("m", "whitelist add steve")
 	_, _ = w.send("m", "op steve") // refused, also in the history
-	all, _, err := w.svc.History(context.Background(), w.as("admin"), w.server, 50, "")
+	all, _, err := w.svc.History(context.Background(), w.as("admin"), w.server, 50, "", false)
 	if err != nil || len(all) != 3 {
 		t.Fatalf("admin history: %d %v", len(all), err)
 	}
 	if all[0].Result != ResultDenied || all[0].Reason != ReasonNotInList || all[0].Pseudonym != "m" {
 		t.Errorf("newest entry = %+v", all[0])
 	}
-	own, _, _ := w.svc.History(context.Background(), w.as("m"), w.server, 50, "")
+	own, _, _ := w.svc.History(context.Background(), w.as("m"), w.server, 50, "", false)
 	for _, e := range own {
 		if e.UserID != w.ids["m"] {
 			t.Errorf("moderator sees a command of %s", e.Pseudonym)
@@ -451,8 +451,8 @@ func TestHistory(t *testing.T) {
 	if len(own) != 2 {
 		t.Errorf("moderator history = %d entries", len(own))
 	}
-	page, next, _ := w.svc.History(context.Background(), w.as("admin"), w.server, 2, "")
-	rest, _, _ := w.svc.History(context.Background(), w.as("admin"), w.server, 2, next)
+	page, next, _ := w.svc.History(context.Background(), w.as("admin"), w.server, 2, "", false)
+	rest, _, _ := w.svc.History(context.Background(), w.as("admin"), w.server, 2, next, false)
 	if len(page) != 2 || len(rest) != 1 || next == "" {
 		t.Errorf("paging: %d + %d", len(page), len(rest))
 	}
