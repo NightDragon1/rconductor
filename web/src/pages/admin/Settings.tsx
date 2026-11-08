@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api, must, patchVersioned } from '@/api/client';
 import { sessionKey } from '@/api/session';
@@ -76,7 +77,7 @@ const sections: [string, RegExp][] = [
 // describe gives the label and help of a key from the language file
 // (NFR-007); rate limits share one text per kind with the role in it. A
 // key without texts shows by its name.
-function describe(t: (k: string, o?: Record<string, unknown>) => string, key: string) {
+function describe(t: TFunction, key: string) {
   const rate = /^ratelimit\.(\w+)\.(per_minute|burst)$/.exec(key);
   if (rate) {
     const role = t(`role.${rate[1]}`);
