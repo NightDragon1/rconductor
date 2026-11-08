@@ -68,7 +68,7 @@ export function actionState(s: Server, mode: ActionMode): ActionState {
 }
 
 // stripCodes removes Minecraft color and format codes (§x) from foreign
-// text: in R1 they are dropped, never turned into styles (revision 2.4
+// text: in 1.0 they are dropped, never turned into styles (revision 2.4
 // candidate 9, SEC-006).
 export function stripCodes(text: string): string {
   return text.replace(/§[0-9a-fk-orx]/gi, '');

@@ -334,7 +334,7 @@ func (r *reader) dbDriver(key, def string) string {
 	switch v {
 	case "sqlite":
 	case "postgres":
-		r.errs = append(r.errs, fmt.Errorf("%s: postgres: %w (planned for R2)", key, ErrNotAvailable))
+		r.errs = append(r.errs, fmt.Errorf("%s: postgres: %w", key, ErrNotAvailable))
 	default:
 		r.fail(key, "must be sqlite or postgres")
 	}
