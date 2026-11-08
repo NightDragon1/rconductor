@@ -26,6 +26,7 @@ const (
 	KeyUser      = "user"
 	KeyRole      = "role"
 	KeyServer    = "server"
+	KeyBatch     = "batch_id"
 	KeyAgent     = "agent"
 	KeyReason    = "reason"
 	KeyDuration  = "duration_ms"

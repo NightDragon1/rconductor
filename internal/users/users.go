@@ -47,6 +47,9 @@ type Request struct {
 	SessionRef string
 	SessionID  string // session hash for the audit
 	RequestID  string
+	// BatchID ties the runs of one multi-server command together (CMD-010,
+	// D-069); empty for everything else. The panel makes it.
+	BatchID string
 }
 
 // SessionRevoker ends the sessions of a user (auth.Service.RevokeUser).

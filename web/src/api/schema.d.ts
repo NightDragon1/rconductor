@@ -387,6 +387,26 @@ export interface paths {
         patch: operations["updateTemplate"];
         trace?: never;
     };
+    "/commands/multi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send one command to several servers at once (CMD-010, D-069).
+         * @description Only RCON admin and server admin. Every server gets a normal run of the pipeline (Design 3.3) with its own request ID: scope, the syntax of its profile, the rate limit of the bucket (user, server) as for a single command, audit and console. A server outside the scope and an unknown ID both give not_found. The panel makes the batch_id that ties the runs together in the audit; a batch_id or any other unknown field in the request is refused with 400. Up to commands.multi_max_servers servers, commands.multi_parallel at a time; the answer comes when every server has its result.
+         */
+        post: operations["sendMultiCommand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/servers/{id}/players": {
         parameters: {
             query?: never;
@@ -1186,6 +1206,33 @@ export interface components {
             response: string;
             /** @description The answer was longer than 64 KiB and is cut. */
             truncated: boolean;
+        };
+        MultiCommandInput: {
+            server_ids: string[];
+            command: string;
+        };
+        MultiCommandResult: {
+            /** Format: uuid */
+            batch_id: string;
+            items: components["schemas"]["MultiCommandItem"][];
+        };
+        MultiCommandItem: {
+            /** Format: uuid */
+            server_id: string;
+            /**
+             * Format: uuid
+             * @description Missing for not_found.
+             */
+            request_id?: string;
+            /** @enum {string} */
+            result: "ok" | "denied" | "error" | "timeout" | "not_found";
+            reason?: components["schemas"]["ReasonCode"];
+            detail?: string;
+            /** @description The command as sent, after cleaning. */
+            command?: string;
+            /** @description Foreign data from the game server (SEC-006). */
+            response?: string;
+            truncated?: boolean;
         };
         HistoryEntry: {
             /** Format: uuid */
@@ -2612,6 +2659,34 @@ export interface operations {
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
             428: components["responses"]["PreconditionRequired"];
+        };
+    };
+    sendMultiCommand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MultiCommandInput"];
+            };
+        };
+        responses: {
+            /** @description The result per server. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MultiCommandResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
         };
     };
     getPlayers: {

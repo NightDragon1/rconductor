@@ -169,6 +169,33 @@ func (e HistoryEntryResult) Valid() bool {
 	}
 }
 
+// Defines values for MultiCommandItemResult.
+const (
+	MultiCommandItemResultDenied   MultiCommandItemResult = "denied"
+	MultiCommandItemResultError    MultiCommandItemResult = "error"
+	MultiCommandItemResultNotFound MultiCommandItemResult = "not_found"
+	MultiCommandItemResultOk       MultiCommandItemResult = "ok"
+	MultiCommandItemResultTimeout  MultiCommandItemResult = "timeout"
+)
+
+// Valid indicates whether the value is a known member of the MultiCommandItemResult enum.
+func (e MultiCommandItemResult) Valid() bool {
+	switch e {
+	case MultiCommandItemResultDenied:
+		return true
+	case MultiCommandItemResultError:
+		return true
+	case MultiCommandItemResultNotFound:
+		return true
+	case MultiCommandItemResultOk:
+		return true
+	case MultiCommandItemResultTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PortRuntimeKind.
 const (
 	PortRuntimeKindGame  PortRuntimeKind = "game"
@@ -905,6 +932,40 @@ type LoginRequest struct {
 	Pseudonym string `json:"pseudonym"`
 }
 
+// MultiCommandInput defines model for MultiCommandInput.
+type MultiCommandInput struct {
+	Command   string               `json:"command"`
+	ServerIds []openapi_types.UUID `json:"server_ids"`
+}
+
+// MultiCommandItem defines model for MultiCommandItem.
+type MultiCommandItem struct {
+	// Command The command as sent, after cleaning.
+	Command *string `json:"command,omitempty"`
+	Detail  *string `json:"detail,omitempty"`
+
+	// Reason Machine-readable reason of a rejection (Design 3.5).
+	Reason *ReasonCode `json:"reason,omitempty"`
+
+	// RequestId Missing for not_found.
+	RequestId *openapi_types.UUID `json:"request_id,omitempty"`
+
+	// Response Foreign data from the game server (SEC-006).
+	Response  *string                `json:"response,omitempty"`
+	Result    MultiCommandItemResult `json:"result"`
+	ServerId  openapi_types.UUID     `json:"server_id"`
+	Truncated *bool                  `json:"truncated,omitempty"`
+}
+
+// MultiCommandItemResult defines model for MultiCommandItem.Result.
+type MultiCommandItemResult string
+
+// MultiCommandResult defines model for MultiCommandResult.
+type MultiCommandResult struct {
+	BatchId openapi_types.UUID `json:"batch_id"`
+	Items   []MultiCommandItem `json:"items"`
+}
+
 // PasswordChange defines model for PasswordChange.
 type PasswordChange struct {
 	CurrentPassword string `json:"current_password"`
@@ -1555,6 +1616,9 @@ type CreateCommandListJSONRequestBody = CommandListCreate
 // UpdateCommandListJSONRequestBody defines body for UpdateCommandList for application/json ContentType.
 type UpdateCommandListJSONRequestBody = CommandListUpdate
 
+// SendMultiCommandJSONRequestBody defines body for SendMultiCommand for application/json ContentType.
+type SendMultiCommandJSONRequestBody = MultiCommandInput
+
 // CreateInviteJSONRequestBody defines body for CreateInvite for application/json ContentType.
 type CreateInviteJSONRequestBody = InviteCreate
 
@@ -1686,6 +1750,9 @@ type ServerInterface interface {
 	// UpdateCommandList Rename a list or replace its entries (ROLE-007).
 	// (PATCH /command-lists/{id})
 	UpdateCommandList(w http.ResponseWriter, r *http.Request, id CommandListID, params UpdateCommandListParams)
+	// SendMultiCommand Send one command to several servers at once (CMD-010, D-069).
+	// (POST /commands/multi)
+	SendMultiCommand(w http.ResponseWriter, r *http.Request)
 	// ListInvites Invitations of the caller; the RCON admin sees all (UI-008).
 	// (GET /invites)
 	ListInvites(w http.ResponseWriter, r *http.Request)
@@ -2286,6 +2353,20 @@ func (siw *ServerInterfaceWrapper) UpdateCommandList(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateCommandList(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SendMultiCommand operation middleware
+func (siw *ServerInterfaceWrapper) SendMultiCommand(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SendMultiCommand(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3908,6 +3989,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/servers/{id}/templates/{template_id}", wrapper.DeleteTemplate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/templates/{template_id}", wrapper.GetTemplate)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/servers/{id}/templates/{template_id}", wrapper.UpdateTemplate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/commands/multi", wrapper.SendMultiCommand)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/players", wrapper.GetPlayers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/history", wrapper.GetHistory)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers/{id}/actions", wrapper.ServerAction)
@@ -5203,6 +5285,92 @@ func (response UpdateCommandList428ApplicationProblemPlusJSONResponse) VisitUpda
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMultiCommandRequestObject struct {
+	Body *SendMultiCommandJSONRequestBody
+}
+
+type SendMultiCommandResponseObject interface {
+	VisitSendMultiCommandResponse(w http.ResponseWriter) error
+}
+
+type SendMultiCommand200JSONResponse MultiCommandResult
+
+func (response SendMultiCommand200JSONResponse) VisitSendMultiCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMultiCommand400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SendMultiCommand400ApplicationProblemPlusJSONResponse) VisitSendMultiCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMultiCommand401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SendMultiCommand401ApplicationProblemPlusJSONResponse) VisitSendMultiCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMultiCommand403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SendMultiCommand403ApplicationProblemPlusJSONResponse) VisitSendMultiCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SendMultiCommand422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response SendMultiCommand422ApplicationProblemPlusJSONResponse) VisitSendMultiCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10002,6 +10170,9 @@ type StrictServerInterface interface {
 	// UpdateCommandList Rename a list or replace its entries (ROLE-007).
 	// (PATCH /command-lists/{id})
 	UpdateCommandList(ctx context.Context, request UpdateCommandListRequestObject) (UpdateCommandListResponseObject, error)
+	// SendMultiCommand Send one command to several servers at once (CMD-010, D-069).
+	// (POST /commands/multi)
+	SendMultiCommand(ctx context.Context, request SendMultiCommandRequestObject) (SendMultiCommandResponseObject, error)
 	// ListInvites Invitations of the caller; the RCON admin sees all (UI-008).
 	// (GET /invites)
 	ListInvites(ctx context.Context, request ListInvitesRequestObject) (ListInvitesResponseObject, error)
@@ -10707,6 +10878,37 @@ func (sh *strictHandler) UpdateCommandList(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateCommandListResponseObject); ok {
 		if err := validResponse.VisitUpdateCommandListResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SendMultiCommand operation middleware
+func (sh *strictHandler) SendMultiCommand(w http.ResponseWriter, r *http.Request) {
+	var request SendMultiCommandRequestObject
+
+	var body SendMultiCommandJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SendMultiCommand(ctx, request.(SendMultiCommandRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SendMultiCommand")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SendMultiCommandResponseObject); ok {
+		if err := validResponse.VisitSendMultiCommandResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

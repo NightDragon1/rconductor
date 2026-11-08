@@ -63,6 +63,7 @@ type world struct {
 	received []string
 	mu       sync.Mutex
 	game     *rcontest.Server
+	srv      *servers.Service
 }
 
 func newWorld(t *testing.T) *world {
@@ -110,6 +111,7 @@ func newWorld(t *testing.T) *world {
 	}
 	t.Cleanup(func() { cancel(); conns.Wait(); game.Close() })
 	w.svc = NewService(st, w.c, conns, log)
+	w.srv = srvSvc
 	w.users = users.NewService(st, w.c, log, nil)
 
 	add := func(name, role, by string) {
