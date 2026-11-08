@@ -67,13 +67,22 @@ restart mechanism is in place, such as Docker `restart: unless-stopped`.
 | Tab | For | Content |
 | --- | --- | --- |
 | Overview | all | status, players and game version; for admins load, ports and volumes with their size and its age |
-| Console | admins | free input, one block per command, timeline, tracks for own commands, others' commands and logs; templates |
+| Console | admins | free input, one block per command, timeline, tracks for own commands, others' commands and logs; templates; one command to several servers |
 | Commands | moderators, supporters | allowed commands and templates as cards with fields; player names come from the player list |
 | Logs | admins | container logs over the agent, only while the view is open |
 | History | all | past commands by role (see [roles](roles.md#who-sees-what)); a switch shows only your own |
 
 In the console, Tab takes the first suggestion and the arrow keys walk through your
 own commands.
+
+### Several servers
+
+Under Several servers in the console the RCON admin and the server admin send one
+command to several servers of their scope, for example a notice before maintenance.
+Each server checks the command on its own, with the syntax of its game profile and
+its own rate limit, as if it were typed there; the results come per server. A server
+outside the scope shows as not found. Up to `commands.multi_max_servers` servers go
+in one call.
 
 ### Templates
 
