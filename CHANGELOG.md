@@ -10,6 +10,7 @@
 - Topology page: host → agent → game server by server group, for RCON admin and server admin (UI-010).
 - Mail over SMTP: the RCON admin sets up host, port, encryption (STARTTLS, SSL/TLS or none), user, password and sender and sends a test mail from the settings (NFR-017).
 - Two-factor sign-in with an authenticator app (TOTP), optional for everyone or required by the RCON admin; recovery by mail to the address in the profile, or a reset by whoever manages the user (AUTH-008).
+- Visibility of commands in the history and the live console is fixed by role: moderators and supporters now see the commands of the other moderators and supporters on their servers; server admins no longer see those of RCON admins. A switch in the history shows only your own (ROLE-009).
 
 ## 1.0
 

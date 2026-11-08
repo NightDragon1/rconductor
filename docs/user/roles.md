@@ -39,8 +39,19 @@ the content of a command list work from the next request, without a new sign-in.
 Real name, picture and contact details are visible to the user, the RCON admin
 and whoever manages that user. Everyone else sees only the pseudonym.
 
-Moderators and supporters never see agent data such as load or containers, and
-in release 1 only their own commands in the history.
+Moderators and supporters never see agent data such as load or containers.
+
+Commands in the history and in the live console are visible by role, on the
+servers a user may reach:
+
+| Viewer | Sees the commands of |
+| --- | --- |
+| RCON admin | everyone, on all servers |
+| Server admin | server admins, moderators and supporters |
+| Moderator, supporter | moderators and supporters |
+
+The role at the time of the command counts, also when the user changed role or
+was deleted later. Every role can narrow the view to its own commands.
 
 ## The emergency admin
 

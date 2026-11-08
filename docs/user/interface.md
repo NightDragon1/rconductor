@@ -70,7 +70,7 @@ restart mechanism is in place, such as Docker `restart: unless-stopped`.
 | Console | admins | free input, one block per command, timeline, tracks for own commands, others' commands and logs |
 | Commands | moderators, supporters | allowed commands as cards with fields; player names come from the player list |
 | Logs | admins | container logs over the agent, only while the view is open |
-| History | all | past commands; moderators and supporters see their own |
+| History | all | past commands by role (see [roles](roles.md#who-sees-what)); a switch shows only your own |
 
 In the console, Tab takes the first suggestion and the arrow keys walk through your
 own commands.
