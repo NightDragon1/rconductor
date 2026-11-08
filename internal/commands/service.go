@@ -389,10 +389,11 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
-// History returns the commands of a server, newest first (Design 2.2):
-// all for RCON admin and server admin, only the own ones for moderators
-// and supporters in R1 (Design 6.3).
-func (s *Service) History(ctx context.Context, req users.Request, serverID string, limit int, cursor string) ([]Entry, string, error) {
+// History returns the commands of a server, newest first (Design 2.2),
+// those whose author the caller may see by role (ROLE-009, D-067); own
+// keeps only the caller's own. The filter is in the query, so that every
+// page and cursor holds to it.
+func (s *Service) History(ctx context.Context, req users.Request, serverID string, limit int, cursor string, own bool) ([]Entry, string, error) {
 	rights, err := s.perm.For(ctx, req.Actor.ID)
 	if err != nil {
 		return nil, "", err
@@ -409,11 +410,12 @@ func (s *Service) History(ctx context.Context, req users.Request, serverID strin
 		return nil, "", err
 	}
 	actor := ""
-	if rights.Role == perm.Moderator || rights.Role == perm.Supporter {
+	if own {
 		actor = req.Actor.ID
 	}
 	rows, err := s.st.Queries.ListCommandHistory(ctx, sqlitedb.ListCommandHistoryParams{
-		ServerID: sql.NullString{String: serverID, Valid: true}, ActorID: actor, CursorTs: cts, CursorID: cid, Lim: int64(limit) + 1,
+		ServerID: sql.NullString{String: serverID, Valid: true}, ActorID: actor, MinRank: int64(perm.MinVisibleRank(rights.Role)),
+		CursorTs: cts, CursorID: cid, Lim: int64(limit) + 1,
 	})
 	if err != nil {
 		return nil, "", fmt.Errorf("read history: %w", err)
@@ -428,7 +430,7 @@ func (s *Service) History(ctx context.Context, req users.Request, serverID strin
 		var p payload
 		_ = json.Unmarshal([]byte(r.Payload), &p)
 		e := Entry{
-			RequestID: r.ID, UserID: r.ActorID.String, Pseudonym: r.Pseudonym, Role: r.ActorRole.String,
+			RequestID: r.ID, UserID: r.ActorID.String, Pseudonym: r.Pseudonym, Role: r.AuthorRole,
 			Command: p.Command, Result: r.Result, Reason: r.ReasonCode.String,
 		}
 		if r.Action == ActionSent {

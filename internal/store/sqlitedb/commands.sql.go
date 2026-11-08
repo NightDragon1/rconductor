@@ -14,20 +14,28 @@ const listCommandHistory = `-- name: ListCommandHistory :many
 
 SELECT a.id, a.ts, a.actor_id, a.actor_role, a.action, a.payload, a.result, a.reason_code,
        coalesce(u.pseudonym, '') AS pseudonym,
+       CAST(CASE WHEN coalesce(a.actor_role, '') != '' THEN a.actor_role
+            WHEN u.id IS NOT NULL THEN u.role ELSE 'rcon_admin' END AS TEXT) AS author_role,
        r.result AS final_result, r.reason_code AS final_reason, r.payload AS result_payload
 FROM audit_log a
 LEFT JOIN users u ON u.id = a.actor_id
 LEFT JOIN audit_log r ON r.kind = 'command' AND r.action = 'cmd.result' AND r.target_type = 'command' AND r.target_id = a.id
 WHERE a.kind = 'command' AND a.action IN ('cmd.sent', 'cmd.denied') AND a.server_id = ?1
   AND (?2 = '' OR a.actor_id = ?2)
-  AND (?3 = '' OR a.ts < ?3 OR (a.ts = ?3 AND a.id < ?4))
+  -- Ranks of perm.AuthorRank: rcon_admin 0, server_admin 1, moderator and
+  -- supporter 2, anything else 0. A viewer sees authors from his rank on.
+  AND (CASE (CASE WHEN coalesce(a.actor_role, '') != '' THEN a.actor_role
+                  WHEN u.id IS NOT NULL THEN u.role ELSE 'rcon_admin' END)
+       WHEN 'server_admin' THEN 1 WHEN 'moderator' THEN 2 WHEN 'supporter' THEN 2 ELSE 0 END) >= CAST(?3 AS INTEGER)
+  AND (?4 = '' OR a.ts < ?4 OR (a.ts = ?4 AND a.id < ?5))
 ORDER BY a.ts DESC, a.id DESC
-LIMIT ?5
+LIMIT ?6
 `
 
 type ListCommandHistoryParams struct {
 	ServerID sql.NullString
 	ActorID  interface{}
+	MinRank  int64
 	CursorTs interface{}
 	CursorID string
 	Lim      int64
@@ -43,6 +51,7 @@ type ListCommandHistoryRow struct {
 	Result        string
 	ReasonCode    sql.NullString
 	Pseudonym     string
+	AuthorRole    string
 	FinalResult   sql.NullString
 	FinalReason   sql.NullString
 	ResultPayload sql.NullString
@@ -51,10 +60,15 @@ type ListCommandHistoryRow struct {
 // Command history: a view on the append-only audit log (D-029). Each
 // command has a cmd.sent entry (ID = request ID) and later a cmd.result
 // entry that refers to it; a refusal is one cmd.denied entry.
+// The author counts with the role at the time of the command; for entries
+// of 1.0 without it the role stored with the user, also a deleted one
+// (soft delete, D-028); only without any user record as an RCON admin
+// (ROLE-009, D-067).
 func (q *Queries) ListCommandHistory(ctx context.Context, arg ListCommandHistoryParams) ([]ListCommandHistoryRow, error) {
 	rows, err := q.db.QueryContext(ctx, listCommandHistory,
 		arg.ServerID,
 		arg.ActorID,
+		arg.MinRank,
 		arg.CursorTs,
 		arg.CursorID,
 		arg.Lim,
@@ -76,6 +90,7 @@ func (q *Queries) ListCommandHistory(ctx context.Context, arg ListCommandHistory
 			&i.Result,
 			&i.ReasonCode,
 			&i.Pseudonym,
+			&i.AuthorRole,
 			&i.FinalResult,
 			&i.FinalReason,
 			&i.ResultPayload,

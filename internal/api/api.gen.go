@@ -1459,6 +1459,7 @@ type UpdateServerParams struct {
 
 // GetHistoryParams defines parameters for GetHistory.
 type GetHistoryParams struct {
+	Own    *bool   `form:"own,omitempty" json:"own,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
@@ -2850,6 +2851,19 @@ func (siw *ServerInterfaceWrapper) GetHistory(w http.ResponseWriter, r *http.Req
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GetHistoryParams
+
+	// ------------- Optional query parameter "own" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "own", r.URL.Query(), &params.Own, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "own"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "own", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "limit" -------------
 

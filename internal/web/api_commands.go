@@ -64,7 +64,8 @@ func (s *apiServer) GetHistory(ctx context.Context, req api.GetHistoryRequestObj
 	if req.Params.Cursor != nil {
 		cursor = *req.Params.Cursor
 	}
-	entries, next, err := s.commands.History(ctx, adminRequest(ctx), req.Id.String(), limit, cursor)
+	own := req.Params.Own != nil && *req.Params.Own
+	entries, next, err := s.commands.History(ctx, adminRequest(ctx), req.Id.String(), limit, cursor, own)
 	if err != nil {
 		return nil, adminError(err)
 	}

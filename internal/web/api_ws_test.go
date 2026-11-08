@@ -196,9 +196,10 @@ func TestWebSocketScopeAndOrigin(t *testing.T) {
 	logtest.Wait(t, w.logs, `"event":"ws.subscribe.denied"`)
 }
 
-// TestModeratorSeesOwnCommandsOnly: in R1 moderators get only their own
-// commands live (Design 6.3).
-func TestModeratorSeesOwnCommandsOnly(t *testing.T) {
+// TestModeratorSeesPoolNotAdmins covers ROLE-009 (D-067) live: a
+// moderator gets the commands of moderators and supporters, never those of
+// admins.
+func TestModeratorSeesPoolNotAdmins(t *testing.T) {
 	w := newWSFixture(t)
 	w.grantModerator(t)
 	c, _, err := w.dial(t, w.login(t, "Mod"), w.origin())
@@ -208,11 +209,16 @@ func TestModeratorSeesOwnCommandsOnly(t *testing.T) {
 	topic := "server." + w.server + ".console"
 	send(t, c, "subscribe", topic)
 	w.subscribed(t, topic, 1)
-	w.hub.PublishConsole(w.server, commands.Entry{RequestID: "other", UserID: w.adminID, Command: "op x", Result: "ok"})
-	w.hub.PublishConsole(w.server, commands.Entry{RequestID: "own", UserID: w.userID, Command: "list", Result: "ok"})
-	m, err := next(t, c, 5*time.Second)
-	if err != nil || !strings.Contains(string(m.Data), `"request_id":"own"`) {
-		t.Errorf("moderator got %+v %v", m, err)
+	w.hub.PublishConsole(w.server, commands.Entry{RequestID: "admin", UserID: w.adminID, Role: "rcon_admin", Command: "op x", Result: "ok"})
+	w.hub.PublishConsole(w.server, commands.Entry{RequestID: "sa", UserID: "sa", Role: "server_admin", Command: "op y", Result: "ok"})
+	w.hub.PublishConsole(w.server, commands.Entry{RequestID: "unknown", UserID: "x", Command: "op z", Result: "ok"})
+	w.hub.PublishConsole(w.server, commands.Entry{RequestID: "sup", UserID: "sup", Role: "supporter", Command: "list", Result: "ok"})
+	w.hub.PublishConsole(w.server, commands.Entry{RequestID: "own", UserID: w.userID, Role: "moderator", Command: "list", Result: "ok"})
+	for _, want := range []string{"sup", "own"} {
+		m, err := next(t, c, 5*time.Second)
+		if err != nil || !strings.Contains(string(m.Data), `"request_id":"`+want+`"`) {
+			t.Errorf("moderator got %+v %v, want %s", m, err, want)
+		}
 	}
 }
 
