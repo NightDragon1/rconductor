@@ -627,6 +627,7 @@
     "deleteText": "Its history stays in the audit; groups and grants lose it at once. This cannot be undone.",
     "name": "Name",
     "profile": "Game profile",
+    "specificProfile": "{{name}} (specific)",
     "choose": "Choose …",
     "host": "Host",
     "port": "RCON port",

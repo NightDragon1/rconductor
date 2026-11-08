@@ -119,6 +119,10 @@ func TestRejected(t *testing.T) {
 		"unknown param type":    {"{ name: text, type: text }", "{ name: text, type: color }", "type must be"},
 		"wrapper with space":    {"wrappers: [execute]", "wrappers: [\"execute run\"]", "single command name"},
 		"bad player pattern":    {"wrappers: [execute]", "wrappers: [execute]\n  player_pattern: \"(?=x)\"", "syntax.player_pattern"},
+		"unknown kind":          {"name: Minecraft (Java Edition)\n", "name: Minecraft (Java Edition)\nkind: special\n", "kind must be generic or specific"},
+		"kind in upper case":    {"name: Minecraft (Java Edition)\n", "name: Minecraft (Java Edition)\nkind: Generic\n", "kind must be generic or specific"},
+		"kind as a list":        {"name: Minecraft (Java Edition)\n", "name: Minecraft (Java Edition)\nkind: [generic]\n", "Profile.Kind"},
+		"kind too long":         {"name: Minecraft (Java Edition)\n", "name: Minecraft (Java Edition)\nkind: " + strings.Repeat("g", 300) + "\n", "kind must be generic or specific"},
 	}
 	for name, tc := range cases {
 		if !strings.Contains(base, tc.from) {
@@ -132,6 +136,31 @@ func TestRejected(t *testing.T) {
 	}
 	if _, err := Parse([]byte(strings.Repeat("#", MaxFileSize+1))); err == nil {
 		t.Error("oversized file accepted")
+	}
+}
+
+// TestKind covers the schema part of CAT-007: generic or specific, without
+// kind generic; the shipped profiles name it.
+func TestKind(t *testing.T) {
+	p, err := Parse([]byte(design74))
+	if err != nil || p.Kind != KindGeneric || KindOf(p) != KindGeneric {
+		t.Errorf("without kind: %q %v", p.Kind, err)
+	}
+	p, err = Parse([]byte(strings.Replace(design74, "name: Minecraft (Java Edition)\n", "name: Minecraft (Java Edition)\nkind: specific\n", 1)))
+	if err != nil || p.Kind != KindSpecific {
+		t.Errorf("specific: %+v %v", p, err)
+	}
+	if KindOf(&Profile{}) != KindGeneric || KindOf(nil) != KindGeneric {
+		t.Error("a stored profile without kind is not generic")
+	}
+	for file, want := range map[string]string{"minecraft-java.yaml": KindGeneric, "minecraft-gtnh.yaml": KindSpecific} {
+		data, err := os.ReadFile("../../profiles/" + file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "\nkind: "+want+"\n") {
+			t.Errorf("%s does not name kind %s", file, want)
+		}
 	}
 }
 

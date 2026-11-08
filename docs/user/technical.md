@@ -11,6 +11,7 @@ fields of the command page.
 | Storage | shipped profiles are built into the panel image (`profiles/` in the repository); your own go to `/data/profiles/*.yaml` |
 | Loading | changes arrive by file events; in addition the panel compares files every `profiles.poll_interval`, because network drives send no events |
 | Precedence | your profile with the id of a shipped one replaces it and is marked as adapted |
+| Kind | `kind: generic` for a game as such, `kind: specific` for a modpack or plugin that ranks above it; a profile without `kind` is generic. Profiles inherit nothing from each other (1.1) |
 | Errors | an invalid file is not imported; the last valid state stays active, the error is in the log and the health overview |
 | Aliases | a file has at most 100 YAML aliases |
 | Anchors | an anchored value must not contain aliases |

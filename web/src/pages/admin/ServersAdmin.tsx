@@ -247,7 +247,7 @@ function ServerPanel({
               <option value="">{t('servers.choose')}</option>
               {(profiles.data ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name}
+                  {p.kind === 'specific' ? t('servers.specificProfile', { name: p.name }) : p.name}
                 </option>
               ))}
             </select>

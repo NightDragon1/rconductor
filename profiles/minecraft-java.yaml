@@ -3,6 +3,7 @@
 schema: 1
 id: minecraft-java
 name: Minecraft (Java Edition)
+kind: generic
 match:
   images: ["itzg/minecraft-server*"]
 protocol:
@@ -15,7 +16,9 @@ syntax:
   case_sensitive: false
   strip_prefix: "/"
   max_length: 1000
-  wrappers: [execute]
+  # Commands that run other commands: execute, function (runs a
+  # datapack function), return (run form) and schedule (later run).
+  wrappers: [execute, function, return, schedule]
   # Java Edition names; selectors such as @a never fit (revision 2.4
   # candidate 19).
   player_pattern: "^[A-Za-z0-9_]{1,16}$"

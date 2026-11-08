@@ -47,11 +47,29 @@ var Protocols = []string{"source-rcon"}
 
 var slugRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
+// Kinds of a profile (CAT-007): generic for a game as such, specific for
+// a modpack or plugin that ranks above it. A profile without kind is
+// generic; profiles inherit nothing from each other.
+const (
+	KindGeneric  = "generic"
+	KindSpecific = "specific"
+)
+
+// KindOf is the kind of a profile, generic if none is set; for profiles
+// stored before the field existed too.
+func KindOf(p *Profile) string {
+	if p == nil || p.Kind == "" {
+		return KindGeneric
+	}
+	return p.Kind
+}
+
 // Profile is a checked game profile.
 type Profile struct {
 	Schema     int       `yaml:"schema" json:"-"`
 	ID         string    `yaml:"id" json:"-"`
 	Name       string    `yaml:"name" json:"-"`
+	Kind       string    `yaml:"kind" json:"kind,omitempty"`
 	Match      Match     `yaml:"match" json:"match"`
 	Protocol   Protocol  `yaml:"protocol" json:"-"`
 	Ports      Ports     `yaml:"ports" json:"ports"`
@@ -246,6 +264,7 @@ func checkAliases(file *ast.File) string {
 func NormalizePath(path string) string { return strings.Join(strings.Fields(path), " ") }
 
 func (p *Profile) defaults() {
+	p.Kind = KindOf(p)
 	if p.Syntax.CaseSensitive == nil {
 		f := false
 		p.Syntax.CaseSensitive = &f
@@ -283,6 +302,9 @@ func (p *Profile) check() []string {
 	}
 	if strings.TrimSpace(p.Name) == "" || len(p.Name) > maxNameLen {
 		bad("name is required, at most %d characters", maxNameLen)
+	}
+	if p.Kind != "" && p.Kind != KindGeneric && p.Kind != KindSpecific {
+		bad("kind must be %s or %s", KindGeneric, KindSpecific)
 	}
 	if !slices.Contains(Protocols, p.Protocol.Type) {
 		bad("protocol.type must be one of %s", strings.Join(Protocols, ", "))

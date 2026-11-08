@@ -13,6 +13,8 @@
 - Visibility of commands in the history and the live console is fixed by role: moderators and supporters now see the commands of the other moderators and supporters on their servers; server admins no longer see those of RCON admins. A switch in the history shows only your own (ROLE-009).
 - Command templates with placeholders per server, such as `kick {player} {reason}`: RCON admin and server admin keep them in the console, moderators and supporters use those of their list on the command page; a filled template is checked like a typed command (CMD-008).
 - One command to several servers at once from the console, for RCON admin and server admin within their scope; each server checks and answers on its own and counts against its own rate limit (CMD-010).
+- Game profiles name their kind, `generic` or `specific` (a modpack or plugin above a game); without it a profile is generic. Profiles with `kind` fail the profile check of panel 1.0 (CAT-007).
+- The Minecraft profile treats `function`, `return` and `schedule` as wrappers like `execute`: moderators and supporters cannot send them (CMD-005).
 
 ## 1.0
 
