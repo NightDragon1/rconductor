@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/rcon"
+	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 	"github.com/NightDragon1/rconductor/internal/rcon/source"
 	"github.com/NightDragon1/rconductor/internal/servers"
@@ -78,7 +80,15 @@ func newWorld(t *testing.T) *world {
 			t.Fatal(err)
 		}
 	}
-	if err := profiles.NewImporter(st, log, os.DirFS("../../profiles"), t.TempDir()).Sync(ctx); err != nil {
+	// A test profile per http-api dialect, for the common suite (D-071).
+	custom := t.TempDir()
+	for _, d := range httpapi.Names() {
+		y := "schema: 1\nid: test-" + d + "\nname: Test " + d + "\nprotocol: { type: http-api, default_port: 7777 }\nhttp_api: { dialect: " + d + " }\nsyntax: { wrappers: [execute] }\n"
+		if err := os.WriteFile(filepath.Join(custom, "test-"+d+".yaml"), []byte(y), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := profiles.NewImporter(st, log, os.DirFS("../../profiles"), custom).Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
 	game, err := rcontest.Start("rconpw", rcontest.Minecraft, func(cmd string) string {
@@ -104,7 +114,7 @@ func newWorld(t *testing.T) *world {
 	box, _ := secret.New(key)
 	w.c = perm.NewChecker(st, log)
 	srvSvc := servers.NewService(st, w.c, box, log)
-	conns := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}}, srvSvc, log, connmgr.Options{ProbeInterval: 50 * time.Millisecond, MaxBackoff: 100 * time.Millisecond})
+	conns := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}, httpapi.Protocol: httpapi.Adapter{}}, srvSvc, log, connmgr.Options{ProbeInterval: 50 * time.Millisecond, MaxBackoff: 100 * time.Millisecond})
 	srvSvc.SetConnections(conns)
 	if err := conns.Start(ctx); err != nil {
 		t.Fatal(err)

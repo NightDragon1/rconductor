@@ -2382,8 +2382,11 @@ components:
             (revision 2.4 candidate 24).
         status:
           type: string
-          enum: [connected, auth_failed, offline]
-          description: Reachability over RCON (SRV-004).
+          enum: [connected, auth_failed, offline, cert_mismatch]
+          description: >-
+            Reachability of the game server (SRV-004); cert_mismatch: a
+            server with an HTTPS API shows another certificate than the
+            trusted one, nothing is sent to it (PROT-003).
         status_since:
           type: string
           format: date-time
@@ -2432,6 +2435,11 @@ components:
             $ref: "#/components/schemas/GamePort"
         game_ports_override:
           type: boolean
+        tls_fingerprint:
+          type: string
+          description: >-
+            Admins only; the trusted certificate of a server with an HTTPS
+            API (protocol http-api), SHA-256 in hex (PROT-003, D-071).
 
     ServerList:
       type: object
@@ -2466,7 +2474,9 @@ components:
           writeOnly: true
           minLength: 1
           maxLength: 512
-          description: RCON password; stored encrypted, never returned.
+          description: >-
+            RCON password, or the API token of a server with an HTTPS API;
+            stored encrypted, never returned.
         game_ports:
           type: array
           description: Overrides the profile's game ports; an empty list returns to them.
@@ -2480,6 +2490,13 @@ components:
           type: string
           maxLength: 255
           description: Container name on the agent's host; set together with agent_id.
+        tls_fingerprint:
+          type: string
+          maxLength: 128
+          description: >-
+            Trusts the certificate of a server with an HTTPS API, as the
+            connection test showed it; required for protocol http-api
+            (PROT-003, D-071). Colons and upper case are accepted.
 
     ConnectionTest:
       type: object
@@ -2505,6 +2522,13 @@ components:
           writeOnly: true
           minLength: 1
           maxLength: 512
+        tls_fingerprint:
+          type: string
+          maxLength: 128
+          description: >-
+            The certificate to trust for this test of a server with an
+            HTTPS API; without it the stored one counts. Without any, the
+            test only reads the certificate and sends no request.
 
     ConnectionTestResult:
       type: object
@@ -2512,7 +2536,14 @@ components:
       properties:
         result:
           type: string
-          enum: [ok, auth_failed, unreachable]
+          enum: [ok, auth_failed, unreachable, unpinned, cert_mismatch]
+          description: >-
+            unpinned: no certificate is trusted yet, the test only read it;
+            cert_mismatch: the server shows another certificate than the
+            trusted one, nothing was sent (PROT-003, D-071).
+        fingerprint:
+          type: string
+          description: The certificate the server showed (http-api only), SHA-256 in hex.
 
     ServerRuntime:
       type: object

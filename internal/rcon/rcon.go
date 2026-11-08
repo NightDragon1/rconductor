@@ -20,7 +20,42 @@ var (
 	// ErrTooLarge means a packet or response exceeded the limits for
 	// foreign data (SEC-006).
 	ErrTooLarge = errors.New("rcon response too large")
+	// ErrCertMismatch means the certificate of the game server is not the
+	// pinned one; nothing was sent (PROT-003, D-071).
+	ErrCertMismatch = errors.New("the certificate of the game server is not the trusted one")
+	// ErrUnpinned means no certificate is trusted yet; nothing was sent.
+	ErrUnpinned = errors.New("no certificate of the game server is trusted yet")
 )
+
+// Endpoint is what an adapter needs beyond address and password: the
+// pinned certificate, the dialect of the game and the parallel requests.
+type Endpoint struct {
+	Addr        string
+	Secret      logging.Secret
+	Fingerprint string
+	Dialect     string
+	Parallel    int
+}
+
+// EndpointDialer is implemented by adapters that need an Endpoint; the
+// connection manager prefers it to Dial.
+type EndpointDialer interface {
+	DialEndpoint(ctx context.Context, e Endpoint) (Conn, error)
+}
+
+// FingerprintReader is implemented by adapters with a pinned certificate:
+// it reads the certificate of addr in a handshake that sends nothing
+// else, for the connection test before anything is trusted.
+type FingerprintReader interface {
+	Fingerprint(ctx context.Context, addr string) (string, error)
+}
+
+// Concurrent is implemented by connections that take several commands at
+// once; the connection manager then does not serialize them (PROT-002
+// holds for RCON only).
+type Concurrent interface {
+	Concurrent()
+}
 
 // Adapter opens connections of one protocol.
 type Adapter interface {

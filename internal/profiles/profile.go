@@ -19,6 +19,7 @@ import (
 	"github.com/goccy/go-yaml/token"
 
 	"github.com/NightDragon1/rconductor/internal/pattern"
+	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 )
 
 // SchemaVersion is the profile schema this release reads.
@@ -43,7 +44,7 @@ const (
 
 // Protocols are the adapters of this release (PROT-001); others follow
 // later.
-var Protocols = []string{"source-rcon"}
+var Protocols = []string{"source-rcon", httpapi.Protocol}
 
 var slugRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
@@ -72,6 +73,7 @@ type Profile struct {
 	Kind       string    `yaml:"kind" json:"kind,omitempty"`
 	Match      Match     `yaml:"match" json:"match"`
 	Protocol   Protocol  `yaml:"protocol" json:"-"`
+	HTTPAPI    *HTTPAPI  `yaml:"http_api" json:"http_api,omitempty"`
 	Ports      Ports     `yaml:"ports" json:"ports"`
 	Syntax     Syntax    `yaml:"syntax" json:"syntax"`
 	Players    *Players  `yaml:"players" json:"players,omitempty"`
@@ -84,6 +86,12 @@ type Profile struct {
 // Match preselects the profile for container images.
 type Match struct {
 	Images []string `yaml:"images" json:"images,omitempty"`
+}
+
+// HTTPAPI chooses the dialect of a game with an HTTPS API (PROT-003,
+// D-071); the dialects are in the code, a profile describes no requests.
+type HTTPAPI struct {
+	Dialect string `yaml:"dialect" json:"dialect"`
 }
 
 // Protocol names the adapter and its default port.
@@ -308,6 +316,12 @@ func (p *Profile) check() []string {
 	}
 	if !slices.Contains(Protocols, p.Protocol.Type) {
 		bad("protocol.type must be one of %s", strings.Join(Protocols, ", "))
+	}
+	switch {
+	case p.Protocol.Type == httpapi.Protocol && (p.HTTPAPI == nil || !httpapi.Known(p.HTTPAPI.Dialect)):
+		bad("http_api.dialect must be one of %s", strings.Join(httpapi.Names(), ", "))
+	case p.Protocol.Type != httpapi.Protocol && p.HTTPAPI != nil:
+		bad("http_api is only for protocol.type %s", httpapi.Protocol)
 	}
 	if p.Protocol.DefaultPort < 1 || p.Protocol.DefaultPort > 65535 {
 		bad("protocol.default_port is required, 1 to 65535")

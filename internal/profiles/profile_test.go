@@ -183,6 +183,32 @@ func TestKind(t *testing.T) {
 	}
 }
 
+// TestHTTPAPIDialect covers D-071 in the profile: protocol http-api names
+// a known dialect; http_api is only for that protocol; the profile
+// describes no requests of its own.
+func TestHTTPAPIDialect(t *testing.T) {
+	ok := "schema: 1\nid: sf\nname: SF\nprotocol: { type: http-api, default_port: 7777 }\nhttp_api: { dialect: satisfactory }\n"
+	p, err := Parse([]byte(ok))
+	if err != nil || p.HTTPAPI == nil || p.HTTPAPI.Dialect != "satisfactory" {
+		t.Fatalf("known dialect: %+v %v", p, err)
+	}
+	for name, tc := range map[string]struct{ text, want string }{
+		"unknown dialect": {strings.Replace(ok, "satisfactory", "doom", 1), "http_api.dialect must be one of satisfactory"},
+		"no dialect":      {strings.Replace(ok, "http_api: { dialect: satisfactory }\n", "", 1), "http_api.dialect must be one of"},
+		"rcon with it":    {strings.Replace(ok, "http-api", "source-rcon", 1), "http_api is only for protocol.type http-api"},
+		"own request":     {strings.Replace(ok, "dialect: satisfactory }", "dialect: satisfactory, path: /x }", 1), "path"},
+	} {
+		if _, err := Parse([]byte(tc.text)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	// profile check names the line.
+	f := Check([]byte(strings.Replace(ok, "satisfactory", "doom", 1)))
+	if len(f) == 0 || f[0].Line == 0 {
+		t.Errorf("findings without a line: %+v", f)
+	}
+}
+
 // TestSyntaxDefaults covers the defaults of CAT-005.
 func TestSyntaxDefaults(t *testing.T) {
 	p, err := Parse([]byte("schema: 1\nid: tiny\nname: Tiny\nprotocol: { type: source-rcon, default_port: 27015 }\n"))
