@@ -8,6 +8,8 @@ import { useTopic } from '@/lib/live-context';
 import { isAdmin, stripCodes } from '@/lib/serverpage';
 import { cardStatus } from '@/lib/status';
 import { useServer } from '@/api/live-servers';
+import { PortChips } from '@/components/PortChips';
+import { portsOf } from '@/lib/ports';
 
 interface Metrics {
   cpu_percent: number;
@@ -40,8 +42,9 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 // OverviewTab shows status, the players online and, for admins of a
-// server with agent, the load (Design 6.3). Values that are old are marked
-// (Design 6.1); ports and volumes follow in R2.
+// server with agent, the load (Design 6.3); for admins also the ports and
+// the volumes with their size and its age (UI-005). Values that are old
+// are marked (Design 6.1).
 export function OverviewTab() {
   const { t, i18n } = useTranslation();
   const lng = i18n.language;
@@ -61,6 +64,9 @@ export function OverviewTab() {
       ? t('overview.bytes', { value: decimal(lng, gib(bytes)), unit: 'GB' })
       : t('overview.bytes', { value: decimal(lng, bytes / 2 ** 20), unit: 'MB' });
   const p = players.data;
+  const admin = isAdmin(session?.user.role);
+  const ports = admin ? portsOf(server) : [];
+  const volumes = admin ? (server.runtime?.container?.volumes ?? []) : [];
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel title={t('overview.status')}>
@@ -95,6 +101,28 @@ export function OverviewTab() {
           </p>
         )}
       </Panel>
+      {ports.length > 0 && (
+        <Panel title={t('ports.label')}>
+          <PortChips ports={ports} label={t('ports.label')} />
+        </Panel>
+      )}
+      {volumes.length > 0 && (
+        <Panel title={t('volumes.label')}>
+          <ul className="flex flex-col gap-1">
+            {volumes.map((v) => (
+              <li key={v.name} className="flex flex-wrap justify-between gap-x-4 text-sm">
+                <bdi className="font-mono">{v.name}</bdi>
+                {v.size_bytes !== undefined && v.measured_at && (
+                  <span className={v.stale ? 'text-warn' : 'text-muted'}>
+                    {t('volumes.size', { size: mb(v.size_bytes), ago: ago(t, v.measured_at, now) })}
+                    {v.stale && ` · ${t('overview.stale')}`}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
       {withLoad && (
         <Panel title={t('overview.load')}>
           {metrics ? (

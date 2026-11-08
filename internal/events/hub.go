@@ -679,7 +679,7 @@ func (h *Hub) PublishStatus(serverID string, status connmgr.Status, since time.T
 // PublishRuntime sends the runtime data of a server to servers.overview:
 // full to those with agent rights on it, reduced (no agent data) to the
 // others in scope (UI-006, revision 2.4 candidate 3).
-func (h *Hub) PublishRuntime(serverID string, full, reduced any) {
+func (h *Hub) PublishRuntime(serverID string, rcon, admin, reduced any) {
 	h.each("overview", "", func(c *client, s *subscription) {
 		rights, err := h.perm.For(context.Background(), c.p.UserID)
 		if err != nil {
@@ -688,8 +688,10 @@ func (h *Hub) PublishRuntime(serverID string, full, reduced any) {
 		sr, ok := rights.Server(serverID)
 		switch {
 		case !ok:
+		case sr.Agent && perm.Role(c.p.Role) == perm.RCONAdmin:
+			h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: rcon})
 		case sr.Agent:
-			h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: full})
+			h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: admin})
 		default:
 			h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: reduced})
 		}

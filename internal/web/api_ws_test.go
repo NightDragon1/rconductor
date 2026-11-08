@@ -463,8 +463,9 @@ func TestSubscribedConfirmation(t *testing.T) {
 	}
 }
 
-// TestOverviewRuntimeReduced covers UI-006 on the WebSocket: in
-// servers.overview a moderator gets runtime data without the agent part.
+// TestOverviewRuntimeReduced covers UI-006 and UI-005 on the WebSocket:
+// in servers.overview a moderator gets runtime data without the agent part,
+// the RCON admin the view with all ports.
 func TestOverviewRuntimeReduced(t *testing.T) {
 	w := newWSFixture(t)
 	w.grantModerator(t)
@@ -474,10 +475,21 @@ func TestOverviewRuntimeReduced(t *testing.T) {
 	}
 	send(t, c, "subscribe", "servers.overview")
 	w.subscribed(t, "servers.overview", 1)
-	w.hub.PublishRuntime(w.server, map[string]string{"kind": "runtime", "container": "secret"}, map[string]string{"kind": "runtime"})
+	boss, _, err := w.dial(t, w.login(t, "Boss"), w.origin())
+	if err != nil {
+		t.Fatal(err)
+	}
+	send(t, boss, "subscribe", "servers.overview")
+	w.subscribed(t, "servers.overview", 2)
+	w.hub.PublishRuntime(w.server, map[string]string{"kind": "runtime", "container": "rcon-ports"},
+		map[string]string{"kind": "runtime", "container": "game-ports"}, map[string]string{"kind": "runtime"})
 	m, err := next(t, c, 5*time.Second)
 	if err != nil || m.Type != "event" || strings.Contains(string(m.Data), "container") {
 		t.Errorf("moderator got %+v %v", m, err)
+	}
+	// The RCON admin gets his own view with all ports (UI-005).
+	if m, err := next(t, boss, 5*time.Second); err != nil || !strings.Contains(string(m.Data), "rcon-ports") {
+		t.Errorf("RCON admin got %+v %v", m, err)
 	}
 }
 

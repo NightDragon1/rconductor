@@ -59,7 +59,8 @@ func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
 		return agentproto.Container{ID: "c2", Name: "mc-creative", Image: imageCreativ, State: "running", StartedAt: now.Add(-ago), RestartCount: n}
 	}
 	snap := agentproto.Snapshot{Containers: []agentproto.Container{
-		{ID: "c1", Name: "mc-survival", Image: imageDigest, State: "running", StartedAt: now.Add(-50 * time.Hour), Volumes: []string{"mc-survival-data"}},
+		{ID: "c1", Name: "mc-survival", Image: imageDigest, State: "running", StartedAt: now.Add(-50 * time.Hour), Volumes: []string{"mc-survival-data"},
+			Ports: []agentproto.Port{{Private: 25565, Public: 25565, Proto: "tcp"}, {Private: 8100, Public: 8100, Proto: "tcp"}}},
 		creative(3*time.Minute, 1),
 		{ID: "c3", Name: "mc-lobby", Image: imageCreativ, State: "exited"},
 		{ID: "c4", Name: "mc-arena", Image: imageCreativ, State: "running", StartedAt: now.Add(-26 * time.Hour)},

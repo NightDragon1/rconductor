@@ -6,6 +6,8 @@
 - The panel works with older agents of the same major version and hides what they cannot do; update the panel before the agents (AGT-013).
 - The game version from the container logs shows on the cards and the server page, for every role that sees the server (AGT-006).
 - The used size of each volume is measured in the background; the API gives it with its age (AGT-007).
+- Ports and volumes on the cards and the server page, with a Steam connect link where the game profile sets `ports.steam_connect` (UI-005). Game profiles with `ports.steam_connect` fail the profile check of panel 1.0.
+- Topology page: host → agent → game server by server group, for RCON admin and server admin (UI-010).
 
 ## 1.0
 

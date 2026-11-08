@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { PortChips } from '@/components/PortChips';
+import { portsOf } from '@/lib/ports';
 import type { Server } from '@/api/servers';
 import { ago, decimal, gib, span } from '@/lib/format';
 import { stripCodes } from '@/lib/serverpage';
@@ -157,6 +159,10 @@ export function ServerCard({
           </span>
         )}
       </div>
+      <PortChips
+        ports={portsOf(server).filter((p) => p.kind === 'game')}
+        label={t('ports.label')}
+      />
       {((c?.stale && c.metrics_at) || rt?.players_stale) && (
         <div className="flex flex-wrap gap-2">
           {c?.stale && c.metrics_at && (

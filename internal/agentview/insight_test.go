@@ -71,7 +71,7 @@ type nullBus struct {
 }
 
 func (*nullBus) PublishAgentData(string, string, any) {}
-func (b *nullBus) PublishRuntime(string, any, any) {
+func (b *nullBus) PublishRuntime(string, any, any, any) {
 	b.mu.Lock()
 	b.runtimes++
 	b.mu.Unlock()

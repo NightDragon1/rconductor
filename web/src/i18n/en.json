@@ -44,6 +44,7 @@
     "expand": "Expand the navigation",
     "overview": "Overview",
     "servers": "Servers",
+    "topology": "Topology",
     "audit": "Audit",
     "admin": "Administration",
     "users": "Users",
@@ -192,6 +193,35 @@
       "forbidden": "This action is not allowed.",
       "other": "The action failed."
     }
+  },
+  "topology": {
+    "host": "Host",
+    "agent": "Agent",
+    "noAgent": "Without agent",
+    "state": {
+      "connected": "connected",
+      "disconnected": "disconnected",
+      "unknown": "state unknown"
+    }
+  },
+  "ports": {
+    "label": "Ports",
+    "internal": "not published",
+    "steam": "Connect",
+    "value": "{{port}}/{{proto}}",
+    "proto": {
+      "tcp": "tcp",
+      "udp": "udp"
+    },
+    "kind": {
+      "game": "game",
+      "rcon": "RCON",
+      "other": "port"
+    }
+  },
+  "volumes": {
+    "label": "Volumes",
+    "size": "{{size}}, measured {{ago}}"
   },
   "overview": {
     "status": "Status",
