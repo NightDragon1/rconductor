@@ -3,6 +3,11 @@
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests", "docker:pinDigests"],
   "automerge": false,
   "dependencyDashboard": true,
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "vulnerabilityAlerts": {
+    "minimumReleaseAge": null
+  },
   "labels": ["dependencies"],
   "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
@@ -37,6 +42,11 @@
       "description": "GitHub Actions",
       "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions"
+    },
+    {
+      "description": "No release timestamp from gcr.io and mcr.microsoft.com; images of Google and Microsoft, pinned by digest",
+      "matchDepNames": ["gcr.io/distroless/static-debian13", "mcr.microsoft.com/playwright"],
+      "minimumReleaseAge": null
     },
     {
       "description": "The container of the E2E jobs must fit the Playwright package",
