@@ -8,7 +8,7 @@ info:
   title: RCONductor Panel API
   version: 1.0.0
   description: >-
-    REST API between the browser and the panel (Design 2). In R1 it serves
+    REST API between the browser and the panel (Design 2). In 1.0 it serves
     only the panel's own web UI. Errors use Problem Details (RFC 9457).
     Bodies over 256 KiB, a profile picture over 2 MiB, get 413 (Design 2.1).
   license:

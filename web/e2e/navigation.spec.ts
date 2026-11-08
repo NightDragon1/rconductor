@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 import { expect, login, secret, test } from './fixtures';
 
 // UI-011: the visible entries per role are exactly those of the table in
-// Design 6.2 (topology since 1.1, UI-010; messages are R2). Entries
+// Design 6.2 (topology since 1.1, UI-010; messages are not built yet). Entries
 // without the right are hidden, not greyed.
 const design62: Record<string, { main: string[]; admin: string[] }> = {
   // RCON admin: everything.

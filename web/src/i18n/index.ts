@@ -4,7 +4,7 @@ import { initReactI18next } from 'react-i18next';
 import en from './en.json';
 
 // All texts of the interface come from language files (NFR-007): English
-// in R1, more languages are added as files.
+// in 1.0, more languages are added as files.
 export const resources = { en: { translation: en } } as const;
 
 export function initI18n(lng = 'en', extra?: Record<string, { translation: object }>) {

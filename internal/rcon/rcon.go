@@ -2,7 +2,7 @@
 
 // Package rcon defines the protocol adapters through which the panel talks
 // to game servers (PROT-001, Architecture 7: extension point). Adapters
-// for further protocols (HTTP API in R2, BattlEye, WebRCON, Telnet in R3)
+// for further protocols (HTTP API in 1.1, later BattlEye, WebRCON, Telnet)
 // implement the same interfaces.
 package rcon
 

@@ -42,7 +42,7 @@ const (
 )
 
 // Protocols are the adapters of this release (PROT-001); others follow
-// with R2 and R3.
+// later.
 var Protocols = []string{"source-rcon"}
 
 var slugRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
@@ -116,7 +116,7 @@ type Stop struct {
 	Command string `yaml:"command" json:"command"`
 }
 
-// Version is the log pattern of the game version (AGT-006, R2).
+// Version is the log pattern of the game version (AGT-006, 1.1).
 type Version struct {
 	Pattern string `yaml:"pattern" json:"pattern"`
 }

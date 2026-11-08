@@ -32,7 +32,7 @@ type Sender interface {
 	Send(ctx context.Context, typ, ref string, payload any) error
 }
 
-// Backend carries out the work on the host (Docker in R1).
+// Backend carries out the work on the host (Docker in 1.0).
 type Backend interface {
 	// Name is the backend reported in hello, e.g. docker.
 	Name() string
