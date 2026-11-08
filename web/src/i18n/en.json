@@ -14,7 +14,12 @@
     "submit": "Sign in",
     "failed": "Pseudonym or password is wrong.",
     "locked": "Too many attempts. Please wait and try again.",
-    "busy": "The panel is busy. Please try again in a moment."
+    "busy": "The panel is busy. Please try again in a moment.",
+    "codeTitle": "Enter the code",
+    "codeExplain": "Your account uses two-factor sign-in. Enter the code of your authenticator app.",
+    "codeFailed": "The code is wrong.",
+    "again": "The sign-in timed out. Please sign in again.",
+    "lostFactor": "Lost your authenticator app?"
   },
   "password": {
     "show": "Show password",
@@ -502,7 +507,17 @@
     "invitesOpen_one": "{{count}} invitation open",
     "invitesOpen_other": "{{count}} invitations open",
     "conflict": "Changed by someone else – reload",
-    "reload": "Reload"
+    "reload": "Reload",
+    "factor": "Two-factor",
+    "factorOn": "on",
+    "factorOff": "off",
+    "recoveryMail": "Recovery address",
+    "mailSet": "on file",
+    "mailNone": "none",
+    "resetFactor": "Reset second factor",
+    "resetFactorTitle": "Reset the second factor of {{name}}?",
+    "resetFactorText": "Two-factor sign-in of this user is switched off and all sessions end.",
+    "resetFactorDone": "Second factor reset."
   },
   "lists": {
     "summary_one": "{{count}} command list",
@@ -678,7 +693,8 @@
       "interface": "Interface",
       "backups": "Backups",
       "mail": "Mail",
-      "other": "Other"
+      "other": "Other",
+      "twofactor": "Two-factor sign-in"
     },
     "key": {
       "backup_interval": {
@@ -792,6 +808,22 @@
       "ratelimit_burst": {
         "label": "Commands in a row: {{role}}",
         "help": "How many may come at once before the limit."
+      },
+      "auth_totp_required": {
+        "label": "Two-factor sign-in for everyone",
+        "help": "Who has none yet must set it up before anything else."
+      },
+      "auth_second_factor_window": {
+        "label": "Time for the code",
+        "help": "How long the code may follow the right password; 5 wrong codes end it too."
+      },
+      "auth_recovery_lifetime": {
+        "label": "Recovery link lifetime",
+        "help": "How long a recovery link of the second factor holds; only the last one counts."
+      },
+      "auth_recovery_per_hour": {
+        "label": "Recovery requests per hour",
+        "help": "Per user and per client address."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
@@ -828,5 +860,44 @@
     "pictureRemoved": "Picture removed.",
     "passwordHint": "Your other sessions end when the password changes.",
     "passwordChanged": "Password changed."
+  },
+  "twofactor": {
+    "title": "Two-factor sign-in",
+    "isOn": "On: signing in needs a code of your authenticator app.",
+    "isOff": "Off: signing in needs only the password.",
+    "setupExplain": "Confirm with your password. Then scan the code with an authenticator app and enter the first code.",
+    "password": "Your password",
+    "start": "Set up",
+    "scan": "Scan this code with your authenticator app, or type in the secret.",
+    "qr": "QR code for the authenticator app",
+    "secret": "Secret",
+    "copySecret": "Copy the secret",
+    "uri": "Address for the app",
+    "copyUri": "Copy the address",
+    "code": "Code from the app",
+    "confirm": "Switch on",
+    "nowOn": "Two-factor sign-in is on.",
+    "off": "Two-factor sign-in is off.",
+    "switchOff": "Switch off",
+    "requiredOn": "Two-factor sign-in is required for everyone; it cannot be switched off.",
+    "requiredTitle": "Set up two-factor sign-in",
+    "requiredExplain": "Two-factor sign-in is required. Set it up to go on.",
+    "wrong": "Password or code wrong.",
+    "locked": "Too many attempts. Please wait and try again.",
+    "alreadyOn": "Two-factor sign-in is on already.",
+    "mailTitle": "Address for recovery",
+    "mailExplain": "If you lose your authenticator app, a link to reset two-factor sign-in goes to this address. Only you see it.",
+    "mail": "Mail address"
+  },
+  "recover": {
+    "title": "Reset two-factor sign-in",
+    "explain": "Enter your pseudonym. If two-factor sign-in is on and an address is on file, a link goes to that address.",
+    "send": "Send link",
+    "sent": "If an account fits, a link is on its way. It is valid for a short time.",
+    "redeemExplain": "Enter your password to reset two-factor sign-in. You sign in afterwards with your password.",
+    "reset": "Reset",
+    "done": "Two-factor sign-in is reset; all sessions ended. Sign in with your password.",
+    "failed": "The link is not valid or the password is wrong.",
+    "toLogin": "To sign-in"
   }
 }

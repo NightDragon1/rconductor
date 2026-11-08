@@ -38,6 +38,10 @@ function storeHelp(on: boolean) {
 
 // Keys with their own label and help in the language file.
 const keyTexts = [
+  'auth_recovery_lifetime',
+  'auth_recovery_per_hour',
+  'auth_second_factor_window',
+  'auth_totp_required',
   'agent_version_retry',
   'agent_version_window',
   'agent_volume_interval',
@@ -81,6 +85,7 @@ const sections: [string, RegExp][] = [
   ['interface', /^ui\./],
   ['backups', /^backup\./],
   ['mail', /^smtp\./],
+  ['twofactor', /^auth\./],
 ];
 // describe gives the label and help of a key from the language file
 // (NFR-007); rate limits share one text per kind with the role in it. A
