@@ -281,6 +281,24 @@
     "noMetrics": "No measurements yet.",
     "rcon": "RCON state"
   },
+  "templates": {
+    "title": "Templates",
+    "explain": "Commands with placeholders such as {player}. Fill one in and it goes to the input line; the panel checks it like a typed command.",
+    "none": "No templates yet.",
+    "search": "Search templates",
+    "new": "New template",
+    "edit": "Edit",
+    "editName": "Edit {{name}}",
+    "delete": "Delete",
+    "deleteName": "Delete {{name}}",
+    "deleteTitle": "Delete the template {{name}}?",
+    "deleteText": "The template is gone for everyone on this server. Commands already sent stay in the history.",
+    "name": "Name",
+    "text": "Command",
+    "textHelp": "Placeholders are {name} in lower case, e.g. kick {player} {reason}; {player} picks from the player list. The first word is fixed.",
+    "save": "Save",
+    "use": "Put into the input"
+  },
   "history": {
     "title": "History",
     "empty": "No commands yet.",
@@ -686,6 +704,7 @@
       "invitations": "Invitations",
       "supporters": "Supporters",
       "ratelimits": "Rate limits",
+      "commands": "Commands",
       "audit": "Audit",
       "websocket": "Live connections",
       "profiles": "Game profiles",
@@ -760,6 +779,10 @@
       "ws_max_subscriptions_per_socket": {
         "label": "Subscriptions per connection",
         "help": "Live topics one browser tab may follow at once."
+      },
+      "commands_templates_per_server": {
+        "label": "Templates per server",
+        "help": "How many command templates one server may have."
       },
       "servers_connection_test_per_minute": {
         "label": "Connection tests per minute",

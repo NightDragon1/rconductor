@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Link } from '@tanstack/react-router';
 import { ChevronRight } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useServer } from '@/api/live-servers';
 import { useAllowedCommands, usePlayers } from '@/api/servers';
+import { useTemplates } from '@/api/templates';
 import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   buildCommand,
+  fieldError,
   formErrors,
   FREE,
   fromCatalog,
@@ -24,6 +26,7 @@ import type { CmdBlock } from '@/lib/console';
 import { ago, clock, useNow } from '@/lib/format';
 import { usePhone } from '@/lib/phone';
 import { stripCodes } from '@/lib/serverpage';
+import { fillTemplate, matchesTemplate, templateParams, type Template } from '@/lib/templates';
 import { cn } from '@/lib/utils';
 import { useConsoleFeed } from './useConsoleFeed';
 
@@ -43,7 +46,7 @@ interface Active {
   param: string;
 }
 
-function Field({
+export function Field({
   p,
   value,
   error,
@@ -224,6 +227,88 @@ export function CommandCard({
   );
 }
 
+// TemplateCard fills a command template (CMD-008, D-068): one field per
+// placeholder; the filled command goes through the pipeline like a typed
+// one, so the fields are a help, not a check.
+export function TemplateCard({
+  tmpl,
+  values,
+  players,
+  listId,
+  busy,
+  isPlayer,
+  action,
+  onChange,
+  onFocusPlayer,
+  onRun,
+  children,
+}: {
+  tmpl: Template;
+  values: Values;
+  players: string[];
+  listId: string;
+  busy: boolean;
+  isPlayer: (name: string) => boolean;
+  action: string;
+  onChange: (name: string, v: string) => void;
+  onFocusPlayer: (name: string) => void;
+  onRun: (command: string) => void;
+  children?: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const params = templateParams(tmpl);
+  const errors: Record<string, string> = {};
+  for (const p of params) {
+    const e = fieldError(p, values[p.name] ?? '', isPlayer);
+    if (e) errors[p.name] = e;
+  }
+  const ok = Object.keys(errors).length === 0;
+  const command = fillTemplate(tmpl.template, values);
+  return (
+    <form
+      aria-label={tmpl.name}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ok && !busy) onRun(command);
+      }}
+      className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="font-semibold wrap-anywhere">{tmpl.name}</h3>
+          <p className="font-mono text-sm wrap-anywhere text-muted">{tmpl.template}</p>
+        </div>
+        {children}
+      </div>
+      {params.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {params.map((p) => (
+            <Field
+              key={p.name}
+              p={p}
+              value={values[p.name] ?? ''}
+              error={errors[p.name]}
+              players={players}
+              listId={listId}
+              onChange={(v) => onChange(p.name, v)}
+              onFocus={() => p.type === 'player' && onFocusPlayer(p.name)}
+            />
+          ))}
+        </div>
+      )}
+      <p
+        className="wrap-anywhere md:truncate rounded bg-surface-raised px-2 py-1 font-mono text-sm"
+        aria-live="polite"
+      >
+        {t('commands.preview', { command })}
+      </p>
+      <Button type="submit" className="self-start max-md:self-stretch" disabled={!ok || busy}>
+        {action}
+      </Button>
+    </form>
+  );
+}
+
 function HistoryItem({ b }: { b: CmdBlock }) {
   const { t, i18n } = useTranslation();
   // Answers are foreign data: text only, color codes dropped (SEC-006).
@@ -279,6 +364,7 @@ function ServerCommands() {
   const server = useServer();
   const id = server?.id ?? '';
   const allowed = useAllowedCommands(id, !!id);
+  const templates = useTemplates(id);
   const players = usePlayers(id);
   const { buf, me, send } = useConsoleFeed(id, false);
   const now = useNow();
@@ -302,6 +388,10 @@ function ServerCommands() {
   // fields is open until someone picks another.
   const folds = (c: Command) => !fromCatalog(c) || c.params.length > 0;
   const shown = commands.filter((c) => matches(c, search));
+  // Templates share the values and the player picking of the cards under
+  // their own key.
+  const tmplKey = (tid: string) => `template:${tid}`;
+  const shownTemplates = (templates.data ?? []).filter((x) => matchesTemplate(x, search));
   const openPath =
     open === null || shown.some((c) => c.path === open) ? open : shown.find(folds)?.path;
   const head = (
@@ -324,45 +414,69 @@ function ServerCommands() {
           <option key={n} value={n} />
         ))}
       </datalist>
-      <section aria-label={t('server.tab.commands')} className="min-w-0">
-        {allowed.isPending && <p className="text-muted">{t('app.loading')}</p>}
-        {allowed.isSuccess && commands.length === 0 && (
-          <p className="text-muted">{t('commands.none')}</p>
-        )}
-        {commands.length > 0 && (
-          <Input
-            type="search"
-            className="mb-3"
-            placeholder={t('commands.search')}
-            aria-label={t('commands.search')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        )}
-        {commands.length > 0 && shown.length === 0 && (
-          <p className="text-muted">{t('commands.noMatch')}</p>
-        )}
-        <div className="grid gap-3 md:grid-cols-2">
-          {shown.map((c) => (
-            <CommandCard
-              key={c.path}
-              c={c}
-              values={values[c.path] ?? {}}
-              players={names}
-              listId={listId}
-              busy={send.isPending}
-              isPlayer={isPlayer}
-              onChange={(name, v) => set(c.path, name, v)}
-              onFocusPlayer={(param) => setActive({ path: c.path, param })}
-              onRun={() => send.mutate(buildCommand(c, values[c.path] ?? {}))}
-              folded={phone && folds(c) ? openPath !== c.path : undefined}
-              onToggle={
-                phone && folds(c) ? () => setOpen(openPath === c.path ? null : c.path) : undefined
-              }
+      <div className="flex min-w-0 flex-col gap-4">
+        <section aria-label={t('server.tab.commands')} className="min-w-0">
+          {allowed.isPending && <p className="text-muted">{t('app.loading')}</p>}
+          {allowed.isSuccess && commands.length === 0 && (
+            <p className="text-muted">{t('commands.none')}</p>
+          )}
+          {commands.length > 0 && (
+            <Input
+              type="search"
+              className="mb-3"
+              placeholder={t('commands.search')}
+              aria-label={t('commands.search')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-          ))}
-        </div>
-      </section>
+          )}
+          {commands.length > 0 && shown.length === 0 && shownTemplates.length === 0 && (
+            <p className="text-muted">{t('commands.noMatch')}</p>
+          )}
+          <div className="grid gap-3 md:grid-cols-2">
+            {shown.map((c) => (
+              <CommandCard
+                key={c.path}
+                c={c}
+                values={values[c.path] ?? {}}
+                players={names}
+                listId={listId}
+                busy={send.isPending}
+                isPlayer={isPlayer}
+                onChange={(name, v) => set(c.path, name, v)}
+                onFocusPlayer={(param) => setActive({ path: c.path, param })}
+                onRun={() => send.mutate(buildCommand(c, values[c.path] ?? {}))}
+                folded={phone && folds(c) ? openPath !== c.path : undefined}
+                onToggle={
+                  phone && folds(c) ? () => setOpen(openPath === c.path ? null : c.path) : undefined
+                }
+              />
+            ))}
+          </div>
+        </section>
+        {shownTemplates.length > 0 && (
+          <section aria-label={t('templates.title')}>
+            <h2 className="mb-2 text-sm font-semibold">{t('templates.title')}</h2>
+            <div className="grid gap-3 md:grid-cols-2">
+              {shownTemplates.map((x) => (
+                <TemplateCard
+                  key={x.id}
+                  tmpl={x}
+                  values={values[tmplKey(x.id)] ?? {}}
+                  players={names}
+                  listId={listId}
+                  busy={send.isPending}
+                  isPlayer={isPlayer}
+                  action={t('commands.run')}
+                  onChange={(name, v) => set(tmplKey(x.id), name, v)}
+                  onFocusPlayer={(param) => setActive({ path: tmplKey(x.id), param })}
+                  onRun={(command) => send.mutate(command)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
       <div className="flex min-w-0 flex-col gap-4">
         {/* A sheet at the lower edge on a phone (Design 6.6). */}
         <section

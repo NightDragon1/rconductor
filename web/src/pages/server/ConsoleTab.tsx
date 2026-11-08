@@ -20,9 +20,11 @@ import {
   type CmdBlock,
   type Tracks,
 } from '@/lib/console';
+import { playerRule } from '@/lib/commandform';
 import { clock } from '@/lib/format';
 import { stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
+import { TemplatesPanel } from './TemplatesPanel';
 import { useConsoleFeed } from './useConsoleFeed';
 
 // tone colors a block and its marker on the timeline (CMD-013): own
@@ -199,6 +201,7 @@ export function ConsoleTab() {
   const [focus, setFocus] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [older, setOlder] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   // Logs flow only while their track is shown (G2, UI-009).
   const { buf, send, loadOlder, history } = useConsoleFeed(id, hasAgent && tracks.logs);
@@ -287,9 +290,17 @@ export function ConsoleTab() {
             {track('others', t('console.others'), markerClass.others)}
             {hasAgent && track('logs', t('console.logs'), markerClass.log)}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setTemplatesOpen(true)}
+          >
+            {t('templates.title')}
+          </Button>
           <Input
             type="search"
-            className="ml-auto w-full sm:w-56"
+            className="w-full sm:w-56"
             placeholder={t('console.filter')}
             aria-label={t('console.filterLabel')}
             value={filter}
@@ -444,6 +455,16 @@ export function ConsoleTab() {
           <p className="mt-1 text-xs text-muted max-md:hidden">{t('console.hint')}</p>
         </form>
       </section>
+      <TemplatesPanel
+        serverId={id}
+        isPlayer={playerRule(allowed.data?.player_pattern)}
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onUse={(command) => {
+          setInput(command);
+          setWalk(-1);
+        }}
+      />
     </div>
   );
 }
