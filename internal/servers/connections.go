@@ -5,6 +5,7 @@ package servers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net"
@@ -12,8 +13,10 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/connmgr"
-	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
 // Connections is what the server administration needs from the connection
@@ -21,7 +24,8 @@ import (
 type Connections interface {
 	Reload(ctx context.Context, id string) error
 	Status(id string) (connmgr.Status, time.Time)
-	Try(ctx context.Context, protocol, addr string, password logging.Secret) error
+	Try(ctx context.Context, t connmgr.Target) error
+	Fingerprint(ctx context.Context, protocol, addr string) (string, bool, error)
 }
 
 // SetConnections links the connection manager: it is told about every
@@ -47,7 +51,12 @@ func (s *Service) changed(ctx context.Context, id string) {
 func (s *Service) target(r sqlitedb.ListServersRow) connmgr.Target {
 	t := connmgr.Target{
 		ID: r.ID, Name: r.Name, Protocol: r.Protocol,
-		Addr: net.JoinHostPort(r.Host, strconv.Itoa(int(r.Port))),
+		Addr:        net.JoinHostPort(r.Host, strconv.Itoa(int(r.Port))),
+		Fingerprint: r.TlsFingerprint,
+	}
+	if r.Protocol == httpapi.Protocol {
+		t.Dialect = s.dialect(r.ProfileID.String)
+		t.Parallel = s.httpParallel()
 	}
 	if s.credentialState(r.Secret) != CredentialsOK {
 		return t
@@ -85,4 +94,27 @@ func (s *Service) Target(ctx context.Context, id string) (connmgr.Target, bool, 
 		return connmgr.Target{}, false, err
 	}
 	return s.target(sqlitedb.ListServersRow(r)), true, nil
+}
+
+// dialect is the http-api dialect of a profile (PROT-003, D-071).
+func (s *Service) dialect(profileID string) string {
+	p, err := s.st.Queries.GetGameProfile(context.Background(), profileID)
+	if err != nil {
+		return ""
+	}
+	var rules profiles.Profile
+	if json.Unmarshal([]byte(p.Rules), &rules) != nil || rules.HTTPAPI == nil {
+		return ""
+	}
+	return rules.HTTPAPI.Dialect
+}
+
+// httpParallel is servers.http_parallel, the requests at once to one
+// server with an HTTPS API.
+func (s *Service) httpParallel() int {
+	n := users.DefaultHTTPParallel
+	if err := s.st.GlobalSetting(context.Background(), users.SettingHTTPParallel, &n); err != nil || n < users.MinHTTPParallel {
+		n = users.DefaultHTTPParallel
+	}
+	return n
 }

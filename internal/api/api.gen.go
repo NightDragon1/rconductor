@@ -90,9 +90,11 @@ func (e AuditEntryResult) Valid() bool {
 
 // Defines values for ConnectionTestResultResult.
 const (
-	ConnectionTestResultResultAuthFailed  ConnectionTestResultResult = "auth_failed"
-	ConnectionTestResultResultOk          ConnectionTestResultResult = "ok"
-	ConnectionTestResultResultUnreachable ConnectionTestResultResult = "unreachable"
+	ConnectionTestResultResultAuthFailed   ConnectionTestResultResult = "auth_failed"
+	ConnectionTestResultResultCertMismatch ConnectionTestResultResult = "cert_mismatch"
+	ConnectionTestResultResultOk           ConnectionTestResultResult = "ok"
+	ConnectionTestResultResultUnpinned     ConnectionTestResultResult = "unpinned"
+	ConnectionTestResultResultUnreachable  ConnectionTestResultResult = "unreachable"
 )
 
 // Valid indicates whether the value is a known member of the ConnectionTestResultResult enum.
@@ -100,7 +102,11 @@ func (e ConnectionTestResultResult) Valid() bool {
 	switch e {
 	case ConnectionTestResultResultAuthFailed:
 		return true
+	case ConnectionTestResultResultCertMismatch:
+		return true
 	case ConnectionTestResultResultOk:
+		return true
+	case ConnectionTestResultResultUnpinned:
 		return true
 	case ConnectionTestResultResultUnreachable:
 		return true
@@ -453,15 +459,18 @@ func (e ServerCredentials) Valid() bool {
 
 // Defines values for ServerStatus.
 const (
-	ServerStatusAuthFailed ServerStatus = "auth_failed"
-	ServerStatusConnected  ServerStatus = "connected"
-	ServerStatusOffline    ServerStatus = "offline"
+	ServerStatusAuthFailed   ServerStatus = "auth_failed"
+	ServerStatusCertMismatch ServerStatus = "cert_mismatch"
+	ServerStatusConnected    ServerStatus = "connected"
+	ServerStatusOffline      ServerStatus = "offline"
 )
 
 // Valid indicates whether the value is a known member of the ServerStatus enum.
 func (e ServerStatus) Valid() bool {
 	switch e {
 	case ServerStatusAuthFailed:
+		return true
+	case ServerStatusCertMismatch:
 		return true
 	case ServerStatusConnected:
 		return true
@@ -764,14 +773,21 @@ type ConnectionTest struct {
 
 	// ServerId The server being edited; missing when a new one is created.
 	ServerId *openapi_types.UUID `json:"server_id,omitempty"`
+
+	// TlsFingerprint The certificate to trust for this test of a server with an HTTPS API; without it the stored one counts. Without any, the test only reads the certificate and sends no request.
+	TlsFingerprint *string `json:"tls_fingerprint,omitempty"`
 }
 
 // ConnectionTestResult defines model for ConnectionTestResult.
 type ConnectionTestResult struct {
+	// Fingerprint The certificate the server showed (http-api only), SHA-256 in hex.
+	Fingerprint *string `json:"fingerprint,omitempty"`
+
+	// Result unpinned: no certificate is trusted yet, the test only read it; cert_mismatch: the server shows another certificate than the trusted one, nothing was sent (PROT-003, D-071).
 	Result ConnectionTestResultResult `json:"result"`
 }
 
-// ConnectionTestResultResult defines model for ConnectionTestResult.Result.
+// ConnectionTestResultResult unpinned: no certificate is trusted yet, the test only read it; cert_mismatch: the server shows another certificate than the trusted one, nothing was sent (PROT-003, D-071).
 type ConnectionTestResultResult string
 
 // ContainerRuntime defines model for ContainerRuntime.
@@ -1219,9 +1235,12 @@ type Server struct {
 	// Runtime Runtime data, kept in memory with its age (NFR-005); the same data comes live in servers.overview with kind runtime. Player count for everyone in scope, the container only for RCON admin and server admin (UI-006).
 	Runtime *ServerRuntime `json:"runtime,omitempty"`
 
-	// Status Reachability over RCON (SRV-004).
+	// Status Reachability of the game server (SRV-004); cert_mismatch: a server with an HTTPS API shows another certificate than the trusted one, nothing is sent to it (PROT-003).
 	Status      ServerStatus `json:"status"`
 	StatusSince time.Time    `json:"status_since"`
+
+	// TlsFingerprint Admins only; the trusted certificate of a server with an HTTPS API (protocol http-api), SHA-256 in hex (PROT-003, D-071).
+	TlsFingerprint *string `json:"tls_fingerprint,omitempty"`
 
 	// Version Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24).
 	Version string `json:"version"`
@@ -1230,7 +1249,7 @@ type Server struct {
 // ServerCredentials Admins only. reenter: the credentials were encrypted with another master key and must be entered again (SRV-002).
 type ServerCredentials string
 
-// ServerStatus Reachability over RCON (SRV-004).
+// ServerStatus Reachability of the game server (SRV-004); cert_mismatch: a server with an HTTPS API shows another certificate than the trusted one, nothing is sent to it (PROT-003).
 type ServerStatus string
 
 // ServerActionInput defines model for ServerActionInput.
@@ -1289,10 +1308,13 @@ type ServerInput struct {
 	Host      *string     `json:"host,omitempty"`
 	Name      *string     `json:"name,omitempty"`
 
-	// Password RCON password; stored encrypted, never returned.
+	// Password RCON password, or the API token of a server with an HTTPS API; stored encrypted, never returned.
 	Password  *string             `json:"password,omitempty"`
 	Port      *int                `json:"port,omitempty"`
 	ProfileId *openapi_types.UUID `json:"profile_id,omitempty"`
+
+	// TlsFingerprint Trusts the certificate of a server with an HTTPS API, as the connection test showed it; required for protocol http-api (PROT-003, D-071). Colons and upper case are accepted.
+	TlsFingerprint *string `json:"tls_fingerprint,omitempty"`
 }
 
 // ServerList defines model for ServerList.

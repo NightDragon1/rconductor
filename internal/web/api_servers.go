@@ -44,11 +44,13 @@ func toAPIServer(s servers.Server) api.Server {
 	out.Protocol, out.Host, out.Port, out.Credentials = &s.Protocol, &s.Host, &s.Port, &cred
 	out.AgentId, out.ContainerName = strPtr(s.AgentID), strPtr(s.ContainerName)
 	out.GamePorts, out.GamePortsOverride = &ports, &s.GamePortsOverride
+	out.TlsFingerprint = strPtr(s.TLSFingerprint)
 	return out
 }
 
 func serverInput(b *api.ServerInput) servers.Input {
-	in := servers.Input{Name: b.Name, Host: b.Host, Port: b.Port, AgentID: b.AgentId, ContainerName: b.ContainerName}
+	in := servers.Input{Name: b.Name, Host: b.Host, Port: b.Port, AgentID: b.AgentId, ContainerName: b.ContainerName,
+		TLSFingerprint: b.TlsFingerprint}
 	if b.ProfileId != nil {
 		p := b.ProfileId.String()
 		in.ProfileID = &p
@@ -98,7 +100,7 @@ func (s *apiServer) TestServerConnection(ctx context.Context, req api.TestServer
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	in := servers.ConnectionData{Host: req.Body.Host, Port: req.Body.Port}
+	in := servers.ConnectionData{Host: req.Body.Host, Port: req.Body.Port, TLSFingerprint: req.Body.TlsFingerprint}
 	if id := req.Body.ServerId; id != nil {
 		in.ServerID = id.String()
 	}
@@ -117,7 +119,7 @@ func (s *apiServer) TestServerConnection(ctx context.Context, req api.TestServer
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.TestServerConnection200JSONResponse{Result: api.ConnectionTestResultResult(result)}, nil
+	return api.TestServerConnection200JSONResponse{Result: api.ConnectionTestResultResult(result.Result), Fingerprint: strPtr(result.Fingerprint)}, nil
 }
 
 func (s *apiServer) GetServer(ctx context.Context, req api.GetServerRequestObject) (api.GetServerResponseObject, error) {

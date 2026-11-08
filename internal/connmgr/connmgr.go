@@ -28,6 +28,9 @@ const (
 	Connected  Status = "connected"
 	AuthFailed Status = "auth_failed"
 	Offline    Status = "offline"
+	// CertMismatch: the server with an HTTPS API shows another certificate
+	// than the trusted one; nothing is sent to it (PROT-003, D-071).
+	CertMismatch Status = "cert_mismatch"
 )
 
 var (
@@ -46,6 +49,23 @@ type Target struct {
 	ID, Name, Protocol, Addr string
 	Password                 logging.Secret
 	Usable                   bool
+	// Fingerprint, Dialect and Parallel are for servers with an HTTPS API
+	// (PROT-003): the trusted certificate, the game and the requests at
+	// once.
+	Fingerprint, Dialect string
+	Parallel             int
+}
+
+func (t Target) endpoint() rcon.Endpoint {
+	return rcon.Endpoint{Addr: t.Addr, Secret: t.Password, Fingerprint: t.Fingerprint, Dialect: t.Dialect, Parallel: t.Parallel}
+}
+
+// dial uses the endpoint when the adapter takes one.
+func dial(ctx context.Context, a rcon.Adapter, t Target) (rcon.Conn, error) {
+	if d, ok := a.(rcon.EndpointDialer); ok {
+		return d.DialEndpoint(ctx, t.endpoint())
+	}
+	return a.Dial(ctx, t.Addr, t.Password)
 }
 
 // Source provides the targets; the server administration implements it.
@@ -188,18 +208,36 @@ const tryTimeout = 5 * time.Second
 // Try opens a connection that only authenticates and closes it at once,
 // for a test of RCON data. It is the one exception to one connection per
 // server (PROT-002 rev. 2, D-049) and sends no command.
-func (m *Manager) Try(ctx context.Context, protocol, addr string, password logging.Secret) error {
-	adapter, err := m.adapters.Get(protocol)
+func (m *Manager) Try(ctx context.Context, t Target) error {
+	adapter, err := m.adapters.Get(t.Protocol)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(ctx, min(m.opts.DialTimeout, tryTimeout))
 	defer cancel()
-	conn, err := adapter.Dial(ctx, addr, password)
+	conn, err := dial(ctx, adapter, t)
 	if err != nil {
 		return err
 	}
 	return conn.Close()
+}
+
+// Fingerprint reads the certificate of a server with a pinned certificate
+// in a handshake that sends nothing else; ok is false for protocols
+// without one (PROT-003).
+func (m *Manager) Fingerprint(ctx context.Context, protocol, addr string) (string, bool, error) {
+	adapter, err := m.adapters.Get(protocol)
+	if err != nil {
+		return "", false, err
+	}
+	r, ok := adapter.(rcon.FingerprintReader)
+	if !ok {
+		return "", false, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, min(m.opts.DialTimeout, tryTimeout))
+	defer cancel()
+	fp, err := r.Fingerprint(ctx, addr)
+	return fp, true, err
 }
 
 // Execute queues a command for a server and waits for its answer, or for
@@ -381,9 +419,15 @@ func (w *worker) run(ctx context.Context) {
 			continue
 		}
 		dctx, cancel := context.WithTimeout(ctx, w.m.opts.DialTimeout)
-		conn, err := adapter.Dial(dctx, t.Addr, t.Password)
+		conn, err := dial(dctx, adapter, t)
 		cancel()
 		switch {
+		case errors.Is(err, rcon.ErrCertMismatch), errors.Is(err, rcon.ErrUnpinned):
+			if s, _ := w.state(); s != CertMismatch {
+				log.Warn("the game server shows another certificate than the trusted one",
+					append(w.attrs(t), logging.Event(logging.ServerCertMismatch))...)
+			}
+			w.setStatus(CertMismatch)
 		case errors.Is(err, rcon.ErrAuth):
 			if s, _ := w.state(); s != AuthFailed {
 				log.Warn("game server refused the rcon credentials",
@@ -427,6 +471,11 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 	probe := time.NewTicker(w.m.opts.ProbeInterval)
 	defer probe.Stop()
 	used := time.Now() // last traffic with an answer
+	// A connection that takes several commands at once gets each in its
+	// own goroutine; it bounds them itself (PROT-002 holds for RCON only).
+	_, concurrent := conn.(rcon.Concurrent)
+	var running sync.WaitGroup
+	defer running.Wait()
 	for {
 		select {
 		case <-ctx.Done():
@@ -440,6 +489,17 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 		case j := <-w.jobs:
 			if err := j.ctx.Err(); err != nil {
 				j.reply <- result{err: err}
+				continue
+			}
+			if concurrent {
+				running.Go(func() {
+					answer, err := conn.Execute(j.ctx, j.command)
+					if err != nil && j.ctx.Err() != nil {
+						err = j.ctx.Err()
+					}
+					j.reply <- result{answer: answer, err: err}
+				})
+				used = time.Now()
 				continue
 			}
 			answer, err := conn.Execute(j.ctx, j.command)
