@@ -193,6 +193,8 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
+          # A failing step must stop before Docker Hub hears of it.
+          set -euo pipefail
           # The login and the bearer token go through stdin and private files
           # only, never through arguments or the log.
           umask 077
@@ -211,8 +213,15 @@ jobs:
           namespace=${HUB#docker.io/}
           for kind in panel agent; do
             repo=$namespace/rconductor-$kind
-            code=$(jq -n --arg short "$(scripts/dockerhub-overview.sh --short "$VERSION" "$kind")" \
-              --arg full "$(scripts/dockerhub-overview.sh "$VERSION" "$kind")" \
+            # The texts first, on their own: an error or an empty text ends
+            # the step before the API is called.
+            short=$(scripts/dockerhub-overview.sh --short "$VERSION" "$kind")
+            full=$(scripts/dockerhub-overview.sh "$VERSION" "$kind")
+            if [ -z "$short" ] || [ -z "$full" ]; then
+              echo "::error::empty Docker Hub description for $kind"
+              exit 1
+            fi
+            code=$(jq -n --arg short "$short" --arg full "$full" \
               '{description: $short, full_description: $full}' |
               curl -sS -o /dev/null -w '%{http_code}' -X PATCH --data @- -H 'Content-Type: application/json' -H @"$auth" \
                 "https://hub.docker.com/v2/repositories/$repo/") || code=000
