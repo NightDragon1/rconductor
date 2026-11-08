@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# The full check before every push.
+# The check before every push, without the tests: the pre-commit hook ran
+# those of the changed packages, the CI runs all; make check is the full
+# run by hand.
 set -euo pipefail
-exec "$(git rev-parse --show-toplevel)/scripts/check.sh"
+exec "$(git rev-parse --show-toplevel)/scripts/check.sh" --no-tests

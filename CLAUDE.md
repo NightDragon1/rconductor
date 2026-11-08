@@ -45,9 +45,9 @@ für RCON-fähige Spieleserver. Lizenz GNU AGPL-3.0.
 - Go: go test ./..., Integrationstests mit testcontainers-go.
 - Oberfläche: Vitest, Abläufe mit Playwright.
 - Vor jedem Commit: Lint und Tests der geänderten Pakete (Go mit -race), über den
-  Pre-Commit-Hook. Vor jedem Push: make check vollständig (golangci-lint, ESLint,
-  Prettier, generierter Code, alle Tests grün), über den Pre-Push-Hook; einmal je Klon
-  aktivieren mit git config core.hooksPath .githooks.
+  Pre-Commit-Hook. Vor jedem Push: scripts/check.sh --no-tests (golangci-lint, ESLint,
+  Prettier, generierter Code, ohne Tests), über den Pre-Push-Hook; make check bleibt
+  vollständig und manuell; einmal je Klon aktivieren mit git config core.hooksPath .githooks.
 - Tests lokal gezielt:
   - Während eines Teilschritts nur betroffene Tests: go test der geänderten
     Pakete, vitest related, playwright --grep auf die betroffenen Specs.
