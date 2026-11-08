@@ -3,6 +3,11 @@
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests", "docker:pinDigests"],
   "automerge": false,
   "dependencyDashboard": true,
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "vulnerabilityAlerts": {
+    "minimumReleaseAge": null
+  },
   "labels": ["dependencies"],
   "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
