@@ -51,7 +51,7 @@ func (c *client) call(method, path string, body, out any) int {
 	if c.cookie != nil {
 		req.AddCookie(c.cookie)
 	}
-	if method == http.MethodPatch && versionedPath.MatchString(path) {
+	if (method == http.MethodPatch || method == http.MethodPut) && versionedPath.MatchString(path) {
 		if v := c.version(path); v != "" {
 			req.Header.Set("If-Match", v)
 		}
@@ -338,7 +338,7 @@ func TestThroughTheStack(t *testing.T) {
 
 // versionedPath names the objects saved as a whole with optimistic
 // locking (revision 2.4 candidate 24).
-var versionedPath = regexp.MustCompile(`^/(user-groups|command-lists|servers|server-groups)/[^/?]+$|^/settings$`)
+var versionedPath = regexp.MustCompile(`^/(user-groups|command-lists|servers|server-groups)/[^/?]+$|^/settings$|^/settings/smtp$`)
 
 // version reads the current version of a versioned object with the
 // client's session, for If-Match; empty if the session cannot read it.

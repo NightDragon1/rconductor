@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -55,6 +56,24 @@ func TestNoSecretsInTheLogs(t *testing.T) {
 	temporary := login(t, s.base, "mod", reset.Password)
 	temporary.must(http.MethodPost, "/me/password", map[string]string{"current_password": reset.Password, "new_password": changed}, nil, http.StatusNoContent)
 	secrets = append(secrets, reset.Password, changed)
+
+	// The SMTP setup with a password and a test mail that fails (NFR-017):
+	// neither the password nor the recipient's name may reach the log.
+	const smtpPassword = "the secret smtp password"
+	admin.must(http.MethodPut, "/settings/smtp", map[string]any{"host": "127.0.0.1", "port": 1, "encryption": "ssl",
+		"username": "mailer", "password": smtpPassword, "from": "panel@example.org"}, nil, http.StatusOK)
+	var tested struct{ Ok bool }
+	admin.must(http.MethodPost, "/settings/smtp/test", map[string]string{"to": "hidden-recipient@example.org"}, &tested, http.StatusOK)
+	if tested.Ok {
+		t.Error("test mail to a closed port went out")
+	}
+	logtest.Wait(t, s.logs, `"event":"mail.failed"`)
+	secrets = append(secrets, smtpPassword, "hidden-recipient")
+	var smtp map[string]any
+	admin.must(http.MethodGet, "/settings/smtp", nil, &smtp, http.StatusOK)
+	if b, _ := json.Marshal(smtp); strings.Contains(string(b), smtpPassword) || smtp["password_set"] != true {
+		t.Errorf("GET /settings/smtp = %s", b)
+	}
 
 	// A command and the pairing of an agent.
 	if _, code := s.send("admin", "list"); code != http.StatusOK {

@@ -33,6 +33,9 @@ export function PasswordInput(props: InputHTMLAttributes<HTMLInputElement>) {
         className="tap absolute top-0 right-0 justify-center text-muted hover:text-text"
         aria-label={t(shown ? 'password.hide' : 'password.show')}
         aria-pressed={shown}
+        // A locked field has nothing to show, also read-only on a phone
+        // (UI-012).
+        disabled={props.disabled}
         onClick={() => setShown((s) => !s)}
       >
         {shown ? <EyeOff aria-hidden className="size-5" /> : <Eye aria-hidden className="size-5" />}

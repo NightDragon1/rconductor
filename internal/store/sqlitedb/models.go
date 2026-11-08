@@ -177,6 +177,18 @@ type SettingsVersion struct {
 	Version int64
 }
 
+type SmtpSetting struct {
+	ID         int64
+	Host       string
+	Port       int64
+	Encryption string
+	Username   string
+	Password   []byte
+	Sender     string
+	Version    int64
+	UpdatedAt  string
+}
+
 type SupporterGrant struct {
 	ID          string
 	SupporterID string

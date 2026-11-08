@@ -119,4 +119,26 @@ are written like `24h`, `15m`, `30s`.
 | `agent.version_window` | duration | 10m | 1m to 24h | how long the panel looks for the game version after it first sees a container run |
 | `agent.volume_interval` | duration | 2h | 10m to 7 days | how often each agent measures the used size of its volumes, in one call for all containers |
 | `agent.volume_stale` | duration | 6h | 30m to 30 days | after this a measured volume size counts as old |
+| `smtp.timeout` | duration | 10s | 1s to 5m | longest time for one mail, from connecting to the end |
+| `smtp.test_per_minute` | number | 5 | 1 to 60 | test mails per user and minute |
 | `ui.shortcuts_enabled` | boolean | off | on, off | keyboard shortcuts for everyone |
+
+## Mail (SMTP)
+
+The RCON admin sets up the SMTP server under Settings → Mail (SMTP). The panel uses
+it for its mail, first to recover a second factor. Every change is in the audit,
+without the password.
+
+| Field | Type | Default | Allowed | Purpose |
+| --- | --- | --- | --- | --- |
+| SMTP host | host name or IP address | empty | up to 253 characters, no port | the SMTP server |
+| Port | number | 587 | 1 to 65535 | its port, typically 587 for STARTTLS and 465 for SSL/TLS |
+| Encryption | choice | STARTTLS | STARTTLS, SSL/TLS, none | with STARTTLS and SSL/TLS the certificate of the server is always checked; STARTTLS is a must once chosen, the panel never falls back to plain text |
+| User, Password | text | empty | up to 256 and 512 characters | sign-in at the SMTP server; only with STARTTLS or SSL/TLS. The password is stored encrypted with the master key and never shown again; a new host or port keeps it |
+| Sender address | mail address | empty | one plain address | the From of the panel's mail |
+
+"Send a test mail" sends a fixed mail to an address you type in. A failure names
+only its kind: `auth` (user or password refused), `tls` (STARTTLS missing or the
+certificate not trusted), `connect`, `timeout` or `rejected` (sender or recipient
+refused). The log notes the same with the codes `mail.sent` and `mail.failed`,
+with the recipient's domain only.

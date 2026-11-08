@@ -23,20 +23,23 @@ export type VersionedPath =
   | '/server-groups/{id}'
   | '/user-groups/{id}'
   | '/command-lists/{id}'
-  | '/settings';
+  | '/settings'
+  | '/settings/smtp';
 
-type Patch<P extends VersionedPath> = paths[P]['patch'];
-type PathParams<P extends VersionedPath> = Patch<P>['parameters']['path'];
-type PatchBody<P extends VersionedPath> = Patch<P>['requestBody']['content']['application/json'];
-type PatchData<P extends VersionedPath> = Patch<P>['responses'][200]['content']['application/json'];
-type PatchInit<P extends VersionedPath> = { body: PatchBody<P> } & ([PathParams<P>] extends [
-  undefined,
-]
+// PatchPath are the versioned writes by PATCH; /settings/smtp is a PUT
+// (putVersioned).
+type PatchPath = Exclude<VersionedPath, '/settings/smtp'>;
+
+type Patch<P extends PatchPath> = paths[P]['patch'];
+type PathParams<P extends PatchPath> = Patch<P>['parameters']['path'];
+type PatchBody<P extends PatchPath> = Patch<P>['requestBody']['content']['application/json'];
+type PatchData<P extends PatchPath> = Patch<P>['responses'][200]['content']['application/json'];
+type PatchInit<P extends PatchPath> = { body: PatchBody<P> } & ([PathParams<P>] extends [undefined]
   ? { path?: never }
   : { path: NonNullable<PathParams<P>> });
 
 // patchVersioned sends a versioned write with If-Match set to version.
-export function patchVersioned<P extends VersionedPath>(
+export function patchVersioned<P extends PatchPath>(
   path: P,
   version: string,
   init: PatchInit<P>,
@@ -49,6 +52,18 @@ export function patchVersioned<P extends VersionedPath>(
     params: { path: init.path, header: { 'If-Match': version } },
     body: init.body,
   });
+}
+
+type SMTPPut = paths['/settings/smtp']['put'];
+
+// putVersioned sends the SMTP setup with If-Match set to version
+// (NFR-017).
+export function putVersioned(
+  path: '/settings/smtp',
+  version: string,
+  body: SMTPPut['requestBody']['content']['application/json'],
+) {
+  return api.PUT(path, { params: { header: { 'If-Match': version } }, body });
 }
 
 // ApiError carries the Problem Details of a failed call (RFC 9457).

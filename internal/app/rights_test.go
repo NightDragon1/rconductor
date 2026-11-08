@@ -102,7 +102,7 @@ func (f *rightsFixture) rawBody(role, method, path string, body any) (int, []byt
 		req.AddCookie(c.cookie)
 		// Versioned writes name the version the role reads (revision 2.4
 		// candidate 24); a role that cannot read sends none.
-		if method == http.MethodPatch && versionedPath.MatchString(path) {
+		if (method == http.MethodPatch || method == http.MethodPut) && versionedPath.MatchString(path) {
 			if v := c.version(path); v != "" {
 				req.Header.Set("If-Match", v)
 			}
@@ -295,6 +295,9 @@ func classify(status int, reason string) byte {
 	case status == http.StatusServiceUnavailable && reason == "agent_unavailable":
 		// Rights passed; the server has no connected agent.
 		return 'A'
+	case status == http.StatusUnprocessableEntity && reason == "invalid":
+		// Rights passed; the input or the setup is not complete.
+		return 'I'
 	}
 	return '?'
 }
@@ -519,6 +522,15 @@ func matrix() []matrixOp {
 		{"GET", "/settings", "OFFFFFUP", at("/settings"), false},
 		{"PATCH", "/settings", "OFFFFFUP", func(*rightsFixture, string) request {
 			return request{path: "/settings", body: map[string]any{"ui.shortcuts_enabled": false}}
+		}, false},
+		// SMTP (NFR-017): RCON admin only; the test mail needs a set-up
+		// server, which the fixture has not, so the RCON admin gets 422.
+		{"GET", "/settings/smtp", "OFFFFFUP", at("/settings/smtp"), false},
+		{"PUT", "/settings/smtp", "OFFFFFUP", func(*rightsFixture, string) request {
+			return request{path: "/settings/smtp", body: map[string]any{"port": 587}}
+		}, false},
+		{"POST", "/settings/smtp/test", "IFFFFFUP", func(*rightsFixture, string) request {
+			return request{path: "/settings/smtp/test", body: map[string]any{"to": "someone@example.org"}}
 		}, false},
 		// /ws is checked with a real upgrade below; the row keeps the
 		// matrix complete.

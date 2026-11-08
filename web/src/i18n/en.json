@@ -194,6 +194,39 @@
       "other": "The action failed."
     }
   },
+  "smtp": {
+    "title": "Mail (SMTP)",
+    "explain": "The server the panel sends mail through, for example to recover a second factor. The password is stored encrypted and never shown again.",
+    "host": "SMTP host",
+    "port": "Port",
+    "encryption": "Encryption",
+    "mode": {
+      "starttls": "STARTTLS",
+      "ssl": "SSL/TLS",
+      "none": "none"
+    },
+    "from": "Sender address",
+    "username": "User",
+    "password": "Password",
+    "passwordSet": "set; type to replace",
+    "passwordNone": "not set",
+    "removePassword": "Remove the stored password",
+    "noTLS": "Without encryption the panel sends no user and no password.",
+    "test": "Send a test mail",
+    "testTitle": "Send a test mail",
+    "testText": "The panel sends a fixed test mail to this address with the saved setup.",
+    "to": "Recipient",
+    "send": "Send",
+    "sent": "The test mail went out.",
+    "rateLimited": "Too many test mails. Wait a minute.",
+    "failed": {
+      "auth": "Not sent: the SMTP server refused user or password.",
+      "tls": "Not sent: no secure connection (STARTTLS missing or certificate not trusted).",
+      "connect": "Not sent: the SMTP server could not be reached.",
+      "timeout": "Not sent: the SMTP server did not answer in time.",
+      "rejected": "Not sent: the SMTP server refused sender or recipient."
+    }
+  },
   "topology": {
     "host": "Host",
     "agent": "Agent",
@@ -644,6 +677,7 @@
       "agents": "Agents",
       "interface": "Interface",
       "backups": "Backups",
+      "mail": "Mail",
       "other": "Other"
     },
     "key": {
@@ -718,6 +752,14 @@
       "profiles_poll_interval": {
         "label": "Game profile check",
         "help": "How often the panel looks for changed profile files."
+      },
+      "smtp_timeout": {
+        "label": "Mail time-out",
+        "help": "Longest time for one mail, from connecting to the end."
+      },
+      "smtp_test_per_minute": {
+        "label": "Test mails per minute",
+        "help": "How many test mails one user may send per minute."
       },
       "agent_version_retry": {
         "label": "Version search interval",

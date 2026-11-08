@@ -14,6 +14,7 @@ import { formatDuration, isGoDuration, parseDuration } from '@/lib/duration';
 import { usePhone } from '@/lib/phone';
 import { useUndo, useUnsaved } from '@/lib/undo';
 import { PhoneNote } from './PhoneNote';
+import { SmtpPanel } from './SmtpPanel';
 
 type Values = Record<string, unknown>;
 export const settingsKey = ['settings'] as const;
@@ -57,6 +58,8 @@ const keyTexts = [
   'servers_connection_test_per_minute',
   'session_idle_timeout',
   'session_max_lifetime',
+  'smtp_test_per_minute',
+  'smtp_timeout',
   'supporters_enabled',
   'ui_shortcuts_enabled',
   'ws_max_sockets_per_session',
@@ -77,6 +80,7 @@ const sections: [string, RegExp][] = [
   ['agents', /^agents?\./],
   ['interface', /^ui\./],
   ['backups', /^backup\./],
+  ['mail', /^smtp\./],
 ];
 // describe gives the label and help of a key from the language file
 // (NFR-007); rate limits share one text per kind with the role in it. A
@@ -104,7 +108,17 @@ const sectionOf = (key: string) => sections.find(([, re]) => re.test(key))?.[0] 
 // admin. Changes wait for undo and go out with the settings' ETag
 // (revision 2.4 candidate 24); switching supporters off asks first, as
 // it ends the sessions of all supporters. A phone only reads (UI-012).
+// SettingsPage holds the global settings and the SMTP setup (NFR-017).
 export function SettingsPage() {
+  return (
+    <div className="flex flex-col gap-5">
+      <SettingsForm />
+      <SmtpPanel />
+    </div>
+  );
+}
+
+function SettingsForm() {
   const { t } = useTranslation();
   const phone = usePhone();
   const [showHelp, setShowHelp] = useState(storedHelp);

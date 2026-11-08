@@ -830,6 +830,50 @@ export interface paths {
         patch: operations["updateSettings"];
         trace?: never;
     };
+    "/settings/smtp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The SMTP server for the panel's mail (NFR-017); RCON admin only.
+         * @description The password is never returned, only whether one is set.
+         */
+        get: operations["getSMTPSettings"];
+        /**
+         * Change the SMTP setup; RCON admin only (NFR-017).
+         * @description Missing fields stay. The password is write-only and sealed with the master key like RCON credentials (SRV-002); an empty one removes it, a new host or port keeps it (D-050). User and password only with starttls or ssl. Every change is audited without the password.
+         */
+        put: operations["updateSMTPSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/smtp/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the fixed test mail to a recipient; RCON admin only (NFR-017).
+         * @description Subject and text are fixed. With starttls and ssl the certificate is checked, and starttls never falls back to plain text. A failure names only its category. At most smtp.test_per_minute per user and minute (429).
+         */
+        post: operations["testSMTP"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1219,6 +1263,44 @@ export interface components {
         /** @description Setting key to JSON value. */
         Settings: {
             [key: string]: unknown;
+        };
+        SMTPSettings: {
+            host: string;
+            port: number;
+            /** @enum {string} */
+            encryption: "none" | "starttls" | "ssl";
+            username: string;
+            /** @description Whether a password is stored; the password itself is never returned. */
+            password_set: boolean;
+            /** @description Sender address. */
+            from: string;
+            /** @description Version for If-Match. */
+            version: string;
+        };
+        SMTPSettingsInput: {
+            host?: string;
+            port?: number;
+            /** @enum {string} */
+            encryption?: "none" | "starttls" | "ssl";
+            username?: string;
+            /**
+             * Format: password
+             * @description Write-only; an empty string removes the password.
+             */
+            password?: string;
+            from?: string;
+        };
+        SMTPTestInput: {
+            /** @description One plain mail address. */
+            to: string;
+        };
+        SMTPTestResult: {
+            ok: boolean;
+            /**
+             * @description Why the mail did not go out; nothing more is told.
+             * @enum {string}
+             */
+            category?: "auth" | "tls" | "connect" | "timeout" | "rejected";
         };
         ProfileUpdate: {
             pseudonym?: string;
@@ -3181,6 +3263,90 @@ export interface operations {
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
             428: components["responses"]["PreconditionRequired"];
+        };
+    };
+    getSMTPSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The SMTP setup. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SMTPSettings"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    updateSMTPSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SMTPSettingsInput"];
+            };
+        };
+        responses: {
+            /** @description The SMTP setup after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SMTPSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+            428: components["responses"]["PreconditionRequired"];
+        };
+    };
+    testSMTP: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SMTPTestInput"];
+            };
+        };
+        responses: {
+            /** @description Sent, or the category of the failure. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SMTPTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+            429: components["responses"]["RateLimited"];
         };
     };
 }
