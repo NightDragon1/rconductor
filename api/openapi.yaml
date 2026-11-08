@@ -2837,7 +2837,7 @@ components:
 
     GameProfile:
       type: object
-      required: [id, slug, name, protocol, default_port, overridden, imported_at, case_sensitive, strip_prefix, max_length, wrappers, game_ports, catalog]
+      required: [id, slug, name, kind, protocol, default_port, overridden, imported_at, case_sensitive, strip_prefix, max_length, wrappers, game_ports, catalog]
       properties:
         id:
           type: string
@@ -2846,6 +2846,13 @@ components:
           type: string
         name:
           type: string
+        kind:
+          type: string
+          enum: [generic, specific]
+          description: >-
+            generic for a game as such, specific for a modpack or plugin
+            that ranks above it (CAT-007); a profile without kind is
+            generic.
         protocol:
           type: string
         default_port:

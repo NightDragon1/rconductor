@@ -1481,6 +1481,11 @@ export interface components {
             id: string;
             slug: string;
             name: string;
+            /**
+             * @description generic for a game as such, specific for a modpack or plugin that ranks above it (CAT-007); a profile without kind is generic.
+             * @enum {string}
+             */
+            kind: "generic" | "specific";
             protocol: string;
             default_port: number;
             /** @description A custom profile replaces the shipped one. */

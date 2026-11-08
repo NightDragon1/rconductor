@@ -127,6 +127,24 @@ func (e GamePortProto) Valid() bool {
 	}
 }
 
+// Defines values for GameProfileKind.
+const (
+	Generic  GameProfileKind = "generic"
+	Specific GameProfileKind = "specific"
+)
+
+// Valid indicates whether the value is a known member of the GameProfileKind enum.
+func (e GameProfileKind) Valid() bool {
+	switch e {
+	case Generic:
+		return true
+	case Specific:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GroupKind.
 const (
 	GroupKindGeneral   GroupKind = "general"
@@ -820,6 +838,9 @@ type GameProfile struct {
 	Id            openapi_types.UUID `json:"id"`
 	ImportedAt    time.Time          `json:"imported_at"`
 
+	// Kind generic for a game as such, specific for a modpack or plugin that ranks above it (CAT-007); a profile without kind is generic.
+	Kind GameProfileKind `json:"kind"`
+
 	// LastError Reason of the last rejected file; RCON admin only.
 	LastError   *string    `json:"last_error,omitempty"`
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
@@ -833,6 +854,9 @@ type GameProfile struct {
 	StripPrefix string   `json:"strip_prefix"`
 	Wrappers    []string `json:"wrappers"`
 }
+
+// GameProfileKind generic for a game as such, specific for a modpack or plugin that ranks above it (CAT-007); a profile without kind is generic.
+type GameProfileKind string
 
 // Grant A server or server group for a moderator through one of his moderator groups, whose list applies (Design 4.3).
 type Grant struct {

@@ -24,7 +24,7 @@ func (s *apiServer) ListProfiles(ctx context.Context, _ api.ListProfilesRequestO
 		id, _ := uuid.Parse(sp.ID)
 		r := sp.Rules
 		g := api.GameProfile{
-			Id: id, Slug: sp.Slug, Name: sp.Name, Protocol: sp.Protocol, DefaultPort: sp.DefaultPort,
+			Id: id, Slug: sp.Slug, Name: sp.Name, Kind: api.GameProfileKind(profiles.KindOf(&sp.Rules)), Protocol: sp.Protocol, DefaultPort: sp.DefaultPort,
 			Overridden: sp.Overridden, ImportedAt: sp.ImportedAt,
 			CaseSensitive: *r.Syntax.CaseSensitive, StripPrefix: *r.Syntax.StripPrefix, MaxLength: r.Syntax.MaxLength,
 			Wrappers: r.Syntax.Wrappers, GamePorts: []api.GamePort{}, Catalog: []api.CatalogCommand{},
