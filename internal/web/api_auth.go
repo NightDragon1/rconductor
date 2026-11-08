@@ -94,6 +94,7 @@ func (s *apiServer) Login(ctx context.Context, req api.LoginRequestObject) (api.
 	client := ClientOf(ctx)
 	token, p, err := s.auth.Login(ctx, req.Body.Pseudonym, req.Body.Password, auth.Client{
 		IP: client.IP, UserAgent: h.r.UserAgent(), RequestID: RequestID(ctx),
+		SessionToken: readSessionCookie(h.r),
 	})
 	var locked *auth.LockedError
 	switch {

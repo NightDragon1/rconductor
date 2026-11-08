@@ -76,6 +76,83 @@ func (f *sessionFixture) count(t *testing.T, q string, args ...any) int {
 	return n
 }
 
+// TestLoginEndsSentAlongSession: a login ends the session whose cookie the
+// browser sent along, when it is the user's own; other sessions of the user,
+// a session of another user and a made-up token stay as they are, and a
+// failed login ends nothing (AUTH-006, D-043). The token never reaches the
+// log, the session only as its short hash (SEC-012).
+func TestLoginEndsSentAlongSession(t *testing.T) {
+	ctx := context.Background()
+	f := newSessionFixture(t, true)
+	f.user(t, storetest.User{Pseudonym: "Mod", Role: RoleModerator})
+	f.user(t, storetest.User{Pseudonym: "Sup", Role: RoleSupporter})
+	var ended [][]string
+	f.svc.OnSessionsEnded(func(h []string) { ended = append(ended, h) })
+	login := func(name, pw, sent string) (string, error) {
+		c := client
+		c.SessionToken = sent
+		tok, _, err := f.svc.Login(ctx, name, pw, c)
+		return tok, err
+	}
+	valid := func(tok string) bool {
+		_, err := f.svc.Authenticate(ctx, tok)
+		return err == nil
+	}
+
+	otherDevice, err := login("mod", testPassword, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := login("mod", testPassword, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sup, err := login("sup", testPassword, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A failed login ends nothing, not even the own session sent along.
+	if _, err := login("mod", "wrong password!!", old); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("wrong password: %v", err)
+	}
+	if !valid(old) || len(ended) != 0 {
+		t.Fatalf("failed login ended a session (valid %v, ended %v)", valid(old), ended)
+	}
+
+	fresh, err := login("mod", testPassword, old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if valid(old) {
+		t.Error("own session sent along still valid after login")
+	}
+	if !valid(fresh) || !valid(otherDevice) {
+		t.Errorf("new session %v, other device %v, want both valid", valid(fresh), valid(otherDevice))
+	}
+	if len(ended) != 1 || len(ended[0]) != 1 || ended[0][0] != HashToken(old) {
+		t.Errorf("sessions ended = %v, want only the one sent along", ended)
+	}
+	logtest.Wait(t, f.logs, `"event":"auth.session.revoked"`, `"cause":"login"`, `"session":"`+HashToken(old)[:8]+`"`)
+
+	// Another user's session and a made-up token stay untouched.
+	if _, err := login("mod", testPassword, sup); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := login("mod", testPassword, "made-up-session-token"); err != nil {
+		t.Fatal(err)
+	}
+	if !valid(sup) || len(ended) != 1 {
+		t.Errorf("session of another user valid %v, ended %v", valid(sup), ended)
+	}
+
+	for _, tok := range []string{old, fresh, otherDevice, sup, HashToken(old)} {
+		if strings.Contains(f.logs.String(), tok) {
+			t.Error("a session token or full hash is in the log")
+		}
+	}
+}
+
 func TestLoginAndAuthenticate(t *testing.T) {
 	ctx := context.Background()
 	f := newSessionFixture(t, true)

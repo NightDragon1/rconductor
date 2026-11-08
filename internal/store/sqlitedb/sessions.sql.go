@@ -54,6 +54,38 @@ func (q *Queries) DeleteSession(ctx context.Context, idHash string) (int64, erro
 	return result.RowsAffected()
 }
 
+const deleteSessionOfUser = `-- name: DeleteSessionOfUser :many
+DELETE FROM sessions WHERE id_hash = ? AND user_id = ? RETURNING id_hash
+`
+
+type DeleteSessionOfUserParams struct {
+	IDHash string
+	UserID string
+}
+
+func (q *Queries) DeleteSessionOfUser(ctx context.Context, arg DeleteSessionOfUserParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, deleteSessionOfUser, arg.IDHash, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id_hash string
+		if err := rows.Scan(&id_hash); err != nil {
+			return nil, err
+		}
+		items = append(items, id_hash)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteUserSessions = `-- name: DeleteUserSessions :many
 DELETE FROM sessions WHERE user_id = ? RETURNING id_hash
 `

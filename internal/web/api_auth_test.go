@@ -222,6 +222,99 @@ func TestLoginSessionLogout(t *testing.T) {
 	}
 }
 
+// TestLoginIssuesNewSession: a login always issues a new session ID, also
+// when the browser already sends a session cookie (AUTH-006, D-043). The
+// cookie sent along never becomes the session of the user who logs in; the
+// own previous session ends.
+func TestLoginIssuesNewSession(t *testing.T) {
+	const origin = "http://panel.lan"
+	login := func(t *testing.T, f *apiFixture, pseudonym string, sent *http.Cookie) *http.Cookie {
+		t.Helper()
+		c := call{method: http.MethodPost, path: "/api/v1/auth/login", body: loginBody(pseudonym, testPassword), origin: origin}
+		if sent != nil {
+			c.cookies = []*http.Cookie{sent}
+		}
+		rec := f.do(t, c)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("login as %s = %d %s", pseudonym, rec.Code, rec.Body.String())
+		}
+		// An invalid cookie sent along is cleared first; like a browser,
+		// the last Set-Cookie of the name wins.
+		var last *http.Cookie
+		for _, ck := range rec.Result().Cookies() {
+			if ck.Name == "rcd_session" {
+				last = ck
+			}
+		}
+		if last == nil || last.Value == "" {
+			t.Fatalf("login as %s set no session cookie: %v", pseudonym, rec.Header().Values("Set-Cookie"))
+		}
+		return last
+	}
+	// who returns the pseudonym of the session behind c, or "" for 401.
+	who := func(t *testing.T, f *apiFixture, c *http.Cookie) string {
+		t.Helper()
+		rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/auth/session", cookies: []*http.Cookie{c}})
+		switch rec.Code {
+		case http.StatusUnauthorized:
+			return ""
+		case http.StatusOK:
+			var s api.Session
+			if err := json.Unmarshal(rec.Body.Bytes(), &s); err != nil {
+				t.Fatal(err)
+			}
+			return s.User.Pseudonym
+		}
+		t.Fatalf("session = %d %s", rec.Code, rec.Body.String())
+		return ""
+	}
+
+	t.Run("own valid session", func(t *testing.T) {
+		f := newAPIFixture(t, Proxies{})
+		old := login(t, f, "mod", nil)
+		fresh := login(t, f, "mod", old)
+		if fresh.Value == old.Value {
+			t.Fatal("login with the own session cookie kept the session ID")
+		}
+		if got := who(t, f, fresh); got != "Mod" {
+			t.Errorf("new session belongs to %q, want Mod", got)
+		}
+		if got := who(t, f, old); got != "" {
+			t.Errorf("old session still valid for %q, want 401", got)
+		}
+	})
+
+	t.Run("session of another user", func(t *testing.T) {
+		f := newAPIFixture(t, Proxies{})
+		boss := login(t, f, "boss", nil)
+		mod := login(t, f, "mod", boss)
+		if mod.Value == boss.Value {
+			t.Fatal("login with another user's cookie kept that session ID")
+		}
+		if got := who(t, f, mod); got != "Mod" {
+			t.Errorf("new session belongs to %q, want Mod", got)
+		}
+		if got := who(t, f, boss); got == "Mod" {
+			t.Error("the cookie sent along became the session of Mod")
+		}
+	})
+
+	t.Run("made-up cookie", func(t *testing.T) {
+		f := newAPIFixture(t, Proxies{})
+		madeUp := &http.Cookie{Name: "rcd_session", Value: "made-up-session-id"}
+		fresh := login(t, f, "mod", madeUp)
+		if fresh.Value == madeUp.Value {
+			t.Fatal("login adopted the made-up session ID")
+		}
+		if got := who(t, f, madeUp); got != "" {
+			t.Errorf("made-up cookie valid for %q after login, want 401", got)
+		}
+		if got := who(t, f, fresh); got != "Mod" {
+			t.Errorf("new session belongs to %q, want Mod", got)
+		}
+	})
+}
+
 func TestDefaultDeny(t *testing.T) {
 	f := newAPIFixture(t, Proxies{})
 	for _, c := range []call{
