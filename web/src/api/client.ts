@@ -23,6 +23,7 @@ export type VersionedPath =
   | '/server-groups/{id}'
   | '/user-groups/{id}'
   | '/command-lists/{id}'
+  | '/servers/{id}/templates/{template_id}'
   | '/settings'
   | '/settings/smtp';
 

@@ -85,6 +85,18 @@ type CommandListEntry struct {
 	Passable      int64
 }
 
+type CommandTemplate struct {
+	ID        string
+	ServerID  string
+	Name      string
+	Template  string
+	Version   int64
+	CreatedBy string
+	CreatedAt string
+	UpdatedAt string
+	DeletedAt sql.NullString
+}
+
 type GameProfile struct {
 	ID          string
 	Slug        string

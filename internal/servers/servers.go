@@ -659,6 +659,10 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 	if err := sqlitedb.New(tx).SoftDeleteServer(ctx, sqlitedb.SoftDeleteServerParams{DeletedAt: sql.NullString{String: now, Valid: true}, UpdatedAt: now, ID: id}); err != nil {
 		return err
 	}
+	// Its templates go the same way (CMD-008).
+	if err := sqlitedb.New(tx).SoftDeleteServerTemplates(ctx, sqlitedb.SoftDeleteServerTemplatesParams{DeletedAt: sql.NullString{String: now, Valid: true}, UpdatedAt: now, ServerID: id}); err != nil {
+		return err
+	}
 	if err := s.auditOK(ctx, tx, req, "server.delete", "server", id, id, map[string]string{"name": r.Name}); err != nil {
 		return err
 	}

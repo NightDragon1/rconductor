@@ -556,6 +556,129 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+  /servers/{id}/templates:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: listTemplates
+      summary: Command templates of the server (CMD-008).
+      description: >-
+        RCON admin and server admin in scope get all templates of the
+        server. Moderators and supporters get only templates whose fixed
+        part, the tokens before the first placeholder, is allowed by the
+        list that applies to them, matched by whole tokens like a command
+        (CMD-004). Orientation only: the interface fills the placeholders
+        and sends the command through POST /servers/{id}/commands, where
+        the pipeline checks it like a typed one (D-068).
+      tags: [commands]
+      responses:
+        "200":
+          description: The templates.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: createTemplate
+      summary: Create a command template; RCON admin, server admin in scope.
+      description: >-
+        Placeholders are {name} with a lower-case name; the first token is
+        fixed text. The name is unique per server among templates that are
+        not deleted. A server has at most commands.templates_per_server
+        templates.
+      tags: [commands]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateInput"
+      responses:
+        "201":
+          description: The new template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/Invalid"
+  /servers/{id}/templates/{template_id}:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+      - $ref: "#/components/parameters/TemplateID"
+    get:
+      operationId: getTemplate
+      summary: One template, for whoever may see it (D-068).
+      tags: [commands]
+      responses:
+        "200":
+          description: The template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateTemplate
+      summary: Change name or text of a template.
+      tags: [commands]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateUpdate"
+      responses:
+        "200":
+          description: The changed template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+    delete:
+      operationId: deleteTemplate
+      summary: Delete a template (soft delete).
+      tags: [commands]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /servers/{id}/players:
     parameters:
       - $ref: "#/components/parameters/ServerID"
@@ -1907,6 +2030,13 @@ components:
       schema:
         type: string
         format: uuid
+    TemplateID:
+      name: template_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     ServerGroupID:
       name: id
       in: path
@@ -3040,6 +3170,66 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CommandListEntry"
+
+    Template:
+      type: object
+      required: [id, server_id, name, template, placeholders, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        server_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        template:
+          type: string
+          description: The command with placeholders such as {player}.
+        placeholders:
+          type: array
+          description: Names of the placeholders in order, each once.
+          items:
+            type: string
+        version:
+          type: string
+          description: >-
+            Version of the stored object for optimistic locking; send it
+            as If-Match when changing the template.
+
+    TemplateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Template"
+
+    TemplateInput:
+      type: object
+      required: [name, template]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        template:
+          type: string
+          minLength: 1
+          maxLength: 4096
+
+    TemplateUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        template:
+          type: string
+          minLength: 1
+          maxLength: 4096
 
     CommandListList:
       type: object
