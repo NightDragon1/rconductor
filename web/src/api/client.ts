@@ -12,6 +12,45 @@ export function apiBase(): string {
 
 export const api = createClient<paths>({ baseUrl: apiBase(), credentials: 'same-origin' });
 
+// VersionedPath lists the writes that carry x-rcd-required-by-server in
+// api/openapi.yaml: the panel refuses them without If-Match (428). The API
+// file declares the header optional, so that role and scope are checked
+// before it (D-051); patchVersioned takes the version as an argument of its
+// own, so no call can leave it out. A Go test keeps this list equal to the
+// API file.
+export type VersionedPath =
+  | '/servers/{id}'
+  | '/server-groups/{id}'
+  | '/user-groups/{id}'
+  | '/command-lists/{id}'
+  | '/settings';
+
+type Patch<P extends VersionedPath> = paths[P]['patch'];
+type PathParams<P extends VersionedPath> = Patch<P>['parameters']['path'];
+type PatchBody<P extends VersionedPath> = Patch<P>['requestBody']['content']['application/json'];
+type PatchData<P extends VersionedPath> = Patch<P>['responses'][200]['content']['application/json'];
+type PatchInit<P extends VersionedPath> = { body: PatchBody<P> } & ([PathParams<P>] extends [
+  undefined,
+]
+  ? { path?: never }
+  : { path: NonNullable<PathParams<P>> });
+
+// patchVersioned sends a versioned write with If-Match set to version.
+export function patchVersioned<P extends VersionedPath>(
+  path: P,
+  version: string,
+  init: PatchInit<P>,
+): Promise<{ data?: PatchData<P>; error?: unknown; response: Response }> {
+  const send = api.PATCH as unknown as (
+    url: string,
+    init: { params: { path?: unknown; header: { 'If-Match': string } }; body: unknown },
+  ) => Promise<{ data?: PatchData<P>; error?: unknown; response: Response }>;
+  return send(path, {
+    params: { path: init.path, header: { 'If-Match': version } },
+    body: init.body,
+  });
+}
+
 // ApiError carries the Problem Details of a failed call (RFC 9457).
 export class ApiError extends Error {
   constructor(
