@@ -22,6 +22,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/cache"
 	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/events"
+	"github.com/NightDragon1/rconductor/internal/mail"
 	"github.com/NightDragon1/rconductor/internal/netlimit"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/servers"
@@ -65,6 +66,8 @@ type Options struct {
 	Perm *perm.Checker
 	// Users administers users and assignments.
 	Users *users.Service
+	// Mail is the SMTP setup and the test mail (NFR-017).
+	Mail *mail.Service
 	// Invites creates and redeems invitations.
 	Invites *users.Invites
 	// Profiles maintains the caller's own profile and password.
@@ -87,7 +90,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies, decode: semaphore.NewWeighted(decodeBudget), pictures: semaphore.NewWeighted(pictureBudget)}
+	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, mail: opts.Mail, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, proxies: opts.Proxies, decode: semaphore.NewWeighted(decodeBudget), pictures: semaphore.NewWeighted(pictureBudget)}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,

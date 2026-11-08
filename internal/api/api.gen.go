@@ -298,6 +298,75 @@ func (e Role) Valid() bool {
 	}
 }
 
+// Defines values for SMTPSettingsEncryption.
+const (
+	SMTPSettingsEncryptionNone     SMTPSettingsEncryption = "none"
+	SMTPSettingsEncryptionSsl      SMTPSettingsEncryption = "ssl"
+	SMTPSettingsEncryptionStarttls SMTPSettingsEncryption = "starttls"
+)
+
+// Valid indicates whether the value is a known member of the SMTPSettingsEncryption enum.
+func (e SMTPSettingsEncryption) Valid() bool {
+	switch e {
+	case SMTPSettingsEncryptionNone:
+		return true
+	case SMTPSettingsEncryptionSsl:
+		return true
+	case SMTPSettingsEncryptionStarttls:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SMTPSettingsInputEncryption.
+const (
+	SMTPSettingsInputEncryptionNone     SMTPSettingsInputEncryption = "none"
+	SMTPSettingsInputEncryptionSsl      SMTPSettingsInputEncryption = "ssl"
+	SMTPSettingsInputEncryptionStarttls SMTPSettingsInputEncryption = "starttls"
+)
+
+// Valid indicates whether the value is a known member of the SMTPSettingsInputEncryption enum.
+func (e SMTPSettingsInputEncryption) Valid() bool {
+	switch e {
+	case SMTPSettingsInputEncryptionNone:
+		return true
+	case SMTPSettingsInputEncryptionSsl:
+		return true
+	case SMTPSettingsInputEncryptionStarttls:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SMTPTestResultCategory.
+const (
+	SMTPTestResultCategoryAuth     SMTPTestResultCategory = "auth"
+	SMTPTestResultCategoryConnect  SMTPTestResultCategory = "connect"
+	SMTPTestResultCategoryRejected SMTPTestResultCategory = "rejected"
+	SMTPTestResultCategoryTimeout  SMTPTestResultCategory = "timeout"
+	SMTPTestResultCategoryTls      SMTPTestResultCategory = "tls"
+)
+
+// Valid indicates whether the value is a known member of the SMTPTestResultCategory enum.
+func (e SMTPTestResultCategory) Valid() bool {
+	switch e {
+	case SMTPTestResultCategoryAuth:
+		return true
+	case SMTPTestResultCategoryConnect:
+		return true
+	case SMTPTestResultCategoryRejected:
+		return true
+	case SMTPTestResultCategoryTimeout:
+		return true
+	case SMTPTestResultCategoryTls:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ServerCredentials.
 const (
 	ServerCredentialsMissing ServerCredentials = "missing"
@@ -904,6 +973,57 @@ type ReasonCode string
 // Role One of the four fixed roles (ROLE-001).
 type Role string
 
+// SMTPSettings defines model for SMTPSettings.
+type SMTPSettings struct {
+	Encryption SMTPSettingsEncryption `json:"encryption"`
+
+	// From Sender address.
+	From string `json:"from"`
+	Host string `json:"host"`
+
+	// PasswordSet Whether a password is stored; the password itself is never returned.
+	PasswordSet bool   `json:"password_set"`
+	Port        int    `json:"port"`
+	Username    string `json:"username"`
+
+	// Version Version for If-Match.
+	Version string `json:"version"`
+}
+
+// SMTPSettingsEncryption defines model for SMTPSettings.Encryption.
+type SMTPSettingsEncryption string
+
+// SMTPSettingsInput defines model for SMTPSettingsInput.
+type SMTPSettingsInput struct {
+	Encryption *SMTPSettingsInputEncryption `json:"encryption,omitempty"`
+	From       *string                      `json:"from,omitempty"`
+	Host       *string                      `json:"host,omitempty"`
+
+	// Password Write-only; an empty string removes the password.
+	Password *string `json:"password,omitempty"`
+	Port     *int    `json:"port,omitempty"`
+	Username *string `json:"username,omitempty"`
+}
+
+// SMTPSettingsInputEncryption defines model for SMTPSettingsInput.Encryption.
+type SMTPSettingsInputEncryption string
+
+// SMTPTestInput defines model for SMTPTestInput.
+type SMTPTestInput struct {
+	// To One plain mail address.
+	To string `json:"to"`
+}
+
+// SMTPTestResult defines model for SMTPTestResult.
+type SMTPTestResult struct {
+	// Category Why the mail did not go out; nothing more is told.
+	Category *SMTPTestResultCategory `json:"category,omitempty"`
+	Ok       bool                    `json:"ok"`
+}
+
+// SMTPTestResultCategory Why the mail did not go out; nothing more is told.
+type SMTPTestResultCategory string
+
 // Server defines model for Server.
 type Server struct {
 	// AgentId Admins only; the paired agent on the server's host.
@@ -1266,6 +1386,12 @@ type UpdateSettingsParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
+// UpdateSMTPSettingsParams defines parameters for UpdateSMTPSettings.
+type UpdateSMTPSettingsParams struct {
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
 // UpdateUserGroupParams defines parameters for UpdateUserGroup.
 type UpdateUserGroupParams struct {
 	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
@@ -1327,6 +1453,12 @@ type SendCommandJSONRequestBody = CommandInput
 
 // UpdateSettingsJSONRequestBody defines body for UpdateSettings for application/json ContentType.
 type UpdateSettingsJSONRequestBody = Settings
+
+// UpdateSMTPSettingsJSONRequestBody defines body for UpdateSMTPSettings for application/json ContentType.
+type UpdateSMTPSettingsJSONRequestBody = SMTPSettingsInput
+
+// TestSMTPJSONRequestBody defines body for TestSMTP for application/json ContentType.
+type TestSMTPJSONRequestBody = SMTPTestInput
 
 // CreateUserGroupJSONRequestBody defines body for CreateUserGroup for application/json ContentType.
 type CreateUserGroupJSONRequestBody = UserGroupCreate
@@ -1480,6 +1612,15 @@ type ServerInterface interface {
 	// UpdateSettings Change global settings; RCON admin only (AUD-003).
 	// (PATCH /settings)
 	UpdateSettings(w http.ResponseWriter, r *http.Request, params UpdateSettingsParams)
+	// GetSMTPSettings The SMTP server for the panel's mail (NFR-017); RCON admin only.
+	// (GET /settings/smtp)
+	GetSMTPSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateSMTPSettings Change the SMTP setup; RCON admin only (NFR-017).
+	// (PUT /settings/smtp)
+	UpdateSMTPSettings(w http.ResponseWriter, r *http.Request, params UpdateSMTPSettingsParams)
+	// TestSMTP Send the fixed test mail to a recipient; RCON admin only (NFR-017).
+	// (POST /settings/smtp/test)
+	TestSMTP(w http.ResponseWriter, r *http.Request)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(w http.ResponseWriter, r *http.Request)
@@ -2622,6 +2763,75 @@ func (siw *ServerInterfaceWrapper) UpdateSettings(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetSMTPSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetSMTPSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSMTPSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateSMTPSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateSMTPSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateSMTPSettingsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateSMTPSettings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestSMTP operation middleware
+func (siw *ServerInterfaceWrapper) TestSMTP(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestSMTP(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUserGroups operation middleware
 func (siw *ServerInterfaceWrapper) ListUserGroups(w http.ResponseWriter, r *http.Request) {
 
@@ -3201,6 +3411,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit", wrapper.ListAudit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings", wrapper.GetSettings)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/settings", wrapper.UpdateSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings/smtp", wrapper.GetSMTPSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/smtp", wrapper.UpdateSMTPSettings)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/settings/smtp/test", wrapper.TestSMTP)
 
 	return m
 }
@@ -6725,6 +6938,283 @@ func (response UpdateSettings428ApplicationProblemPlusJSONResponse) VisitUpdateS
 	return err
 }
 
+type GetSMTPSettingsRequestObject struct {
+}
+
+type GetSMTPSettingsResponseObject interface {
+	VisitGetSMTPSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetSMTPSettings200JSONResponse SMTPSettings
+
+func (response GetSMTPSettings200JSONResponse) VisitGetSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSMTPSettings401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetSMTPSettings401ApplicationProblemPlusJSONResponse) VisitGetSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSMTPSettings403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetSMTPSettings403ApplicationProblemPlusJSONResponse) VisitGetSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSMTPSettingsRequestObject struct {
+	Params UpdateSMTPSettingsParams
+	Body   *UpdateSMTPSettingsJSONRequestBody
+}
+
+type UpdateSMTPSettingsResponseObject interface {
+	VisitUpdateSMTPSettingsResponse(w http.ResponseWriter) error
+}
+
+type UpdateSMTPSettings200JSONResponse SMTPSettings
+
+func (response UpdateSMTPSettings200JSONResponse) VisitUpdateSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSMTPSettings400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSMTPSettings400ApplicationProblemPlusJSONResponse) VisitUpdateSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSMTPSettings401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSMTPSettings401ApplicationProblemPlusJSONResponse) VisitUpdateSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSMTPSettings403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSMTPSettings403ApplicationProblemPlusJSONResponse) VisitUpdateSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSMTPSettings409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSMTPSettings409ApplicationProblemPlusJSONResponse) VisitUpdateSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSMTPSettings422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSMTPSettings422ApplicationProblemPlusJSONResponse) VisitUpdateSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateSMTPSettings428ApplicationProblemPlusJSONResponse struct {
+	PreconditionRequiredApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateSMTPSettings428ApplicationProblemPlusJSONResponse) VisitUpdateSMTPSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestSMTPRequestObject struct {
+	Body *TestSMTPJSONRequestBody
+}
+
+type TestSMTPResponseObject interface {
+	VisitTestSMTPResponse(w http.ResponseWriter) error
+}
+
+type TestSMTP200JSONResponse SMTPTestResult
+
+func (response TestSMTP200JSONResponse) VisitTestSMTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestSMTP400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response TestSMTP400ApplicationProblemPlusJSONResponse) VisitTestSMTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestSMTP401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response TestSMTP401ApplicationProblemPlusJSONResponse) VisitTestSMTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestSMTP403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response TestSMTP403ApplicationProblemPlusJSONResponse) VisitTestSMTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestSMTP422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response TestSMTP422ApplicationProblemPlusJSONResponse) VisitTestSMTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestSMTP429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response TestSMTP429ApplicationProblemPlusJSONResponse) VisitTestSMTPResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUserGroupsRequestObject struct {
 }
 
@@ -7906,6 +8396,15 @@ type StrictServerInterface interface {
 	// UpdateSettings Change global settings; RCON admin only (AUD-003).
 	// (PATCH /settings)
 	UpdateSettings(ctx context.Context, request UpdateSettingsRequestObject) (UpdateSettingsResponseObject, error)
+	// GetSMTPSettings The SMTP server for the panel's mail (NFR-017); RCON admin only.
+	// (GET /settings/smtp)
+	GetSMTPSettings(ctx context.Context, request GetSMTPSettingsRequestObject) (GetSMTPSettingsResponseObject, error)
+	// UpdateSMTPSettings Change the SMTP setup; RCON admin only (NFR-017).
+	// (PUT /settings/smtp)
+	UpdateSMTPSettings(ctx context.Context, request UpdateSMTPSettingsRequestObject) (UpdateSMTPSettingsResponseObject, error)
+	// TestSMTP Send the fixed test mail to a recipient; RCON admin only (NFR-017).
+	// (POST /settings/smtp/test)
+	TestSMTP(ctx context.Context, request TestSMTPRequestObject) (TestSMTPResponseObject, error)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(ctx context.Context, request ListUserGroupsRequestObject) (ListUserGroupsResponseObject, error)
@@ -9254,6 +9753,94 @@ func (sh *strictHandler) UpdateSettings(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateSettingsResponseObject); ok {
 		if err := validResponse.VisitUpdateSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSMTPSettings operation middleware
+func (sh *strictHandler) GetSMTPSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetSMTPSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSMTPSettings(ctx, request.(GetSMTPSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSMTPSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSMTPSettingsResponseObject); ok {
+		if err := validResponse.VisitGetSMTPSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateSMTPSettings operation middleware
+func (sh *strictHandler) UpdateSMTPSettings(w http.ResponseWriter, r *http.Request, params UpdateSMTPSettingsParams) {
+	var request UpdateSMTPSettingsRequestObject
+
+	request.Params = params
+
+	var body UpdateSMTPSettingsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateSMTPSettings(ctx, request.(UpdateSMTPSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateSMTPSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateSMTPSettingsResponseObject); ok {
+		if err := validResponse.VisitUpdateSMTPSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestSMTP operation middleware
+func (sh *strictHandler) TestSMTP(w http.ResponseWriter, r *http.Request) {
+	var request TestSMTPRequestObject
+
+	var body TestSMTPJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestSMTP(ctx, request.(TestSMTPRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestSMTP")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestSMTPResponseObject); ok {
+		if err := validResponse.VisitTestSMTPResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

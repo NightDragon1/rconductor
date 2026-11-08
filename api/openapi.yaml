@@ -1542,6 +1542,94 @@ paths:
         "422":
           $ref: "#/components/responses/Invalid"
 
+  /settings/smtp:
+    get:
+      operationId: getSMTPSettings
+      summary: The SMTP server for the panel's mail (NFR-017); RCON admin only.
+      description: >-
+        The password is never returned, only whether one is set.
+      tags: [settings]
+      responses:
+        "200":
+          description: The SMTP setup.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SMTPSettings"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      operationId: updateSMTPSettings
+      summary: Change the SMTP setup; RCON admin only (NFR-017).
+      description: >-
+        Missing fields stay. The password is write-only and sealed with the
+        master key like RCON credentials (SRV-002); an empty one removes it,
+        a new host or port keeps it (D-050). User and password only with
+        starttls or ssl. Every change is audited without the password.
+      tags: [settings]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SMTPSettingsInput"
+      responses:
+        "200":
+          description: The SMTP setup after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SMTPSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+  /settings/smtp/test:
+    post:
+      operationId: testSMTP
+      summary: Send the fixed test mail to a recipient; RCON admin only (NFR-017).
+      description: >-
+        Subject and text are fixed. With starttls and ssl the certificate is
+        checked, and starttls never falls back to plain text. A failure
+        names only its category. At most smtp.test_per_minute per user and
+        minute (429).
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SMTPTestInput"
+      responses:
+        "200":
+          description: Sent, or the category of the failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SMTPTestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
 components:
   parameters:
     IfMatch:
@@ -2388,6 +2476,75 @@ components:
       type: object
       additionalProperties: true
       description: Setting key to JSON value.
+
+    SMTPSettings:
+      type: object
+      required: [host, port, encryption, username, password_set, from, version]
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+        encryption:
+          type: string
+          enum: [none, starttls, ssl]
+        username:
+          type: string
+        password_set:
+          type: boolean
+          description: Whether a password is stored; the password itself is never returned.
+        from:
+          type: string
+          description: Sender address.
+        version:
+          type: string
+          description: Version for If-Match.
+
+    SMTPSettingsInput:
+      type: object
+      properties:
+        host:
+          type: string
+          maxLength: 253
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        encryption:
+          type: string
+          enum: [none, starttls, ssl]
+        username:
+          type: string
+          maxLength: 256
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 512
+          description: Write-only; an empty string removes the password.
+        from:
+          type: string
+          maxLength: 254
+
+    SMTPTestInput:
+      type: object
+      required: [to]
+      properties:
+        to:
+          type: string
+          maxLength: 254
+          description: One plain mail address.
+
+    SMTPTestResult:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        category:
+          type: string
+          enum: [auth, tls, connect, timeout, rejected]
+          description: Why the mail did not go out; nothing more is told.
 
     ProfileUpdate:
       type: object

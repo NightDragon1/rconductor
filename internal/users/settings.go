@@ -51,6 +51,17 @@ const (
 	MinAuditRetentionDays     = 30
 )
 
+// Settings of the mail (NFR-017): the time for one delivery and the test
+// mails per user and minute.
+const (
+	SettingSMTPTimeout       = "smtp.timeout"
+	DefaultSMTPTimeout       = 10 * time.Second
+	MinSMTPTimeout           = time.Second
+	SettingSMTPTestPerMinute = "smtp.test_per_minute"
+	DefaultSMTPTestPerMinute = 5
+	MinSMTPTestPerMinute     = 1
+)
+
 // rule checks one setting value; it returns the value to store.
 type rule func(raw json.RawMessage) (any, error)
 
@@ -114,6 +125,8 @@ var settingRules = map[string]rule{
 	agentview.SettingVersionWindow:  durationRule(agentview.MinVersionWindow, 24*time.Hour),
 	agentview.SettingVolumeInterval: durationRule(agentview.MinVolumeInterval, 7*24*time.Hour),
 	agentview.SettingVolumeStale:    durationRule(agentview.MinVolumeStale, 30*24*time.Hour),
+	SettingSMTPTimeout:              durationRule(MinSMTPTimeout, 5*time.Minute),
+	SettingSMTPTestPerMinute:        intRule(MinSMTPTestPerMinute, 60),
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and

@@ -97,6 +97,14 @@ const (
 	CacheStale        Code = "cache.stale"
 )
 
+// Mail (NFR-017): only the recipient's domain and the reason as a
+// category (auth, tls, connect, timeout, rejected), never an address,
+// password or server answer.
+const (
+	MailSent   Code = "mail.sent"
+	MailFailed Code = "mail.failed"
+)
+
 // AllCodes lists every defined code, in the order of Design 8.3.
 var AllCodes = []Code{
 	AppStart, AppReady, DBMigrateStart, DBMigrateDone, DBMigrateLockWt,
@@ -111,4 +119,5 @@ var AllCodes = []Code{
 	AgentHandshake, AgentForbidden, AgentUnsupported, DockerAction,
 	LogsFollowStart, LogsFollowStop, LogsTail,
 	WSSubscribe, WSSubscribeDenied, CacheStale,
+	MailSent, MailFailed,
 }

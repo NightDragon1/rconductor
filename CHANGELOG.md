@@ -8,6 +8,7 @@
 - The used size of each volume is measured in the background; the API gives it with its age (AGT-007).
 - Ports and volumes on the cards and the server page, with a Steam connect link where the game profile sets `ports.steam_connect` (UI-005). Game profiles with `ports.steam_connect` fail the profile check of panel 1.0.
 - Topology page: host → agent → game server by server group, for RCON admin and server admin (UI-010).
+- Mail over SMTP: the RCON admin sets up host, port, encryption (STARTTLS, SSL/TLS or none), user, password and sender and sends a test mail from the settings (NFR-017).
 
 ## 1.0
 
