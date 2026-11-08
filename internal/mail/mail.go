@@ -453,3 +453,31 @@ func message(from, to, subject, body string, now time.Time) []byte {
 	b.WriteString(body)
 	return []byte(b.String())
 }
+
+// The recovery mail of the second factor is fixed but for the link
+// (AUTH-008); the link carries its token in the fragment and is never
+// logged.
+const (
+	recoverySubject = "RCONductor: reset your two-factor sign-in"
+	recoveryBody    = "Someone asked to reset the two-factor sign-in of your RCONductor account.\r\n\r\n" +
+		"If it was you, open this link within the time it is valid and enter your password:\r\n\r\n%s\r\n\r\n" +
+		"The link works once. If it was not you, ignore this mail; nothing changes.\r\n"
+)
+
+// SendRecovery sends the recovery mail of the second factor and returns
+// the category of a failure, or "" (NFR-017, AUTH-008).
+func (s *Service) SendRecovery(ctx context.Context, to, link string) string {
+	attrs := []any{slog.String("domain", domainOf(to)), slog.String("purpose", "recovery")}
+	r, err := s.st.Queries.GetSMTPSettings(ctx)
+	if err != nil || r.Host == "" || r.Sender == "" {
+		s.log.Warn("mail not sent", append(attrs, logging.Event(logging.MailFailed), slog.String(logging.KeyReason, CategoryConnect))...)
+		return CategoryConnect
+	}
+	category := s.send(ctx, r, to, recoverySubject, fmt.Sprintf(recoveryBody, link))
+	if category == "" {
+		s.log.Info("mail sent", append(attrs, logging.Event(logging.MailSent))...)
+	} else {
+		s.log.Warn("mail not sent", append(attrs, logging.Event(logging.MailFailed), slog.String(logging.KeyReason, category))...)
+	}
+	return category
+}

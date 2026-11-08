@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agentview"
+	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -125,8 +126,13 @@ var settingRules = map[string]rule{
 	agentview.SettingVersionWindow:  durationRule(agentview.MinVersionWindow, 24*time.Hour),
 	agentview.SettingVolumeInterval: durationRule(agentview.MinVolumeInterval, 7*24*time.Hour),
 	agentview.SettingVolumeStale:    durationRule(agentview.MinVolumeStale, 30*24*time.Hour),
-	SettingSMTPTimeout:              durationRule(MinSMTPTimeout, 5*time.Minute),
-	SettingSMTPTestPerMinute:        intRule(MinSMTPTestPerMinute, 60),
+	// Second factor (AUTH-008).
+	auth.SettingTOTPRequired:       boolRule,
+	auth.SettingSecondFactorWindow: durationRule(auth.MinSecondFactorWindow, time.Hour),
+	auth.SettingRecoveryLifetime:   durationRule(auth.MinRecoveryLifetime, 24*time.Hour),
+	auth.SettingRecoveryPerHour:    intRule(auth.MinRecoveryPerHour, 100),
+	SettingSMTPTimeout:             durationRule(MinSMTPTimeout, 5*time.Minute),
+	SettingSMTPTestPerMinute:       intRule(MinSMTPTestPerMinute, 60),
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and

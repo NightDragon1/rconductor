@@ -21,6 +21,9 @@ func SQLiteGo() []*goose.Migration {
 		goose.NewGoMigration(10,
 			&goose.GoFunc{RunTx: execTx(versionTriggersUp)},
 			&goose.GoFunc{RunTx: execTx(versionTriggersDown)}),
+		goose.NewGoMigration(13,
+			&goose.GoFunc{RunTx: execTx(secondFactorTriggersUp)},
+			&goose.GoFunc{RunTx: execTx(secondFactorTriggersDown)}),
 	}
 }
 
@@ -214,3 +217,34 @@ func fkViolations(ctx context.Context, tx *sql.Tx) ([]string, error) {
 	}
 	return out, rows.Err()
 }
+
+// 00013: a waiting second step and a recovery link end when the password
+// changes or the user is locked; a recovery link also when the second
+// factor is reset or switched off (AUTH-008). In the database, so that no
+// way of changing them is forgotten.
+const secondFactorTriggersUp = `
+CREATE TRIGGER users_password_ends_pending AFTER UPDATE OF password_hash ON users
+    WHEN NEW.password_hash IS NOT OLD.password_hash
+BEGIN
+    DELETE FROM login_pending WHERE user_id = NEW.id;
+    DELETE FROM totp_recovery WHERE user_id = NEW.id;
+END;
+CREATE TRIGGER users_lock_ends_pending AFTER UPDATE OF disabled_at ON users
+    WHEN NEW.disabled_at IS NOT NULL
+BEGIN
+    DELETE FROM login_pending WHERE user_id = NEW.id;
+    DELETE FROM totp_recovery WHERE user_id = NEW.id;
+END;
+CREATE TRIGGER users_totp_off_ends_recovery AFTER UPDATE OF totp_secret ON users
+    WHEN NEW.totp_secret IS NULL AND OLD.totp_secret IS NOT NULL
+BEGIN
+    DELETE FROM totp_recovery WHERE user_id = NEW.id;
+    DELETE FROM login_pending WHERE user_id = NEW.id;
+END;
+`
+
+const secondFactorTriggersDown = `
+DROP TRIGGER users_totp_off_ends_recovery;
+DROP TRIGGER users_lock_ends_pending;
+DROP TRIGGER users_password_ends_pending;
+`

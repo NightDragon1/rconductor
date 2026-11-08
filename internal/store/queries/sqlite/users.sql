@@ -7,7 +7,8 @@ INSERT INTO users (
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetLoginUser :one
-SELECT id, pseudonym, role, password_hash, is_emergency, disabled_at, must_change_password
+SELECT id, pseudonym, role, password_hash, is_emergency, disabled_at, must_change_password,
+       totp_secret IS NOT NULL AS totp_enabled
 FROM users
 WHERE pseudonym = ? COLLATE NOCASE AND deleted_at IS NULL;
 
@@ -16,13 +17,15 @@ UPDATE users SET last_login_at = ? WHERE id = ?;
 
 -- name: ListUsers :many
 SELECT id, pseudonym, role, real_name, contacts, CAST(avatar IS NOT NULL AS INTEGER) AS has_avatar,
-       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at
+       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at,
+       CAST(totp_secret IS NOT NULL AS INTEGER) AS totp_enabled, CAST(email != '' AS INTEGER) AS email_set
 FROM users WHERE deleted_at IS NULL
 ORDER BY pseudonym COLLATE NOCASE;
 
 -- name: GetUser :one
 SELECT id, pseudonym, role, real_name, contacts, CAST(avatar IS NOT NULL AS INTEGER) AS has_avatar,
-       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at
+       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at,
+       CAST(totp_secret IS NOT NULL AS INTEGER) AS totp_enabled, CAST(email != '' AS INTEGER) AS email_set
 FROM users WHERE id = ? AND deleted_at IS NULL;
 
 -- name: SetUserRole :exec

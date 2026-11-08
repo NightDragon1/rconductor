@@ -152,7 +152,8 @@ func TestEmergencyAdminReset(t *testing.T) {
 	if err := f.st.DB.QueryRowContext(ctx, `SELECT id FROM users WHERE is_emergency = 1`).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.st.DB.ExecContext(ctx, `UPDATE users SET must_change_password = 0, disabled_at = 't' WHERE id = ?`, id); err != nil {
+	// A second factor the admin lost: the reset clears it too (AUTH-008).
+	if _, err := f.st.DB.ExecContext(ctx, `UPDATE users SET must_change_password = 0, disabled_at = 't', totp_secret = x'01', totp_last_step = 9 WHERE id = ?`, id); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.st.DB.ExecContext(ctx, `INSERT INTO sessions VALUES ('aaaaaaaa11', ?, 't', 't', 't', 'ip', 'ua')`, id); err != nil {
@@ -179,6 +180,11 @@ func TestEmergencyAdminReset(t *testing.T) {
 	}
 	if ok, _ := f.hasher.Verify(ctx, hash, newPw); !ok || must != 1 || disabled != nil {
 		t.Errorf("after reset: verify=%v must=%d disabled=%v", ok, must, disabled)
+	}
+	var totpLeft int
+	_ = f.st.DB.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE id = ? AND (totp_secret IS NOT NULL OR totp_last_step != 0)`, id).Scan(&totpLeft)
+	if totpLeft != 0 {
+		t.Error("second factor survives the reset")
 	}
 	var sessions, audited int
 	_ = f.st.DB.QueryRowContext(ctx, `SELECT count(*) FROM sessions WHERE user_id = ?`, id).Scan(&sessions)

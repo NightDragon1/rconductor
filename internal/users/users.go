@@ -78,6 +78,10 @@ type User struct {
 	SupportersAllowed bool
 	CreatedAt         time.Time
 	LastLoginAt       *time.Time
+	// TOTPEnabled and EmailSet are what managers see of the second factor
+	// and of the address, never the address itself (AUTH-008).
+	TOTPEnabled bool
+	EmailSet    bool
 }
 
 func toUser(r sqlitedb.ListUsersRow) User {
@@ -85,6 +89,7 @@ func toUser(r sqlitedb.ListUsersRow) User {
 		ID: r.ID, Pseudonym: r.Pseudonym, Role: perm.Role(r.Role), RealName: r.RealName.String,
 		Contacts: map[string]string{}, HasAvatar: r.HasAvatar == 1, Disabled: r.DisabledAt.Valid,
 		IsEmergency: r.IsEmergency == 1, SupportersAllowed: r.SupportersAllowed == 1,
+		TOTPEnabled: r.TotpEnabled == 1, EmailSet: r.EmailSet == 1,
 	}
 	_ = json.Unmarshal([]byte(r.Contacts), &u.Contacts)
 	u.CreatedAt, _ = time.Parse(store.TimeLayout, r.CreatedAt)

@@ -80,7 +80,8 @@ func (q *Queries) GetEmergencyAdmin(ctx context.Context) (GetEmergencyAdminRow, 
 }
 
 const getLoginUser = `-- name: GetLoginUser :one
-SELECT id, pseudonym, role, password_hash, is_emergency, disabled_at, must_change_password
+SELECT id, pseudonym, role, password_hash, is_emergency, disabled_at, must_change_password,
+       totp_secret IS NOT NULL AS totp_enabled
 FROM users
 WHERE pseudonym = ? COLLATE NOCASE AND deleted_at IS NULL
 `
@@ -93,6 +94,7 @@ type GetLoginUserRow struct {
 	IsEmergency        int64
 	DisabledAt         sql.NullString
 	MustChangePassword int64
+	TotpEnabled        bool
 }
 
 func (q *Queries) GetLoginUser(ctx context.Context, pseudonym string) (GetLoginUserRow, error) {
@@ -106,6 +108,7 @@ func (q *Queries) GetLoginUser(ctx context.Context, pseudonym string) (GetLoginU
 		&i.IsEmergency,
 		&i.DisabledAt,
 		&i.MustChangePassword,
+		&i.TotpEnabled,
 	)
 	return i, err
 }
@@ -123,7 +126,8 @@ func (q *Queries) GetPasswordHash(ctx context.Context, id string) (string, error
 
 const getUser = `-- name: GetUser :one
 SELECT id, pseudonym, role, real_name, contacts, CAST(avatar IS NOT NULL AS INTEGER) AS has_avatar,
-       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at
+       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at,
+       CAST(totp_secret IS NOT NULL AS INTEGER) AS totp_enabled, CAST(email != '' AS INTEGER) AS email_set
 FROM users WHERE id = ? AND deleted_at IS NULL
 `
 
@@ -139,6 +143,8 @@ type GetUserRow struct {
 	SupportersAllowed int64
 	CreatedAt         string
 	LastLoginAt       sql.NullString
+	TotpEnabled       int64
+	EmailSet          int64
 }
 
 func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
@@ -156,6 +162,8 @@ func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
 		&i.SupportersAllowed,
 		&i.CreatedAt,
 		&i.LastLoginAt,
+		&i.TotpEnabled,
+		&i.EmailSet,
 	)
 	return i, err
 }
@@ -222,7 +230,8 @@ func (q *Queries) ListSupportersOfModerator(ctx context.Context, moderatorID str
 
 const listUsers = `-- name: ListUsers :many
 SELECT id, pseudonym, role, real_name, contacts, CAST(avatar IS NOT NULL AS INTEGER) AS has_avatar,
-       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at
+       disabled_at, is_emergency, supporters_allowed, created_at, last_login_at,
+       CAST(totp_secret IS NOT NULL AS INTEGER) AS totp_enabled, CAST(email != '' AS INTEGER) AS email_set
 FROM users WHERE deleted_at IS NULL
 ORDER BY pseudonym COLLATE NOCASE
 `
@@ -239,6 +248,8 @@ type ListUsersRow struct {
 	SupportersAllowed int64
 	CreatedAt         string
 	LastLoginAt       sql.NullString
+	TotpEnabled       int64
+	EmailSet          int64
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
@@ -262,6 +273,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 			&i.SupportersAllowed,
 			&i.CreatedAt,
 			&i.LastLoginAt,
+			&i.TotpEnabled,
+			&i.EmailSet,
 		); err != nil {
 			return nil, err
 		}

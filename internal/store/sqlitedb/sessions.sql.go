@@ -116,7 +116,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID string) ([]stri
 const getSessionUser = `-- name: GetSessionUser :one
 SELECT s.id_hash, s.created_at, s.last_seen_at, s.expires_at,
        u.id AS user_id, u.pseudonym, u.role, u.is_emergency, u.disabled_at, u.deleted_at,
-       u.must_change_password
+       u.must_change_password, u.totp_secret IS NOT NULL AS totp_enabled
 FROM sessions s JOIN users u ON u.id = s.user_id
 WHERE s.id_hash = ?
 `
@@ -133,6 +133,7 @@ type GetSessionUserRow struct {
 	DisabledAt         sql.NullString
 	DeletedAt          sql.NullString
 	MustChangePassword int64
+	TotpEnabled        bool
 }
 
 func (q *Queries) GetSessionUser(ctx context.Context, idHash string) (GetSessionUserRow, error) {
@@ -150,6 +151,7 @@ func (q *Queries) GetSessionUser(ctx context.Context, idHash string) (GetSession
 		&i.DisabledAt,
 		&i.DeletedAt,
 		&i.MustChangePassword,
+		&i.TotpEnabled,
 	)
 	return i, err
 }

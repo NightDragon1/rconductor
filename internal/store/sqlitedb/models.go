@@ -122,6 +122,16 @@ type Invite struct {
 	UsedBy         sql.NullString
 }
 
+type LoginPending struct {
+	IDHash    string
+	UserID    string
+	CreatedAt string
+	ExpiresAt string
+	Failures  int64
+	Ip        string
+	UserAgent string
+}
+
 type Server struct {
 	ID            string
 	Name          string
@@ -198,6 +208,13 @@ type SupporterGrant struct {
 	CreatedAt   string
 }
 
+type TotpRecovery struct {
+	UserID    string
+	TokenHash string
+	CreatedAt string
+	ExpiresAt string
+}
+
 type User struct {
 	ID                 string
 	Pseudonym          string
@@ -217,6 +234,10 @@ type User struct {
 	DisabledAt         sql.NullString
 	DeletedAt          sql.NullString
 	MustChangePassword int64
+	TotpSecret         []byte
+	TotpPending        []byte
+	TotpLastStep       int64
+	Email              string
 }
 
 type UserFavorite struct {

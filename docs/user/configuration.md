@@ -29,7 +29,7 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_AGENT_ADDR` | address | `:8443` | `[host]:port` | agent port, TLS 1.3 with pinned keys; never behind a reverse proxy |
 | `RCD_IMAGE_REPO` | text | `docker.io/nightdragon1` | registry and owner | the image the pairing dialog names; the Compose files pass it on |
 | `RCD_AGENT_PUBLIC_ADDR` | address | empty | `host:port` | where agents reach the panel; goes into pairing tokens |
-| `RCD_PUBLIC_URL` | URL | empty | absolute `http` or `https` URL | public URL for invitation links and origin checks; with `https://` session cookies are `Secure` |
+| `RCD_PUBLIC_URL` | URL | empty | absolute `http` or `https` URL | public URL for invitation links and origin checks; with `https://` session cookies are `Secure`; recovery mails of the second factor go out only with it set |
 | `RCD_BASE_PATH` | path | `/` | absolute path such as `/rcon` | base path behind a reverse proxy |
 | `RCD_TRUSTED_PROXIES` | list | empty | IPs or CIDR ranges, separated by commas | proxies whose `X-Forwarded-For` and `X-Forwarded-Proto` count |
 | `RCD_DB_DRIVER` | text | `sqlite` | `sqlite`; `postgres` follows in release 2 | database driver |
@@ -119,6 +119,10 @@ are written like `24h`, `15m`, `30s`.
 | `agent.version_window` | duration | 10m | 1m to 24h | how long the panel looks for the game version after it first sees a container run |
 | `agent.volume_interval` | duration | 2h | 10m to 7 days | how often each agent measures the used size of its volumes, in one call for all containers |
 | `agent.volume_stale` | duration | 6h | 30m to 30 days | after this a measured volume size counts as old |
+| `auth.totp_required` | boolean | off | on, off | two-factor sign-in for everyone; who has none yet must set it up before anything else |
+| `auth.second_factor_window` | duration | 5m | 1m to 1h | time for the code after the right password; 5 wrong codes end it too |
+| `auth.recovery_lifetime` | duration | 30m | 5m to 24h | validity of a recovery link for the second factor; only the last one requested holds |
+| `auth.recovery_per_hour` | number | 3 | 1 to 100 | recovery requests per user and per client address and hour |
 | `smtp.timeout` | duration | 10s | 1s to 5m | longest time for one mail, from connecting to the end |
 | `smtp.test_per_minute` | number | 5 | 1 to 60 | test mails per user and minute |
 | `ui.shortcuts_enabled` | boolean | off | on, off | keyboard shortcuts for everyone |
