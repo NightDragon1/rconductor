@@ -284,7 +284,7 @@
   "history": {
     "title": "History",
     "empty": "No commands yet.",
-    "ownOnly": "You see your own commands only.",
+    "ownOnly": "Only my commands",
     "more": "Load more",
     "response": "Answer",
     "truncated": "The answer was cut at 64 KiB.",

@@ -55,14 +55,16 @@ export function useAllowedCommands(id: string, enabled: boolean) {
   });
 }
 
-// useHistory pages through the command history, newest first.
-export function useHistory(id: string) {
+// useHistory pages through the command history, newest first; own keeps
+// the caller's commands only. What a role may see the backend decides
+// (ROLE-009).
+export function useHistory(id: string, own = false) {
   return useInfiniteQuery({
-    queryKey: ['history', id],
+    queryKey: ['history', id, own],
     queryFn: async ({ pageParam }) =>
       must(
         await api.GET('/servers/{id}/history', {
-          params: { path: { id }, query: { limit: 50, cursor: pageParam } },
+          params: { path: { id }, query: { limit: 50, cursor: pageParam, own: own || undefined } },
         }),
       ),
     initialPageParam: undefined as string | undefined,

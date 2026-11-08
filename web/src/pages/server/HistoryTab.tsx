@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHistory, type HistoryEntry } from '@/api/servers';
-import { useSession } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/CopyButton';
 import { ForeignText } from '@/components/ForeignText';
 import { dateTime } from '@/lib/format';
-import { isAdmin, stripCodes } from '@/lib/serverpage';
+import { stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
 import { useServer } from '@/api/live-servers';
 
@@ -60,18 +59,21 @@ function Entry({ e }: { e: HistoryEntry }) {
   );
 }
 
-// HistoryTab lists the commands of the server, newest first (Design 6.3);
-// in R1 moderator and supporter see only their own, which the backend
-// decides.
+// HistoryTab lists the commands of the server, newest first (Design 6.3).
+// Which authors a role sees the backend decides (ROLE-009); the switch
+// narrows that to the caller's own commands.
 export function HistoryTab() {
   const { t } = useTranslation();
-  const { data: session } = useSession();
   const server = useServer();
-  const history = useHistory(server?.id ?? '');
+  const [own, setOwn] = useState(false);
+  const history = useHistory(server?.id ?? '', own);
   const entries = history.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <section aria-label={t('history.title')} className="flex flex-col gap-3">
-      {!isAdmin(session?.user.role) && <p className="text-sm text-muted">{t('history.ownOnly')}</p>}
+      <label className="flex items-center gap-2 self-start text-sm max-md:py-2">
+        <input type="checkbox" checked={own} onChange={(e) => setOwn(e.target.checked)} />
+        {t('history.ownOnly')}
+      </label>
       {history.isPending && <p className="text-muted">{t('app.loading')}</p>}
       {history.isError && <p className="text-danger">{t('app.error')}</p>}
       {history.isSuccess && entries.length === 0 && (

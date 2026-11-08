@@ -111,7 +111,7 @@ test('overview tab with players and load', async ({ page, state }) => {
   await expect(page.getByRole('main')).not.toContainText('CPU');
 });
 
-test('history: all for admins, own for the moderator', async ({ page, state }) => {
+test('history by role, with the switch for own commands (ROLE-009)', async ({ page, state }) => {
   await open(page, state, 'admin', 'survival', 'history');
   const history = page.getByRole('region', { name: 'History' });
   await expect(history).toContainText('say hi from mod');
@@ -120,11 +120,18 @@ test('history: all for admins, own for the moderator', async ({ page, state }) =
   await colored.getByText('Answer', { exact: true }).click();
   // Color codes of the answer are dropped, never styled (W1).
   await expect(colored.locator('pre')).toHaveText('Done: say hello world');
+  // Moderators share a pool on their servers, admin commands stay hidden.
+  await open(page, state, 'mod2', 'survival', 'history');
+  const pool = page.getByRole('region', { name: 'History' });
+  await expect(pool).toContainText('say hi from mod');
+  await expect(pool).not.toContainText('hello');
+  await pool.getByRole('checkbox', { name: 'Only my commands' }).check();
+  await expect(pool).not.toContainText('say hi from mod');
   await open(page, state, 'mod', 'survival', 'history');
   const own = page.getByRole('region', { name: 'History' });
+  await own.getByRole('checkbox', { name: 'Only my commands' }).check();
   await expect(own).toContainText('say hi from mod');
   await expect(own).not.toContainText('hello');
-  await expect(own).toContainText('You see your own commands only.');
 });
 
 test('server list with search (F13)', async ({ page, state }) => {
