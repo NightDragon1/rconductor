@@ -339,7 +339,7 @@ func matrix() []matrixOp {
 	}
 	return []matrixOp{
 		// last: logging in as sa_in with sa_in's own cookie sent along ends
-		// that session (AUTH-006, D-043).
+		// that session (AUTH-006, D-052).
 		{"POST", "/auth/login", "OOOOOOOP", func(f *rightsFixture, _ string) request {
 			return request{path: "/auth/login", body: map[string]string{"pseudonym": rSI, "password": matrixPassword}}
 		}, true},
