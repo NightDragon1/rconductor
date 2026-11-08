@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/LuckPerms/LuckPerms/blob/master/common/minecraft/src/main/java/me/lucko/luckperms/common/minecraft/command/MinecraftCommandExecutor.java
+# source: https://github.com/LuckPerms/LuckPerms/blob/master/common/src/main/java/me/lucko/luckperms/common/command/spec/CommandSpec.java
+
+schema: 1
+id: minecraft-luckperms
+name: LuckPerms
+kind: specific
+# Layer on any loader or Paper. Root aliases: luckperms, lp, perm, perms,
+# permission, permissions; the catalog uses lp.
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: lp info
+    description: Show LuckPerms and storage information
+  - path: lp sync
+    description: Reload all data from storage
+  - path: lp editor
+    description: Open the web editor, optional type
+    params:
+      - { name: type, type: text, optional: true }
+  - path: lp verbose
+    description: Permission check monitoring (on, record, off, upload; optional filter)
+    params:
+      - { name: action, type: choice, values: ["on", record, "off", upload] }
+      - { name: filter, type: text, optional: true }
+  - path: lp search
+    description: Find users and groups with a permission
+    params:
+      - { name: permission, type: text }
+  - path: lp user
+    description: User command (e.g. info, permission set <node> true, parent add <group>, promote <track>)
+    params:
+      - { name: player, type: player }
+      - { name: args, type: text }
+  - path: lp group
+    description: Group command (group, then e.g. info, permission set <node> true, setweight <n>, listmembers)
+    params:
+      - { name: group_and_args, type: text }
+  - path: lp track
+    description: Track command (track, then e.g. info, append <group>)
+    params:
+      - { name: track_and_args, type: text }
+  - path: lp creategroup
+    description: Create a group
+    params:
+      - { name: group, type: text }
+  - path: lp deletegroup
+    description: Delete a group
+    params:
+      - { name: group, type: text }
+  - path: lp listgroups
+    description: List all groups
+  - path: lp createtrack
+    description: Create a track
+    params:
+      - { name: track, type: text }
+  - path: lp deletetrack
+    description: Delete a track
+    params:
+      - { name: track, type: text }
+  - path: lp listtracks
+    description: List all tracks
+  - path: lp log recent
+    description: Show recent actions
+    params:
+      - { name: page, type: number, min: 1, optional: true }
+  - path: lp reloadconfig
+    description: Reload the config file
+  - path: lp bulkupdate
+    description: Bulk change stored data (dangerous; needs confirmation)
+    params:
+      - { name: args, type: text }

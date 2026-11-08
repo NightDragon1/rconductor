@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://pixelmonmod.com/wiki/Changelog/Version_6
+# source: https://pixelmonmod.com/wiki/Pokemon_spec
+# source: https://nodecraft.com/support/games/minecraft/mods/pixelmon/how-to-configure-pixelmon-commands-and-permissions
+
+schema: 1
+id: minecraft-pixelmon
+name: Pixelmon Reforged
+kind: specific
+# Layer on minecraft-forge (Pixelmon is a closed-source mod; only commands
+# named in the official wiki are listed).
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: pokegive
+    description: Give a Pokemon to a player (Pokemon spec, e.g. pikachu lvl:20 shiny)
+    params:
+      - { name: player, type: player }
+      - { name: spec, type: text }
+  - path: pokespawn
+    description: Spawn a Pokemon from a spec at the sender (player sender only)
+    params:
+      - { name: spec, type: text }
+  - path: pokeheal
+    description: Heal a player's party
+    params:
+      - { name: player, type: player, optional: true }
+  - path: endbattle
+    description: End a stuck battle of a player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: pokereload
+    description: Reload Pixelmon configs
+  - path: checkspawns
+    description: Show spawn chances (legendary, megaboss, fishing, ... or Pokemon names)
+    params:
+      - { name: args, type: text, optional: true }
+  - path: spawning diagnose
+    description: Diagnose the spawner
+  - path: unlock
+    description: Unlock a player's locked party slots or PC
+    params:
+      - { name: player, type: player }
+  - path: megaring
+    description: Give or toggle the Mega Ring for a player
+    params:
+      - { name: player, type: player, optional: true }

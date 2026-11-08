@@ -38,6 +38,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/rcon"
+	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 	"github.com/NightDragon1/rconductor/internal/rcon/source"
 	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -178,7 +179,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	// reconnecting in the background.
 	var runtime *cache.Cache
 	var hub *eventbus.Hub
-	conns := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}}, serverSvc, logs.Module("rcon"), connmgr.Options{
+	conns := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}, httpapi.Protocol: httpapi.Adapter{}}, serverSvc, logs.Module("rcon"), connmgr.Options{
 		ProbeInterval: cfg.RCON.Probe, IdleProbe: cfg.RCON.IdleProbe, ProbeTimeout: cfg.RCON.ProbeTimeout,
 		MaxBackoff: cfg.RCON.MaxBackoff, DialTimeout: cfg.RCON.DialTimeout, QueueSize: cfg.RCON.Queue,
 		OnStatus: func(id string, s connmgr.Status) {

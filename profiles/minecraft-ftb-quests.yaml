@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/FTBTeam/FTB-Quests/tree/main/common/src/main/java/dev/ftb/mods/ftbquests/command
+# source: https://github.com/FTBTeam/FTB-Quests/tree/1.20.1/main (cross-check of command names)
+
+schema: 1
+id: minecraft-ftb-quests
+name: FTB Quests
+kind: specific
+# Layer on minecraft-forge or minecraft-neoforge. Note: completing a quest
+# runs its command rewards, which the pack author defined.
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: ftbquests change_progress
+    description: Reset or complete a quest object for players (players, reset|complete, quest id)
+    params:
+      - { name: player, type: player }
+      - { name: action, type: choice, values: [reset, complete, reset-all, complete-all] }
+      - { name: quest_object, type: text, optional: true }
+  - path: ftbquests editing_mode
+    description: Switch quest editing mode for a player
+    params:
+      - { name: enabled, type: choice, values: ["true", "false"] }
+      - { name: player, type: player, optional: true }
+  - path: ftbquests locked
+    description: Lock or unlock quest progress for a player's team
+    params:
+      - { name: enabled, type: choice, values: ["true", "false"] }
+      - { name: player, type: player, optional: true }
+  - path: ftbquests block_rewards
+    description: Block or allow rewards for a player's team
+    params:
+      - { name: enabled, type: choice, values: ["true", "false"] }
+      - { name: player, type: player, optional: true }
+  - path: ftbquests pause_progression
+    description: Pause quest progression for a player's team (newer versions)
+    params:
+      - { name: enabled, type: choice, values: ["true", "false"] }
+      - { name: player, type: player, optional: true }
+  - path: ftbquests reload
+    description: Reload quests or team progress (newer versions; older ones reload without argument)
+    params:
+      - { name: what, type: choice, values: [quests, team_progress], optional: true }
+  - path: ftbquests delete_empty_reward_tables
+    description: Delete reward tables without entries
+  - path: ftbquests clear_item_display_cache
+    description: Clear the item display cache

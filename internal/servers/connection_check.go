@@ -17,6 +17,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/rcon"
+	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
@@ -25,7 +26,20 @@ const (
 	ConnectionOK          = "ok"
 	ConnectionAuthFailed  = "auth_failed"
 	ConnectionUnreachable = "unreachable"
+	// ConnectionUnpinned: no certificate of the server with an HTTPS API
+	// is trusted yet; the test only read it (PROT-003, D-071).
+	ConnectionUnpinned = "unpinned"
+	// ConnectionCertMismatch: the server shows another certificate than
+	// the trusted one; nothing was sent.
+	ConnectionCertMismatch = "cert_mismatch"
 )
+
+// ConnectionResult is the result of a connection test; Fingerprint is the
+// certificate a server with an HTTPS API showed.
+type ConnectionResult struct {
+	Result      string
+	Fingerprint string
+}
 
 // ErrTestRateLimited means the user has used up his connection tests.
 var ErrTestRateLimited = errors.New("too many connection tests")
@@ -38,6 +52,9 @@ type ConnectionData struct {
 	Host      *string
 	Port      *int
 	Password  *logging.Secret
+	// TLSFingerprint is the certificate to trust for the test of a server
+	// with an HTTPS API; without it the stored one counts.
+	TLSFingerprint *string
 }
 
 // maxTestUsers bounds the memory of the limit; only RCON admins get there.
@@ -88,34 +105,34 @@ func (s *Service) testLimit(ctx context.Context) int {
 // connection that only authenticates. Without a password typed in, the
 // stored one is used, also at a new address (D-050). The password
 // appears in neither log nor audit.
-func (s *Service) TestConnection(ctx context.Context, req users.Request, in ConnectionData) (string, error) {
+func (s *Service) TestConnection(ctx context.Context, req users.Request, in ConnectionData) (ConnectionResult, error) {
 	const action = "server.connection_test"
 	if err := s.mustBeAdmin(ctx, req, action, "server", in.ServerID); err != nil {
-		return "", err
+		return ConnectionResult{}, err
 	}
 	if !s.tests.take(req.Actor.ID, s.testLimit(ctx), time.Now()) {
 		s.denied(ctx, req, action, "server", in.ServerID, "rate_limited")
-		return "", ErrTestRateLimited
+		return ConnectionResult{}, ErrTestRateLimited
 	}
 	var base fields
 	var sealed []byte
 	if in.ServerID != "" {
 		r, err := s.st.Queries.GetServer(ctx, in.ServerID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", users.ErrNotFound
+			return ConnectionResult{}, users.ErrNotFound
 		}
 		if err != nil {
-			return "", err
+			return ConnectionResult{}, err
 		}
-		base = fields{profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port)}
+		base = fields{profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port), fingerprint: r.TlsFingerprint}
 		sealed = r.Secret
 	}
 	f, err := s.check(ctx, s.st.Queries, base, Input{ProfileID: in.ProfileID, Host: in.Host, Port: in.Port})
 	if err != nil {
-		return "", err
+		return ConnectionResult{}, err
 	}
 	if f.host == "" || f.port == 0 {
-		return "", &users.InvalidError{Detail: "profile and host are required"}
+		return ConnectionResult{}, &users.InvalidError{Detail: "profile and host are required"}
 	}
 	sameAddr := in.ServerID != "" && f.host == base.host && f.port == base.port
 	var stored logging.Secret
@@ -125,29 +142,41 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 	password := stored
 	if in.Password != nil {
 		if err := checkPassword(*in.Password); err != nil {
-			return "", err
+			return ConnectionResult{}, err
 		}
 		password = *in.Password
 	}
-	if password == "" {
-		return "", &users.InvalidError{Detail: "enter the RCON password"}
-	}
-	var result string
-	if sameAddr && f.protocol == base.protocol && samePassword(password, stored) {
-		result = s.runningResult(in.ServerID)
+	var res ConnectionResult
+	if f.protocol == httpapi.Protocol {
+		pin := base.fingerprint
+		if in.TLSFingerprint != nil {
+			pin = ""
+			if fp, ok := httpapi.NormalizeFingerprint(*in.TLSFingerprint); ok {
+				pin = fp
+			}
+		}
+		res = s.tryPinned(ctx, req, in.ServerID, f, pin, password)
 	} else {
-		result = s.tryConnection(ctx, f, password)
+		if password == "" {
+			return ConnectionResult{}, &users.InvalidError{Detail: "enter the RCON password"}
+		}
+		if sameAddr && f.protocol == base.protocol && samePassword(password, stored) {
+			res.Result = s.runningResult(in.ServerID)
+		} else {
+			res.Result = s.tryConnection(ctx, f, password)
+		}
 	}
+	result := res.Result
 	s.log.Info("rcon data tested", logging.Event(logging.RCONConnectionTest), slog.String(logging.KeyRequestID, req.RequestID),
 		slog.String(logging.KeyUser, req.Pseudonym), slog.String(logging.KeyServer, in.ServerID), slog.String("result", result))
 	if _, err := audit.Write(ctx, s.st.DB, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
 		ServerID: in.ServerID, TargetType: "server", TargetID: in.ServerID, Action: action, Result: audit.ResultOK,
-		Payload: map[string]any{"host": f.host, "port": f.port, "result": result},
+		Payload: map[string]any{"host": f.host, "port": f.port, "result": result, "fingerprint": res.Fingerprint},
 	}); err != nil {
-		return "", err
+		return ConnectionResult{}, err
 	}
-	return result, nil
+	return res, nil
 }
 
 // storedPassword opens the password of the read that gave the address, so
@@ -176,8 +205,51 @@ func (s *Service) runningResult(id string) string {
 	return ConnectionUnreachable
 }
 
+// tryPinned tests a server with an HTTPS API. The certificate is read in
+// a handshake that sends nothing; the token goes out only if it is the
+// trusted one (D-071).
+func (s *Service) tryPinned(ctx context.Context, req users.Request, id string, f fields, pin string, token logging.Secret) ConnectionResult {
+	addr := net.JoinHostPort(f.host, strconv.Itoa(f.port))
+	fp, _, err := s.conns.Fingerprint(ctx, f.protocol, addr)
+	if err != nil {
+		s.log.Debug("certificate not readable", slog.Any("err", err))
+		return ConnectionResult{Result: ConnectionUnreachable}
+	}
+	res := ConnectionResult{Fingerprint: fp}
+	switch {
+	case pin == "":
+		res.Result = ConnectionUnpinned
+		return res
+	case fp != pin:
+		s.log.Warn("the game server shows another certificate than the trusted one", logging.Event(logging.ServerCertMismatch),
+			slog.String(logging.KeyRequestID, req.RequestID), slog.String(logging.KeyServer, id), slog.String("fingerprint", fp))
+		res.Result = ConnectionCertMismatch
+		return res
+	case token == "":
+		res.Result = ConnectionAuthFailed
+		return res
+	}
+	err = s.conns.Try(ctx, connmgr.Target{Protocol: f.protocol, Addr: addr, Password: token, Fingerprint: pin,
+		Dialect: s.dialect(f.profileID), Parallel: 1})
+	res.Result = connectionResult(err)
+	if errors.Is(err, rcon.ErrCertMismatch) {
+		res.Result = ConnectionCertMismatch
+	}
+	return res
+}
+
+func connectionResult(err error) string {
+	switch {
+	case err == nil:
+		return ConnectionOK
+	case errors.Is(err, rcon.ErrAuth):
+		return ConnectionAuthFailed
+	}
+	return ConnectionUnreachable
+}
+
 func (s *Service) tryConnection(ctx context.Context, f fields, password logging.Secret) string {
-	err := s.conns.Try(ctx, f.protocol, net.JoinHostPort(f.host, strconv.Itoa(f.port)), password)
+	err := s.conns.Try(ctx, connmgr.Target{Protocol: f.protocol, Addr: net.JoinHostPort(f.host, strconv.Itoa(f.port)), Password: password})
 	switch {
 	case err == nil:
 		return ConnectionOK

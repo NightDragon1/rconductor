@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://www.gameserverkings.com/knowledge-base/starbound/configuration-overview.md
+# source: https://www.survivalservers.com/wiki/Starbound_Admin_Commands
+
+schema: 1
+id: starbound
+name: Starbound
+kind: generic
+# starbound_server.config: runRconServer true, rconServerPort 21026.
+# No player list command over RCON.
+protocol:
+  type: source-rcon
+  default_port: 21026
+ports:
+  game:
+    - { port: 21025, proto: tcp, name: game }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: []
+stop:
+  command: shutdown
+catalog:
+  - path: help
+    description: List commands
+  - path: kick
+    description: Kick a player, optional reason
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
+  - path: ban
+    description: Ban a player (optional reason, ip/uuid, seconds)
+    params:
+      - { name: player, type: player }
+      - { name: options, type: text, optional: true }
+  - path: unban
+    description: Lift a ban by uuid or IP
+    params:
+      - { name: uuid_or_ip, type: text }
+  - path: whisper
+    description: Private message to a player
+    params:
+      - { name: player, type: player }
+      - { name: text, type: text }
+  - path: whereis
+    description: Show a player's location
+    params:
+      - { name: player, type: player }
+  - path: timewarp
+    description: Advance server time by N seconds
+    params:
+      - { name: seconds, type: number, min: 1 }
+  - path: serverreload
+    description: Reload assets including mods
+  - path: shutdown
+    description: Stop the server cleanly

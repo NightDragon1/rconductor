@@ -26,6 +26,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -71,6 +72,10 @@ type Server struct {
 	// or else those of the profile (SRV-005).
 	GamePorts         []profiles.GamePort
 	GamePortsOverride bool
+	// TLSFingerprint is the trusted certificate of a server with an HTTPS
+	// API (PROT-003); it is shown with the details, only the RCON admin
+	// sets it.
+	TLSFingerprint string
 }
 
 // Input is the writable part of a server; nil fields keep their value on
@@ -88,6 +93,9 @@ type Input struct {
 	// agent; "" clears them (SRV-001 rev. 2).
 	AgentID       *string
 	ContainerName *string
+	// TLSFingerprint trusts the certificate of a server with an HTTPS API,
+	// as the connection test showed it (PROT-003, D-071).
+	TLSFingerprint *string
 	// Version is the version read before (required); the write is refused
 	// with ErrConflict if it is stale.
 	Version *int64
@@ -215,6 +223,7 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 	srv.Protocol, srv.Host, srv.Port = r.Protocol, r.Host, int(r.Port)
 	srv.Credentials = s.credentialState(r.Secret)
 	srv.AgentID, srv.ContainerName = r.AgentID.String, r.ContainerName.String
+	srv.TLSFingerprint = r.TlsFingerprint
 	srv.GamePorts = []profiles.GamePort{}
 	if r.GamePorts.Valid {
 		srv.GamePortsOverride = true
@@ -352,6 +361,7 @@ func validPorts(ports []profiles.GamePort) error {
 // fields is the checked state of a server before writing.
 type fields struct {
 	name, profileID, protocol, host string
+	fingerprint                     string
 	port                            int
 	gamePorts                       sql.NullString
 	agentID, container              sql.NullString
@@ -431,7 +441,29 @@ func (s *Service) check(ctx context.Context, q *sqlitedb.Queries, f fields, in I
 	if !slices.Contains(profiles.Protocols, f.protocol) {
 		return f, &users.InvalidError{Detail: "the profile's protocol is not supported"}
 	}
+	if in.TLSFingerprint != nil {
+		f.fingerprint = ""
+		if strings.TrimSpace(*in.TLSFingerprint) != "" {
+			fp, ok := httpapi.NormalizeFingerprint(*in.TLSFingerprint)
+			if !ok {
+				return f, &users.InvalidError{Detail: "tls_fingerprint must be the SHA-256 of the certificate in hex"}
+			}
+			f.fingerprint = fp
+		}
+	}
+	if f.protocol != httpapi.Protocol {
+		f.fingerprint = "" // only servers with an HTTPS API pin a certificate
+	}
 	return f, nil
+}
+
+// requirePin refuses to store a server with an HTTPS API without a
+// trusted certificate (PROT-003, D-071).
+func requirePin(f fields) error {
+	if f.protocol == httpapi.Protocol && f.fingerprint == "" {
+		return &users.InvalidError{Detail: "test the connection and trust the certificate of the server first"}
+	}
+	return nil
 }
 
 // validContainerName follows Docker's container names.
@@ -482,6 +514,7 @@ func updateAudit(r sqlitedb.GetServerRow, f fields, password bool) map[string]an
 		"name": f.name != r.Name, "profile_id": f.profileID != r.ProfileID.String, "host": f.host != r.Host,
 		"port": f.port != int(r.Port), "password": password, "game_ports": f.gamePorts != r.GamePorts,
 		"agent_id": f.agentID != r.AgentID, "container_name": f.container != r.ContainerName,
+		"tls_fingerprint": f.fingerprint != r.TlsFingerprint,
 	}
 	var names []string
 	for name, c := range changed {
@@ -500,7 +533,20 @@ func updateAudit(r sqlitedb.GetServerRow, f fields, password bool) map[string]an
 	if changed["port"] {
 		out["port"] = map[string]int{"from": int(r.Port), "to": f.port}
 	}
+	if changed["tls_fingerprint"] {
+		out["tls_fingerprint"] = map[string]string{"from": r.TlsFingerprint, "to": f.fingerprint}
+	}
 	return out
+}
+
+// pinned logs a newly trusted certificate (PROT-003, D-071).
+func (s *Service) pinned(req users.Request, id, fingerprint string) {
+	if fingerprint == "" {
+		return
+	}
+	s.log.Info("certificate of the game server trusted", logging.Event(logging.ServerCertPinned),
+		slog.String(logging.KeyRequestID, req.RequestID), slog.String(logging.KeyUser, req.Pseudonym),
+		slog.String(logging.KeyServer, id), slog.String("fingerprint", fingerprint))
 }
 
 // Create adds a server; name, profile, host and password are required, the
@@ -514,6 +560,9 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	}
 	f, err := s.check(ctx, s.st.Queries, fields{}, in)
 	if err != nil {
+		return Server{}, err
+	}
+	if err := requirePin(f); err != nil {
 		return Server{}, err
 	}
 	if err := checkPassword(*in.Password); err != nil {
@@ -536,19 +585,24 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	if err := sqlitedb.New(tx).InsertServer(ctx, sqlitedb.InsertServerParams{
 		ID: id, Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: true}, Protocol: f.protocol,
 		Host: f.host, Port: int64(f.port), Secret: sealed, GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
-		CreatedAt: now, UpdatedAt: now,
+		TlsFingerprint: f.fingerprint, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
 		}
 		return Server{}, err
 	}
-	if err := s.auditOK(ctx, tx, req, "server.create", "server", id, id, map[string]any{"name": f.name, "fields": changedFields(in)}); err != nil {
+	created := map[string]any{"name": f.name, "fields": changedFields(in)}
+	if f.fingerprint != "" {
+		created["tls_fingerprint"] = f.fingerprint
+	}
+	if err := s.auditOK(ctx, tx, req, "server.create", "server", id, id, created); err != nil {
 		return Server{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return Server{}, err
 	}
+	s.pinned(req, id, f.fingerprint)
 	s.perm.Invalidate()
 	s.changed(ctx, id)
 	return s.Get(ctx, req, id)
@@ -600,9 +654,12 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	}
 	f, err := s.check(ctx, q, fields{
 		name: r.Name, profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port), gamePorts: r.GamePorts,
-		agentID: r.AgentID, container: r.ContainerName,
+		agentID: r.AgentID, container: r.ContainerName, fingerprint: r.TlsFingerprint,
 	}, in)
 	if err != nil {
+		return Server{}, err
+	}
+	if err := requirePin(f); err != nil {
 		return Server{}, err
 	}
 	// A new host or port keeps the stored password (D-050).
@@ -616,7 +673,8 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	now := store.Now()
 	if err := q.UpdateServer(ctx, sqlitedb.UpdateServerParams{
 		Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: f.profileID != ""}, Protocol: f.protocol,
-		Host: f.host, Port: int64(f.port), GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container, UpdatedAt: now, ID: id,
+		Host: f.host, Port: int64(f.port), GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
+		TlsFingerprint: f.fingerprint, UpdatedAt: now, ID: id,
 	}); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
@@ -633,6 +691,9 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	}
 	if err := tx.Commit(); err != nil {
 		return Server{}, err
+	}
+	if f.fingerprint != r.TlsFingerprint {
+		s.pinned(req, id, f.fingerprint)
 	}
 	s.changed(ctx, id)
 	return s.Get(ctx, req, id)

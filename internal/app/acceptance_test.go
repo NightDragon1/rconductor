@@ -434,10 +434,16 @@ func newRestartable(t *testing.T, game *rcontest.Server, rconPassword string) *r
 	r.admin.must(http.MethodPost, "/me/password", map[string]string{"current_password": m[1], "new_password": matrixPassword}, nil, http.StatusNoContent)
 	var p struct{ Items []struct{ ID, Slug string } }
 	r.admin.must(http.MethodGet, "/profiles", nil, &p, http.StatusOK)
+	profile := ""
+	for _, x := range p.Items {
+		if x.Slug == "minecraft-java" {
+			profile = x.ID
+		}
+	}
 	host, port, _ := net.SplitHostPort(game.Addr)
 	n, _ := strconv.Atoi(port)
 	var s struct{ ID string }
-	r.admin.must(http.MethodPost, "/servers", map[string]any{"name": "mc", "profile_id": p.Items[0].ID, "host": host, "port": n, "password": rconPassword}, &s, http.StatusCreated)
+	r.admin.must(http.MethodPost, "/servers", map[string]any{"name": "mc", "profile_id": profile, "host": host, "port": n, "password": rconPassword}, &s, http.StatusCreated)
 	r.server = s.ID
 	return r
 }

@@ -627,6 +627,7 @@
     "deleteText": "Its history stays in the audit; groups and grants lose it at once. This cannot be undone.",
     "name": "Name",
     "profile": "Game profile",
+    "specificProfile": "{{name}} (specific)",
     "choose": "Choose …",
     "host": "Host",
     "port": "RCON port",
@@ -809,6 +810,10 @@
       "commands_templates_per_server": {
         "label": "Templates per server",
         "help": "How many command templates one server may have."
+      },
+      "servers_http_parallel": {
+        "label": "Requests at once (HTTPS API)",
+        "help": "How many commands go to one game server with an HTTPS API at the same time."
       },
       "servers_connection_test_per_minute": {
         "label": "Connection tests per minute",

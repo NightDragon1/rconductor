@@ -11,10 +11,51 @@ fields of the command page.
 | Storage | shipped profiles are built into the panel image (`profiles/` in the repository); your own go to `/data/profiles/*.yaml` |
 | Loading | changes arrive by file events; in addition the panel compares files every `profiles.poll_interval`, because network drives send no events |
 | Precedence | your profile with the id of a shipped one replaces it and is marked as adapted |
+| Kind | `kind: generic` for a game as such, `kind: specific` for a modpack or plugin that ranks above it; a profile without `kind` is generic. Profiles inherit nothing from each other (new in 1.1) |
 | Errors | an invalid file is not imported; the last valid state stays active, the error is in the log and the health overview |
 | Aliases | a file has at most 100 YAML aliases |
 | Anchors | an anchored value must not contain aliases |
 | Nesting | lists and mappings nest at most 64 levels deep |
+
+### Shipped profiles
+
+The panel ships these profiles (new in 1.1). A `specific` profile, such as a modpack or a
+plugin, adds to a `generic` one; a server has one profile, so pick the one that fits
+the server best.
+
+| Id | Name | Kind |
+| --- | --- | --- |
+| `ark-sa` | ARK: Survival Ascended | generic |
+| `ark-se` | ARK: Survival Evolved | generic |
+| `conan-exiles` | Conan Exiles | generic |
+| `factorio` | Factorio | generic |
+| `insurgency-sandstorm` | Insurgency: Sandstorm | generic |
+| `minecraft-create` | Create | specific |
+| `minecraft-essentialsx` | EssentialsX | specific |
+| `minecraft-forge` | Minecraft Forge | generic |
+| `minecraft-ftb-chunks` | FTB Chunks | specific |
+| `minecraft-ftb-essentials` | FTB Essentials | specific |
+| `minecraft-ftb-quests` | FTB Quests | specific |
+| `minecraft-ftb-ranks` | FTB Ranks | specific |
+| `minecraft-ftb-teams` | FTB Teams | specific |
+| `minecraft-gtnh` | Minecraft GT New Horizons (1.7.10) | specific |
+| `minecraft-java-legacy` | Minecraft (Java Edition 1.12.2) | generic |
+| `minecraft-java` | Minecraft (Java Edition) | generic |
+| `minecraft-luckperms` | LuckPerms | specific |
+| `minecraft-neoforge` | Minecraft NeoForge | generic |
+| `minecraft-paper` | Minecraft Paper (Spigot/Bukkit) | generic |
+| `minecraft-pixelmon` | Pixelmon Reforged | specific |
+| `minecraft-spark` | spark (profiler) | specific |
+| `mordhau` | Mordhau | generic |
+| `palworld` | Palworld | generic |
+| `project-zomboid` | Project Zomboid | generic |
+| `source-cs2` | Counter-Strike 2 | specific |
+| `source-engine` | Source Engine (srcds) | generic |
+| `source-gmod` | Garry's Mod | specific |
+| `source-l4d2` | Left 4 Dead 2 | specific |
+| `squad` | Squad | generic |
+| `starbound` | Starbound | generic |
+| `v-rising` | V Rising | generic |
 
 ### Checking a profile
 

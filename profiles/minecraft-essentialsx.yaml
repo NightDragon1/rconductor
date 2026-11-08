@@ -1,0 +1,137 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/EssentialsX/Essentials/blob/2.x/Essentials/src/main/resources/plugin.yml
+
+schema: 1
+id: minecraft-essentialsx
+name: EssentialsX
+kind: specific
+# Layer on minecraft-paper. Bukkit also registers every command as
+# essentials:<name>; those forms are listed as wrappers, too.
+protocol:
+  type: source-rcon
+  default_port: 25575
+syntax:
+  # sudo runs a command as another player; powertool binds commands to an
+  # item (in doubt, marked).
+  wrappers:
+    - sudo
+    - esudo
+    - "essentials:sudo"
+    - "essentials:esudo"
+    - powertool
+    - pt
+    - ept
+    - epowertool
+    - "essentials:powertool"
+    - "essentials:pt"
+    - "essentials:ept"
+    - "essentials:epowertool"
+catalog:
+  # --- Moderation ---
+  - path: kick
+    description: Kick a player
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
+  - path: kickall
+    description: Kick all players
+    params:
+      - { name: reason, type: text, optional: true }
+  - path: ban
+    description: Ban a player
+    params:
+      - { name: player, type: player }
+      - { name: reason, type: text, optional: true }
+  - path: tempban
+    description: Ban a player for a time (e.g. 1d2h), optional reason after it
+    params:
+      - { name: player, type: player }
+      - { name: duration_and_reason, type: text }
+  - path: unban
+    description: Unban a player
+    params:
+      - { name: player, type: player }
+  - path: banip
+    description: Ban an IP address, optional reason after it
+    params:
+      - { name: address_and_reason, type: text }
+  - path: unbanip
+    description: Unban an IP address
+    params:
+      - { name: address, type: text }
+  - path: mute
+    description: Mute or unmute a player, optional duration and reason
+    params:
+      - { name: player, type: player }
+      - { name: duration_and_reason, type: text, optional: true }
+  - path: seen
+    description: Show when a player was last online
+    params:
+      - { name: player, type: player }
+  - path: whois
+    description: Show details of a player
+    params:
+      - { name: nickname, type: text }
+  - path: socialspy
+    description: Toggle social spy for a player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: vanish
+    description: Toggle vanish for a player
+    params:
+      - { name: player, type: player, optional: true }
+  # --- Players ---
+  - path: heal
+    description: Heal a player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: feed
+    description: Fill a player's hunger
+    params:
+      - { name: player, type: player, optional: true }
+  - path: fly
+    description: Toggle flight for a player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: god
+    description: Toggle invulnerability for a player
+    params:
+      - { name: player, type: player, optional: true }
+  - path: nick
+    description: Set a player's nickname, or off
+    params:
+      - { name: player, type: player }
+      - { name: nickname, type: text }
+  - path: tphere
+    description: Teleport a player to the sender (player sender only)
+    params:
+      - { name: player, type: player }
+  - path: kit
+    description: Give a kit, optional player after it
+    params:
+      - { name: kit_and_player, type: text }
+  # --- Messaging ---
+  - path: broadcast
+    description: Broadcast a message to all players
+    params:
+      - { name: text, type: text }
+  - path: broadcastworld
+    description: Broadcast a message to one world
+    params:
+      - { name: world_and_message, type: text }
+  # --- Economy ---
+  - path: eco
+    description: Change a player's balance
+    params:
+      - { name: action, type: choice, values: [give, take, set, reset] }
+      - { name: player, type: player }
+      - { name: amount, type: number, optional: true }
+  - path: balance
+    description: Show a player's balance
+    params:
+      - { name: player, type: player, optional: true }
+  # --- Server ---
+  - path: essentials reload
+    description: Reload the EssentialsX configuration
+  - path: backup
+    description: Run the configured backup command

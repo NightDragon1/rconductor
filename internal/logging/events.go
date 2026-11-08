@@ -65,6 +65,13 @@ const (
 	RCONConnectionTest Code = "rcon.connection_test"
 )
 
+// Certificates of game servers with an HTTPS API (PROT-003, D-071): the
+// RCON admin trusted one; a server showed another than the trusted one.
+const (
+	ServerCertPinned   Code = "server.cert.pinned"
+	ServerCertMismatch Code = "server.cert.mismatch"
+)
+
 // Game profiles.
 const (
 	ProfileImported   Code = "profile.imported"
@@ -121,6 +128,7 @@ var AllCodes = []Code{
 	PermDenied, PermRecomputed,
 	CmdAccepted, CmdDenied, CmdSent, CmdResponse, CmdTimeout,
 	RCONConnected, RCONAuthFailed, RCONDisconnected, RCONReconnect, RCONConnectionTest,
+	ServerCertPinned, ServerCertMismatch,
 	ProfileImported, ProfileRejected, ProfileOverridden,
 	AgentConnected, AgentRejected, AgentPaired, AgentRevoked, AgentLimit, AgentDisconnected,
 	AgentHandshake, AgentForbidden, AgentUnsupported, DockerAction,

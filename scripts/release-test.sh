@@ -124,5 +124,58 @@ for bad in "v0.10|0.10 latest|" "v0.10|0.10 0|" "v0.10|0.10 1|" "v1.0|1.0|" "v0.
   fi
 done
 
+# C4 (regression test): the Docker Hub step of release.yml stops before
+# the API when the overview script fails or prints nothing. The step runs
+# as the runner runs it, against a stand-in for curl and the script.
+step() { # the run block of the named step of release.yml
+  awk -v name="$1" '
+    index($0, "- name: " name) { found = 1; next }
+    found && !run && /run: \|/ { run = 1; match($0, /^ */); ind = RLENGTH; next }
+    run && /^ *[^ ]/ { match($0, /^ */); if (RLENGTH <= ind) exit }
+    run { print substr($0, ind + 3) }
+  ' .github/workflows/release.yml
+}
+hubstep=$(mktemp -d)
+step "Short description and overview of both repos" > "$hubstep/step.sh"
+mkdir -p "$hubstep/bin" "$hubstep/scripts"
+cat > "$hubstep/bin/curl" <<'STUB'
+#!/bin/sh
+out=/dev/null
+while [ $# -gt 0 ]; do
+  case "$1" in -o) out=$2; shift ;; -X) echo "$2" >> "$CALLS" ;; esac
+  shift
+done
+cat > /dev/null
+echo '{"access_token":"t"}' > "$out"
+printf 200
+STUB
+chmod +x "$hubstep/bin/curl"
+describe() { # how the stand-in overview script behaves: fail or empty
+  case $1 in
+    fail) printf '#!/bin/sh\necho broken >&2\nexit 1\n' ;;
+    empty) printf '#!/bin/sh\nexit 0\n' ;;
+    ok) printf '#!/bin/sh\necho text\n' ;;
+  esac > "$hubstep/scripts/dockerhub-overview.sh"
+  chmod +x "$hubstep/scripts/dockerhub-overview.sh"
+  : > "$hubstep/calls"
+  (cd "$hubstep" && CALLS=$hubstep/calls PATH="$hubstep/bin:$PATH" HUB=docker.io/x VERSION=1.1 \
+    DOCKERHUB_USERNAME=u DOCKERHUB_TOKEN=t bash --noprofile --norc -e step.sh >/dev/null 2>&1)
+}
+[ -s "$hubstep/step.sh" ] || { echo "C4: the Docker Hub step was not found in release.yml" >&2; fails=$((fails + 1)); }
+for mode in fail empty; do
+  if describe "$mode"; then
+    echo "C4: the Docker Hub step went on with an overview script that is $mode" >&2
+    fails=$((fails + 1))
+  fi
+  if grep -qx PATCH "$hubstep/calls"; then
+    echo "C4: the Docker Hub step sent a description with an overview script that is $mode" >&2
+    fails=$((fails + 1))
+  fi
+done
+# With a working script the same step reaches the API for both images.
+describe ok || { echo "C4: the Docker Hub step failed with a working overview script" >&2; fails=$((fails + 1)); }
+expect "C4: descriptions sent with a working script" 2 "$(grep -cx PATCH "$hubstep/calls")"
+rm -rf "$hubstep"
+
 [ "$fails" -eq 0 ] || exit 1
 echo "release scripts ok"

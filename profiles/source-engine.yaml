@@ -1,0 +1,101 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://developer.valvesoftware.com/wiki/Source_RCON_Protocol
+# source: https://developer.valvesoftware.com/wiki/List_of_console_scripting_commands
+# source: https://developer.valvesoftware.com/wiki/List_of_Left_4_Dead_2_console_commands_and_variables
+# source: https://developer.valvesoftware.com/wiki/Banip
+
+schema: 1
+id: source-engine
+name: Source Engine (srcds)
+kind: generic
+# No match.images and no players block: "status" lists one player per
+# line, the panel reads only a single-line list (see INDEX.md).
+# No player_pattern: Steam names are free text.
+protocol:
+  type: source-rcon
+  default_port: 27015
+ports:
+  game:
+    - { port: 27015, proto: udp, name: game }
+    - { port: 27015, proto: tcp, name: rcon }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  separators: [";"]
+  # exec runs a cfg file, alias defines command sequences, script and
+  # script_execute run VScript, rcon forwards a command, ent_fire can
+  # fire RunScriptCode or point_servercommand. sm_rcon and sm_execcfg
+  # (SourceMod) run server commands or cfg files; in doubt, marked.
+  wrappers:
+    - exec
+    - execifexists
+    - execwithwhitelist
+    - alias
+    - script
+    - script_execute
+    - rcon
+    - ent_fire
+    - sm_rcon
+    - sm_execcfg
+stop:
+  command: quit
+catalog:
+  - path: status
+    description: Show server status and players with user ids and Steam ids
+  - path: kick
+    description: Kick a player by name
+    params:
+      - { name: name, type: text }
+  - path: kickid
+    description: Kick a player by user id or Steam id, optional message after it
+    params:
+      - { name: id_and_message, type: text }
+  - path: banid
+    description: Ban a user id or Steam id for N minutes (0 = permanent), then writeid
+    params:
+      - { name: minutes, type: number, min: 0 }
+      - { name: id, type: text }
+  - path: addip
+    description: Ban an IP for N minutes (0 = permanent), then writeip
+    params:
+      - { name: minutes, type: number, min: 0 }
+      - { name: ip, type: text }
+  - path: removeid
+    description: Remove a Steam id from the ban list, then writeid
+    params:
+      - { name: id, type: text }
+  - path: removeip
+    description: Remove an IP from the ban list, then writeip
+    params:
+      - { name: ip, type: text }
+  - path: writeid
+    description: Save the id ban list to disk
+  - path: writeip
+    description: Save the IP ban list to disk
+  - path: listid
+    description: List banned ids
+  - path: listip
+    description: List banned IPs
+  - path: say
+    description: Message to all players
+    params:
+      - { name: text, type: text }
+  - path: changelevel
+    description: Change the map without disconnecting players
+    params:
+      - { name: map, type: text }
+  - path: map
+    description: Load a map (restarts the server session)
+    params:
+      - { name: map, type: text }
+  - path: mp_restartgame
+    description: Restart the game after N seconds
+    params:
+      - { name: seconds, type: number, min: 1 }
+  - path: version
+    description: Show the server version
+  - path: stats
+    description: Show server performance statistics
+  - path: quit
+    description: Shut down the server

@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://znodgaming.com/~znodusers/stingtwo/sandstormServerAdminGuide.pdf (copy of NWI "Sandstorm-Server-Admin-Guide-1.4.pdf")
+
+schema: 1
+id: insurgency-sandstorm
+name: "Insurgency: Sandstorm"
+kind: generic
+# RconListenPort 27015 is the guide's example, not a stated default.
+# Unknown commands run as engine console commands while
+# [Rcon] bAllowConsoleCommands=True (default); see INDEX.md.
+# No players block: listplayers prints one line per player.
+protocol:
+  type: source-rcon
+  default_port: 27015
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: []
+catalog:
+  - path: help
+    description: List commands and their usage
+  - path: listplayers
+    description: List connected players
+  - path: kick
+    description: Kick a player (id, net id or name), optional reason
+    params:
+      - { name: target_and_reason, type: text }
+  - path: ban
+    description: Ban a player (id, net id or name), optional minutes and reason
+    params:
+      - { name: target_minutes_reason, type: text }
+  - path: banid
+    description: Ban a net id (also offline), optional minutes and reason
+    params:
+      - { name: netid_minutes_reason, type: text }
+  - path: permban
+    description: Ban a player permanently, optional reason
+    params:
+      - { name: target_and_reason, type: text }
+  - path: unban
+    description: Lift a ban by net id
+    params:
+      - { name: netid, type: text }
+  - path: listbans
+    description: Show the ban list
+  - path: say
+    description: Message to the chat
+    params:
+      - { name: text, type: text }
+  - path: restartround
+    description: Restart the round (0 = keep teams, 1 = swap teams)
+    params:
+      - { name: swap, type: choice, values: ["0", "1"], optional: true }
+  - path: maps
+    description: List maps, optional filter
+    params:
+      - { name: filter, type: text, optional: true }
+  - path: scenarios
+    description: List scenarios, optional filter
+    params:
+      - { name: filter, type: text, optional: true }
+  - path: travelscenario
+    description: Change to a scenario
+    params:
+      - { name: scenario, type: text }
+  - path: travel
+    description: Travel to a level by travel URL
+    params:
+      - { name: url, type: text }
+  - path: gamemodeproperty
+    description: Get or set a game mode property (property, optional new value)
+    params:
+      - { name: property_and_value, type: text }
+  - path: listgamemodeproperties
+    description: List game mode properties, optional filter
+    params:
+      - { name: filter, type: text, optional: true }

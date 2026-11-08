@@ -117,6 +117,7 @@ are written like `24h`, `15m`, `30s`.
 | `ws.max_sockets_per_session` | number | 20 | 1 to 100 | WebSockets per session; beyond it the oldest closes |
 | `ws.max_subscriptions_per_socket` | number | 16 | 1 to 64 | subscriptions per WebSocket |
 | `servers.connection_test_per_minute` | number | 10 | 1 to 120 | connection tests per user and minute |
+| `servers.http_parallel` (new in 1.1) | number | 4 | 1 to 64 | requests at once to one game server with an HTTPS API; RCON keeps one connection per server |
 | `commands.templates_per_server` (new in 1.1) | number | 100 | 1 to 1000 | command templates per server |
 | `commands.multi_max_servers` (new in 1.1) | number | 50 | 1 to 1000 | servers of one command to several servers |
 | `commands.multi_parallel` (new in 1.1) | number | 8 | 1 to 64 | servers a command to several servers runs on at the same time |

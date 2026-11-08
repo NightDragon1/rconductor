@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://github.com/FTBTeam/FTB-Teams/tree/main/common/src/main/java/dev/ftb/mods/ftbteams/command
+# source: https://github.com/FTBTeam/FTB-Teams/tree/1.20.1/main (cross-check of command names)
+
+schema: 1
+id: minecraft-ftb-teams
+name: FTB Teams
+kind: specific
+# Layer on minecraft-forge or minecraft-neoforge.
+protocol:
+  type: source-rcon
+  default_port: 25575
+catalog:
+  - path: ftbteams list
+    description: List teams
+    params:
+      - { name: type, type: choice, values: [parties, server_teams, players], optional: true }
+  - path: ftbteams info
+    description: Show information about a team
+    params:
+      - { name: team, type: text, optional: true }
+  - path: ftbteams info server_id
+    description: Show the server id
+  - path: ftbteams server create
+    description: Create a server team
+    params:
+      - { name: name, type: text }
+  - path: ftbteams force add
+    description: Force players into a team (newer versions; team, then players)
+    params:
+      - { name: team_and_players, type: text }
+  - path: ftbteams force remove
+    description: Force players out of a team (newer versions; team, then players)
+    params:
+      - { name: team_and_players, type: text }
+  - path: ftbteams force disband
+    description: Disband a team (newer versions)
+    params:
+      - { name: team, type: text }
+  - path: ftbteams teamstage
+    description: Add, remove or list team stages of a player's team (newer versions)
+    params:
+      - { name: player, type: player }
+      - { name: action, type: choice, values: [add, remove, list] }
+      - { name: stage, type: text, optional: true }

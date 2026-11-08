@@ -32,6 +32,14 @@ const (
 	DefaultConnectionTests = 10
 )
 
+// Requests at once to one game server with an HTTPS API (PROT-003,
+// D-071); RCON keeps its one connection (PROT-002).
+const (
+	SettingHTTPParallel = "servers.http_parallel"
+	DefaultHTTPParallel = 4
+	MinHTTPParallel     = 1
+)
+
 // SettingShortcuts switches keyboard shortcuts on for everyone (UI-008);
 // off by default, readable by all through the session (revision 2.4
 // candidate 7).
@@ -139,6 +147,7 @@ var settingRules = map[string]rule{
 	SettingFingerprintPairing:     boolRule,
 	SettingShortcuts:              boolRule,
 	SettingConnectionTests:        intRule(1, 120),
+	SettingHTTPParallel:           intRule(MinHTTPParallel, 64),
 	// Version search and volume sizes (AGT-006, AGT-007).
 	agentview.SettingVersionRetry:   durationRule(agentview.MinVersionRetry, time.Hour),
 	agentview.SettingVersionWindow:  durationRule(agentview.MinVersionWindow, 24*time.Hour),
@@ -175,6 +184,7 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingTemplatesPerServer: DefaultTemplatesPerServer,
 		SettingMultiMaxServers:    DefaultMultiMaxServers,
 		SettingMultiParallel:      DefaultMultiParallel,
+		SettingHTTPParallel:       DefaultHTTPParallel,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err

@@ -145,20 +145,21 @@ type LoginPending struct {
 }
 
 type Server struct {
-	ID            string
-	Name          string
-	CreatedAt     string
-	UpdatedAt     string
-	DeletedAt     sql.NullString
-	ProfileID     sql.NullString
-	Protocol      string
-	Host          string
-	Port          int64
-	Secret        []byte
-	AgentID       sql.NullString
-	ContainerName sql.NullString
-	GamePorts     sql.NullString
-	Version       int64
+	ID             string
+	Name           string
+	CreatedAt      string
+	UpdatedAt      string
+	DeletedAt      sql.NullString
+	ProfileID      sql.NullString
+	Protocol       string
+	Host           string
+	Port           int64
+	Secret         []byte
+	AgentID        sql.NullString
+	ContainerName  sql.NullString
+	GamePorts      sql.NullString
+	Version        int64
+	TlsFingerprint string
 }
 
 type ServerGroup struct {

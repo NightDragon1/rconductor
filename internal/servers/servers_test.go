@@ -346,7 +346,7 @@ func TestConnectionNewData(t *testing.T) {
 	test := func(pw string, want string) {
 		t.Helper()
 		in.Password = secretOf(pw)
-		if got, err := f.svc.TestConnection(ctx, f.as("admin"), in); err != nil || got != want {
+		if got, err := f.svc.TestConnection(ctx, f.as("admin"), in); err != nil || got.Result != want {
 			t.Errorf("password %q: %q %v, want %q", pw, got, err, want)
 		}
 	}
@@ -412,7 +412,7 @@ func TestConnectionRunning(t *testing.T) {
 	before := srv.Connections()
 	for _, pw := range []*logging.Secret{nil, secretOf(rconPassword)} {
 		got, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ServerID: sv.ID, Password: pw, Host: in.Host, Port: in.Port})
-		if err != nil || got != ConnectionOK {
+		if err != nil || got.Result != ConnectionOK {
 			t.Errorf("unchanged: %q %v", got, err)
 		}
 	}
@@ -421,7 +421,7 @@ func TestConnectionRunning(t *testing.T) {
 	}
 
 	got, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ServerID: sv.ID, Password: secretOf("wrong")})
-	if err != nil || got != ConnectionAuthFailed {
+	if err != nil || got.Result != ConnectionAuthFailed {
 		t.Errorf("changed password: %q %v", got, err)
 	}
 	if n := srv.Connections(); n != before+1 {
@@ -436,7 +436,7 @@ func TestConnectionRunning(t *testing.T) {
 	defer other.Close()
 	host, port, _ := net.SplitHostPort(other.Addr)
 	p, _ := strconv.Atoi(port)
-	if got, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ServerID: sv.ID, Host: &host, Port: &p}); err != nil || got != ConnectionOK {
+	if got, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ServerID: sv.ID, Host: &host, Port: &p}); err != nil || got.Result != ConnectionOK {
 		t.Errorf("new address with the stored password: %q %v", got, err)
 	}
 	if other.Connections() != 1 {

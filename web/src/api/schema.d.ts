@@ -1258,10 +1258,10 @@ export interface components {
             /** @description Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24). */
             version: string;
             /**
-             * @description Reachability over RCON (SRV-004).
+             * @description Reachability of the game server (SRV-004); cert_mismatch: a server with an HTTPS API shows another certificate than the trusted one, nothing is sent to it (PROT-003).
              * @enum {string}
              */
-            status: "connected" | "auth_failed" | "offline";
+            status: "connected" | "auth_failed" | "offline" | "cert_mismatch";
             /** Format: date-time */
             status_since: string;
             /** Format: uuid */
@@ -1289,6 +1289,8 @@ export interface components {
             /** @description Admins only; the override of the server or the profile's ports (SRV-005). */
             game_ports?: components["schemas"]["GamePort"][];
             game_ports_override?: boolean;
+            /** @description Admins only; the trusted certificate of a server with an HTTPS API (protocol http-api), SHA-256 in hex (PROT-003, D-071). */
+            tls_fingerprint?: string;
         };
         ServerList: {
             items: components["schemas"]["Server"][];
@@ -1301,7 +1303,7 @@ export interface components {
             port?: number;
             /**
              * Format: password
-             * @description RCON password; stored encrypted, never returned.
+             * @description RCON password, or the API token of a server with an HTTPS API; stored encrypted, never returned.
              */
             password?: string;
             /** @description Overrides the profile's game ports; an empty list returns to them. */
@@ -1310,6 +1312,8 @@ export interface components {
             agent_id?: string;
             /** @description Container name on the agent's host; set together with agent_id. */
             container_name?: string;
+            /** @description Trusts the certificate of a server with an HTTPS API, as the connection test showed it; required for protocol http-api (PROT-003, D-071). Colons and upper case are accepted. */
+            tls_fingerprint?: string;
         };
         ConnectionTest: {
             /**
@@ -1323,10 +1327,17 @@ export interface components {
             port?: number;
             /** Format: password */
             password?: string;
+            /** @description The certificate to trust for this test of a server with an HTTPS API; without it the stored one counts. Without any, the test only reads the certificate and sends no request. */
+            tls_fingerprint?: string;
         };
         ConnectionTestResult: {
-            /** @enum {string} */
-            result: "ok" | "auth_failed" | "unreachable";
+            /**
+             * @description unpinned: no certificate is trusted yet, the test only read it; cert_mismatch: the server shows another certificate than the trusted one, nothing was sent (PROT-003, D-071).
+             * @enum {string}
+             */
+            result: "ok" | "auth_failed" | "unreachable" | "unpinned" | "cert_mismatch";
+            /** @description The certificate the server showed (http-api only), SHA-256 in hex. */
+            fingerprint?: string;
         };
         /** @description Runtime data, kept in memory with its age (NFR-005); the same data comes live in servers.overview with kind runtime. Player count for everyone in scope, the container only for RCON admin and server admin (UI-006). */
         ServerRuntime: {
@@ -1481,6 +1492,11 @@ export interface components {
             id: string;
             slug: string;
             name: string;
+            /**
+             * @description generic for a game as such, specific for a modpack or plugin that ranks above it (CAT-007); a profile without kind is generic.
+             * @enum {string}
+             */
+            kind: "generic" | "specific";
             protocol: string;
             default_port: number;
             /** @description A custom profile replaces the shipped one. */

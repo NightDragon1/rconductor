@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# source: https://developer.valvesoftware.com/wiki/List_of_Left_4_Dead_2_console_commands_and_variables
+
+schema: 1
+id: source-l4d2
+name: Left 4 Dead 2
+kind: specific
+# Layer on source-engine (script, script_execute and ent_fire are
+# marked there).
+protocol:
+  type: source-rcon
+  default_port: 27015
+catalog:
+  - path: director_stop
+    description: Stop all wanderers, mobs, specials and bosses
