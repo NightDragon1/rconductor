@@ -166,6 +166,7 @@
     "restartRcon": "Restart over RCON",
     "cancel": "Cancel",
     "agentGone": "The agent is disconnected; actions are not possible.",
+    "unsupported": "The agent does not support actions. Update the agent.",
     "confirm": {
       "stopTitle": "Stop {{name}}?",
       "stop": "The container stops. Players are disconnected; the server stays down until it is started again.",
@@ -182,6 +183,7 @@
     },
     "error": {
       "agent_unavailable": "The agent is not connected.",
+      "agent_unsupported": "The agent does not support this. Update the agent.",
       "action_failed": "The agent or Docker refused the action.",
       "rate_limited": "Too many actions. Please wait a moment.",
       "timeout": "The agent did not answer in time.",
@@ -301,6 +303,7 @@
     "noMatch": "No line matches the filter.",
     "agentGone": "The agent is disconnected; no new lines arrive.",
     "rateLimited": "Too many requests for this container. Try again in {{s}} s.",
+    "unsupported": "The agent does not support logs. Update the agent.",
     "failed": "The earlier lines could not be read."
   },
   "invite": {

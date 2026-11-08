@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,10 +28,17 @@ import (
 type hostBackend struct {
 	mu     sync.Mutex
 	orders []string
+	// caps replaces the capabilities when set, for an older agent.
+	caps []string
+	// samples counts the metrics sent.
+	samples atomic.Int32
 }
 
 func (b *hostBackend) Name() string { return "docker" }
 func (b *hostBackend) Capabilities() []string {
+	if b.caps != nil {
+		return b.caps
+	}
 	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics}
 }
 
@@ -46,7 +54,9 @@ func (b *hostBackend) Run(ctx context.Context, out agent.Sender) error {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
-			_ = out.Send(ctx, agentproto.TypeMetrics, "", agentproto.Metrics{Containers: []agentproto.Metric{{Name: "mc", CPUPercent: 42, MemBytes: 1 << 20}}})
+			if out.Send(ctx, agentproto.TypeMetrics, "", agentproto.Metrics{Containers: []agentproto.Metric{{Name: "mc", CPUPercent: 42, MemBytes: 1 << 20}}}) == nil {
+				b.samples.Add(1)
+			}
 		}
 	}
 }

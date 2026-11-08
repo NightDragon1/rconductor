@@ -171,6 +171,35 @@ func (idleHost) Run(ctx context.Context, out agent.Sender) error {
 	return nil
 }
 
+// legacyHost is an older agent of the same major version: it reports
+// only restart_info and runs one container mc-legacy (AGT-013). It still
+// sends metrics, which the panel drops.
+type legacyHost struct{ *fakeHost }
+
+func (legacyHost) Capabilities() []string { return []string{agentproto.CapRestartInfo} }
+
+func (legacyHost) Run(ctx context.Context, out agent.Sender) error {
+	snap := agentproto.Snapshot{Containers: []agentproto.Container{
+		{ID: "l1", Name: "mc-legacy", Image: imageCreativ, State: "running", StartedAt: time.Now().UTC().Add(-time.Hour)},
+	}}
+	if err := out.Send(ctx, agentproto.TypeSnapshot, "", snap); err != nil {
+		return err
+	}
+	metrics := agentproto.Metrics{Containers: []agentproto.Metric{{Name: "mc-legacy", CPUPercent: 77, MemBytes: 1 << 30, MemLimit: 2 << 30}}}
+	t := time.NewTicker(2 * time.Second)
+	defer t.Stop()
+	for {
+		if err := out.Send(ctx, agentproto.TypeMetrics, "", metrics); err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
+	}
+}
+
 // startAgent pairs an agent with a fresh token and waits until the panel
 // lists it as connected; it returns the agent ID.
 func startAgent(ctx context.Context, admin *client, agentAddr, name, root string, backend agent.Backend) (string, error) {
@@ -258,6 +287,10 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 	}
 
 	if err := pendingAgent(ctx, admin, agentAddr, root); err != nil {
+		return err
+	}
+	// host-legacy is older; a test ties a server of its own to it (AGT-013).
+	if st.LegacyAgentID, err = startAgent(ctx, admin, agentAddr, "host-legacy", root, legacyHost{&fakeHost{}}); err != nil {
 		return err
 	}
 

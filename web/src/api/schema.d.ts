@@ -223,7 +223,7 @@ export interface paths {
         put?: never;
         /**
          * Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
-         * @description RCON admin everywhere, server admin in his scope; moderators and supporters never (403). With an agent the order goes to it and the agent checks the label again; without an agent only restart works, by the profile's stop command over RCON and the container's restart policy unless-stopped. Without a connected agent (or for start and stop without agent) the answer is 503 agent_unavailable. Every action is audited.
+         * @description RCON admin everywhere, server admin in his scope; moderators and supporters never (403). With an agent the order goes to it and the agent checks the label again; without an agent only restart works, by the profile's stop command over RCON and the container's restart policy unless-stopped. Without a connected agent (or for start and stop without agent) the answer is 503 agent_unavailable; a connected agent that does not report the capability container.action answers 409 agent_unsupported (AGT-013). Every action is audited.
          */
         post: operations["serverAction"];
         delete?: never;
@@ -243,7 +243,7 @@ export interface paths {
         };
         /**
          * The last log lines of the server's container over the agent (UI-009, logs.tail).
-         * @description Earlier lines than the live view holds (Gesamtkonzept 5, revision 2.4 candidate 20). RCON admin everywhere, server admin in his scope, only with a connected agent; moderators and supporters never (403). The lines are foreign data, cleaned and bounded (SEC-006). The agent's rate limit per container applies (429).
+         * @description Earlier lines than the live view holds (Gesamtkonzept 5, revision 2.4 candidate 20). RCON admin everywhere, server admin in his scope, only with a connected agent; moderators and supporters never (403). The lines are foreign data, cleaned and bounded (SEC-006). The agent's rate limit per container applies (429). A connected agent that does not report the capability logs answers 409 agent_unsupported (AGT-013).
          */
         get: operations["getServerLogs"];
         put?: never;
@@ -1045,6 +1045,8 @@ export interface components {
             metrics_at?: string;
             stale: boolean;
             agent_connected: boolean;
+            /** @description Capabilities the agent reported when it connected last (AGT-013), such as container.action, logs and metrics; missing while the panel has not seen the agent since its start. Like the rest of the container part only for RCON admin and server admin in scope (AGT-008, UI-006). Foreign data from the agent (SEC-006). */
+            capabilities?: string[];
         };
         ServerActionInput: {
             /** @enum {string} */
@@ -1376,7 +1378,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "action_failed" | "conflict" | "precondition_required";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
@@ -1898,6 +1900,15 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description The agent does not report the capability for it (agent_unsupported, AGT-013); only an update of the agent helps. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             429: components["responses"]["RateLimited"];
             /** @description The agent or Docker refused the action (action_failed). */
             502: {
@@ -1954,6 +1965,15 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description The agent does not report the capability for it (agent_unsupported, AGT-013); only an update of the agent helps. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             429: components["responses"]["RateLimited"];
             /** @description The agent or Docker could not read the logs (action_failed). */
             502: {

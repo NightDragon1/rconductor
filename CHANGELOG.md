@@ -3,6 +3,7 @@
 ## 1.1
 
 - Wrappers are also refused with a namespace prefix such as minecraft:execute (CMD-005).
+- The panel works with older agents of the same major version and hides what they cannot do; update the panel before the agents (AGT-013).
 
 ## 1.0
 

@@ -21,9 +21,11 @@ import (
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 )
 
-// Agents sends orders to agents.
+// Agents sends orders to agents and knows what they reported in hello.
 type Agents interface {
 	Request(ctx context.Context, agentID, typ string, payload any) (agentproto.Result, error)
+	// Capabilities of the agent's last hello; false when not seen yet.
+	Capabilities(agentID string) ([]string, bool)
 }
 
 // Bus publishes to the WebSocket topics.
@@ -47,6 +49,8 @@ type ContainerRuntime struct {
 	MetricsAt      *time.Time `json:"metrics_at,omitempty"`
 	Stale          bool       `json:"stale"`
 	AgentConnected bool       `json:"agent_connected"`
+	// Capabilities of the agent's last hello (AGT-013); nil while unknown.
+	Capabilities *[]string `json:"capabilities,omitempty"`
 }
 
 // Runtime is what cards and the server head show (revision 2.4 candidates
@@ -144,6 +148,10 @@ func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Run
 		return rt
 	}
 	cr := &ContainerRuntime{Name: name, State: cache.StateUnknown, AgentConnected: v.data.Connected(agentID), Stale: true}
+	if caps, ok := v.agents.Capabilities(agentID); ok {
+		c := append([]string{}, caps...)
+		cr.Capabilities = &c
+	}
 	if c, ok := v.data.Container(agentID, name); ok {
 		cr.State, cr.Image, cr.RestartCount, cr.RestartLoop = c.State, c.Image, c.RestartCount, c.RestartLoop
 		if !c.StartedAt.IsZero() {

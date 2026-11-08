@@ -7,11 +7,21 @@ export type Tab = 'overview' | 'console' | 'commands' | 'logs' | 'history';
 export const isAdmin = (role: string | undefined) =>
   role === 'rcon_admin' || role === 'server_admin';
 
+// agentCan tells whether the server's agent reported a capability
+// (AGT-013). While the panel has not seen the agent since its start the
+// capabilities are unknown and count as present; the backend refuses an
+// order without the capability anyway.
+export function agentCan(s: Server, capability: string): boolean {
+  const caps = s.runtime?.container?.capabilities;
+  return caps === undefined || caps.includes(capability);
+}
+
 // tabsFor lists the tabs of the server page a role sees (Design 6.3,
-// UI-011). Logs need an agent; without one they have no source (F11).
-export function tabsFor(role: string | undefined, hasAgent: boolean): Tab[] {
+// UI-011). Logs need an agent that reports the capability logs; without
+// one they have no source (F11, AGT-013).
+export function tabsFor(role: string | undefined, hasAgent: boolean, logs = true): Tab[] {
   if (isAdmin(role)) {
-    return hasAgent
+    return hasAgent && logs
       ? ['overview', 'console', 'logs', 'history']
       : ['overview', 'console', 'history'];
   }
@@ -29,10 +39,12 @@ export type ActionMode = 'none' | 'agent' | 'rcon';
 
 // actionMode: actions only for RCON admin and server admin (AGT-008); with
 // an agent start, stop and restart, without one only the restart over the
-// profile's stop command (AGT-009, revision 2.4 candidate 16).
+// profile's stop command (AGT-009, revision 2.4 candidate 16). An agent
+// without the capability container.action gets no actions (AGT-013).
 export function actionMode(s: Server, role: string | undefined): ActionMode {
   if (!isAdmin(role)) return 'none';
-  return s.agent_id ? 'agent' : 'rcon';
+  if (!s.agent_id) return 'rcon';
+  return agentCan(s, 'container.action') ? 'agent' : 'none';
 }
 
 export interface ActionState {

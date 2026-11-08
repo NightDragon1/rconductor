@@ -65,6 +65,9 @@ type State struct {
 	LockedUserID string            `json:"locked_user_id"`
 	// ExpiredInvite is the token of an invitation past its time (UI-008).
 	ExpiredInvite string `json:"expired_invite"`
+	// LegacyAgentID is host-legacy, an agent with fewer capabilities and the
+	// container mc-legacy (AGT-013).
+	LegacyAgentID string `json:"legacy_agent_id"`
 	profile       string
 	moderators    string // the moderator group
 }

@@ -15,7 +15,7 @@ import { useSession } from '@/api/session';
 import { useServer } from '@/api/live-servers';
 import { decimal, gib, span, useNow } from '@/lib/format';
 import { usePhone } from '@/lib/phone';
-import { isAdmin, tabsFor } from '@/lib/serverpage';
+import { agentCan, isAdmin, tabsFor } from '@/lib/serverpage';
 import { cardStatus, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
 import { ServerActions } from './ServerActions';
@@ -176,7 +176,7 @@ export function ServerLayout() {
   const groups = useServerGroups(isAdmin(role));
   if (!server) return <p className="text-muted">{t('app.loading')}</p>;
   const group = groups.data?.find((g) => server.groups.includes(g.id));
-  const tabs = tabsFor(role, !!server.agent_id);
+  const tabs = tabsFor(role, !!server.agent_id, agentCan(server, 'logs'));
   return (
     <div className="flex flex-col gap-5">
       <nav aria-label={t('server.breadcrumb')} className="text-sm text-muted max-md:hidden">

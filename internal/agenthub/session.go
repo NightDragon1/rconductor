@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,12 @@ type Session struct {
 
 func newSession(h *Hub, conn *websocket.Conn, agentID string, hello agentproto.Hello, remote string) *Session {
 	return &Session{AgentID: agentID, Hello: hello, Remote: remote, h: h, conn: conn, cancel: func() {}, pending: map[string]chan agentproto.Result{}, collect: map[string]func(agentproto.Envelope){}, done: make(chan struct{})}
+}
+
+// Can reports whether the agent reported the capability in its hello;
+// the empty capability every agent has (AGT-013).
+func (s *Session) Can(capability string) bool {
+	return capability == "" || slices.Contains(s.Hello.Capabilities, capability)
 }
 
 // run reads messages until the connection ends and returns the reason.
@@ -212,6 +219,12 @@ func (h *Hub) dispatch(s *Session, e agentproto.Envelope) {
 	switch e.Type {
 	case agentproto.TypeResult:
 		s.result(e)
+	case agentproto.TypeMetrics:
+		// Metrics of an agent that does not report the capability are
+		// dropped: nothing shows what it never offered (AGT-013).
+		if s.Can(agentproto.CapMetrics) && h.onMessage != nil {
+			h.onMessage(s.AgentID, e)
+		}
 	default:
 		if h.onMessage != nil {
 			h.onMessage(s.AgentID, e)

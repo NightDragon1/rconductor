@@ -396,8 +396,10 @@ paths:
         the agent checks the label again; without an agent only restart
         works, by the profile's stop command over RCON and the container's
         restart policy unless-stopped. Without a connected agent (or for
-        start and stop without agent) the answer is 503 agent_unavailable.
-        Every action is audited.
+        start and stop without agent) the answer is 503 agent_unavailable;
+        a connected agent that does not report the capability
+        container.action answers 409 agent_unsupported (AGT-013). Every
+        action is audited.
       tags: [servers]
       requestBody:
         required: true
@@ -422,6 +424,12 @@ paths:
           $ref: "#/components/responses/NotFound"
         "429":
           $ref: "#/components/responses/RateLimited"
+        "409":
+          description: The agent does not report the capability for it (agent_unsupported, AGT-013); only an update of the agent helps.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         "502":
           description: The agent or Docker refused the action (action_failed).
           content:
@@ -451,7 +459,9 @@ paths:
         2.4 candidate 20). RCON admin everywhere, server admin in his
         scope, only with a connected agent; moderators and supporters
         never (403). The lines are foreign data, cleaned and bounded
-        (SEC-006). The agent's rate limit per container applies (429).
+        (SEC-006). The agent's rate limit per container applies (429). A
+        connected agent that does not report the capability logs answers
+        409 agent_unsupported (AGT-013).
       tags: [servers]
       parameters:
         - name: lines
@@ -479,6 +489,12 @@ paths:
           $ref: "#/components/responses/NotFound"
         "429":
           $ref: "#/components/responses/RateLimited"
+        "409":
+          description: The agent does not report the capability for it (agent_unsupported, AGT-013); only an update of the agent helps.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         "502":
           description: The agent or Docker could not read the logs (action_failed).
           content:
@@ -2002,6 +2018,17 @@ components:
           type: boolean
         agent_connected:
           type: boolean
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: >-
+            Capabilities the agent reported when it connected last
+            (AGT-013), such as container.action, logs and metrics; missing
+            while the panel has not seen the agent since its start. Like the
+            rest of the container part only for RCON admin and server admin
+            in scope (AGT-008, UI-006). Foreign data from the agent
+            (SEC-006).
 
     ServerActionInput:
       type: object
@@ -2749,6 +2776,7 @@ components:
         - password_change_required
         - timeout
         - agent_unavailable
+        - agent_unsupported
         - action_failed
         - conflict
         - precondition_required

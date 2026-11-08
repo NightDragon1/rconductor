@@ -197,6 +197,7 @@ func (e ProfileParamType) Valid() bool {
 const (
 	ReasonCodeActionFailed           ReasonCode = "action_failed"
 	ReasonCodeAgentUnavailable       ReasonCode = "agent_unavailable"
+	ReasonCodeAgentUnsupported       ReasonCode = "agent_unsupported"
 	ReasonCodeBusy                   ReasonCode = "busy"
 	ReasonCodeConflict               ReasonCode = "conflict"
 	ReasonCodeForbidden              ReasonCode = "forbidden"
@@ -218,6 +219,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeActionFailed:
 		return true
 	case ReasonCodeAgentUnavailable:
+		return true
+	case ReasonCodeAgentUnsupported:
 		return true
 	case ReasonCodeBusy:
 		return true
@@ -614,8 +617,11 @@ type ConnectionTestResultResult string
 
 // ContainerRuntime defines model for ContainerRuntime.
 type ContainerRuntime struct {
-	AgentConnected bool     `json:"agent_connected"`
-	CpuPercent     *float64 `json:"cpu_percent,omitempty"`
+	AgentConnected bool `json:"agent_connected"`
+
+	// Capabilities Capabilities the agent reported when it connected last (AGT-013), such as container.action, logs and metrics; missing while the panel has not seen the agent since its start. Like the rest of the container part only for RCON admin and server admin in scope (AGT-008, UI-006). Foreign data from the agent (SEC-006).
+	Capabilities *[]string `json:"capabilities,omitempty"`
+	CpuPercent   *float64  `json:"cpu_percent,omitempty"`
 
 	// Image Foreign data from the agent (SEC-006).
 	Image        *string    `json:"image,omitempty"`
@@ -5869,6 +5875,20 @@ func (response ServerAction404ApplicationProblemPlusJSONResponse) VisitServerAct
 	return err
 }
 
+type ServerAction409ApplicationProblemPlusJSONResponse Problem
+
+func (response ServerAction409ApplicationProblemPlusJSONResponse) VisitServerActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ServerAction429ApplicationProblemPlusJSONResponse struct {
 	RateLimitedApplicationProblemPlusJSONResponse
 }
@@ -6293,6 +6313,20 @@ func (response GetServerLogs404ApplicationProblemPlusJSONResponse) VisitGetServe
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerLogs409ApplicationProblemPlusJSONResponse Problem
+
+func (response GetServerLogs409ApplicationProblemPlusJSONResponse) VisitGetServerLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }

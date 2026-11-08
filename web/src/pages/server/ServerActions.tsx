@@ -20,12 +20,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { usePhone } from '@/lib/phone';
-import { actionMode, actionState } from '@/lib/serverpage';
+import { actionMode, actionState, isAdmin } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
 
 type Action = 'start' | 'stop' | 'restart';
 const known = [
   'agent_unavailable',
+  'agent_unsupported',
   'action_failed',
   'rate_limited',
   'timeout',
@@ -67,7 +68,12 @@ export function ServerActions({ server, role }: { server: Server; role?: string 
       });
     },
   });
-  if (mode === 'none') return null;
+  if (mode === 'none') {
+    // An admin learns why the actions are missing (AGT-013).
+    return isAdmin(role) && server.agent_id ? (
+      <p className="text-sm text-muted">{t('actions.unsupported')}</p>
+    ) : null;
+  }
 
   const run = (a: Action) => {
     setConfirm(null);

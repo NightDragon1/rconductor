@@ -10,6 +10,7 @@ export interface StackState {
   server_id: string;
   server_name: string;
   servers: Record<string, string>;
+  legacy_agent_id: string;
   locked_user_id: string;
   expired_invite: string;
 }

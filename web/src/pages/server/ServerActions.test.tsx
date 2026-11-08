@@ -37,6 +37,29 @@ describe('server actions', () => {
     expect(unmarked(document.body)).toEqual([]);
   });
 
+  it('are missing with a hint when the agent lacks the capability (AGT-013)', async () => {
+    setLanguage('en');
+    const old: Server = {
+      ...server,
+      runtime: {
+        kind: 'runtime',
+        server_id: 's1',
+        container: {
+          name: 'mc',
+          state: 'running',
+          restart_count: 0,
+          restart_loop: false,
+          stale: false,
+          agent_connected: true,
+          capabilities: ['logs', 'metrics'],
+        },
+      },
+    };
+    await renderPage(() => <ServerActions server={old} role="server_admin" />);
+    expect(screen.queryAllByRole('button')).toEqual([]);
+    expect(document.body.textContent).toContain('The agent does not support actions.');
+  });
+
   it('warn about the restart mechanism without agent (W6)', async () => {
     setLanguage('en');
     const plain: Server = { ...server, agent_id: undefined, runtime: undefined };
