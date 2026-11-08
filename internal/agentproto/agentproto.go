@@ -34,13 +34,19 @@ const (
 	TypeLogLines        = "log.lines"
 	TypeVersionDetect   = "version.detect"
 	TypeVolumesSize     = "volumes.size"
-	TypeResult          = "result"
-	TypeRevoked         = "revoked"
+	// TypeVersionFound and TypeVolumeSizes answer version.detect and
+	// volumes.size before their result, like log.lines answers logs.tail
+	// (AGT-006, AGT-007).
+	TypeVersionFound = "version.found"
+	TypeVolumeSizes  = "volume.sizes"
+	TypeResult       = "result"
+	TypeRevoked      = "revoked"
 )
 
 // FromAgent and FromPanel list the types each side may send.
 var (
-	FromAgent = []string{TypeHello, TypeSnapshot, TypeContainerEvent, TypeMetrics, TypeLogLines, TypeResult}
+	FromAgent = []string{TypeHello, TypeSnapshot, TypeContainerEvent, TypeMetrics, TypeLogLines,
+		TypeVersionFound, TypeVolumeSizes, TypeResult}
 	FromPanel = []string{TypeWelcome, TypeReject, TypeContainerAction, TypeLogsTail, TypeLogsFollow, TypeLogsStop,
 		TypeVersionDetect, TypeVolumesSize, TypeRevoked}
 )
@@ -75,6 +81,10 @@ const (
 	CapLogs            = "logs"
 	CapMetrics         = "metrics"
 	CapRestartInfo     = "restart_info"
+	// CapVersionDetect and CapVolumesSize come with 1.1 (AGT-006,
+	// AGT-007); an agent 1.0 does not report them.
+	CapVersionDetect = "version.detect"
+	CapVolumesSize   = "volumes.size"
 )
 
 // NeededCapability names the capability an agent must report for a
@@ -88,6 +98,10 @@ func NeededCapability(typ string) string {
 		return CapLogs
 	case TypeMetrics:
 		return CapMetrics
+	case TypeVersionDetect, TypeVersionFound:
+		return CapVersionDetect
+	case TypeVolumesSize, TypeVolumeSizes:
+		return CapVolumesSize
 	}
 	return ""
 }
@@ -216,6 +230,74 @@ type LogLines struct {
 	Container string   `json:"container"`
 	Lines     []string `json:"lines"`
 	Truncated bool     `json:"truncated,omitempty"`
+}
+
+// Bounds of the version search (AGT-006, SEC-003): one attempt reads at
+// most this many lines and bytes of the log; the match is cut to
+// MaxVersion bytes.
+const (
+	MaxVersionPattern = 512
+	MaxVersionLines   = 1000
+	MaxVersionBytes   = 1 << 20
+	MaxVersion        = 64
+	MaxVolumes        = 1000
+)
+
+// VersionDetect asks the agent to search the logs of a container for the
+// profile's version pattern, from Since on, never before the start of the
+// container (AGT-006, D-009).
+type VersionDetect struct {
+	Container string    `json:"container"`
+	Pattern   string    `json:"pattern"`
+	Since     time.Time `json:"since,omitzero"`
+}
+
+// VersionFound carries only the match of the pattern, no log line
+// (AGT-006); an empty Version means no match in this attempt.
+type VersionFound struct {
+	Container string `json:"container"`
+	Version   string `json:"version,omitempty"`
+}
+
+// Clean bounds the foreign version (SEC-006).
+func (v *VersionFound) Clean() {
+	v.Container = foreign.Name(v.Container, maxName)
+	v.Version = foreign.Name(v.Version, MaxVersion)
+}
+
+// VolumesSize asks for the used size of the volumes of all allowed
+// containers, in one call to Docker (AGT-007).
+type VolumesSize struct{}
+
+// VolumeSize is the used size of one volume; Bytes is -1 when Docker does
+// not know it (another volume driver).
+type VolumeSize struct {
+	Name  string `json:"name"`
+	Bytes int64  `json:"bytes"`
+}
+
+// VolumeSizes answers volumes.size.
+type VolumeSizes struct {
+	Volumes []VolumeSize `json:"volumes"`
+}
+
+// Clean bounds the foreign list (SEC-006).
+func (v *VolumeSizes) Clean() {
+	if len(v.Volumes) > MaxVolumes {
+		v.Volumes = v.Volumes[:MaxVolumes]
+	}
+	out := v.Volumes[:0]
+	for _, s := range v.Volumes {
+		s.Name = foreign.Name(s.Name, maxName)
+		if s.Name == "" {
+			continue
+		}
+		if s.Bytes < -1 {
+			s.Bytes = -1
+		}
+		out = append(out, s)
+	}
+	v.Volumes = out
 }
 
 // Result answers an order.

@@ -82,8 +82,11 @@ test('cards show only fields with a source (UI-004)', async ({ page, state }) =>
   await expect(lobby).toHaveAttribute('data-status', 'stopped');
   await expect(lobby.getByRole('meter')).toHaveCount(0);
   await expect(lobby).not.toContainText('Started');
-  // The game version has no source in R1 (revision 2.4 candidate 11).
-  await expect(page.getByRole('main')).not.toContainText('Version');
+  // The game version comes from the agent's version search (AGT-006);
+  // cards without a match show no field.
+  await expect(survival).toContainText('Version 26.3');
+  await expect(card(page, 'creative')).not.toContainText('Version');
+  await expect(card(page, 'outpost')).not.toContainText('Version');
   // The groups frame the cards.
   await expect(page.getByRole('region', { name: 'minecraft' }).getByRole('article')).toHaveCount(3);
   await expect(page.getByRole('region', { name: 'events' }).getByRole('article')).toHaveCount(1);
@@ -101,6 +104,8 @@ test('moderator cards have no agent data (UI-006)', async ({ page, state }) => {
     await expect(survival.getByRole('meter')).toHaveCount(0);
     await expect(survival).not.toContainText('Started');
     await expect(survival).not.toContainText('GB');
+    // The game version is a server datum (UI-006, AGT-006).
+    await expect(survival).toContainText('Version 26.3');
   }
 });
 

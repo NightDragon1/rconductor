@@ -49,7 +49,8 @@ type fakeHost struct {
 
 func (*fakeHost) Name() string { return "docker" }
 func (*fakeHost) Capabilities() []string {
-	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics, agentproto.CapRestartInfo}
+	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics, agentproto.CapRestartInfo,
+		agentproto.CapVersionDetect, agentproto.CapVolumesSize}
 }
 
 func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
@@ -58,7 +59,7 @@ func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
 		return agentproto.Container{ID: "c2", Name: "mc-creative", Image: imageCreativ, State: "running", StartedAt: now.Add(-ago), RestartCount: n}
 	}
 	snap := agentproto.Snapshot{Containers: []agentproto.Container{
-		{ID: "c1", Name: "mc-survival", Image: imageDigest, State: "running", StartedAt: now.Add(-50 * time.Hour)},
+		{ID: "c1", Name: "mc-survival", Image: imageDigest, State: "running", StartedAt: now.Add(-50 * time.Hour), Volumes: []string{"mc-survival-data"}},
 		creative(3*time.Minute, 1),
 		{ID: "c3", Name: "mc-lobby", Image: imageCreativ, State: "exited"},
 		{ID: "c4", Name: "mc-arena", Image: imageCreativ, State: "running", StartedAt: now.Add(-26 * time.Hour)},
@@ -139,6 +140,15 @@ func (h *fakeHost) Handle(ctx context.Context, e agentproto.Envelope, out agent.
 			}
 			_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: t.Container, Lines: lines})
 		}
+	case agentproto.TypeVersionDetect:
+		// survival logged its version at the start (AGT-006).
+		if v, err := agentproto.Payload[agentproto.VersionDetect](e); err == nil && v.Container == "mc-survival" {
+			_ = out.Send(ctx, agentproto.TypeVersionFound, e.ID, agentproto.VersionFound{Container: v.Container, Version: "26.3"})
+		}
+	case agentproto.TypeVolumesSize:
+		_ = out.Send(ctx, agentproto.TypeVolumeSizes, e.ID, agentproto.VolumeSizes{Volumes: []agentproto.VolumeSize{
+			{Name: "mc-survival-data", Bytes: 7 << 30},
+		}})
 	}
 	_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeOK})
 }

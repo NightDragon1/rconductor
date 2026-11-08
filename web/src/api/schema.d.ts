@@ -1022,6 +1022,8 @@ export interface components {
             /** Format: date-time */
             players_at?: string;
             players_stale?: boolean;
+            /** @description Game version the agent found in the container's logs with the profile's version pattern (AGT-006); a server datum for every role that sees the server (UI-006). Missing without a match, without a pattern or with an agent that does not report version.detect (AGT-013). Valid until the container starts again or its image changes. Foreign data (SEC-006). */
+            game_version?: string;
             container?: components["schemas"]["ContainerRuntime"];
         };
         ContainerRuntime: {
@@ -1047,6 +1049,24 @@ export interface components {
             agent_connected: boolean;
             /** @description Capabilities the agent reported when it connected last (AGT-013), such as container.action, logs and metrics; missing while the panel has not seen the agent since its start. Like the rest of the container part only for RCON admin and server admin in scope (AGT-008, UI-006). Foreign data from the agent (SEC-006). */
             capabilities?: string[];
+            /** @description Named volumes of the container (AGT-007); the size only once the agent measured it, without the capability volumes.size never. */
+            volumes?: components["schemas"]["VolumeRuntime"][];
+        };
+        VolumeRuntime: {
+            /** @description Foreign data from the agent (SEC-006). */
+            name: string;
+            /**
+             * Format: int64
+             * @description Used size, measured in the background every agent.volume_interval.
+             */
+            size_bytes?: number;
+            /**
+             * Format: date-time
+             * @description When the size was measured; the display names its age.
+             */
+            measured_at?: string;
+            /** @description The size is older than agent.volume_stale. */
+            stale?: boolean;
         };
         ServerActionInput: {
             /** @enum {string} */

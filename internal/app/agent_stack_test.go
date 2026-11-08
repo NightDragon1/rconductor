@@ -43,7 +43,8 @@ func (b *hostBackend) Capabilities() []string {
 }
 
 func (b *hostBackend) Run(ctx context.Context, out agent.Sender) error {
-	snap := agentproto.Snapshot{Containers: []agentproto.Container{{ID: "c1", Name: "mc", State: "running", Image: "mc"}}}
+	snap := agentproto.Snapshot{Containers: []agentproto.Container{{ID: "c1", Name: "mc", State: "running", Image: "mc",
+		StartedAt: time.Now().UTC().Add(-time.Minute), Volumes: []string{"mc-data"}}}}
 	if err := out.Send(ctx, agentproto.TypeSnapshot, "", snap); err != nil {
 		return err
 	}
@@ -67,6 +68,12 @@ func (b *hostBackend) Handle(ctx context.Context, e agentproto.Envelope, out age
 	b.mu.Unlock()
 	if e.Type == agentproto.TypeLogsFollow {
 		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"[Server] <b>Done</b>"}})
+	}
+	if e.Type == agentproto.TypeVersionDetect {
+		_ = out.Send(ctx, agentproto.TypeVersionFound, e.ID, agentproto.VersionFound{Container: "mc", Version: "1.21.4"})
+	}
+	if e.Type == agentproto.TypeVolumesSize {
+		_ = out.Send(ctx, agentproto.TypeVolumeSizes, e.ID, agentproto.VolumeSizes{Volumes: []agentproto.VolumeSize{{Name: "mc-data", Bytes: 1 << 30}}})
 	}
 	if e.Type == agentproto.TypeLogsTail {
 		// lines=7 stands for a container over the agent's rate.

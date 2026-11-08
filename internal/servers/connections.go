@@ -28,7 +28,14 @@ type Connections interface {
 // change and reports the reachability shown with each server (SRV-004).
 func (s *Service) SetConnections(c Connections) { s.conns = c }
 
+// OnChange sets a receiver of every changed server, such as the agent
+// data that a new container assignment concerns (AGT-006, AGT-007).
+func (s *Service) OnChange(f func(id string)) { s.onChange = f }
+
 func (s *Service) changed(ctx context.Context, id string) {
+	if s.onChange != nil {
+		defer s.onChange(id)
+	}
 	if s.conns == nil {
 		return
 	}

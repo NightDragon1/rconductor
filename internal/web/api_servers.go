@@ -291,6 +291,9 @@ func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Serv
 	if rt.PlayersStale {
 		ar.PlayersStale = &rt.PlayersStale
 	}
+	if rt.GameVersion != "" {
+		ar.GameVersion = &rt.GameVersion
+	}
 	if c := rt.Container; c != nil {
 		ac := &api.ContainerRuntime{
 			Name: c.Name, State: c.State, StartedAt: c.StartedAt, RestartCount: c.RestartCount, RestartLoop: c.RestartLoop,
@@ -299,6 +302,18 @@ func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Serv
 		}
 		if c.Image != "" {
 			ac.Image = &c.Image
+		}
+		if len(c.Volumes) > 0 {
+			vols := make([]api.VolumeRuntime, 0, len(c.Volumes))
+			for _, vv := range c.Volumes {
+				vr := api.VolumeRuntime{Name: vv.Name, SizeBytes: vv.SizeBytes, MeasuredAt: vv.MeasuredAt}
+				if vv.Stale {
+					stale := true
+					vr.Stale = &stale
+				}
+				vols = append(vols, vr)
+			}
+			ac.Volumes = &vols
 		}
 		if c.MemBytes != nil {
 			v := int64(min(*c.MemBytes, 1<<62)) //nolint:gosec // bounded

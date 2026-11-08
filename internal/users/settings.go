@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -108,6 +109,11 @@ var settingRules = map[string]rule{
 	SettingFingerprintPairing:     boolRule,
 	SettingShortcuts:              boolRule,
 	SettingConnectionTests:        intRule(1, 120),
+	// Version search and volume sizes (AGT-006, AGT-007).
+	agentview.SettingVersionRetry:   durationRule(agentview.MinVersionRetry, time.Hour),
+	agentview.SettingVersionWindow:  durationRule(agentview.MinVersionWindow, 24*time.Hour),
+	agentview.SettingVolumeInterval: durationRule(agentview.MinVolumeInterval, 7*24*time.Hour),
+	agentview.SettingVolumeStale:    durationRule(agentview.MinVolumeStale, 30*24*time.Hour),
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and

@@ -604,6 +604,61 @@ func TestRightsMatrix(t *testing.T) {
 	}
 }
 
+// TestGameVersionAndVolumesByRole extends the matrix by the agent data of
+// 1.1: the game version is a server datum for every role that sees the
+// server (AGT-006, UI-006), the volumes with their sizes only for RCON
+// admin and the server admin in scope (AGT-007, UI-006); outside the scope
+// the server does not exist.
+func TestGameVersionAndVolumesByRole(t *testing.T) {
+	f := newRightsFixture(t)
+	pairAgent(t, f.as(rA), f.agentAddr, f.server, &hostBackend{caps: []string{agentproto.CapVersionDetect, agentproto.CapVolumesSize}})
+	type server struct {
+		Runtime struct {
+			GameVersion string `json:"game_version"`
+			Container   *struct {
+				Volumes []struct {
+					Name      string `json:"name"`
+					SizeBytes *int64 `json:"size_bytes"`
+				} `json:"volumes"`
+			} `json:"container"`
+		}
+	}
+	// The panel asks the agent in the background.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var s server
+		f.as(rA).must(http.MethodGet, "/servers/"+f.server, nil, &s, http.StatusOK)
+		c := s.Runtime.Container
+		if s.Runtime.GameVersion != "" && c != nil && len(c.Volumes) == 1 && c.Volumes[0].SizeBytes != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no version or size: %+v", s)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	for _, role := range []string{rA, rSI, rSO, rMR, rMN, rSU} {
+		var s server
+		status := f.as(role).call(http.MethodGet, "/servers/"+f.server, nil, &s)
+		switch role {
+		case rSO:
+			if status != http.StatusNotFound {
+				t.Errorf("%s: %d, want 404", role, status)
+			}
+		case rA, rSI:
+			c := s.Runtime.Container
+			if status != http.StatusOK || s.Runtime.GameVersion != "1.21.4" || c == nil || len(c.Volumes) != 1 ||
+				c.Volumes[0].Name != "mc-data" || *c.Volumes[0].SizeBytes != 1<<30 {
+				t.Errorf("%s: %d %+v", role, status, s.Runtime)
+			}
+		default:
+			if status != http.StatusOK || s.Runtime.GameVersion != "1.21.4" || s.Runtime.Container != nil {
+				t.Errorf("%s: %d %+v, want the version and no container part", role, status, s.Runtime)
+			}
+		}
+	}
+}
+
 // TestCapabilitiesByRole extends the matrix by the field capabilities of
 // the runtime data (AGT-013): RCON admin and the server admin in scope see
 // it with the container part, moderator and supporter get neither

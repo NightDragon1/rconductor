@@ -114,6 +114,7 @@
     "memory": "{{used}} / {{limit}} GB",
     "players": "Players",
     "playersValue": "{{count}}",
+    "version": "Version",
     "started": "Started {{ago}}",
     "stale": "Values stale · {{age}}",
     "playersStale": "Players stale",
@@ -687,6 +688,22 @@
       "profiles_poll_interval": {
         "label": "Game profile check",
         "help": "How often the panel looks for changed profile files."
+      },
+      "agent_version_retry": {
+        "label": "Version search interval",
+        "help": "How often the panel asks the agent again for the game version after a container start."
+      },
+      "agent_version_window": {
+        "label": "Version search window",
+        "help": "How long after a container start the panel looks for the game version."
+      },
+      "agent_volume_interval": {
+        "label": "Volume size interval",
+        "help": "How often each agent measures the used size of its volumes."
+      },
+      "agent_volume_stale": {
+        "label": "Volume size age",
+        "help": "After this a measured volume size counts as old."
       },
       "agents_fingerprint_pairing": {
         "label": "Pairing by fingerprint",

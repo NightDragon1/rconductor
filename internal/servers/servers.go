@@ -100,6 +100,8 @@ type Service struct {
 	box   *secret.Box
 	log   *slog.Logger
 	conns Connections
+	// onChange is told about every changed server, after the connection.
+	onChange func(id string)
 	// agents and rcon carry out actions (AGT-003, AGT-009).
 	agents Agents
 	rcon   Executor

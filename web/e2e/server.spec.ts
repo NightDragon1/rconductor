@@ -175,6 +175,7 @@ test('an older agent hides what it cannot do (AGT-013)', async ({ browser, page,
     const head = page.getByRole('region', { name: 'legacy' });
     await expect(head).toContainText('host-legacy');
     await expect(head.getByText('CPU')).toHaveCount(0);
+    await expect(head.getByText('Version')).toHaveCount(0);
     // The backend refuses on its own.
     const r = await adminPage.request.post(`api/v1/servers/${id}/actions`, {
       data: { action: 'restart' },
@@ -186,5 +187,17 @@ test('an older agent hides what it cannot do (AGT-013)', async ({ browser, page,
     const d = await adminPage.request.delete(`api/v1/servers/${id}`, { headers });
     expect(d.status()).toBe(204);
     await admin.close();
+  }
+});
+
+test('the game version is a server datum for every role (AGT-006, UI-006)', async ({
+  page,
+  state,
+}) => {
+  for (const user of ['admin', 'mod']) {
+    await open(page, state, user, 'survival');
+    const head = page.getByRole('region', { name: 'survival' });
+    await expect(head).toContainText('Version');
+    await expect(head).toContainText('26.3');
   }
 });

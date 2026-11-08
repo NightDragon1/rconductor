@@ -24,6 +24,7 @@ import (
 // Agents sends orders to agents and knows what they reported in hello.
 type Agents interface {
 	Request(ctx context.Context, agentID, typ string, payload any) (agentproto.Result, error)
+	RequestData(ctx context.Context, agentID, typ string, payload any, collect func(agentproto.Envelope)) (agentproto.Result, error)
 	// Capabilities of the agent's last hello; false when not seen yet.
 	Capabilities(agentID string) ([]string, bool)
 }
@@ -51,17 +52,22 @@ type ContainerRuntime struct {
 	AgentConnected bool       `json:"agent_connected"`
 	// Capabilities of the agent's last hello (AGT-013); nil while unknown.
 	Capabilities *[]string `json:"capabilities,omitempty"`
+	// Volumes of the container with the sizes the agent measured (AGT-007).
+	Volumes []VolumeView `json:"volumes,omitempty"`
 }
 
 // Runtime is what cards and the server head show (revision 2.4 candidates
 // 3 and 4); kind is runtime in servers.overview.
 type Runtime struct {
-	Kind         string            `json:"kind"`
-	ServerID     string            `json:"server_id"`
-	Players      *int              `json:"players,omitempty"`
-	PlayersAt    *time.Time        `json:"players_at,omitempty"`
-	PlayersStale bool              `json:"players_stale,omitempty"`
-	Container    *ContainerRuntime `json:"container,omitempty"`
+	Kind         string     `json:"kind"`
+	ServerID     string     `json:"server_id"`
+	Players      *int       `json:"players,omitempty"`
+	PlayersAt    *time.Time `json:"players_at,omitempty"`
+	PlayersStale bool       `json:"players_stale,omitempty"`
+	// GameVersion is a server datum for every role that sees the server
+	// (AGT-006, UI-006); foreign data (SEC-006).
+	GameVersion string            `json:"game_version,omitempty"`
+	Container   *ContainerRuntime `json:"container,omitempty"`
 }
 
 // Metrics is the data of server.<id>.metrics.
@@ -116,6 +122,7 @@ type View struct {
 	log    *slog.Logger
 
 	players *cache.Cache
+	in      *insight
 
 	mu      sync.Mutex
 	follows map[string]*follow // by server ID
@@ -140,6 +147,7 @@ func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Run
 			rt.Players, rt.PlayersAt, rt.PlayersStale = &n, &at, p.Stale
 		}
 	}
+	rt.GameVersion = v.gameVersion(serverID)
 	if !agentData {
 		return rt
 	}
@@ -154,6 +162,9 @@ func (v *View) Runtime(ctx context.Context, serverID string, agentData bool) Run
 	}
 	if c, ok := v.data.Container(agentID, name); ok {
 		cr.State, cr.Image, cr.RestartCount, cr.RestartLoop = c.State, c.Image, c.RestartCount, c.RestartLoop
+		if len(c.Volumes) > 0 {
+			cr.Volumes = v.volumesOf(agentID, c.Volumes)
+		}
 		if !c.StartedAt.IsZero() {
 			t := c.StartedAt
 			cr.StartedAt = &t
@@ -191,11 +202,17 @@ func (v *View) publishRuntime(ctx context.Context, serverID string) {
 // New wires the cache's notifications to the bus.
 func New(st *store.Store, data *cache.AgentData, agents Agents, bus Bus, log *slog.Logger) *View {
 	v := &View{st: st, data: data, agents: agents, bus: bus, log: log, follows: map[string]*follow{},
-		orders: map[string]*logOrders{}, run: strconv.FormatInt(time.Now().UnixNano(), 36)}
+		orders: map[string]*logOrders{}, run: strconv.FormatInt(time.Now().UnixNano(), 36), in: newInsight()}
 	data.OnMetrics(v.metrics)
-	data.OnChange(func(agentID, container string) { v.metrics(agentID, []string{container}) })
+	data.OnChange(func(agentID, container string) {
+		v.metrics(agentID, []string{container})
+		v.in.wake()
+	})
 	data.OnLines(v.lines)
-	data.OnConnect(v.reconnected)
+	data.OnConnect(func(agentID string) {
+		v.reconnected(agentID)
+		v.in.wake()
+	})
 	return v
 }
 

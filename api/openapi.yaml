@@ -1979,6 +1979,16 @@ components:
           format: date-time
         players_stale:
           type: boolean
+        game_version:
+          type: string
+          maxLength: 64
+          description: >-
+            Game version the agent found in the container's logs with the
+            profile's version pattern (AGT-006); a server datum for every
+            role that sees the server (UI-006). Missing without a match,
+            without a pattern or with an agent that does not report
+            version.detect (AGT-013). Valid until the container starts
+            again or its image changes. Foreign data (SEC-006).
         container:
           $ref: "#/components/schemas/ContainerRuntime"
 
@@ -2029,6 +2039,32 @@ components:
             rest of the container part only for RCON admin and server admin
             in scope (AGT-008, UI-006). Foreign data from the agent
             (SEC-006).
+        volumes:
+          type: array
+          items:
+            $ref: "#/components/schemas/VolumeRuntime"
+          description: >-
+            Named volumes of the container (AGT-007); the size only once the
+            agent measured it, without the capability volumes.size never.
+
+    VolumeRuntime:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Foreign data from the agent (SEC-006).
+        size_bytes:
+          type: integer
+          format: int64
+          description: Used size, measured in the background every agent.volume_interval.
+        measured_at:
+          type: string
+          format: date-time
+          description: When the size was measured; the display names its age.
+        stale:
+          type: boolean
+          description: The size is older than agent.volume_stale.
 
     ServerActionInput:
       type: object

@@ -15,7 +15,7 @@ import { useSession } from '@/api/session';
 import { useServer } from '@/api/live-servers';
 import { decimal, gib, span, useNow } from '@/lib/format';
 import { usePhone } from '@/lib/phone';
-import { agentCan, isAdmin, tabsFor } from '@/lib/serverpage';
+import { agentCan, isAdmin, stripCodes, tabsFor } from '@/lib/serverpage';
 import { cardStatus, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
 import { ServerActions } from './ServerActions';
@@ -129,6 +129,11 @@ function Head({ server, role }: { server: Server; role?: string }) {
           {server.runtime?.players !== undefined && (
             <Fact label={t('server.players')}>
               {t('card.playersValue', { count: server.runtime.players })}
+            </Fact>
+          )}
+          {server.runtime?.game_version && (
+            <Fact label={t('card.version')}>
+              <bdi>{stripCodes(server.runtime.game_version)}</bdi>
             </Fact>
           )}
           {c?.cpu_percent !== undefined && (
