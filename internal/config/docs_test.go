@@ -127,6 +127,43 @@ func TestVariableDefaultsAndLimits(t *testing.T) {
 	}
 }
 
+// TestReadmeVariablesMatchTheGuide covers DOC-001: the short table of
+// the README names only variables of the guide, with the same default.
+func TestReadmeVariablesMatchTheGuide(t *testing.T) {
+	doc, err := os.ReadFile(guide)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	short, err := doccheck.Section(string(readme), "Important variables")
+	if err != nil {
+		t.Fatal(err)
+	}
+	full := map[string]doccheck.Row{}
+	for _, s := range []string{"Compose files", "Panel variables", "Agent variables"} {
+		rows, err := doccheck.Section(string(doc), s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k, r := range rows {
+			full[k] = r
+		}
+	}
+	for key, row := range short {
+		r, ok := full[key]
+		if !ok {
+			t.Errorf("README names %s, the guide does not", key)
+			continue
+		}
+		if got, want := doccheck.Plain(row["Default"]), doccheck.Plain(r["Default"]); got != want {
+			t.Errorf("%s: README says default %q, the guide %q", key, got, want)
+		}
+	}
+}
+
 func only(key, value string) Lookup {
 	return func(k string) (string, bool) {
 		if k == key {

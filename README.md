@@ -19,8 +19,7 @@ docker compose -f all-in-one.yaml logs panel | grep password:
 ```
 
 `DOCKER_GID` is the group that owns the Docker socket on your host. The agent
-runs as a non-root user and reaches the socket through this group, so
-`stat -c %g /var/run/docker.sock` above reads the number for you.
+runs as a non-root user and reaches the socket through this group.
 
 1. Open `http://<host>:8080` and sign in as `admin` with the password from the
    log. You are asked for a new one; the initial password is shown only once.
@@ -40,47 +39,32 @@ runs as a non-root user and reaches the socket through this group, so
 
 The images are on Docker Hub and ghcr.io (`nightdragon1/rconductor-panel`,
 `nightdragon1/rconductor-agent`) for amd64 and arm64. The tag `1` follows all
-1.x releases, so panel and agent stay compatible. Docker Hub is the default;
-`RCD_IMAGE_REPO=ghcr.io/nightdragon1` in `.env` selects ghcr.io.
+1.x releases, so panel and agent stay compatible.
 
-## Volumes and files
+## Important variables
 
-All state lives in three volumes. Recreating the container with the same
-volumes keeps all data. Keep `/secrets` separate from `/backups`: a backup
-never contains the master key.
-
-| Path | Content | Created |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `/data/rconductor.db` | SQLite database: users, servers, settings, audit log | first start |
-| `/data/rconductor.db-wal`, `/data/rconductor.db-shm` | SQLite write-ahead log and index, part of the database | while running |
-| `/data/rconductor.db.migrate.lock` | lock against parallel migration runs | first start |
-| `/data/profiles/*.yaml` | custom game profiles; one with the id of a shipped profile replaces it; changes are picked up without restart (file events, plus a check every 30 s, setting `profiles.poll_interval`); check one first with `docker run --rm -v ./x.yaml:/p.yaml:ro nightdragon1/rconductor-panel:1 profile check /p.yaml` ([details](docs/user/technical.md#checking-a-profile)) | by you |
-| `/secrets/master.key` | master key (32 random bytes, base64, mode 0600) for encrypting RCON credentials | first start, unless `RCD_MASTER_KEY_FILE` is set |
-| `/secrets/panel.key` | Ed25519 key pair of the agent port (PEM, mode 0600); agents pin its fingerprint, shown as `panel_fingerprint` in the `app.ready` line. Losing it means pairing all agents again | first start |
-| `/backups/rconductor-<UTC time>-auto.db` | automatic backup, every 24 h, the last 7 are kept | 24 h after the newest automatic backup, or 24 h after start if there is none |
-| `/backups/rconductor-<UTC time>-pre-migrate-v<N>.db` | backup before a schema migration from version N, the last 3 are kept | before each migration of an existing database |
-
-While a backup is written it carries the suffix `.partial` and is renamed
-when complete. Backup interval and retention are stored as settings in the
-database. A
-backup is a complete SQLite database; to restore it, stop the panel and copy
-it to `/data/rconductor.db` (remove the `-wal` and `-shm` files first).
-
-If the master key is lost, the panel starts, but RCON credentials have to be
-entered again. Store a copy of `/secrets/master.key` in a safe place.
+| `DOCKER_GID` | `999` | group of `/var/run/docker.sock`; lets the agent reach the socket |
+| `RCD_PAIRING_TOKEN` | empty | pairing token of the agent, made in the panel |
+| `RCD_AGENT_PUBLIC_ADDR` | empty | `host:port` under which agents reach the panel's agent port 8443 |
+| `RCD_PUBLIC_URL` | empty | public URL of the panel, such as `https://rcon.example.org`, behind a reverse proxy |
+| `RCD_TRUSTED_PROXIES` | empty | addresses of your reverse proxy; only from those `X-Forwarded-For` and `X-Forwarded-Proto` count |
+| `RCD_VERSION` | `1` | image tag in the Compose files, such as `1` or `1.0` |
+| `RCD_IMAGE_REPO` | `docker.io/nightdragon1` | registry in the Compose files; `ghcr.io/nightdragon1` selects ghcr.io |
 
 ## Documentation
 
-| Read this | For |
-| --- | --- |
-| [Overview](docs/user/overview.md) | the idea, panel and agent, why there is an agent |
-| [Installation](docs/user/installation.md) | both Compose variants, agents, reverse proxy, volumes, backups |
-| [Configuration](docs/user/configuration.md) | every environment variable and setting |
-| [Roles and rights](docs/user/roles.md) | who may do what, and how rights are assigned |
-| [Interface](docs/user/interface.md) | how the web interface is built and used |
-| [Technical notes](docs/user/technical.md) | profiles and lists, pairing, keys, encryption |
-
-Releases are listed in the [changelog](CHANGELOG.md).
+The [wiki](https://github.com/NightDragon1/rconductor/wiki) has the examples
+and the full list of variables and settings:
+[docker run](https://github.com/NightDragon1/rconductor/wiki/Installation-with-docker-run),
+[Docker Compose](https://github.com/NightDragon1/rconductor/wiki/Installation-with-Docker-Compose),
+[reverse proxy with Let's Encrypt](https://github.com/NightDragon1/rconductor/wiki/Reverse-proxy-with-Lets-Encrypt),
+[agent on another host](https://github.com/NightDragon1/rconductor/wiki/Agent-on-another-host),
+[things to note](https://github.com/NightDragon1/rconductor/wiki/Things-to-note) and
+[configuration](https://github.com/NightDragon1/rconductor/wiki/Configuration).
+The guides in [docs/user](docs/user) describe the code on `main`. Releases are
+listed in the [changelog](CHANGELOG.md).
 
 ## Development
 

@@ -1,8 +1,9 @@
 # Installation
 
 The [quick start](../../README.md#quick-start) sets up panel and agent on one
-host. This page has the details. Every variable and setting is described in
-[Configuration](configuration.md).
+host. This page has the details; the
+[wiki](https://github.com/NightDragon1/rconductor/wiki) has complete examples.
+Every variable and setting is described in [Configuration](configuration.md).
 
 Run the panel only in your LAN or behind a VPN. No example here publishes an
 RCON port, and none of yours should.
@@ -89,7 +90,7 @@ hosts, do it on the panel host and on every game host.
 
 Going back to an older version is not supported once the database has been migrated.
 To go back, stop the panel, restore the backup as described under
-[Volumes and files](../../README.md#volumes-and-files) and start the old version.
+[Volumes and files](#volumes-and-files) and start the old version.
 
 To install a certain version instead of the newest, put it into `.env` before the
 first start: `RCD_VERSION=1.0`.
@@ -104,8 +105,28 @@ sufficient tunnel timeout. Never put a reverse proxy in front of the agent port
 
 ## Volumes and files
 
-The [README](../../README.md#volumes-and-files) lists every path in the volumes and says
-how to restore a backup.
+All state lives in three volumes. Recreating the container with the same
+volumes keeps all data. Keep `/secrets` separate from `/backups`: a backup
+never contains the master key.
+
+| Path | Content | Created |
+| --- | --- | --- |
+| `/data/rconductor.db` | SQLite database: users, servers, settings, audit log | first start |
+| `/data/rconductor.db-wal`, `/data/rconductor.db-shm` | SQLite write-ahead log and index, part of the database | while running |
+| `/data/rconductor.db.migrate.lock` | lock against parallel migration runs | first start |
+| `/data/profiles/*.yaml` | custom game profiles; one with the id of a shipped profile replaces it; changes are picked up without restart (file events, plus a check every 30 s, setting `profiles.poll_interval`); check one first with `docker run --rm -v ./x.yaml:/p.yaml:ro nightdragon1/rconductor-panel:1 profile check /p.yaml` ([details](technical.md#checking-a-profile)) | by you |
+| `/secrets/master.key` | master key (32 random bytes, base64, mode 0600) for encrypting RCON credentials | first start, unless `RCD_MASTER_KEY_FILE` is set |
+| `/secrets/panel.key` | Ed25519 key pair of the agent port (PEM, mode 0600); agents pin its fingerprint, shown as `panel_fingerprint` in the `app.ready` line. Losing it means pairing all agents again | first start |
+| `/backups/rconductor-<UTC time>-auto.db` | automatic backup, every 24 h, the last 7 are kept | 24 h after the newest automatic backup, or 24 h after start if there is none |
+| `/backups/rconductor-<UTC time>-pre-migrate-v<N>.db` | backup before a schema migration from version N, the last 3 are kept | before each migration of an existing database |
+
+While a backup is written it carries the suffix `.partial` and is renamed
+when complete. Backup interval and retention are stored as settings in the
+database. A backup is a complete SQLite database; to restore it, stop the
+panel and copy it to `/data/rconductor.db` (remove the `-wal` and `-shm` files first).
+
+If the master key is lost, the panel starts, but RCON credentials have to be
+entered again. Store a copy of `/secrets/master.key` in a safe place.
 
 ## Agents
 

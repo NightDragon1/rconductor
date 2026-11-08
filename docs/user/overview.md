@@ -38,5 +38,5 @@ hosts. A socket proxy in front of the socket narrows the agent further
 
 ## What comes next
 
-Messages, German as a second language, two-factor sign-in, Postgres and more
-protocols are planned for later releases.
+Messages, German as a second language, Postgres and more protocols are planned
+for later releases.
