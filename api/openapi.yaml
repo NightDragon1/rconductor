@@ -30,7 +30,10 @@ paths:
       description: >-
         Starts a new session and sets the session cookie. Wrong
         credentials, unknown users and disabled accounts get the same
-        answer.
+        answer. With the second factor on (AUTH-008) the right password
+        starts no session: the answer is 202 with the cookie rcd_pending
+        for /auth/login/totp, and a session sent along stays until the
+        code is right (D-052).
       tags: [auth]
       security: []
       requestBody:
@@ -46,12 +49,100 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Session"
+        "202":
+          description: The password was right; the code of the second factor must follow.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondFactorRequired"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /auth/login/totp:
+    post:
+      operationId: loginCode
+      summary: Complete a login with the code of the second factor (AUTH-008).
+      description: >-
+        Needs the cookie rcd_pending of /auth/login: one use, valid for
+        auth.second_factor_window, ended by 5 wrong codes, a lockout, a lock
+        of the user or a change of the password. Wrong codes count to
+        login.max_failures. Starts the session like /auth/login.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CodeInput"
+      responses:
+        "200":
+          description: Logged in; the response sets the session cookie.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /auth/recovery:
+    post:
+      operationId: requestRecovery
+      summary: Ask for a recovery link of the second factor (AUTH-008).
+      description: >-
+        The answer is always the same, whether user and address exist or
+        not. A user with an address and the second factor on gets a mail
+        with a link valid for auth.recovery_lifetime; only the last link
+        holds. At most auth.recovery_per_hour per user and per client. The
+        mail goes out only with RCD_PUBLIC_URL set.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecoveryRequest"
+      responses:
+        "202":
+          description: Taken; nothing tells whether a mail goes out.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /auth/recovery/redeem:
+    post:
+      operationId: redeemRecovery
+      summary: Reset the second factor with the recovery link and the password (AUTH-008).
+      description: >-
+        Resets only: all sessions of the user end and the next login needs
+        the password; nobody is signed in. The link holds once; wrong
+        passwords count to the lockout.
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecoveryRedeem"
+      responses:
+        "204":
+          description: The second factor is off.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
         "429":
           $ref: "#/components/responses/RateLimited"
         "503":
@@ -82,6 +173,147 @@ paths:
                 $ref: "#/components/schemas/Session"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+
+  /me/second-factor:
+    get:
+      operationId: getSecondFactor
+      summary: The own second factor and mail address (AUTH-008).
+      tags: [me]
+      responses:
+        "200":
+          description: The state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondFactor"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+  /me/second-factor/setup:
+    post:
+      operationId: setupSecondFactor
+      summary: Start the own second factor; needs the password (AUTH-008).
+      description: >-
+        Refused while a second factor is on. The secret waits until its
+        first code confirms it.
+      tags: [me]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordConfirm"
+      responses:
+        "200":
+          description: The new secret, to scan or type in.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondFactorSetup"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /me/second-factor/confirm:
+    post:
+      operationId: confirmSecondFactor
+      summary: Switch the own second factor on with its first code (AUTH-008).
+      tags: [me]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CodeInput"
+      responses:
+        "204":
+          description: The second factor is on.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /me/second-factor/disable:
+    post:
+      operationId: disableSecondFactor
+      summary: Switch the own second factor off with password and code (AUTH-008).
+      description: Refused while auth.totp_required is on.
+      tags: [me]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordConfirm"
+      responses:
+        "204":
+          description: The second factor is off.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /me/email:
+    put:
+      operationId: setEmail
+      summary: Change the own mail address for the recovery; needs the password and, with the second factor on, a code (AUTH-008).
+      tags: [me]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailInput"
+      responses:
+        "204":
+          description: Changed; an empty address removes it.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "422":
+          $ref: "#/components/responses/Invalid"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Busy"
+  /users/{id}/second-factor:
+    parameters:
+      - $ref: "#/components/parameters/UserID"
+    delete:
+      operationId: resetSecondFactor
+      summary: Reset the second factor of a user; whoever manages the user (AUTH-008).
+      description: >-
+        Also with an address on file and without further input (D-050);
+        audited, all sessions of the user end. Not for the emergency admin
+        (AUTH-011).
+      tags: [users]
+      responses:
+        "204":
+          description: Reset.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /profiles:
     get:
@@ -1773,8 +2005,14 @@ components:
 
     User:
       type: object
-      required: [id, pseudonym, role, contacts, has_avatar, disabled, is_emergency, supporters_allowed, created_at]
+      required: [id, pseudonym, role, contacts, has_avatar, disabled, is_emergency, supporters_allowed, created_at, totp_enabled, email_set]
       properties:
+        totp_enabled:
+          type: boolean
+          description: The second factor is on (AUTH-008).
+        email_set:
+          type: boolean
+          description: An address for the recovery is on file; the address itself only its owner reads.
         id:
           type: string
           format: uuid
@@ -2477,6 +2715,102 @@ components:
       additionalProperties: true
       description: Setting key to JSON value.
 
+    SecondFactorRequired:
+      type: object
+      required: [second_factor, expires_at]
+      properties:
+        second_factor:
+          type: string
+          enum: [totp]
+        expires_at:
+          type: string
+          format: date-time
+
+    CodeInput:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          maxLength: 16
+          description: The 6 digits of the authenticator app; spaces are ignored.
+
+    PasswordConfirm:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 512
+        code:
+          type: string
+          maxLength: 16
+          description: Required while the second factor is on.
+
+    EmailInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          description: One plain address; empty removes it.
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 512
+        code:
+          type: string
+          maxLength: 16
+
+    SecondFactor:
+      type: object
+      required: [enabled, required, email]
+      properties:
+        enabled:
+          type: boolean
+        required:
+          type: boolean
+          description: The RCON admin requires it for everyone (auth.totp_required).
+        email:
+          type: string
+          description: The own address for the recovery; only its owner reads it.
+
+    SecondFactorSetup:
+      type: object
+      required: [secret, uri]
+      properties:
+        secret:
+          type: string
+          description: Base32, to type into the authenticator app.
+        uri:
+          type: string
+          description: otpauth URI for the QR code, made in the browser.
+
+    RecoveryRequest:
+      type: object
+      required: [pseudonym]
+      properties:
+        pseudonym:
+          type: string
+          maxLength: 256
+
+    RecoveryRedeem:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          maxLength: 128
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 512
+
     SMTPSettings:
       type: object
       required: [host, port, encryption, username, password_set, from, version]
@@ -2943,8 +3277,14 @@ components:
 
     Session:
       type: object
-      required: [user, expires_at, must_change_password, ui, panel_version]
+      required: [user, expires_at, must_change_password, totp_setup_required, ui, panel_version]
       properties:
+        totp_setup_required:
+          type: boolean
+          description: >-
+            The RCON admin requires the second factor and the user has none:
+            only setting it up, logging out and reading the session work,
+            and no WebSocket subscription (AUTH-008).
         panel_version:
           type: string
           description: >-
@@ -3006,6 +3346,7 @@ components:
         - action_failed
         - conflict
         - precondition_required
+        - totp_setup_required
 
     Problem:
       type: object

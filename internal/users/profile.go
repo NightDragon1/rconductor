@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -361,4 +363,41 @@ func (p *Profiles) ResetPassword(ctx context.Context, req Request, id string) (s
 		return "", err
 	}
 	return pw, nil
+}
+
+// ResetSecondFactor resets the second factor of a user for whoever manages
+// the user (AUTH-008), also with an address on file and without further
+// input (D-050); audited, and all sessions of the user end. The emergency
+// admin is reset only by RCD_EMERGENCY_ADMIN_RESET (AUTH-011).
+func (p *Profiles) ResetSecondFactor(ctx context.Context, req Request, id string) error {
+	s := p.users
+	if err := s.mustManage(ctx, req, id, "totp.reset"); err != nil {
+		return err
+	}
+	u, err := s.load(ctx, id)
+	if err != nil {
+		return err
+	}
+	if u.IsEmergency {
+		s.denied(ctx, req, "totp.reset", id, "forbidden", nil)
+		return ErrForbidden
+	}
+	tx, err := s.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	n, err := sqlitedb.New(tx).ClearTOTP(ctx, sqlitedb.ClearTOTPParams{UpdatedAt: store.Now(), ID: id})
+	if err != nil {
+		return err
+	}
+	if err := s.audit(ctx, tx, req, "totp.reset", id, map[string]bool{"was_on": n > 0}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.log.Info("second factor off", logging.Event(logging.AuthTOTPDisabled), slog.String(logging.KeyRequestID, req.RequestID),
+		slog.String(logging.KeyUser, u.Pseudonym), slog.String("cause", "admin_reset"))
+	return s.rightsChanged(ctx, req, "totp.reset", id)
 }

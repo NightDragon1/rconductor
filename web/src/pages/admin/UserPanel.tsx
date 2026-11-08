@@ -130,7 +130,7 @@ export function UserPanel({
     setEdits((e) => ({ ...e, ...body }));
   };
   const [confirm, setConfirm] = useState<
-    'role' | 'reset' | 'remove' | 'lock' | 'unlock' | 'sessions' | null
+    'role' | 'reset' | 'remove' | 'lock' | 'unlock' | 'sessions' | 'factor' | null
   >(null);
   const panel = useReveal<HTMLElement>();
   const [newRole, setNewRole] = useState<Role | ''>('');
@@ -466,6 +466,18 @@ export function UserPanel({
         </Button>
       )}
 
+      {/* Of the second factor and the address only on/off (AUTH-008). */}
+      <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+        <div className="flex gap-1">
+          <dt className="text-muted">{t('admin.factor')}</dt>
+          <dd>{t(user.totp_enabled ? 'admin.factorOn' : 'admin.factorOff')}</dd>
+        </div>
+        <div className="flex gap-1">
+          <dt className="text-muted">{t('admin.recoveryMail')}</dt>
+          <dd>{t(user.email_set ? 'admin.mailSet' : 'admin.mailNone')}</dd>
+        </div>
+      </dl>
+
       <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm">
         <span className="font-medium">{t('admin.locked')}</span>
         <input
@@ -494,6 +506,11 @@ export function UserPanel({
         >
           {t('admin.endSessions')}
         </Button>
+        {!readOnly && !user.is_emergency && user.totp_enabled && (
+          <Button variant="outline" size="sm" onClick={() => setConfirm('factor')}>
+            {t('admin.resetFactor')}
+          </Button>
+        )}
         {!readOnly && !user.is_emergency && (
           <Button variant="outline" size="sm" onClick={() => setConfirm('reset')}>
             {t('admin.resetPassword')}
@@ -574,6 +591,22 @@ export function UserPanel({
             );
             setTemp(r.password);
           }, t('admin.resetDone'));
+        }}
+      />
+      <ConfirmDialog
+        open={confirm === 'factor'}
+        title={t('admin.resetFactorTitle', { name: user.pseudonym })}
+        text={t('admin.resetFactorText')}
+        action={t('admin.resetFactor')}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          setConfirm(null);
+          void report(async () => {
+            const r = await api.DELETE('/users/{id}/second-factor', {
+              params: { path: { id: user.id } },
+            });
+            if (!r.response.ok) must(r);
+          }, t('admin.resetFactorDone'));
         }}
       />
       <ConfirmDialog

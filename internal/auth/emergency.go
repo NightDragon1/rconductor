@@ -124,10 +124,15 @@ func resetEmergencyAdmin(ctx context.Context, st *store.Store, h *password.Hashe
 	if err != nil {
 		return fmt.Errorf("end sessions of the emergency admin: %w", err)
 	}
+	// The reset also resets the second factor (AUTH-008, AUTH-011).
+	totpCleared, err := q.ClearTOTP(ctx, sqlitedb.ClearTOTPParams{UpdatedAt: store.Now(), ID: id})
+	if err != nil {
+		return fmt.Errorf("reset second factor of the emergency admin: %w", err)
+	}
 	if _, err := audit.Write(ctx, tx, audit.Entry{
 		Kind: audit.KindAuth, TargetType: "user", TargetID: id,
 		Action: "emergency_admin.reset", Result: audit.ResultOK,
-		Payload: map[string]int{"sessions_ended": len(sessions)},
+		Payload: map[string]int{"sessions_ended": len(sessions), "totp_cleared": int(totpCleared)},
 	}); err != nil {
 		return err
 	}

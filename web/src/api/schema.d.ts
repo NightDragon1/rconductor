@@ -15,9 +15,69 @@ export interface paths {
         put?: never;
         /**
          * Log in with pseudonym and password (AUTH-001, AUTH-006).
-         * @description Starts a new session and sets the session cookie. Wrong credentials, unknown users and disabled accounts get the same answer.
+         * @description Starts a new session and sets the session cookie. Wrong credentials, unknown users and disabled accounts get the same answer. With the second factor on (AUTH-008) the right password starts no session: the answer is 202 with the cookie rcd_pending for /auth/login/totp, and a session sent along stays until the code is right (D-052).
          */
         post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a login with the code of the second factor (AUTH-008).
+         * @description Needs the cookie rcd_pending of /auth/login: one use, valid for auth.second_factor_window, ended by 5 wrong codes, a lockout, a lock of the user or a change of the password. Wrong codes count to login.max_failures. Starts the session like /auth/login.
+         */
+        post: operations["loginCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for a recovery link of the second factor (AUTH-008).
+         * @description The answer is always the same, whether user and address exist or not. A user with an address and the second factor on gets a mail with a link valid for auth.recovery_lifetime; only the last link holds. At most auth.recovery_per_hour per user and per client. The mail goes out only with RCD_PUBLIC_URL set.
+         */
+        post: operations["requestRecovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/recovery/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset the second factor with the recovery link and the password (AUTH-008).
+         * @description Resets only: all sessions of the user end and the next login needs the password; nobody is signed in. The link holds once; wrong passwords count to the lockout.
+         */
+        post: operations["redeemRecovery"];
         delete?: never;
         options?: never;
         head?: never;
@@ -53,6 +113,119 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/second-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The own second factor and mail address (AUTH-008). */
+        get: operations["getSecondFactor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/second-factor/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the own second factor; needs the password (AUTH-008).
+         * @description Refused while a second factor is on. The secret waits until its first code confirms it.
+         */
+        post: operations["setupSecondFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/second-factor/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Switch the own second factor on with its first code (AUTH-008). */
+        post: operations["confirmSecondFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/second-factor/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch the own second factor off with password and code (AUTH-008).
+         * @description Refused while auth.totp_required is on.
+         */
+        post: operations["disableSecondFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change the own mail address for the recovery; needs the password and, with the second factor on, a code (AUTH-008). */
+        put: operations["setEmail"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users/{id}/second-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset the second factor of a user; whoever manages the user (AUTH-008).
+         * @description Also with an address on file and without further input (D-050); audited, all sessions of the user end. Not for the emergency admin (AUTH-011).
+         */
+        delete: operations["resetSecondFactor"];
         options?: never;
         head?: never;
         patch?: never;
@@ -916,6 +1089,10 @@ export interface components {
             compose: string;
         };
         User: {
+            /** @description The second factor is on (AUTH-008). */
+            totp_enabled: boolean;
+            /** @description An address for the recovery is on file; the address itself only its owner reads. */
+            email_set: boolean;
             /** Format: uuid */
             id: string;
             pseudonym: string;
@@ -1264,6 +1441,50 @@ export interface components {
         Settings: {
             [key: string]: unknown;
         };
+        SecondFactorRequired: {
+            /** @enum {string} */
+            second_factor: "totp";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        CodeInput: {
+            /** @description The 6 digits of the authenticator app; spaces are ignored. */
+            code: string;
+        };
+        PasswordConfirm: {
+            /** Format: password */
+            password: string;
+            /** @description Required while the second factor is on. */
+            code?: string;
+        };
+        EmailInput: {
+            /** @description One plain address; empty removes it. */
+            email: string;
+            /** Format: password */
+            password: string;
+            code?: string;
+        };
+        SecondFactor: {
+            enabled: boolean;
+            /** @description The RCON admin requires it for everyone (auth.totp_required). */
+            required: boolean;
+            /** @description The own address for the recovery; only its owner reads it. */
+            email: string;
+        };
+        SecondFactorSetup: {
+            /** @description Base32, to type into the authenticator app. */
+            secret: string;
+            /** @description otpauth URI for the QR code, made in the browser. */
+            uri: string;
+        };
+        RecoveryRequest: {
+            pseudonym: string;
+        };
+        RecoveryRedeem: {
+            token: string;
+            /** Format: password */
+            password: string;
+        };
         SMTPSettings: {
             host: string;
             port: number;
@@ -1472,6 +1693,8 @@ export interface components {
             role: components["schemas"]["Role"];
         };
         Session: {
+            /** @description The RCON admin requires the second factor and the user has none: only setting it up, logging out and reading the session work, and no WebSocket subscription (AUTH-008). */
+            totp_setup_required: boolean;
             /** @description Version of the panel (UI-015), e.g. 0.10; 0.0.0-dev in development builds. */
             panel_version: string;
             /** @description Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings. */
@@ -1496,7 +1719,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
@@ -1640,9 +1863,95 @@ export interface operations {
                     "application/json": components["schemas"]["Session"];
                 };
             };
+            /** @description The password was right; the code of the second factor must follow. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecondFactorRequired"];
+                };
+            };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Busy"];
+        };
+    };
+    loginCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeInput"];
+            };
+        };
+        responses: {
+            /** @description Logged in; the response sets the session cookie. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Busy"];
+        };
+    };
+    requestRecovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Taken; nothing tells whether a mail goes out. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    redeemRecovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoveryRedeem"];
+            };
+        };
+        responses: {
+            /** @description The second factor is off. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["Busy"];
         };
@@ -1686,6 +1995,160 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getSecondFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecondFactor"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    setupSecondFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordConfirm"];
+            };
+        };
+        responses: {
+            /** @description The new secret, to scan or type in. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecondFactorSetup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Busy"];
+        };
+    };
+    confirmSecondFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeInput"];
+            };
+        };
+        responses: {
+            /** @description The second factor is on. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    disableSecondFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordConfirm"];
+            };
+        };
+        responses: {
+            /** @description The second factor is off. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Busy"];
+        };
+    };
+    setEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailInput"];
+            };
+        };
+        responses: {
+            /** @description Changed; an empty address removes it. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            422: components["responses"]["Invalid"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["Busy"];
+        };
+    };
+    resetSecondFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["UserID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reset. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listProfiles: {

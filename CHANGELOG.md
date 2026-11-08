@@ -9,6 +9,7 @@
 - Ports and volumes on the cards and the server page, with a Steam connect link where the game profile sets `ports.steam_connect` (UI-005). Game profiles with `ports.steam_connect` fail the profile check of panel 1.0.
 - Topology page: host → agent → game server by server group, for RCON admin and server admin (UI-010).
 - Mail over SMTP: the RCON admin sets up host, port, encryption (STARTTLS, SSL/TLS or none), user, password and sender and sends a test mail from the settings (NFR-017).
+- Two-factor sign-in with an authenticator app (TOTP), optional for everyone or required by the RCON admin; recovery by mail to the address in the profile, or a reset by whoever manages the user (AUTH-008).
 
 ## 1.0
 

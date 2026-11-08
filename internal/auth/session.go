@@ -62,6 +62,10 @@ type Principal struct {
 	// MustChangePassword allows only changing the password, logging out
 	// and reading the session (AUTH-010).
 	MustChangePassword bool
+	// TOTPSetupRequired allows only setting up the second factor, logging
+	// out and reading the session, while the RCON admin requires it and
+	// the user has none (AUTH-008).
+	TOTPSetupRequired bool
 	// SessionHash identifies the session in the database and the audit log.
 	SessionHash string
 	ExpiresAt   time.Time
@@ -95,6 +99,9 @@ type Service struct {
 
 	mu    sync.Mutex
 	ended []func(sessionHashes []string)
+
+	// sf is the second factor (AUTH-008); nil without it.
+	sf *secondFactorState
 }
 
 // OnSessionsEnded registers f to learn about every ended session, so that
@@ -326,6 +333,15 @@ func (s *Service) Login(ctx context.Context, pseudonym, pw string, c Client) (st
 		return fail(reason)
 	}
 
+	// With the second factor on, the password opens only the second step;
+	// the failures stay counted until the code is right (AUTH-008).
+	if u.TotpEnabled && s.sf != nil {
+		pending, expires, err := s.startSecondStep(ctx, u, c)
+		if err != nil {
+			return "", Principal{}, err
+		}
+		return "", Principal{}, &SecondStepError{Token: pending, ExpiresAt: expires}
+	}
 	token, p, err := s.createSession(ctx, u, c)
 	if err != nil {
 		return "", Principal{}, err
@@ -396,6 +412,7 @@ func (s *Service) createSession(ctx context.Context, u sqlitedb.GetLoginUserRow,
 	return token, Principal{
 		UserID: u.ID, Pseudonym: u.Pseudonym, Role: u.Role, IsEmergency: u.IsEmergency == 1,
 		MustChangePassword: u.MustChangePassword == 1,
+		TOTPSetupRequired:  !u.TotpEnabled && s.sf != nil && s.TOTPRequired(ctx),
 		SessionHash:        hash, ExpiresAt: minTime(now.Add(idle), absolute),
 	}, nil
 }
@@ -491,6 +508,7 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Principal, er
 	return Principal{
 		UserID: row.UserID, Pseudonym: row.Pseudonym, Role: row.Role, IsEmergency: row.IsEmergency == 1,
 		MustChangePassword: row.MustChangePassword == 1,
+		TOTPSetupRequired:  !row.TotpEnabled && s.sf != nil && s.TOTPRequired(ctx),
 		SessionHash:        hash, ExpiresAt: minTime(lastSeen.Add(idle), absolute),
 	}, nil
 }
@@ -572,5 +590,6 @@ func (s *Service) SessionValid(ctx context.Context, hash string) bool {
 	}
 	absolute, err := time.Parse(store.TimeLayout, row.ExpiresAt)
 	return err == nil && s.now().UTC().Before(absolute) && !row.DisabledAt.Valid && !row.DeletedAt.Valid &&
-		(row.IsEmergency == 0 || s.emergency) && row.MustChangePassword == 0
+		(row.IsEmergency == 0 || s.emergency) && row.MustChangePassword == 0 &&
+		(row.TotpEnabled || s.sf == nil || !s.TOTPRequired(ctx))
 }

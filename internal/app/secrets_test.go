@@ -75,6 +75,27 @@ func TestNoSecretsInTheLogs(t *testing.T) {
 		t.Errorf("GET /settings/smtp = %s", b)
 	}
 
+	// A second factor: secret and the cookie of the second step never
+	// reach the log (AUTH-008).
+	sa := s.users["sa2"]
+	var setup struct{ Secret string }
+	sa.must(http.MethodPost, "/me/second-factor/setup", map[string]string{"password": "password of sa2"}, &setup, http.StatusOK)
+	first := codeAt(t, setup.Secret, 0)
+	sa.must(http.MethodPost, "/me/second-factor/confirm", map[string]string{"code": first}, nil, http.StatusNoContent)
+	_, _, cookies := post(t, s.base, "/auth/login", map[string]string{"pseudonym": "sa2", "password": "password of sa2"})
+	pending := cookieNamed(cookies, "rcd_pending")
+	if pending == nil {
+		t.Fatal("no second step")
+	}
+	second := codeAt(t, setup.Secret, 1)
+	_, _, cookies = post(t, s.base, "/auth/login/totp", map[string]string{"code": second}, pending)
+	if c := cookieNamed(cookies, "rcd_session"); c != nil {
+		secrets = append(secrets, c.Value)
+	}
+	// The codes themselves are six digits that a timestamp may hold by
+	// chance; the secret they come from is checked.
+	secrets = append(secrets, setup.Secret, pending.Value)
+
 	// A command and the pairing of an agent.
 	if _, code := s.send("admin", "list"); code != http.StatusOK {
 		t.Errorf("command = %d", code)

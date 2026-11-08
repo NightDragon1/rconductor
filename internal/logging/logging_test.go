@@ -148,8 +148,9 @@ func TestCodesUniqueAndWellFormed(t *testing.T) {
 	// revision 2.3 candidate 5, logs.tail with revision 2.4 candidate 20,
 	// audit.entry_lost with the addendum to revision 2.7, and
 	// rcon.connection_test with revision 2.8, mail.sent and mail.failed
-	// with 1.1 (NFR-017).
-	if len(AllCodes) != 52 {
-		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected, logs.tail, audit.entry_lost, rcon.connection_test, mail.sent and mail.failed", len(AllCodes))
+	// with 1.1 (NFR-017), the four codes of the second factor with 1.1
+	// (AUTH-008).
+	if len(AllCodes) != 56 {
+		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected, logs.tail, audit.entry_lost, rcon.connection_test, mail.sent, mail.failed and the four of AUTH-008", len(AllCodes))
 	}
 }

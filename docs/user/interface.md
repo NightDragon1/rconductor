@@ -19,7 +19,22 @@ Entries you may not use are hidden, not greyed out.
 | Settings | yes | – | – | – |
 
 Your own profile is at the bottom of the side bar: real name, contacts, picture,
-password.
+password, two-factor sign-in and the address for its recovery.
+
+## Two-factor sign-in
+
+In your profile you can switch on two-factor sign-in: confirm with your password,
+scan the QR code with an authenticator app (or type in the secret) and enter the
+first code. From then on signing in needs the password and a code. Switching it
+off and changing the address for recovery need your password and a code.
+
+If you lose your authenticator app, use "Lost your authenticator app?" at
+sign-in: a link goes to the address in your profile, if one is on file. The link
+holds once and for a short time; with your password it resets two-factor sign-in
+and ends all your sessions. Without an address, whoever manages your account
+resets it in the user administration. The RCON admin can require two-factor
+sign-in for everyone (setting `auth.totp_required`); who has none yet must set it
+up before anything else, the RCON admin too.
 
 ## Overview
 

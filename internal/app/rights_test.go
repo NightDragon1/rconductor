@@ -298,6 +298,9 @@ func classify(status int, reason string) byte {
 	case status == http.StatusUnprocessableEntity && reason == "invalid":
 		// Rights passed; the input or the setup is not complete.
 		return 'I'
+	case status == http.StatusConflict && reason == "conflict":
+		// Rights passed; the state does not allow it (AUTH-008).
+		return 'C'
 	}
 	return '?'
 }
@@ -353,6 +356,18 @@ func matrix() []matrixOp {
 			return request{path: "/auth/login", body: map[string]string{"pseudonym": rSI, "password": matrixPassword}}
 		}, true},
 		{"GET", "/auth/session", "OOOOOOUO", at("/auth/session"), false},
+		// Second factor (AUTH-008): the second step without a waiting
+		// login and a made-up link are refused for everyone; the recovery
+		// request answers alike.
+		{"POST", "/auth/login/totp", "UUUUUUUP", func(*rightsFixture, string) request {
+			return request{path: "/auth/login/totp", body: map[string]string{"code": "000000"}}
+		}, false},
+		{"POST", "/auth/recovery", "OOOOOOOP", func(*rightsFixture, string) request {
+			return request{path: "/auth/recovery", body: map[string]string{"pseudonym": "nobody"}}
+		}, false},
+		{"POST", "/auth/recovery/redeem", "UUUUUUUP", func(*rightsFixture, string) request {
+			return request{path: "/auth/recovery/redeem", body: map[string]string{"token": "made-up", "password": matrixPassword}}
+		}, false},
 		{"POST", "/auth/logout", "OOOOOOUO", at("/auth/logout"), true},
 		{"GET", "/profiles", "OOOOOOUP", at("/profiles"), false},
 
@@ -435,6 +450,9 @@ func matrix() []matrixOp {
 		{"POST", "/users/{id}/password-reset", "OONOFFUP", func(f *rightsFixture, role string) request {
 			return request{path: "/users/" + freshSupporter(f, role) + "/password-reset"}
 		}, false},
+		{"DELETE", "/users/{id}/second-factor", "OONOFFUP", func(f *rightsFixture, role string) request {
+			return request{path: "/users/" + freshSupporter(f, role) + "/second-factor"}
+		}, false},
 		{"GET", "/users/{id}/avatar", "OONONOUP", userPath("/avatar"), false},
 		// A fresh supporter, so that the matrix keeps its own sessions.
 		{"DELETE", "/users/{id}/sessions", "OONOFFUP", func(f *rightsFixture, role string) request {
@@ -499,6 +517,21 @@ func matrix() []matrixOp {
 		}, false},
 
 		{"GET", "/me", "OOOOOOUP", at("/me"), false},
+		// The own second factor: before any setup confirm and switching off
+		// find nothing (409), then the setup with the password works.
+		{"GET", "/me/second-factor", "OOOOOOUP", at("/me/second-factor"), false},
+		{"POST", "/me/second-factor/confirm", "CCCCCCUP", func(*rightsFixture, string) request {
+			return request{path: "/me/second-factor/confirm", body: map[string]string{"code": "000000"}}
+		}, false},
+		{"POST", "/me/second-factor/disable", "CCCCCCUP", func(*rightsFixture, string) request {
+			return request{path: "/me/second-factor/disable", body: map[string]string{"password": matrixPassword}}
+		}, false},
+		{"POST", "/me/second-factor/setup", "OOOOOOUP", func(*rightsFixture, string) request {
+			return request{path: "/me/second-factor/setup", body: map[string]string{"password": matrixPassword}}
+		}, false},
+		{"PUT", "/me/email", "OOOOOOUP", func(*rightsFixture, string) request {
+			return request{path: "/me/email", body: map[string]string{"email": "", "password": matrixPassword}}
+		}, false},
 		{"PATCH", "/me", "OOOOOOUP", func(*rightsFixture, string) request {
 			return request{path: "/me", body: map[string]any{"real_name": "Real Name"}}
 		}, false},

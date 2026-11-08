@@ -156,6 +156,18 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		return err
 	}
 	authSvc := auth.NewService(st, hasher, authLog, cfg.EmergencyAdmin)
+	// Second factor with recovery by mail (AUTH-008, NFR-017); the link
+	// needs the public URL, a link from the request could name any host.
+	mailSvc := mail.NewService(st, box, logs.Module("mail"))
+	linkBase := ""
+	if cfg.PublicURL != nil {
+		linkBase = cfg.PublicURL.String()
+	}
+	authSvc.SetSecondFactor(auth.SecondFactor{Box: box, Mail: mailSvc, LinkBase: linkBase})
+	defer authSvc.WaitMail()
+	if err := auth.EnsureSecondFactorDefaults(ctx, st); err != nil {
+		return err
+	}
 	checker := perm.NewChecker(st, logs.Module("perm"))
 	userSvc := users.NewService(st, checker, logs.Module("users"), authSvc.RevokeUser)
 	serverSvc := servers.NewService(st, checker, box, logs.Module("servers"))
@@ -241,7 +253,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
 			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
 	}
-	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc, Mail: mail.NewService(st, box, logs.Module("mail")),
+	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc, Mail: mailSvc,
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
 		Agents: agentSvc, Runtime: views,
 	})

@@ -230,6 +230,7 @@ const (
 	ReasonCodeRateLimited            ReasonCode = "rate_limited"
 	ReasonCodeServerUnavailable      ReasonCode = "server_unavailable"
 	ReasonCodeTimeout                ReasonCode = "timeout"
+	ReasonCodeTotpSetupRequired      ReasonCode = "totp_setup_required"
 	ReasonCodeUnauthenticated        ReasonCode = "unauthenticated"
 	ReasonCodeWrapperBlocked         ReasonCode = "wrapper_blocked"
 )
@@ -264,6 +265,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeServerUnavailable:
 		return true
 	case ReasonCodeTimeout:
+		return true
+	case ReasonCodeTotpSetupRequired:
 		return true
 	case ReasonCodeUnauthenticated:
 		return true
@@ -361,6 +364,21 @@ func (e SMTPTestResultCategory) Valid() bool {
 	case SMTPTestResultCategoryTimeout:
 		return true
 	case SMTPTestResultCategoryTls:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SecondFactorRequiredSecondFactor.
+const (
+	Totp SecondFactorRequiredSecondFactor = "totp"
+)
+
+// Valid indicates whether the value is a known member of the SecondFactorRequiredSecondFactor enum.
+func (e SecondFactorRequiredSecondFactor) Valid() bool {
+	switch e {
+	case Totp:
 		return true
 	default:
 		return false
@@ -630,6 +648,12 @@ type CatalogCommand struct {
 	Path        string         `json:"path"`
 }
 
+// CodeInput defines model for CodeInput.
+type CodeInput struct {
+	// Code The 6 digits of the authenticator app; spaces are ignored.
+	Code string `json:"code"`
+}
+
 // CommandInput defines model for CommandInput.
 type CommandInput struct {
 	Command string `json:"command"`
@@ -734,6 +758,15 @@ type ContainerRuntime struct {
 
 	// Volumes Named volumes of the container (AGT-007); the size only once the agent measured it, without the capability volumes.size never.
 	Volumes *[]VolumeRuntime `json:"volumes,omitempty"`
+}
+
+// EmailInput defines model for EmailInput.
+type EmailInput struct {
+	Code *string `json:"code,omitempty"`
+
+	// Email One plain address; empty removes it.
+	Email    string  `json:"email"`
+	Password *string `json:"password,omitempty"`
 }
 
 // Favorites defines model for Favorites.
@@ -878,6 +911,13 @@ type PasswordChange struct {
 	NewPassword     string `json:"new_password"`
 }
 
+// PasswordConfirm defines model for PasswordConfirm.
+type PasswordConfirm struct {
+	// Code Required while the second factor is on.
+	Code     *string `json:"code,omitempty"`
+	Password *string `json:"password,omitempty"`
+}
+
 // PasswordReset defines model for PasswordReset.
 type PasswordReset struct {
 	// Password Temporary password; shown only once.
@@ -970,6 +1010,17 @@ type ProfileUpdate struct {
 // ReasonCode Machine-readable reason of a rejection (Design 3.5).
 type ReasonCode string
 
+// RecoveryRedeem defines model for RecoveryRedeem.
+type RecoveryRedeem struct {
+	Password *string `json:"password,omitempty"`
+	Token    string  `json:"token"`
+}
+
+// RecoveryRequest defines model for RecoveryRequest.
+type RecoveryRequest struct {
+	Pseudonym string `json:"pseudonym"`
+}
+
 // Role One of the four fixed roles (ROLE-001).
 type Role string
 
@@ -1023,6 +1074,34 @@ type SMTPTestResult struct {
 
 // SMTPTestResultCategory Why the mail did not go out; nothing more is told.
 type SMTPTestResultCategory string
+
+// SecondFactor defines model for SecondFactor.
+type SecondFactor struct {
+	// Email The own address for the recovery; only its owner reads it.
+	Email   string `json:"email"`
+	Enabled bool   `json:"enabled"`
+
+	// Required The RCON admin requires it for everyone (auth.totp_required).
+	Required bool `json:"required"`
+}
+
+// SecondFactorRequired defines model for SecondFactorRequired.
+type SecondFactorRequired struct {
+	ExpiresAt    time.Time                        `json:"expires_at"`
+	SecondFactor SecondFactorRequiredSecondFactor `json:"second_factor"`
+}
+
+// SecondFactorRequiredSecondFactor defines model for SecondFactorRequired.SecondFactor.
+type SecondFactorRequiredSecondFactor string
+
+// SecondFactorSetup defines model for SecondFactorSetup.
+type SecondFactorSetup struct {
+	// Secret Base32, to type into the authenticator app.
+	Secret string `json:"secret"`
+
+	// Uri otpauth URI for the QR code, made in the browser.
+	Uri string `json:"uri"`
+}
 
 // Server defines model for Server.
 type Server struct {
@@ -1163,6 +1242,9 @@ type Session struct {
 	// PanelVersion Version of the panel (UI-015), e.g. 0.10; 0.0.0-dev in development builds.
 	PanelVersion string `json:"panel_version"`
 
+	// TotpSetupRequired The RCON admin requires the second factor and the user has none: only setting it up, logging out and reading the session work, and no WebSocket subscription (AUTH-008).
+	TotpSetupRequired bool `json:"totp_setup_required"`
+
 	// Ui Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings.
 	Ui struct {
 		// ShortcutsEnabled Keyboard shortcuts, off by default (UI-008).
@@ -1204,9 +1286,12 @@ type Target struct {
 // User defines model for User.
 type User struct {
 	// Contacts Contact details such as telegram or whatsapp (AUTH-009).
-	Contacts    map[string]string  `json:"contacts"`
-	CreatedAt   time.Time          `json:"created_at"`
-	Disabled    bool               `json:"disabled"`
+	Contacts  map[string]string `json:"contacts"`
+	CreatedAt time.Time         `json:"created_at"`
+	Disabled  bool              `json:"disabled"`
+
+	// EmailSet An address for the recovery is on file; the address itself only its owner reads.
+	EmailSet    bool               `json:"email_set"`
 	HasAvatar   bool               `json:"has_avatar"`
 	Id          openapi_types.UUID `json:"id"`
 	IsEmergency bool               `json:"is_emergency"`
@@ -1219,6 +1304,9 @@ type User struct {
 
 	// SupportersAllowed The moderator may have supporters (ROLE-006).
 	SupportersAllowed bool `json:"supporters_allowed"`
+
+	// TotpEnabled The second factor is on (AUTH-008).
+	TotpEnabled bool `json:"totp_enabled"`
 }
 
 // UserGroup defines model for UserGroup.
@@ -1409,6 +1497,15 @@ type ListUsersParams struct {
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// LoginCodeJSONRequestBody defines body for LoginCode for application/json ContentType.
+type LoginCodeJSONRequestBody = CodeInput
+
+// RequestRecoveryJSONRequestBody defines body for RequestRecovery for application/json ContentType.
+type RequestRecoveryJSONRequestBody = RecoveryRequest
+
+// RedeemRecoveryJSONRequestBody defines body for RedeemRecovery for application/json ContentType.
+type RedeemRecoveryJSONRequestBody = RecoveryRedeem
+
 // CreateCommandListJSONRequestBody defines body for CreateCommandList for application/json ContentType.
 type CreateCommandListJSONRequestBody = CommandListCreate
 
@@ -1424,11 +1521,23 @@ type RedeemInviteJSONRequestBody = InviteRedeem
 // UpdateMeJSONRequestBody defines body for UpdateMe for application/json ContentType.
 type UpdateMeJSONRequestBody = ProfileUpdate
 
+// SetEmailJSONRequestBody defines body for SetEmail for application/json ContentType.
+type SetEmailJSONRequestBody = EmailInput
+
 // SetFavoritesJSONRequestBody defines body for SetFavorites for application/json ContentType.
 type SetFavoritesJSONRequestBody = Favorites
 
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = PasswordChange
+
+// ConfirmSecondFactorJSONRequestBody defines body for ConfirmSecondFactor for application/json ContentType.
+type ConfirmSecondFactorJSONRequestBody = CodeInput
+
+// DisableSecondFactorJSONRequestBody defines body for DisableSecondFactor for application/json ContentType.
+type DisableSecondFactorJSONRequestBody = PasswordConfirm
+
+// SetupSecondFactorJSONRequestBody defines body for SetupSecondFactor for application/json ContentType.
+type SetupSecondFactorJSONRequestBody = PasswordConfirm
 
 // CreateServerGroupJSONRequestBody defines body for CreateServerGroup for application/json ContentType.
 type CreateServerGroupJSONRequestBody = ServerGroupInput
@@ -1498,9 +1607,18 @@ type ServerInterface interface {
 	// Login Log in with pseudonym and password (AUTH-001, AUTH-006).
 	// (POST /auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
+	// LoginCode Complete a login with the code of the second factor (AUTH-008).
+	// (POST /auth/login/totp)
+	LoginCode(w http.ResponseWriter, r *http.Request)
 	// Logout End the current session (AUTH-006).
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// RequestRecovery Ask for a recovery link of the second factor (AUTH-008).
+	// (POST /auth/recovery)
+	RequestRecovery(w http.ResponseWriter, r *http.Request)
+	// RedeemRecovery Reset the second factor with the recovery link and the password (AUTH-008).
+	// (POST /auth/recovery/redeem)
+	RedeemRecovery(w http.ResponseWriter, r *http.Request)
 	// GetSession The current session and its user (AUTH-006).
 	// (GET /auth/session)
 	GetSession(w http.ResponseWriter, r *http.Request)
@@ -1543,6 +1661,9 @@ type ServerInterface interface {
 	// SetMyAvatar Upload the own profile picture (AUTH-009).
 	// (PUT /me/avatar)
 	SetMyAvatar(w http.ResponseWriter, r *http.Request)
+	// SetEmail Change the own mail address for the recovery; needs the password and, with the second factor on, a code (AUTH-008).
+	// (PUT /me/email)
+	SetEmail(w http.ResponseWriter, r *http.Request)
 	// GetFavorites The caller's favorite servers for the console (CMD-001).
 	// (GET /me/favorites)
 	GetFavorites(w http.ResponseWriter, r *http.Request)
@@ -1552,6 +1673,18 @@ type ServerInterface interface {
 	// ChangePassword Change the own password (AUTH-007).
 	// (POST /me/password)
 	ChangePassword(w http.ResponseWriter, r *http.Request)
+	// GetSecondFactor The own second factor and mail address (AUTH-008).
+	// (GET /me/second-factor)
+	GetSecondFactor(w http.ResponseWriter, r *http.Request)
+	// ConfirmSecondFactor Switch the own second factor on with its first code (AUTH-008).
+	// (POST /me/second-factor/confirm)
+	ConfirmSecondFactor(w http.ResponseWriter, r *http.Request)
+	// DisableSecondFactor Switch the own second factor off with password and code (AUTH-008).
+	// (POST /me/second-factor/disable)
+	DisableSecondFactor(w http.ResponseWriter, r *http.Request)
+	// SetupSecondFactor Start the own second factor; needs the password (AUTH-008).
+	// (POST /me/second-factor/setup)
+	SetupSecondFactor(w http.ResponseWriter, r *http.Request)
 	// ListProfiles Game profiles with their command catalog (CAT-001, CAT-002).
 	// (GET /profiles)
 	ListProfiles(w http.ResponseWriter, r *http.Request)
@@ -1660,6 +1793,9 @@ type ServerInterface interface {
 	// ResetPassword Set a temporary password for a managed user (AUTH-010).
 	// (POST /users/{id}/password-reset)
 	ResetPassword(w http.ResponseWriter, r *http.Request, id UserID)
+	// ResetSecondFactor Reset the second factor of a user; whoever manages the user (AUTH-008).
+	// (DELETE /users/{id}/second-factor)
+	ResetSecondFactor(w http.ResponseWriter, r *http.Request, id UserID)
 	// EndUserSessions End all sessions of a managed user (AUTH-006).
 	// (DELETE /users/{id}/sessions)
 	EndUserSessions(w http.ResponseWriter, r *http.Request, id UserID)
@@ -1895,11 +2031,53 @@ func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request)
 	handler.ServeHTTP(w, r)
 }
 
+// LoginCode operation middleware
+func (siw *ServerInterfaceWrapper) LoginCode(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LoginCode(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Logout operation middleware
 func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RequestRecovery operation middleware
+func (siw *ServerInterfaceWrapper) RequestRecovery(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RequestRecovery(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RedeemRecovery operation middleware
+func (siw *ServerInterfaceWrapper) RedeemRecovery(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RedeemRecovery(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2177,6 +2355,20 @@ func (siw *ServerInterfaceWrapper) SetMyAvatar(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// SetEmail operation middleware
+func (siw *ServerInterfaceWrapper) SetEmail(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetEmail(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetFavorites operation middleware
 func (siw *ServerInterfaceWrapper) GetFavorites(w http.ResponseWriter, r *http.Request) {
 
@@ -2210,6 +2402,62 @@ func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ChangePassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSecondFactor operation middleware
+func (siw *ServerInterfaceWrapper) GetSecondFactor(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSecondFactor(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfirmSecondFactor operation middleware
+func (siw *ServerInterfaceWrapper) ConfirmSecondFactor(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfirmSecondFactor(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DisableSecondFactor operation middleware
+func (siw *ServerInterfaceWrapper) DisableSecondFactor(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DisableSecondFactor(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetupSecondFactor operation middleware
+func (siw *ServerInterfaceWrapper) SetupSecondFactor(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetupSecondFactor(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3190,6 +3438,32 @@ func (siw *ServerInterfaceWrapper) ResetPassword(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ResetSecondFactor operation middleware
+func (siw *ServerInterfaceWrapper) ResetSecondFactor(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetSecondFactor(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // EndUserSessions operation middleware
 func (siw *ServerInterfaceWrapper) EndUserSessions(w http.ResponseWriter, r *http.Request) {
 
@@ -3351,8 +3625,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/login", wrapper.Login)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/login/totp", wrapper.LoginCode)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/recovery", wrapper.RequestRecovery)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/recovery/redeem", wrapper.RedeemRecovery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/session", wrapper.GetSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/second-factor", wrapper.GetSecondFactor)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/second-factor/setup", wrapper.SetupSecondFactor)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/second-factor/confirm", wrapper.ConfirmSecondFactor)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/second-factor/disable", wrapper.DisableSecondFactor)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/me/email", wrapper.SetEmail)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}/second-factor", wrapper.ResetSecondFactor)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/profiles", wrapper.ListProfiles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers", wrapper.ListServers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers", wrapper.CreateServer)
@@ -3922,6 +4205,20 @@ func (response Login200JSONResponse) VisitLoginResponse(w http.ResponseWriter) e
 	return err
 }
 
+type Login202JSONResponse SecondFactorRequired
+
+func (response Login202JSONResponse) VisitLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type Login400ApplicationProblemPlusJSONResponse struct {
 	BadRequestApplicationProblemPlusJSONResponse
 }
@@ -4008,6 +4305,98 @@ func (response Login503ApplicationProblemPlusJSONResponse) VisitLoginResponse(w 
 	return err
 }
 
+type LoginCodeRequestObject struct {
+	Body *LoginCodeJSONRequestBody
+}
+
+type LoginCodeResponseObject interface {
+	VisitLoginCodeResponse(w http.ResponseWriter) error
+}
+
+type LoginCode200JSONResponse Session
+
+func (response LoginCode200JSONResponse) VisitLoginCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LoginCode400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response LoginCode400ApplicationProblemPlusJSONResponse) VisitLoginCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LoginCode401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response LoginCode401ApplicationProblemPlusJSONResponse) VisitLoginCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LoginCode429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response LoginCode429ApplicationProblemPlusJSONResponse) VisitLoginCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LoginCode503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response LoginCode503ApplicationProblemPlusJSONResponse) VisitLoginCodeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type LogoutRequestObject struct {
 }
 
@@ -4051,6 +4440,124 @@ func (response Logout403ApplicationProblemPlusJSONResponse) VisitLogoutResponse(
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestRecoveryRequestObject struct {
+	Body *RequestRecoveryJSONRequestBody
+}
+
+type RequestRecoveryResponseObject interface {
+	VisitRequestRecoveryResponse(w http.ResponseWriter) error
+}
+
+type RequestRecovery202Response struct {
+}
+
+func (response RequestRecovery202Response) VisitRequestRecoveryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type RequestRecovery400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RequestRecovery400ApplicationProblemPlusJSONResponse) VisitRequestRecoveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemRecoveryRequestObject struct {
+	Body *RedeemRecoveryJSONRequestBody
+}
+
+type RedeemRecoveryResponseObject interface {
+	VisitRedeemRecoveryResponse(w http.ResponseWriter) error
+}
+
+type RedeemRecovery204Response struct {
+}
+
+func (response RedeemRecovery204Response) VisitRedeemRecoveryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RedeemRecovery400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemRecovery400ApplicationProblemPlusJSONResponse) VisitRedeemRecoveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemRecovery401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemRecovery401ApplicationProblemPlusJSONResponse) VisitRedeemRecoveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemRecovery429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemRecovery429ApplicationProblemPlusJSONResponse) VisitRedeemRecoveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeemRecovery503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response RedeemRecovery503ApplicationProblemPlusJSONResponse) VisitRedeemRecoveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -4932,6 +5439,108 @@ func (response SetMyAvatar422ApplicationProblemPlusJSONResponse) VisitSetMyAvata
 	return err
 }
 
+type SetEmailRequestObject struct {
+	Body *SetEmailJSONRequestBody
+}
+
+type SetEmailResponseObject interface {
+	VisitSetEmailResponse(w http.ResponseWriter) error
+}
+
+type SetEmail204Response struct {
+}
+
+func (response SetEmail204Response) VisitSetEmailResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SetEmail400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SetEmail400ApplicationProblemPlusJSONResponse) VisitSetEmailResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetEmail401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SetEmail401ApplicationProblemPlusJSONResponse) VisitSetEmailResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetEmail422ApplicationProblemPlusJSONResponse struct {
+	InvalidApplicationProblemPlusJSONResponse
+}
+
+func (response SetEmail422ApplicationProblemPlusJSONResponse) VisitSetEmailResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetEmail429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response SetEmail429ApplicationProblemPlusJSONResponse) VisitSetEmailResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetEmail503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response SetEmail503ApplicationProblemPlusJSONResponse) VisitSetEmailResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetFavoritesRequestObject struct {
 }
 
@@ -5143,6 +5752,346 @@ type ChangePassword503ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ChangePassword503ApplicationProblemPlusJSONResponse) VisitChangePasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSecondFactorRequestObject struct {
+}
+
+type GetSecondFactorResponseObject interface {
+	VisitGetSecondFactorResponse(w http.ResponseWriter) error
+}
+
+type GetSecondFactor200JSONResponse SecondFactor
+
+func (response GetSecondFactor200JSONResponse) VisitGetSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSecondFactor401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetSecondFactor401ApplicationProblemPlusJSONResponse) VisitGetSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmSecondFactorRequestObject struct {
+	Body *ConfirmSecondFactorJSONRequestBody
+}
+
+type ConfirmSecondFactorResponseObject interface {
+	VisitConfirmSecondFactorResponse(w http.ResponseWriter) error
+}
+
+type ConfirmSecondFactor204Response struct {
+}
+
+func (response ConfirmSecondFactor204Response) VisitConfirmSecondFactorResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ConfirmSecondFactor400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ConfirmSecondFactor400ApplicationProblemPlusJSONResponse) VisitConfirmSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmSecondFactor401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ConfirmSecondFactor401ApplicationProblemPlusJSONResponse) VisitConfirmSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmSecondFactor409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ConfirmSecondFactor409ApplicationProblemPlusJSONResponse) VisitConfirmSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmSecondFactor429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response ConfirmSecondFactor429ApplicationProblemPlusJSONResponse) VisitConfirmSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableSecondFactorRequestObject struct {
+	Body *DisableSecondFactorJSONRequestBody
+}
+
+type DisableSecondFactorResponseObject interface {
+	VisitDisableSecondFactorResponse(w http.ResponseWriter) error
+}
+
+type DisableSecondFactor204Response struct {
+}
+
+func (response DisableSecondFactor204Response) VisitDisableSecondFactorResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DisableSecondFactor400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response DisableSecondFactor400ApplicationProblemPlusJSONResponse) VisitDisableSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableSecondFactor401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DisableSecondFactor401ApplicationProblemPlusJSONResponse) VisitDisableSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableSecondFactor409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response DisableSecondFactor409ApplicationProblemPlusJSONResponse) VisitDisableSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableSecondFactor429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response DisableSecondFactor429ApplicationProblemPlusJSONResponse) VisitDisableSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DisableSecondFactor503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response DisableSecondFactor503ApplicationProblemPlusJSONResponse) VisitDisableSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetupSecondFactorRequestObject struct {
+	Body *SetupSecondFactorJSONRequestBody
+}
+
+type SetupSecondFactorResponseObject interface {
+	VisitSetupSecondFactorResponse(w http.ResponseWriter) error
+}
+
+type SetupSecondFactor200ResponseHeaders struct {
+	CacheControl *string
+}
+
+type SetupSecondFactor200JSONResponse struct {
+	Body    SecondFactorSetup
+	Headers SetupSecondFactor200ResponseHeaders
+}
+
+func (response SetupSecondFactor200JSONResponse) VisitSetupSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.CacheControl != nil {
+		w.Header().Set("Cache-Control", fmt.Sprint(*response.Headers.CacheControl))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetupSecondFactor400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SetupSecondFactor400ApplicationProblemPlusJSONResponse) VisitSetupSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetupSecondFactor401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SetupSecondFactor401ApplicationProblemPlusJSONResponse) VisitSetupSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetupSecondFactor409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response SetupSecondFactor409ApplicationProblemPlusJSONResponse) VisitSetupSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetupSecondFactor429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response SetupSecondFactor429ApplicationProblemPlusJSONResponse) VisitSetupSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetupSecondFactor503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response SetupSecondFactor503ApplicationProblemPlusJSONResponse) VisitSetupSecondFactorResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8145,6 +9094,70 @@ func (response ResetPassword503ApplicationProblemPlusJSONResponse) VisitResetPas
 	return err
 }
 
+type ResetSecondFactorRequestObject struct {
+	Id UserID `json:"id"`
+}
+
+type ResetSecondFactorResponseObject interface {
+	VisitResetSecondFactorResponse(w http.ResponseWriter) error
+}
+
+type ResetSecondFactor204Response struct {
+}
+
+func (response ResetSecondFactor204Response) VisitResetSecondFactorResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ResetSecondFactor401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ResetSecondFactor401ApplicationProblemPlusJSONResponse) VisitResetSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetSecondFactor403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ResetSecondFactor403ApplicationProblemPlusJSONResponse) VisitResetSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetSecondFactor404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ResetSecondFactor404ApplicationProblemPlusJSONResponse) VisitResetSecondFactorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type EndUserSessionsRequestObject struct {
 	Id UserID `json:"id"`
 }
@@ -8282,9 +9295,18 @@ type StrictServerInterface interface {
 	// Login Log in with pseudonym and password (AUTH-001, AUTH-006).
 	// (POST /auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
+	// LoginCode Complete a login with the code of the second factor (AUTH-008).
+	// (POST /auth/login/totp)
+	LoginCode(ctx context.Context, request LoginCodeRequestObject) (LoginCodeResponseObject, error)
 	// Logout End the current session (AUTH-006).
 	// (POST /auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// RequestRecovery Ask for a recovery link of the second factor (AUTH-008).
+	// (POST /auth/recovery)
+	RequestRecovery(ctx context.Context, request RequestRecoveryRequestObject) (RequestRecoveryResponseObject, error)
+	// RedeemRecovery Reset the second factor with the recovery link and the password (AUTH-008).
+	// (POST /auth/recovery/redeem)
+	RedeemRecovery(ctx context.Context, request RedeemRecoveryRequestObject) (RedeemRecoveryResponseObject, error)
 	// GetSession The current session and its user (AUTH-006).
 	// (GET /auth/session)
 	GetSession(ctx context.Context, request GetSessionRequestObject) (GetSessionResponseObject, error)
@@ -8327,6 +9349,9 @@ type StrictServerInterface interface {
 	// SetMyAvatar Upload the own profile picture (AUTH-009).
 	// (PUT /me/avatar)
 	SetMyAvatar(ctx context.Context, request SetMyAvatarRequestObject) (SetMyAvatarResponseObject, error)
+	// SetEmail Change the own mail address for the recovery; needs the password and, with the second factor on, a code (AUTH-008).
+	// (PUT /me/email)
+	SetEmail(ctx context.Context, request SetEmailRequestObject) (SetEmailResponseObject, error)
 	// GetFavorites The caller's favorite servers for the console (CMD-001).
 	// (GET /me/favorites)
 	GetFavorites(ctx context.Context, request GetFavoritesRequestObject) (GetFavoritesResponseObject, error)
@@ -8336,6 +9361,18 @@ type StrictServerInterface interface {
 	// ChangePassword Change the own password (AUTH-007).
 	// (POST /me/password)
 	ChangePassword(ctx context.Context, request ChangePasswordRequestObject) (ChangePasswordResponseObject, error)
+	// GetSecondFactor The own second factor and mail address (AUTH-008).
+	// (GET /me/second-factor)
+	GetSecondFactor(ctx context.Context, request GetSecondFactorRequestObject) (GetSecondFactorResponseObject, error)
+	// ConfirmSecondFactor Switch the own second factor on with its first code (AUTH-008).
+	// (POST /me/second-factor/confirm)
+	ConfirmSecondFactor(ctx context.Context, request ConfirmSecondFactorRequestObject) (ConfirmSecondFactorResponseObject, error)
+	// DisableSecondFactor Switch the own second factor off with password and code (AUTH-008).
+	// (POST /me/second-factor/disable)
+	DisableSecondFactor(ctx context.Context, request DisableSecondFactorRequestObject) (DisableSecondFactorResponseObject, error)
+	// SetupSecondFactor Start the own second factor; needs the password (AUTH-008).
+	// (POST /me/second-factor/setup)
+	SetupSecondFactor(ctx context.Context, request SetupSecondFactorRequestObject) (SetupSecondFactorResponseObject, error)
 	// ListProfiles Game profiles with their command catalog (CAT-001, CAT-002).
 	// (GET /profiles)
 	ListProfiles(ctx context.Context, request ListProfilesRequestObject) (ListProfilesResponseObject, error)
@@ -8444,6 +9481,9 @@ type StrictServerInterface interface {
 	// ResetPassword Set a temporary password for a managed user (AUTH-010).
 	// (POST /users/{id}/password-reset)
 	ResetPassword(ctx context.Context, request ResetPasswordRequestObject) (ResetPasswordResponseObject, error)
+	// ResetSecondFactor Reset the second factor of a user; whoever manages the user (AUTH-008).
+	// (DELETE /users/{id}/second-factor)
+	ResetSecondFactor(ctx context.Context, request ResetSecondFactorRequestObject) (ResetSecondFactorResponseObject, error)
 	// EndUserSessions End all sessions of a managed user (AUTH-006).
 	// (DELETE /users/{id}/sessions)
 	EndUserSessions(ctx context.Context, request EndUserSessionsRequestObject) (EndUserSessionsResponseObject, error)
@@ -8700,6 +9740,37 @@ func (sh *strictHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// LoginCode operation middleware
+func (sh *strictHandler) LoginCode(w http.ResponseWriter, r *http.Request) {
+	var request LoginCodeRequestObject
+
+	var body LoginCodeJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LoginCode(ctx, request.(LoginCodeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LoginCode")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LoginCodeResponseObject); ok {
+		if err := validResponse.VisitLoginCodeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Logout operation middleware
 func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var request LogoutRequestObject
@@ -8717,6 +9788,68 @@ func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(LogoutResponseObject); ok {
 		if err := validResponse.VisitLogoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RequestRecovery operation middleware
+func (sh *strictHandler) RequestRecovery(w http.ResponseWriter, r *http.Request) {
+	var request RequestRecoveryRequestObject
+
+	var body RequestRecoveryJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RequestRecovery(ctx, request.(RequestRecoveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RequestRecovery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RequestRecoveryResponseObject); ok {
+		if err := validResponse.VisitRequestRecoveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RedeemRecovery operation middleware
+func (sh *strictHandler) RedeemRecovery(w http.ResponseWriter, r *http.Request) {
+	var request RedeemRecoveryRequestObject
+
+	var body RedeemRecoveryJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RedeemRecovery(ctx, request.(RedeemRecoveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RedeemRecovery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RedeemRecoveryResponseObject); ok {
+		if err := validResponse.VisitRedeemRecoveryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -9108,6 +10241,37 @@ func (sh *strictHandler) SetMyAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// SetEmail operation middleware
+func (sh *strictHandler) SetEmail(w http.ResponseWriter, r *http.Request) {
+	var request SetEmailRequestObject
+
+	var body SetEmailJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetEmail(ctx, request.(SetEmailRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetEmail")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetEmailResponseObject); ok {
+		if err := validResponse.VisitSetEmailResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetFavorites operation middleware
 func (sh *strictHandler) GetFavorites(w http.ResponseWriter, r *http.Request) {
 	var request GetFavoritesRequestObject
@@ -9187,6 +10351,123 @@ func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ChangePasswordResponseObject); ok {
 		if err := validResponse.VisitChangePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSecondFactor operation middleware
+func (sh *strictHandler) GetSecondFactor(w http.ResponseWriter, r *http.Request) {
+	var request GetSecondFactorRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSecondFactor(ctx, request.(GetSecondFactorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSecondFactor")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSecondFactorResponseObject); ok {
+		if err := validResponse.VisitGetSecondFactorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConfirmSecondFactor operation middleware
+func (sh *strictHandler) ConfirmSecondFactor(w http.ResponseWriter, r *http.Request) {
+	var request ConfirmSecondFactorRequestObject
+
+	var body ConfirmSecondFactorJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConfirmSecondFactor(ctx, request.(ConfirmSecondFactorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConfirmSecondFactor")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConfirmSecondFactorResponseObject); ok {
+		if err := validResponse.VisitConfirmSecondFactorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DisableSecondFactor operation middleware
+func (sh *strictHandler) DisableSecondFactor(w http.ResponseWriter, r *http.Request) {
+	var request DisableSecondFactorRequestObject
+
+	var body DisableSecondFactorJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DisableSecondFactor(ctx, request.(DisableSecondFactorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DisableSecondFactor")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DisableSecondFactorResponseObject); ok {
+		if err := validResponse.VisitDisableSecondFactorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetupSecondFactor operation middleware
+func (sh *strictHandler) SetupSecondFactor(w http.ResponseWriter, r *http.Request) {
+	var request SetupSecondFactorRequestObject
+
+	var body SetupSecondFactorJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetupSecondFactor(ctx, request.(SetupSecondFactorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetupSecondFactor")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetupSecondFactorResponseObject); ok {
+		if err := validResponse.VisitSetupSecondFactorResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -10204,6 +11485,32 @@ func (sh *strictHandler) ResetPassword(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ResetPasswordResponseObject); ok {
 		if err := validResponse.VisitResetPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResetSecondFactor operation middleware
+func (sh *strictHandler) ResetSecondFactor(w http.ResponseWriter, r *http.Request, id UserID) {
+	var request ResetSecondFactorRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResetSecondFactor(ctx, request.(ResetSecondFactorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResetSecondFactor")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResetSecondFactorResponseObject); ok {
+		if err := validResponse.VisitResetSecondFactorResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

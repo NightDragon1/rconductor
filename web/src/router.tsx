@@ -26,6 +26,8 @@ import { AgentsPage } from '@/pages/admin/Agents';
 import { SettingsPage } from '@/pages/admin/Settings';
 import { AuditPage } from '@/pages/Audit';
 import { TopologyPage } from '@/pages/Topology';
+import { RecoverPage } from '@/pages/Recover';
+import { SetupSecondFactorPage } from '@/pages/SetupSecondFactor';
 import { ProfilePage } from '@/pages/Profile';
 import { CommandListsPage } from '@/pages/admin/CommandLists';
 import { ServersAdminPage } from '@/pages/admin/ServersAdmin';
@@ -73,6 +75,24 @@ const changePasswordRoute = createRoute({
   component: ChangePasswordPage,
 });
 
+// While the RCON admin requires the second factor and the user has none,
+// only its setup is open (AUTH-008).
+const setupSecondFactorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'setup-second-factor',
+  beforeLoad: async ({ context }) => {
+    if (!(await sessionRoute(context))) throw redirect({ to: '/login' });
+  },
+  component: SetupSecondFactorPage,
+});
+
+// The recovery of the second factor needs no session (AUTH-008).
+const recoverRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'recover',
+  component: RecoverPage,
+});
+
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
@@ -80,6 +100,7 @@ const appRoute = createRoute({
     const s = await sessionRoute(context);
     if (!s) throw redirect({ to: '/login' });
     if (s.must_change_password) throw redirect({ to: '/change-password' });
+    if (s.totp_setup_required) throw redirect({ to: '/setup-second-factor' });
   },
   component: Shell,
 });
@@ -186,6 +207,8 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   inviteRoute,
   changePasswordRoute,
+  setupSecondFactorRoute,
+  recoverRoute,
   appRoute.addChildren([
     homeRoute,
     serversRoute,

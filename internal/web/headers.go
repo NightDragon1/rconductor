@@ -38,9 +38,16 @@ const (
 	actionWrite = 80 * time.Second
 )
 
-// publicBody reports whether path takes a body without a session.
+// publicBody reports whether path takes a body without a session: the
+// login with its second step, the invitation and the recovery of the
+// second factor (AUTH-008).
 func publicBody(path string) bool {
-	return strings.HasSuffix(path, "/auth/login") || strings.HasSuffix(path, "/invites/redeem")
+	for _, p := range []string{"/auth/login", "/auth/login/totp", "/invites/redeem", "/auth/recovery", "/auth/recovery/redeem"} {
+		if strings.HasSuffix(path, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // APIPolicy is the Content-Security-Policy of every answer that is not the

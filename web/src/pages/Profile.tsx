@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { PasswordInput } from '@/components/PasswordInput';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
+import { ProfileSecondFactor } from './ProfileSecondFactor';
 
 type Message = { ok: boolean; text: string } | null;
 
@@ -244,6 +245,7 @@ export function ProfilePage() {
           {t('password.submit')}
         </Button>
       </form>
+      <ProfileSecondFactor />
     </div>
   );
 }

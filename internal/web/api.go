@@ -28,7 +28,7 @@ import (
 // publicOperations need no session; every other operation is rejected
 // with 401 unless a valid session is present (default deny).
 // The names are the generated Go method names of the operations.
-var publicOperations = map[string]bool{"Login": true, "RedeemInvite": true}
+var publicOperations = map[string]bool{"Login": true, "RedeemInvite": true, "LoginCode": true, "RequestRecovery": true, "RedeemRecovery": true}
 
 // whileMustChange are the only operations a user with a forced password
 // change may call (AUTH-010).
@@ -179,6 +179,14 @@ func (s *apiServer) authenticate(next api.StrictHandlerFunc, operationID string)
 			})
 			return nil, &problem{status: http.StatusForbidden, reason: api.ReasonCodePasswordChangeRequired,
 				detail: "change your password first"}
+		}
+		if ok && p.TOTPSetupRequired && !whileTOTPSetup[operationID] {
+			perm.LogDenied(s.log, perm.Denial{
+				RequestID: RequestID(ctx), SessionRef: p.SessionRef(), User: p.Pseudonym, Role: perm.Role(p.Role),
+				Reason: string(api.ReasonCodeTotpSetupRequired), Action: operationID,
+			})
+			return nil, &problem{status: http.StatusForbidden, reason: api.ReasonCodeTotpSetupRequired,
+				detail: "set up two-factor sign-in first"}
 		}
 		return next(ctx, w, r, request)
 	}

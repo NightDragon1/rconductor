@@ -66,6 +66,7 @@ func (s *apiServer) sessionOf(ctx context.Context, p auth.Principal) api.Session
 		User:               api.SessionUser{Id: id, Pseudonym: p.Pseudonym, Role: api.Role(p.Role)},
 		ExpiresAt:          p.ExpiresAt,
 		MustChangePassword: p.MustChangePassword,
+		TotpSetupRequired:  p.TOTPSetupRequired,
 		PanelVersion:       buildinfo.Version,
 	}
 	if s.store != nil {
@@ -97,7 +98,12 @@ func (s *apiServer) Login(ctx context.Context, req api.LoginRequestObject) (api.
 		SessionToken: readSessionCookie(h.r),
 	})
 	var locked *auth.LockedError
+	var step *auth.SecondStepError
 	switch {
+	case errors.As(err, &step):
+		// The password was right; the code follows (AUTH-008).
+		setPendingCookie(h.w, h.r, step.Token, step.ExpiresAt)
+		return api.Login202JSONResponse(api.SecondFactorRequired{SecondFactor: api.Totp, ExpiresAt: step.ExpiresAt}), nil
 	case errors.As(err, &locked):
 		return nil, &problem{
 			status: http.StatusTooManyRequests, reason: api.ReasonCodeRateLimited, detail: locked.Error(),

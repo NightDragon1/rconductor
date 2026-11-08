@@ -48,7 +48,7 @@ func toAPIUser(u users.User) api.User {
 	out := api.User{
 		Id: id, Pseudonym: u.Pseudonym, Role: api.Role(u.Role), Contacts: u.Contacts, HasAvatar: u.HasAvatar,
 		Disabled: u.Disabled, IsEmergency: u.IsEmergency, SupportersAllowed: u.SupportersAllowed,
-		CreatedAt: u.CreatedAt, LastLoginAt: u.LastLoginAt,
+		CreatedAt: u.CreatedAt, LastLoginAt: u.LastLoginAt, TotpEnabled: u.TOTPEnabled, EmailSet: u.EmailSet,
 	}
 	if u.RealName != "" {
 		out.RealName = &u.RealName
