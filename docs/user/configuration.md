@@ -1,7 +1,7 @@
 # Configuration
 
-Applies to version 1.0 and to main (1.1). Entries marked (1.1) are new in
-1.1; version 1.0 does not have them.
+> **Version:** applies to RCONductor 1.0, the released version, and to 1.1
+> on `main`. Items marked (1.1) are new in 1.1 and not in 1.0.
 
 Only start-up and infrastructure are set by environment variables; everything
 that changes during operation is a setting in the panel. All variables are
