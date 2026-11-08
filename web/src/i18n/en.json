@@ -281,6 +281,24 @@
     "noMetrics": "No measurements yet.",
     "rcon": "RCON state"
   },
+  "multi": {
+    "open": "Several servers",
+    "title": "Send to several servers",
+    "explain": "One command to several servers of your scope. Each server checks it on its own and answers on its own; it counts against the rate limit of each server.",
+    "servers": "Servers",
+    "addGroup": "Add {{name}}",
+    "command": "Command",
+    "send_one": "Send to {{count}} server",
+    "send_other": "Send to {{count}} servers",
+    "results": "Results",
+    "result": {
+      "ok": "OK",
+      "denied": "denied",
+      "error": "error",
+      "timeout": "timeout",
+      "not_found": "not found"
+    }
+  },
   "templates": {
     "title": "Templates",
     "explain": "Commands with placeholders such as {player}. Fill one in and it goes to the input line; the panel checks it like a typed command.",
@@ -779,6 +797,14 @@
       "ws_max_subscriptions_per_socket": {
         "label": "Subscriptions per connection",
         "help": "Live topics one browser tab may follow at once."
+      },
+      "commands_multi_max_servers": {
+        "label": "Servers per multi command",
+        "help": "How many servers one command to several servers may name."
+      },
+      "commands_multi_parallel": {
+        "label": "Multi command at once",
+        "help": "On how many servers a command to several servers runs at the same time."
       },
       "commands_templates_per_server": {
         "label": "Templates per server",

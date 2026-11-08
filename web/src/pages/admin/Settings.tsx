@@ -51,6 +51,8 @@ const keyTexts = [
   'backup_interval',
   'backup_keep_auto',
   'backup_keep_pre_migration',
+  'commands_multi_max_servers',
+  'commands_multi_parallel',
   'commands_templates_per_server',
   'invite_lifetime',
   'login_lockout_duration',
