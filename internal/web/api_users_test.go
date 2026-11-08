@@ -5,6 +5,7 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
@@ -102,13 +103,13 @@ func TestProfilesAPI(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil || rec.Code != http.StatusOK {
 		t.Fatalf("profiles = %d %s", rec.Code, rec.Body.String())
 	}
-	// Both shipped profiles; the list is ordered by name, so look up by slug.
+	// All shipped profiles; the list is ordered by name, so look up by slug.
 	bySlug := map[string]api.GameProfile{}
 	for _, p := range list.Items {
 		bySlug[p.Slug] = p
 	}
 	java, ok := bySlug["minecraft-java"]
-	if len(list.Items) != 2 || !ok || len(java.Catalog) != 38 {
+	if len(list.Items) != shippedProfiles(t) || !ok || len(java.Catalog) != 38 {
 		t.Fatalf("profiles = %+v", list.Items)
 	}
 	if java.MaxLength != 1000 || len(java.Wrappers) == 0 || java.Wrappers[0] != "execute" || java.LastError != nil {
@@ -144,4 +145,20 @@ func TestShortcutsInSession(t *testing.T) {
 	if !strings.Contains(session(mod), `"shortcuts_enabled":true`) {
 		t.Errorf("after switching = %s", session(mod))
 	}
+}
+
+// shippedProfiles is the number of profile files the panel ships.
+func shippedProfiles(t *testing.T) int {
+	t.Helper()
+	entries, err := os.ReadDir("../../profiles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".yaml") {
+			n++
+		}
+	}
+	return n
 }
