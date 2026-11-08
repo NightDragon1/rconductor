@@ -1,9 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Panel and agent on one host (Design 5.5). The agent reaches the panel over
-# the Compose network, port 8443 is not published. Start it, create a pairing
-# token in the panel, put it into RCD_PAIRING_TOKEN and restart the agent.
-# DOCKER_GID is the group of the socket: stat -c %g /var/run/docker.sock
+# Panel and agent on one host. Start it, create a pairing token in the
+# panel, put it into RCD_PAIRING_TOKEN and start the agent again.
 services:
   panel:
     image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-panel:${RCD_VERSION:-1}
@@ -16,6 +14,8 @@ services:
     ports:
       - "${RCD_WEB_PORT:-8080}:8080"
     environment:
+      # The agent reaches the panel over the Compose network; port 8443
+      # is not published.
       RCD_AGENT_PUBLIC_ADDR: panel:8443
       RCD_IMAGE_REPO: "${RCD_IMAGE_REPO:-docker.io/nightdragon1}"
       # Empty: 80 % of mem_limit, set by the panel.
@@ -32,8 +32,10 @@ services:
     security_opt: ["no-new-privileges:true"]
     pids_limit: 256
     mem_limit: 1g
+    # Group of the Docker socket: stat -c %g /var/run/docker.sock
     group_add: ["${DOCKER_GID:-999}"]
     environment:
+      # Pairing token from the panel; without it the agent waits.
       RCD_PAIRING_TOKEN: "${RCD_PAIRING_TOKEN:-}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

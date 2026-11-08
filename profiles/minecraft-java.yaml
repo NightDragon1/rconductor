@@ -16,8 +16,7 @@ syntax:
   strip_prefix: "/"
   max_length: 1000
   wrappers: [execute]
-  # Java Edition names; selectors such as @a never fit (revision 2.4
-  # candidate 19).
+  # Java Edition names; selectors such as @a never fit.
   player_pattern: "^[A-Za-z0-9_]{1,16}$"
 players:
   command: list

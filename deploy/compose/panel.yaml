@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# The panel host of the separate variant (Design 5.4). RCD_AGENT_PUBLIC_ADDR
-# is the address agents reach the panel under; it goes into pairing tokens.
+# The panel alone, for agents on other hosts (deploy/compose/agent.yaml).
 services:
   panel:
     image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-panel:${RCD_VERSION:-1}
@@ -13,8 +12,11 @@ services:
     mem_limit: 1g
     ports:
       - "${RCD_WEB_PORT:-8080}:8080"
+      # Agent port; agents connect here directly, never through a proxy.
       - "${RCD_AGENT_PORT:-8443}:8443"
     environment:
+      # host:port under which agents reach the agent port; goes into
+      # every pairing token.
       RCD_AGENT_PUBLIC_ADDR: "${RCD_AGENT_PUBLIC_ADDR:-}"
       RCD_IMAGE_REPO: "${RCD_IMAGE_REPO:-docker.io/nightdragon1}"
       # Empty: 80 % of mem_limit, set by the panel.
