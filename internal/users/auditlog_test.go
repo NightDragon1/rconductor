@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/perm"
 )
@@ -144,5 +146,28 @@ func TestSupporterSwitchOffEndsSessions(t *testing.T) {
 	}
 	if !slices.Equal(f.revoked, []string{f.ids["sup"]}) {
 		t.Errorf("sessions ended for %v, want all supporters", f.revoked)
+	}
+}
+
+// TestAgentDataSettings covers the settings of AGT-006 and AGT-007: each
+// takes its minimum and refuses anything below it.
+func TestAgentDataSettings(t *testing.T) {
+	f := withMore(t)
+	ctx := context.Background()
+	var inv *InvalidError
+	for key, low := range map[string]time.Duration{
+		agentview.SettingVersionRetry:   agentview.MinVersionRetry,
+		agentview.SettingVersionWindow:  agentview.MinVersionWindow,
+		agentview.SettingVolumeInterval: agentview.MinVolumeInterval,
+		agentview.SettingVolumeStale:    agentview.MinVolumeStale,
+	} {
+		ok := map[string]json.RawMessage{key: json.RawMessage(`"` + low.String() + `"`)}
+		if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), ok, f.version("settings", "")); err != nil {
+			t.Errorf("%s = %s: %v", key, low, err)
+		}
+		below := map[string]json.RawMessage{key: json.RawMessage(`"` + (low - time.Second).String() + `"`)}
+		if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), below, f.version("settings", "")); !errors.As(err, &inv) {
+			t.Errorf("%s below the minimum: %v", key, err)
+		}
 	}
 }

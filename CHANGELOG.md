@@ -4,6 +4,8 @@
 
 - Wrappers are also refused with a namespace prefix such as minecraft:execute (CMD-005).
 - The panel works with older agents of the same major version and hides what they cannot do; update the panel before the agents (AGT-013).
+- The game version from the container logs shows on the cards and the server page, for every role that sees the server (AGT-006).
+- The used size of each volume is measured in the background; the API gives it with its age (AGT-007).
 
 ## 1.0
 

@@ -66,7 +66,8 @@ const full: Server[] = [
   },
 ];
 
-// What the API gives a moderator: no agent data (UI-006).
+// What the API gives a moderator: no agent data, but the game version as a
+// server datum (UI-006, AGT-006).
 const reduced: Server[] = full.map(
   ({ id, name, profile_id, groups, status, status_since, version }) => ({
     id,
@@ -76,7 +77,12 @@ const reduced: Server[] = full.map(
     groups,
     status,
     status_since,
-    runtime: { kind: 'runtime', server_id: id, players: 2 },
+    runtime: {
+      kind: 'runtime',
+      server_id: id,
+      players: 2,
+      ...(id === 's1' ? { game_version: '§a1.21.4' } : {}),
+    },
   }),
 );
 
@@ -205,6 +211,11 @@ describe('landing pages', () => {
     expect(beta.dataset.status).toBe('authFailed');
     expect(within(beta).getByText('Profile: Minecraft Java')).toBeTruthy();
     expect(within(beta).getByText('2')).toBeTruthy();
+    // The game version shows without its color code; without one no field.
+    const alpha = screen.getByRole('article', { name: 'alpha' });
+    expect(within(alpha).getByText('Version')).toBeTruthy();
+    expect(within(alpha).getByText('1.21.4')).toBeTruthy();
+    expect(within(beta).queryByText('Version')).toBeNull();
   });
 
   it('has no text outside the language files (NFR-007)', async () => {

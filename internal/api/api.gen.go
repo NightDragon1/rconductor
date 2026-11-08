@@ -638,6 +638,9 @@ type ContainerRuntime struct {
 
 	// State Docker state, or unknown while the agent is disconnected.
 	State string `json:"state"`
+
+	// Volumes Named volumes of the container (AGT-007); the size only once the agent measured it, without the capability volumes.size never.
+	Volumes *[]VolumeRuntime `json:"volumes,omitempty"`
 }
 
 // Favorites defines model for Favorites.
@@ -968,7 +971,10 @@ type ServerList struct {
 
 // ServerRuntime Runtime data, kept in memory with its age (NFR-005); the same data comes live in servers.overview with kind runtime. Player count for everyone in scope, the container only for RCON admin and server admin (UI-006).
 type ServerRuntime struct {
-	Container    *ContainerRuntime  `json:"container,omitempty"`
+	Container *ContainerRuntime `json:"container,omitempty"`
+
+	// GameVersion Game version the agent found in the container's logs with the profile's version pattern (AGT-006); a server datum for every role that sees the server (UI-006). Missing without a match, without a pattern or with an agent that does not report version.detect (AGT-013). Valid until the container starts again or its image changes. Foreign data (SEC-006).
+	GameVersion  *string            `json:"game_version,omitempty"`
 	Kind         ServerRuntimeKind  `json:"kind"`
 	Players      *int               `json:"players,omitempty"`
 	PlayersAt    *time.Time         `json:"players_at,omitempty"`
@@ -1099,6 +1105,21 @@ type UserUpdate struct {
 
 	// SupportersAllowed Release supporters for a moderator (ROLE-006); only server admins and the RCON admin. Switching off takes the rights of the moderator's supporters.
 	SupportersAllowed *bool `json:"supporters_allowed,omitempty"`
+}
+
+// VolumeRuntime defines model for VolumeRuntime.
+type VolumeRuntime struct {
+	// MeasuredAt When the size was measured; the display names its age.
+	MeasuredAt *time.Time `json:"measured_at,omitempty"`
+
+	// Name Foreign data from the agent (SEC-006).
+	Name string `json:"name"`
+
+	// SizeBytes Used size, measured in the background every agent.volume_interval.
+	SizeBytes *int64 `json:"size_bytes,omitempty"`
+
+	// Stale The size is older than agent.volume_stale.
+	Stale *bool `json:"stale,omitempty"`
 }
 
 // AgentID defines model for AgentID.

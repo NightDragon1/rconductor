@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
@@ -32,6 +34,11 @@ type fakeDocker struct {
 	logs    []byte
 	tty     bool
 	events  chan events.Message
+	// since is the Since of the last log call; volumes and diskUsage serve
+	// volumes.size.
+	since     []string
+	volumes   []volume.Volume
+	diskUsage int
 }
 
 func (f *fakeDocker) ContainerList(_ context.Context, o client.ContainerListOptions) (client.ContainerListResult, error) {
@@ -91,8 +98,21 @@ func (f *fakeDocker) ContainerStats(context.Context, string, client.ContainerSta
 	return client.ContainerStatsResult{Body: io.NopCloser(bytes.NewReader(b))}, nil
 }
 
-func (f *fakeDocker) ContainerLogs(context.Context, string, client.ContainerLogsOptions) (client.ContainerLogsResult, error) {
+func (f *fakeDocker) ContainerLogs(_ context.Context, _ string, o client.ContainerLogsOptions) (client.ContainerLogsResult, error) {
+	f.mu.Lock()
+	f.since = append(f.since, o.Since)
+	f.mu.Unlock()
 	return io.NopCloser(bytes.NewReader(f.logs)), nil
+}
+
+func (f *fakeDocker) DiskUsage(_ context.Context, o client.DiskUsageOptions) (client.DiskUsageResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.diskUsage++
+	if !o.Volumes {
+		return client.DiskUsageResult{}, nil
+	}
+	return client.DiskUsageResult{Volumes: client.VolumesDiskUsage{Items: f.volumes}}, nil
 }
 
 func (f *fakeDocker) Events(ctx context.Context, _ client.EventsListOptions) client.EventsResult {
@@ -219,7 +239,8 @@ func TestOrdersCheckedAgain(t *testing.T) {
 			t.Errorf("%+v: %+v", bad, r)
 		}
 	}
-	for _, typ := range []string{agentproto.TypeVersionDetect, agentproto.TypeVolumesSize, "container.exec"} {
+	// version.detect and volumes.size exist since 1.1 (AGT-006, AGT-007).
+	for _, typ := range []string{"container.exec", "container.create", "volume.remove"} {
 		if r, _ := order(t, d, typ, map[string]string{"container": "mc"}); r.Code != agentproto.CodeUnsupported {
 			t.Errorf("%s: %+v", typ, r)
 		}
@@ -417,4 +438,112 @@ func TestLogsStopDuringASendKeepsTheSession(t *testing.T) {
 		t.Errorf("the send lost its context: %v", err)
 	}
 	_ = pw.Close()
+}
+
+// TestVersionDetect covers AGT-006 and SEC-003 on the agent: the match of
+// the profile's pattern goes back, never a log line; the search starts at
+// the container start or at the panel's last attempt, whichever is later;
+// it reads at most the bounded part of the log; bad patterns and
+// unlabeled containers are refused.
+func TestVersionDetect(t *testing.T) {
+	d, fd, logs := newTestDocker(t)
+	d.limiter = newOrderLimiter(100, 100)
+	fd.tty, fd.logs = true, []byte("[init] secret=hunter2\nStarting minecraft server version 1.21.4\nDone\n")
+	pat := "Starting minecraft server version (\\S+)"
+	r, rec := order(t, d, agentproto.TypeVersionDetect, agentproto.VersionDetect{Container: "mc", Pattern: pat})
+	if r.Code != agentproto.CodeOK {
+		t.Fatalf("result = %+v", r)
+	}
+	found := rec.of(agentproto.TypeVersionFound)
+	if len(found) != 1 {
+		t.Fatalf("answers = %+v", rec.msgs)
+	}
+	v, _ := agentproto.Payload[agentproto.VersionFound](found[0])
+	if v.Version != "1.21.4" || v.Container != "mc" {
+		t.Errorf("found = %+v", v)
+	}
+	if strings.Contains(string(found[0].Payload), "hunter2") || strings.Contains(logs.String(), "hunter2") ||
+		len(rec.of(agentproto.TypeLogLines)) != 0 {
+		t.Error("a log line left the agent")
+	}
+	// The container started at 10:00:00.5; an earlier Since counts from
+	// the start, a later one from itself.
+	order(t, d, agentproto.TypeVersionDetect, agentproto.VersionDetect{Container: "mc", Pattern: pat,
+		Since: time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC)})
+	order(t, d, agentproto.TypeVersionDetect, agentproto.VersionDetect{Container: "mc", Pattern: pat,
+		Since: time.Date(2026, 11, 3, 11, 0, 0, 0, time.UTC)})
+	fd.mu.Lock()
+	since := slices.Clone(fd.since)
+	fd.mu.Unlock()
+	if want := []string{"2026-11-03T10:00:00.5Z", "2026-11-03T10:00:00.5Z", "2026-11-03T11:00:00Z"}; !slices.Equal(since, want) {
+		t.Errorf("since = %v, want %v", since, want)
+	}
+
+	// No match: an empty answer, no error.
+	fd.logs = []byte("nothing here\n")
+	r, rec = order(t, d, agentproto.TypeVersionDetect, agentproto.VersionDetect{Container: "mc", Pattern: pat})
+	v, _ = agentproto.Payload[agentproto.VersionFound](rec.of(agentproto.TypeVersionFound)[0])
+	if r.Code != agentproto.CodeOK || v.Version != "" {
+		t.Errorf("no match: %+v %+v", r, v)
+	}
+	// Bounded: a match after the first MaxVersionLines lines or beyond
+	// MaxVersionBytes is not seen; a long match is cut.
+	var many strings.Builder
+	for range agentproto.MaxVersionLines {
+		many.WriteString("x\n")
+	}
+	fd.logs = []byte(many.String() + "Starting minecraft server version late\n")
+	_, rec = order(t, d, agentproto.TypeVersionDetect, agentproto.VersionDetect{Container: "mc", Pattern: pat})
+	if v, _ = agentproto.Payload[agentproto.VersionFound](rec.of(agentproto.TypeVersionFound)[0]); v.Version != "" {
+		t.Errorf("match beyond the line limit: %q", v.Version)
+	}
+	fd.logs = []byte(strings.Repeat("y", agentproto.MaxVersionBytes) + "\nStarting minecraft server version late\n")
+	_, rec = order(t, d, agentproto.TypeVersionDetect, agentproto.VersionDetect{Container: "mc", Pattern: pat})
+	if v, _ = agentproto.Payload[agentproto.VersionFound](rec.of(agentproto.TypeVersionFound)[0]); v.Version != "" {
+		t.Errorf("match beyond the byte limit: %q", v.Version)
+	}
+	fd.logs = []byte("Starting minecraft server version " + strings.Repeat("9", 1000) + "\u202e\n")
+	_, rec = order(t, d, agentproto.TypeVersionDetect, agentproto.VersionDetect{Container: "mc", Pattern: pat})
+	if v, _ = agentproto.Payload[agentproto.VersionFound](rec.of(agentproto.TypeVersionFound)[0]); len(v.Version) > agentproto.MaxVersion || strings.ContainsRune(v.Version, '\u202e') {
+		t.Errorf("long match not bounded: %d bytes", len(v.Version))
+	}
+
+	for _, bad := range []string{"", "no group", "(unclosed", strings.Repeat("a", agentproto.MaxVersionPattern+1) + "(x)"} {
+		if r, _ := order(t, d, agentproto.TypeVersionDetect, agentproto.VersionDetect{Container: "mc", Pattern: bad}); r.Code != agentproto.CodeInvalid {
+			t.Errorf("pattern %.20q: %+v", bad, r)
+		}
+	}
+	if r, _ := order(t, d, agentproto.TypeVersionDetect, agentproto.VersionDetect{Container: "db", Pattern: pat}); r.Code != agentproto.CodeForbidden {
+		t.Errorf("unlabeled container: %+v", r)
+	}
+}
+
+// TestVolumeSizes covers AGT-007 on the agent: one call to Docker gives
+// the sizes of the volumes of allowed containers only; unknown sizes are
+// -1.
+func TestVolumeSizes(t *testing.T) {
+	d, fd, _ := newTestDocker(t)
+	fd.volumes = []volume.Volume{
+		{Name: "mc-data", UsageData: &volume.UsageData{Size: 1 << 30, RefCount: 1}},
+		{Name: "db-data", UsageData: &volume.UsageData{Size: 5, RefCount: 1}},
+	}
+	r, rec := order(t, d, agentproto.TypeVolumesSize, agentproto.VolumesSize{})
+	if r.Code != agentproto.CodeOK {
+		t.Fatalf("result = %+v", r)
+	}
+	s, _ := agentproto.Payload[agentproto.VolumeSizes](rec.of(agentproto.TypeVolumeSizes)[0])
+	if len(s.Volumes) != 1 || s.Volumes[0] != (agentproto.VolumeSize{Name: "mc-data", Bytes: 1 << 30}) {
+		t.Errorf("sizes = %+v", s.Volumes)
+	}
+	fd.volumes[0].UsageData = nil
+	_, rec = order(t, d, agentproto.TypeVolumesSize, agentproto.VolumesSize{})
+	s, _ = agentproto.Payload[agentproto.VolumeSizes](rec.of(agentproto.TypeVolumeSizes)[0])
+	if len(s.Volumes) != 1 || s.Volumes[0].Bytes != -1 {
+		t.Errorf("unknown size = %+v", s.Volumes)
+	}
+	fd.mu.Lock()
+	defer fd.mu.Unlock()
+	if fd.diskUsage != 2 {
+		t.Errorf("disk usage calls = %d, want one per order", fd.diskUsage)
+	}
 }

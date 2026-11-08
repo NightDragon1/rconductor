@@ -23,10 +23,12 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/pattern"
 )
 
 // dockerAPI is the part of the Docker API the agent uses: no create,
-// remove, exec, image or volume calls exist here (AGT-004).
+// remove, exec, image or volume calls exist here (AGT-004); DiskUsage only
+// reads the used size of volumes (AGT-007).
 type dockerAPI interface {
 	ContainerList(ctx context.Context, options client.ContainerListOptions) (client.ContainerListResult, error)
 	ContainerInspect(ctx context.Context, id string, options client.ContainerInspectOptions) (client.ContainerInspectResult, error)
@@ -36,6 +38,7 @@ type dockerAPI interface {
 	ContainerStats(ctx context.Context, id string, options client.ContainerStatsOptions) (client.ContainerStatsResult, error)
 	ContainerLogs(ctx context.Context, id string, options client.ContainerLogsOptions) (client.ContainerLogsResult, error)
 	Events(ctx context.Context, options client.EventsListOptions) client.EventsResult
+	DiskUsage(ctx context.Context, options client.DiskUsageOptions) (client.DiskUsageResult, error)
 }
 
 // Timing of the Docker backend (Design 1.5, Gesamtkonzept 4.6).
@@ -103,10 +106,10 @@ func newDocker(api dockerAPI, cfg config.Agent, log *slog.Logger) *Docker {
 // Name implements Backend.
 func (d *Docker) Name() string { return "docker" }
 
-// Capabilities implements Backend; version.detect and volumes.size follow
-// in R2.
+// Capabilities implements Backend (AGT-013).
 func (d *Docker) Capabilities() []string {
-	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics, agentproto.CapRestartInfo}
+	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics, agentproto.CapRestartInfo,
+		agentproto.CapVersionDetect, agentproto.CapVolumesSize}
 }
 
 func (d *Docker) labelFilter() client.Filters {
@@ -412,8 +415,23 @@ func (d *Docker) handle(ctx context.Context, e agentproto.Envelope, out Sender) 
 		}
 		d.stopFollow(f.Container)
 		return agentproto.CodeOK, ""
+	case agentproto.TypeVersionDetect:
+		v, err := agentproto.Payload[agentproto.VersionDetect](e)
+		if err != nil || !validName(v.Container) {
+			return agentproto.CodeInvalid, ""
+		}
+		p, err := pattern.Compile(v.Pattern, 1)
+		if err != nil {
+			return agentproto.CodeInvalid, "invalid pattern"
+		}
+		s, code := d.allow(ctx, v.Container, e.Type)
+		if code != "" {
+			return code, ""
+		}
+		return d.detectVersion(ctx, s, v, p, e.ID, out)
+	case agentproto.TypeVolumesSize:
+		return d.volumeSizes(ctx, e.ID, out)
 	}
-	// version.detect and volumes.size come with R2; nothing else exists.
 	d.log.Warn("order not supported", logging.Event(logging.AgentUnsupported), slog.String("type", e.Type))
 	return agentproto.CodeUnsupported, ""
 }
@@ -519,6 +537,86 @@ func (d *Docker) tail(ctx context.Context, s container.Summary, name string, n i
 	}
 	lines, cut := agentproto.LimitLines(lines)
 	if err := out.Send(ctx, agentproto.TypeLogLines, ref, agentproto.LogLines{Container: name, Lines: lines, Truncated: cut}); err != nil {
+		return agentproto.CodeError, ""
+	}
+	return agentproto.CodeOK, ""
+}
+
+// detectVersion searches the logs of the container from its start, or
+// from the panel's last attempt, for the version pattern; only the match
+// goes back, never a log line (AGT-006, SEC-003). One attempt reads at
+// most MaxVersionLines lines and MaxVersionBytes bytes.
+func (d *Docker) detectVersion(ctx context.Context, s container.Summary, v agentproto.VersionDetect, p *pattern.Pattern, ref string, out Sender) (code, msg string) {
+	tctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	since := v.Since
+	if insp, err := d.api.ContainerInspect(tctx, s.ID, client.ContainerInspectOptions{}); err == nil && insp.Container.State != nil {
+		if started, err := time.Parse(time.RFC3339Nano, insp.Container.State.StartedAt); err == nil && started.After(since) {
+			since = started
+		}
+	}
+	opts := client.ContainerLogsOptions{Tail: "all"}
+	if !since.IsZero() {
+		opts.Since = since.UTC().Format(time.RFC3339Nano)
+	}
+	r, err := d.logStream(tctx, s, opts)
+	if err != nil {
+		return agentproto.CodeError, "logs not readable"
+	}
+	defer func() { _ = r.Close() }()
+	b, err := io.ReadAll(io.LimitReader(r, agentproto.MaxVersionBytes))
+	if err != nil && !errors.Is(err, io.EOF) && len(b) == 0 {
+		return agentproto.CodeError, "logs not readable"
+	}
+	found := agentproto.VersionFound{Container: v.Container}
+	m, ok, err := p.FirstMatch(tctx, string(b))
+	if err != nil {
+		return agentproto.CodeTimeout, "pattern search timed out"
+	}
+	if ok && len(m) > 0 {
+		found.Version = m[0]
+	}
+	found.Clean()
+	if err := out.Send(ctx, agentproto.TypeVersionFound, ref, found); err != nil {
+		return agentproto.CodeError, ""
+	}
+	return agentproto.CodeOK, ""
+}
+
+// volumeSizes reads the used size of the volumes of all allowed containers
+// with one call to Docker (AGT-007).
+func (d *Docker) volumeSizes(ctx context.Context, ref string, out Sender) (code, msg string) {
+	tctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	cs, err := d.list(tctx, d.labelFilter())
+	if err != nil {
+		return agentproto.CodeError, "containers not listed"
+	}
+	allowed := map[string]bool{}
+	for _, c := range cs {
+		for _, m := range c.Mounts {
+			if m.Type == "volume" && m.Name != "" {
+				allowed[m.Name] = true
+			}
+		}
+	}
+	du, err := d.api.DiskUsage(tctx, client.DiskUsageOptions{Volumes: true, Verbose: true})
+	if err != nil {
+		return agentproto.CodeError, "disk usage not readable"
+	}
+	sizes := agentproto.VolumeSizes{Volumes: []agentproto.VolumeSize{}}
+	for _, v := range du.Volumes.Items {
+		if !allowed[v.Name] {
+			continue
+		}
+		n := int64(-1)
+		if v.UsageData != nil {
+			n = v.UsageData.Size
+		}
+		sizes.Volumes = append(sizes.Volumes, agentproto.VolumeSize{Name: v.Name, Bytes: n})
+	}
+	sizes.Clean()
+	if err := out.Send(ctx, agentproto.TypeVolumeSizes, ref, sizes); err != nil {
 		return agentproto.CodeError, ""
 	}
 	return agentproto.CodeOK, ""

@@ -125,6 +125,9 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err := profiles.EnsureDefaults(ctx, st); err != nil {
 		return err
 	}
+	if err := agentview.EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
 	// Catalog import before serving (Architecture 5.4), then on every change.
 	importer := profiles.NewImporter(st, logs.Module("profiles"), builtinprofiles.FS(), filepath.Join(cfg.DataDir, "profiles"))
 	if err := importer.Sync(ctx); err != nil {
@@ -211,6 +214,8 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	views := agentview.New(st, agentData, agents, hub, logs.Module("agent"))
 	views.SetPlayers(runtime)
 	hub.SetAgentViews(views)
+	serverSvc.OnChange(func(string) { views.Wake() })
+	wg.Go(func() { views.Run(ctx) })
 	agentSvc.SetHub(agents)
 	wg.Go(func() { agentSvc.ClosePairing(ctx, time.Minute) })
 	agentAddr := make(chan net.Addr, 1)

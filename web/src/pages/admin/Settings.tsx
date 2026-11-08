@@ -37,6 +37,10 @@ function storeHelp(on: boolean) {
 
 // Keys with their own label and help in the language file.
 const keyTexts = [
+  'agent_version_retry',
+  'agent_version_window',
+  'agent_volume_interval',
+  'agent_volume_stale',
   'agents_fingerprint_pairing',
   'audit_retention_days',
   'backup_interval',
@@ -70,7 +74,7 @@ const sections: [string, RegExp][] = [
   ['audit', /^audit\./],
   ['websocket', /^ws\./],
   ['profiles', /^profiles\./],
-  ['agents', /^agents\./],
+  ['agents', /^agents?\./],
   ['interface', /^ui\./],
   ['backups', /^backup\./],
 ];

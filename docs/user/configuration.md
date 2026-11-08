@@ -115,4 +115,8 @@ are written like `24h`, `15m`, `30s`.
 | `ws.max_subscriptions_per_socket` | number | 16 | 1 to 64 | subscriptions per WebSocket |
 | `servers.connection_test_per_minute` | number | 10 | 1 to 120 | connection tests per user and minute |
 | `agents.fingerprint_pairing` | boolean | off | on, off | pairing by fingerprint; closes itself after 30 minutes |
+| `agent.version_retry` | duration | 30s | 5s to 1h | how often the panel asks the agent again for the game version; each attempt reads only the log since the last one |
+| `agent.version_window` | duration | 10m | 1m to 24h | how long the panel looks for the game version after it first sees a container run |
+| `agent.volume_interval` | duration | 2h | 10m to 7 days | how often each agent measures the used size of its volumes, in one call for all containers |
+| `agent.volume_stale` | duration | 6h | 30m to 30 days | after this a measured volume size counts as old |
 | `ui.shortcuts_enabled` | boolean | off | on, off | keyboard shortcuts for everyone |

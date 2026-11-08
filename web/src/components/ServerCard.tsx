@@ -145,6 +145,12 @@ export function ServerCard({
             <span className="font-mono">{t('card.playersValue', { count: rt.players })}</span>
           </span>
         )}
+        {rt?.game_version && (
+          <span>
+            <span className="text-muted">{t('card.version')}</span>{' '}
+            <bdi className="font-mono">{stripCodes(rt.game_version)}</bdi>
+          </span>
+        )}
         {c?.started_at && c.state === 'running' && (
           <span className="text-muted">
             {t('card.started', { ago: ago(t, c.started_at, now) })}
