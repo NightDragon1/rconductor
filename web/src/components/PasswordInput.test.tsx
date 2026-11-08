@@ -39,6 +39,12 @@ describe('PasswordInput (UI-013)', () => {
     expect(field().type).toBe('password');
   });
 
+  it('cannot be shown when the field is locked (UI-012)', () => {
+    render(<PasswordInput aria-label="Locked" disabled defaultValue="" />);
+    const toggles = screen.getAllByRole('button', { name: 'Show password' });
+    expect((toggles.at(-1) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('hides before the form goes out', () => {
     show();
     fireEvent.submit(field().form as HTMLFormElement);
