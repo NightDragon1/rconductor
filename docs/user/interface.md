@@ -1,5 +1,8 @@
 # Interface
 
+> **Version:** applies to RCONductor 1.1. Parts marked (new in 1.1)
+> are not in 1.0.
+
 The interface is in English and comes in a dark design (default) and a light one.
 Entries you may not use are hidden, not greyed out.
 
@@ -9,7 +12,7 @@ Entries you may not use are hidden, not greyed out.
 | --- | --- | --- | --- | --- |
 | Overview | yes | yes | yes | yes |
 | Servers | all | in scope | own | own |
-| Topology | yes | in scope, agents without name | – | – |
+| Topology (new in 1.1) | yes | in scope, agents without name | – | – |
 | Audit | yes | in scope | – | – |
 | Users | yes | moderators, supporters | supporters, if released | – |
 | Groups | yes | moderator groups | – | – |
@@ -19,9 +22,9 @@ Entries you may not use are hidden, not greyed out.
 | Settings | yes | – | – | – |
 
 Your own profile is at the bottom of the side bar: real name, contacts, picture,
-password, two-factor sign-in and the address for its recovery.
+password, and (new in 1.1) two-factor sign-in and the address for its recovery.
 
-## Two-factor sign-in
+## Two-factor sign-in (new in 1.1)
 
 In your profile you can switch on two-factor sign-in: confirm with your password,
 scan the QR code with an authenticator app (or type in the secret) and enter the
@@ -38,18 +41,18 @@ up before anything else, the RCON admin too.
 
 ## Overview
 
-Cards show each server with status, load, players, the game version and, for
-admins, the game ports. The RCON admin also gets a
+Cards show each server with status, load and players, (new in 1.1) the game version
+and, for admins, the game ports. The RCON admin also gets a
 health overview: restart loops, disconnected agents, RCON errors and locked users,
 each with a link to the object. Values that are out of date are marked, not hidden.
 
-## Topology
+## Topology (new in 1.1)
 
 The topology shows host → agent → game server, by server group, and follows
 status changes live. Servers without an agent are listed on their own. The server
 admin sees the agents of his servers as "Agent" with their state, without names.
 
-## Ports and volumes
+## Ports and volumes (new in 1.1)
 
 The server admin sees the game ports of his servers, the RCON admin also the RCON
 port and every other published port of the container. A port that is not
@@ -66,16 +69,16 @@ restart mechanism is in place, such as Docker `restart: unless-stopped`.
 
 | Tab | For | Content |
 | --- | --- | --- |
-| Overview | all | status, players and game version; for admins load, ports and volumes with their size and its age |
-| Console | admins | free input, one block per command, timeline, tracks for own commands, others' commands and logs; templates; one command to several servers |
-| Commands | moderators, supporters | allowed commands and templates as cards with fields; player names come from the player list |
+| Overview | all | status and players, for admins load; (new in 1.1) game version, for admins ports and volumes with their size and its age |
+| Console | admins | free input, one block per command, timeline, tracks for own commands, others' commands and logs; (new in 1.1) templates, one command to several servers |
+| Commands | moderators, supporters | allowed commands and (new in 1.1) templates as cards with fields; player names come from the player list |
 | Logs | admins | container logs over the agent, only while the view is open |
-| History | all | past commands by role (see [roles](roles.md#who-sees-what)); a switch shows only your own |
+| History | all | past commands by role (see [roles](roles.md#who-sees-what)); (new in 1.1) moderators and supporters also see those of the others on their servers, a switch shows only your own |
 
 In the console, Tab takes the first suggestion and the arrow keys walk through your
 own commands.
 
-### Several servers
+### Several servers (new in 1.1)
 
 Under Several servers in the console the RCON admin and the server admin send one
 command to several servers of their scope, for example a notice before maintenance.
@@ -84,7 +87,7 @@ its own rate limit, as if it were typed there; the results come per server. A se
 outside the scope shows as not found. Up to `commands.multi_max_servers` servers go
 in one call.
 
-### Templates
+### Templates (new in 1.1)
 
 A template is a command with placeholders, such as `kick {player} {reason}`. The
 RCON admin and the server admin keep the templates of a server under Templates in

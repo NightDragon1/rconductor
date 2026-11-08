@@ -77,7 +77,7 @@ migrates the database by itself and writes a backup first, as
 `/backups/rconductor-<UTC time>-pre-migrate-v<N>.db`. Agents keep their pairing, you
 need no new token.
 
-With the tag `1`, an update within release 1 is:
+With the tag `1`, an update within the major version 1 is:
 
 ```sh
 docker compose -f all-in-one.yaml pull
