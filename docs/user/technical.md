@@ -49,6 +49,7 @@ the server best.
 | `mordhau` | Mordhau | generic |
 | `palworld` | Palworld | generic |
 | `project-zomboid` | Project Zomboid | generic |
+| `satisfactory` | Satisfactory | generic |
 | `source-cs2` | Counter-Strike 2 | specific |
 | `source-engine` | Source Engine (srcds) | generic |
 | `source-gmod` | Garry's Mod | specific |
