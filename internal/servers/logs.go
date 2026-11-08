@@ -79,6 +79,9 @@ func (s *Service) Logs(ctx context.Context, req users.Request, id string, n int)
 	defer cancel()
 	res, err := s.agents.RequestData(tctx, agentID, agentproto.TypeLogsTail, agentproto.LogsTail{Container: container, Lines: n}, collect)
 	switch {
+	case errors.Is(err, agenthub.ErrNotCapable):
+		s.denied(ctx, req, "server.logs", "server", id, ReasonAgentUnsupported)
+		return LogTail{}, ErrAgentUnsupported
 	case errors.Is(err, agenthub.ErrNotConnected), errors.Is(err, agenthub.ErrBusy):
 		return LogTail{}, ErrAgentUnavailable
 	case errors.Is(err, context.DeadlineExceeded):

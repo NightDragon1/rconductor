@@ -46,6 +46,10 @@ var (
 	// ErrAgentUnavailable means the server has no connected agent, or the
 	// action needs one.
 	ErrAgentUnavailable = errors.New("no connected agent for this server")
+	// ErrAgentUnsupported means the connected agent does not report the
+	// capability the order needs; only an update of the agent helps
+	// (AGT-013).
+	ErrAgentUnsupported = errors.New("the agent of this server does not support this, update the agent")
 	// ErrRCONUnavailable means the restart without agent found no RCON
 	// connection.
 	ErrRCONUnavailable = errors.New("no rcon connection to the game server")
@@ -107,6 +111,18 @@ func (s *Service) Action(ctx context.Context, req users.Request, id, action stri
 	return s.rconRestart(ctx, req, id, r.ProfileID)
 }
 
+// ReasonAgentUnsupported is the reason of a refusal for a missing
+// capability of the agent (Design 3.5, AGT-013).
+const ReasonAgentUnsupported = "agent_unsupported"
+
+// unsupported logs the refusal for a missing capability of the agent.
+func (s *Service) unsupported(req users.Request, id, action string) {
+	perm.LogDenied(s.log, perm.Denial{
+		RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym,
+		Role: req.Actor.Role, Server: id, Reason: ReasonAgentUnsupported, Action: action,
+	})
+}
+
 func (s *Service) actionForbidden(ctx context.Context, req users.Request, id, action string) error {
 	s.actionAudit(ctx, req, id, action, "", audit.ResultDenied, "forbidden", nil)
 	perm.LogDenied(s.log, perm.Denial{
@@ -126,6 +142,10 @@ func (s *Service) agentAction(ctx context.Context, req users.Request, id, agentI
 	defer cancel()
 	res, err := s.agents.Request(actx, agentID, agentproto.TypeContainerAction, agentproto.ContainerAction{Container: container, Action: action})
 	switch {
+	case errors.Is(err, agenthub.ErrNotCapable):
+		s.actionAudit(ctx, req, id, action, "agent", audit.ResultDenied, ReasonAgentUnsupported, detail)
+		s.unsupported(req, id, "server.action")
+		return ActionResult{}, ErrAgentUnsupported
 	case errors.Is(err, agenthub.ErrNotConnected), errors.Is(err, agenthub.ErrBusy):
 		s.actionAudit(ctx, req, id, action, "agent", audit.ResultError, "agent_unavailable", detail)
 		return ActionResult{}, ErrAgentUnavailable

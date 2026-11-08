@@ -257,6 +257,8 @@ func actionError(err error) error {
 	switch {
 	case errors.Is(err, servers.ErrAgentUnavailable):
 		return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeAgentUnavailable, detail: err.Error()}
+	case errors.Is(err, servers.ErrAgentUnsupported):
+		return &problem{status: http.StatusConflict, reason: api.ReasonCodeAgentUnsupported, detail: err.Error()}
 	case errors.Is(err, servers.ErrRCONUnavailable):
 		return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeServerUnavailable}
 	case errors.Is(err, servers.ErrActionTimeout):
@@ -293,6 +295,7 @@ func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Serv
 		ac := &api.ContainerRuntime{
 			Name: c.Name, State: c.State, StartedAt: c.StartedAt, RestartCount: c.RestartCount, RestartLoop: c.RestartLoop,
 			CpuPercent: c.CPUPercent, MetricsAt: c.MetricsAt, Stale: c.Stale, AgentConnected: c.AgentConnected,
+			Capabilities: c.Capabilities,
 		}
 		if c.Image != "" {
 			ac.Image = &c.Image

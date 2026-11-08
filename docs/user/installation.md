@@ -58,12 +58,18 @@ HTTP; TLS is the job of a reverse proxy.
 
 ## Updating
 
-**Update panel and agents together.** They must have the same major version, the
-first number of the version. If they differ, the panel refuses the agent with the
-reason `version`; the hint is in the panel log and the agent log. The agent keeps
-trying and connects once the versions match. RCON and the rest of the panel keep
-working in the meantime, only the agent functions are gone. So a panel `1.0` with an
-agent `0.9` does not work, and neither does the other way round.
+**Update the panel first, then the agents.** Panel and agents must have the same
+major version, the first number of the version. If they differ, the panel refuses
+the agent with the reason `version`; the hint is in the panel log and the agent log.
+The agent keeps trying and connects once the versions match. RCON and the rest of
+the panel keep working in the meantime, only the agent functions are gone. So a
+panel `1.0` with an agent `0.9` does not work, and neither does the other way round.
+
+Within a major version a panel works with every agent of it, also with an older
+one: a panel `1.1` works with an agent `1.0`. An older agent reports what it can do
+when it connects; what it cannot do, the panel hides, and the API answers `409` with
+the reason `agent_unsupported`. Only an update of the agent helps then. A newer agent
+with an older panel is not supported, so update the panel before the agents.
 
 Your data stays in the volumes. On the first start after an update the panel
 migrates the database by itself and writes a backup first, as

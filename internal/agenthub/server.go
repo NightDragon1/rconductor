@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -61,6 +62,9 @@ var (
 	ErrNotConnected = errors.New("agent not connected")
 	// ErrBusy means too many orders wait for the agent.
 	ErrBusy = errors.New("too many orders wait for the agent")
+	// ErrNotCapable means the connected agent does not report the
+	// capability the order needs (AGT-013); the order is not sent.
+	ErrNotCapable = errors.New("the agent does not report the capability for this order")
 )
 
 // maxPending bounds the orders waiting for results per agent.
@@ -125,6 +129,9 @@ type Hub struct {
 
 	mu       sync.Mutex
 	sessions map[string]*Session
+	// caps keeps the capabilities of each agent's last hello, also after
+	// its session ended, for the panel's display (AGT-013).
+	caps map[string][]string
 	// onMessage gets every message of an admitted agent except results.
 	onMessage func(agentID string, e agentproto.Envelope)
 	// onDisconnect is told when an agent's last session ends.
@@ -141,24 +148,43 @@ func (h *Hub) OnMessage(f func(agentID string, e agentproto.Envelope)) { h.onMes
 // Request sends an order to an agent and waits for its result until ctx
 // ends (Design 1.5).
 func (h *Hub) Request(ctx context.Context, agentID, typ string, payload any) (agentproto.Result, error) {
+	s, err := h.capable(agentID, typ)
+	if err != nil {
+		return agentproto.Result{}, err
+	}
+	return s.request(ctx, typ, payload, nil)
+}
+
+// capable returns the session of an agent that may get an order of typ.
+func (h *Hub) capable(agentID, typ string) (*Session, error) {
 	h.mu.Lock()
 	s := h.sessions[agentID]
 	h.mu.Unlock()
 	if s == nil {
-		return agentproto.Result{}, ErrNotConnected
+		return nil, ErrNotConnected
 	}
-	return s.request(ctx, typ, payload, nil)
+	if !s.Can(agentproto.NeededCapability(typ)) {
+		return nil, ErrNotCapable
+	}
+	return s, nil
+}
+
+// Capabilities returns the capabilities of an agent's last hello since the
+// panel started; false when the panel has not seen the agent.
+func (h *Hub) Capabilities(agentID string) ([]string, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c, ok := h.caps[agentID]
+	return slices.Clone(c), ok
 }
 
 // RequestData sends an order whose answer brings data before its result,
 // such as logs.tail: those messages go to collect, not to the general
 // receiver (Design 1.5).
 func (h *Hub) RequestData(ctx context.Context, agentID, typ string, payload any, collect func(agentproto.Envelope)) (agentproto.Result, error) {
-	h.mu.Lock()
-	s := h.sessions[agentID]
-	h.mu.Unlock()
-	if s == nil {
-		return agentproto.Result{}, ErrNotConnected
+	s, err := h.capable(agentID, typ)
+	if err != nil {
+		return agentproto.Result{}, err
 	}
 	return s.request(ctx, typ, payload, collect)
 }
@@ -177,7 +203,7 @@ func New(id *keys.Identity, log *slog.Logger, opts Options) *Hub {
 	return &Hub{
 		id: id, log: log, registry: opts.Registry, throttle: newThrottle(opts.Throttle), ping: opts.Ping, hello: opts.HelloTimeout,
 		maxConns: orDefault(opts.MaxConnections, maxAgentConns), maxClientConns: orDefault(opts.MaxClientConnections, maxAgentConnsPerClient),
-		sessions: map[string]*Session{},
+		sessions: map[string]*Session{}, caps: map[string][]string{},
 	}
 }
 
@@ -458,6 +484,7 @@ func (h *Hub) register(s *Session) {
 	h.mu.Lock()
 	old := h.sessions[s.AgentID]
 	h.sessions[s.AgentID] = s
+	h.caps[s.AgentID] = slices.Clone(s.Hello.Capabilities)
 	h.mu.Unlock()
 	if old != nil {
 		// A reconnect replaces the older session of the same agent; the

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import type { Server } from '@/api/servers';
-import { actionMode, actionState, defaultTab, stripCodes, tabsFor } from './serverpage';
+import { actionMode, actionState, agentCan, defaultTab, stripCodes, tabsFor } from './serverpage';
 
 const base: Server = {
   id: 's1',
@@ -12,7 +12,7 @@ const base: Server = {
   version: 'v',
 };
 
-function agentServer(state: string, connected = true): Server {
+function agentServer(state: string, connected = true, capabilities?: string[]): Server {
   return {
     ...base,
     agent_id: 'a1',
@@ -26,6 +26,7 @@ function agentServer(state: string, connected = true): Server {
         restart_loop: false,
         stale: false,
         agent_connected: connected,
+        capabilities,
       },
     },
   };
@@ -46,6 +47,34 @@ describe('tabs (Design 6.3, UI-011)', () => {
     expect(defaultTab('server_admin')).toBe('console');
     expect(defaultTab('moderator')).toBe('commands');
     expect(defaultTab('supporter')).toBe('commands');
+  });
+});
+
+describe('agent capabilities (AGT-013)', () => {
+  it('hide what the agent does not report', () => {
+    const old = agentServer('running', true, ['metrics']);
+    expect(agentCan(old, 'logs')).toBe(false);
+    expect(agentCan(old, 'metrics')).toBe(true);
+    expect(actionMode(old, 'rcon_admin')).toBe('none');
+    expect(actionMode(old, 'server_admin')).toBe('none');
+    expect(tabsFor('server_admin', true, agentCan(old, 'logs'))).toEqual([
+      'overview',
+      'console',
+      'history',
+    ]);
+  });
+  it('hide everything for an agent without capabilities', () => {
+    const none = agentServer('running', true, []);
+    expect(agentCan(none, 'container.action')).toBe(false);
+    expect(actionMode(none, 'rcon_admin')).toBe('none');
+  });
+  it('count unknown capabilities as present', () => {
+    const unknown = agentServer('running');
+    expect(agentCan(unknown, 'logs')).toBe(true);
+    expect(actionMode(unknown, 'server_admin')).toBe('agent');
+    expect(actionMode(agentServer('running', true, ['container.action']), 'rcon_admin')).toBe(
+      'agent',
+    );
   });
 });
 

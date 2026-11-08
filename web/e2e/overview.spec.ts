@@ -5,7 +5,8 @@ import { expect, login, secret, test } from './fixtures';
 // The stack has survival (running, sha256 image), creative (restart
 // loop), lobby (stopped) and arena (container running, RCON password
 // rejected) on agent host-1, outpost without agent, a disconnected agent
-// host-2 and a locked user (internal/e2e/stack).
+// host-2, an older agent host-legacy without servers and a locked user
+// (internal/e2e/stack).
 const card = (page: Page, name: string) => page.getByRole('article', { name, exact: true });
 
 test('every role lands on its overview (UI-002)', async ({ page, state }) => {
@@ -35,7 +36,8 @@ test('the health overview names every problem with a link (UI-003)', async ({ pa
   const tile = (name: string) => page.getByRole('region', { name, exact: true });
   await expect(tile('Servers')).toContainText('3 / 6');
   await expect(tile('Servers')).toContainText('1 stopped');
-  await expect(tile('Agents')).toContainText('1 / 2');
+  // host-1 and host-legacy connected, host-2 gone.
+  await expect(tile('Agents')).toContainText('2 / 3');
   await expect(tile('RCON errors')).toContainText('1');
   await expect(tile('RCON errors')).toContainText('arena');
   await expect(tile('Restart loops')).toContainText('creative');

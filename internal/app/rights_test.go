@@ -30,6 +30,7 @@ import (
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 
+	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 )
 
@@ -60,6 +61,8 @@ type rightsFixture struct {
 	group, list     string
 	pwchangeTemp    string
 	freshName       int
+	// agentAddr is the panel's agent port.
+	agentAddr string
 }
 
 func (f *rightsFixture) unique(prefix string) string {
@@ -205,6 +208,9 @@ func newRightsFixture(t *testing.T) *rightsFixture {
 	}
 	t.Cleanup(game.Close)
 	f := &rightsFixture{t: t, base: "http://" + addr, data: cfg.DataDir, c: map[string]*client{}, ids: map[string]string{}}
+	if v, ok := agentAddrs.Load(cfg.SecretsDir); ok {
+		f.agentAddr = v.(string)
+	}
 
 	m := regexp.MustCompile(`password: (\S+)`).FindStringSubmatch(console.String())
 	admin := login(t, f.base, "admin", m[1])
@@ -593,6 +599,55 @@ func TestRightsMatrix(t *testing.T) {
 			status, reason := f.raw(f.caller(op, role), op.method, r.path, r.body)
 			if got, want := classify(status, reason), op.expect[i]; got != want {
 				t.Errorf("%s %s as %s: %d %s (%c), want %c", op.method, op.path, role, status, reason, got, want)
+			}
+		}
+	}
+}
+
+// TestCapabilitiesByRole extends the matrix by the field capabilities of
+// the runtime data (AGT-013): RCON admin and the server admin in scope see
+// it with the container part, moderator and supporter get neither
+// (AGT-008, UI-006), outside the scope the server does not exist; the
+// same in the server list.
+func TestCapabilitiesByRole(t *testing.T) {
+	f := newRightsFixture(t)
+	pairAgent(t, f.as(rA), f.agentAddr, f.server, &hostBackend{caps: []string{agentproto.CapLogs}})
+	type runtime struct {
+		Container *struct {
+			Capabilities *[]string `json:"capabilities"`
+		} `json:"container"`
+	}
+	for _, role := range []string{rA, rSI, rSO, rMR, rMN, rSU} {
+		var one struct{ Runtime runtime }
+		status := f.as(role).call(http.MethodGet, "/servers/"+f.server, nil, &one)
+		var list struct {
+			Items []struct {
+				ID      string
+				Runtime runtime
+			}
+		}
+		f.as(role).must(http.MethodGet, "/servers", nil, &list, http.StatusOK)
+		var inList *runtime
+		for i := range list.Items {
+			if list.Items[i].ID == f.server {
+				inList = &list.Items[i].Runtime
+			}
+		}
+		switch role {
+		case rA, rSI:
+			for where, rt := range map[string]*runtime{"server": &one.Runtime, "list": inList} {
+				if status != http.StatusOK || rt == nil || rt.Container == nil || rt.Container.Capabilities == nil ||
+					!slices.Equal(*rt.Container.Capabilities, []string{agentproto.CapLogs}) {
+					t.Errorf("%s %s: status %d, runtime %+v, want capabilities [logs]", role, where, status, rt)
+				}
+			}
+		case rSO:
+			if status != http.StatusNotFound || inList != nil {
+				t.Errorf("%s: status %d, in list %v, want 404 and not listed", role, status, inList != nil)
+			}
+		default:
+			if status != http.StatusOK || one.Runtime.Container != nil || inList == nil || inList.Container != nil {
+				t.Errorf("%s: status %d, container part %+v, want none", role, status, one.Runtime.Container)
 			}
 		}
 	}

@@ -77,6 +77,21 @@ const (
 	CapRestartInfo     = "restart_info"
 )
 
+// NeededCapability names the capability an agent must report for a
+// message type, an order to it or data from it; empty when every agent of
+// the major version handles it (AGT-013).
+func NeededCapability(typ string) string {
+	switch typ {
+	case TypeContainerAction:
+		return CapContainerAction
+	case TypeLogsTail, TypeLogsFollow:
+		return CapLogs
+	case TypeMetrics:
+		return CapMetrics
+	}
+	return ""
+}
+
 // Limits (SEC-007, revision 2.3 candidate 2).
 const (
 	MaxAgentMessage = 1 << 20  // from the agent; above it the panel disconnects

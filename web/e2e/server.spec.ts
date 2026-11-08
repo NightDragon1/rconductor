@@ -135,3 +135,56 @@ test('server list with search (F13)', async ({ page, state }) => {
   await page.getByRole('article', { name: 'survival' }).getByRole('link').click();
   await expect(page).toHaveURL(new RegExp(`servers/${state.servers.survival}/commands$`));
 });
+
+test('an older agent hides what it cannot do (AGT-013)', async ({ browser, page, state }) => {
+  // A server of its own on host-legacy, which reports only restart_info.
+  const admin = await browser.newContext({ baseURL: state.base_url });
+  const adminPage = await admin.newPage();
+  await login(adminPage, 'admin', secret(state, 'admin'));
+  await expect(adminPage.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  const headers = { Origin: new URL(state.base_url).origin };
+  const outpost = await (
+    await adminPage.request.get(`api/v1/servers/${state.servers.outpost}`)
+  ).json();
+  const created = await adminPage.request.post('api/v1/servers', {
+    data: {
+      name: 'legacy',
+      profile_id: outpost.profile_id,
+      host: outpost.host,
+      port: outpost.port,
+      password: 'e2e-rcon',
+      agent_id: state.legacy_agent_id,
+      container_name: 'mc-legacy',
+    },
+    headers,
+  });
+  expect(created.status()).toBe(201);
+  const id = (await created.json()).id as string;
+  try {
+    await page.context().clearCookies();
+    await login(page, 'admin', secret(state, 'admin'));
+    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    await page.goto(`servers/${id}`);
+    await expect(page.getByRole('heading', { name: 'legacy', level: 1 })).toBeVisible();
+    await expect(
+      page.getByText('The agent does not support actions. Update the agent.'),
+    ).toBeVisible();
+    await expect(actions(page)).toHaveCount(0);
+    await expect(tabs(page)).toHaveText(['Overview', 'Console', 'History']);
+    // Its metrics are dropped: no CPU in the head.
+    const head = page.getByRole('region', { name: 'legacy' });
+    await expect(head).toContainText('host-legacy');
+    await expect(head.getByText('CPU')).toHaveCount(0);
+    // The backend refuses on its own.
+    const r = await adminPage.request.post(`api/v1/servers/${id}/actions`, {
+      data: { action: 'restart' },
+      headers,
+    });
+    expect(r.status()).toBe(409);
+    expect((await r.json()).reason).toBe('agent_unsupported');
+  } finally {
+    const d = await adminPage.request.delete(`api/v1/servers/${id}`, { headers });
+    expect(d.status()).toBe(204);
+    await admin.close();
+  }
+});

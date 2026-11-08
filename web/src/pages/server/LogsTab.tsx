@@ -68,7 +68,9 @@ export function LogsView({ server }: { server: Server }) {
           ? t('logs.rateLimited', { s: err?.retryAfter ?? 6 })
           : reason === 'agent_unavailable'
             ? t('logs.agentGone')
-            : t('logs.failed'),
+            : reason === 'agent_unsupported'
+              ? t('logs.unsupported')
+              : t('logs.failed'),
       );
       setEarlier('idle');
     }
