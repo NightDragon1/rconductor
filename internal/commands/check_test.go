@@ -55,6 +55,48 @@ func TestWrapperBlocked(t *testing.T) {
 	}
 }
 
+// TestWrapperNamespacePrefixB1 covers CMD-005: a wrapper stays a wrapper
+// with any namespace prefix in front of its name, in the case rule of the
+// profile; only the command name counts.
+func TestWrapperNamespacePrefixB1(t *testing.T) {
+	for in, want := range map[string]bool{
+		"minecraft:execute run op x":   true,
+		"Essentials:EXECUTE run op x":  true,
+		"a:b:execute as @a run say hi": true,
+		":execute run op x":            true,
+		"/minecraft:execute run op x":  true,
+		"say minecraft:execute":        false,
+		"minecraft:say execute":        false,
+		"execute: run op x":            false,
+	} {
+		cmd, err := Clean(in, minecraft)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := IsWrapper(Tokens(cmd), minecraft); got != want {
+			t.Errorf("%q wrapper = %v, want %v", in, got, want)
+		}
+	}
+	strict := minecraft
+	strict.CaseSensitive = true
+	if IsWrapper(Tokens("foo:Execute run op x"), strict) {
+		t.Error("case_sensitive=true: foo:Execute taken for execute")
+	}
+	if !IsWrapper(Tokens("foo:execute run op x"), strict) {
+		t.Error("case_sensitive=true: foo:execute not recognized")
+	}
+	// A wrapper marked with a colon in the profile is compared whole.
+	ns := Syntax{Wrappers: []string{"mod:run"}}
+	if !IsWrapper(Tokens("mod:run x"), ns) || IsWrapper(Tokens("run x"), ns) {
+		t.Error("wrapper with colon in the profile")
+	}
+	// Large input: many prefixes before the name.
+	long := strings.Repeat(":", 10000) + "execute"
+	if !IsWrapper([]string{long}, minecraft) {
+		t.Error("long namespace chain not recognized")
+	}
+}
+
 // TestClean covers CMD-006 and CAT-005: control characters and line breaks
 // never reach the game server; a leading / is removed; the length limit
 // applies after cleaning.

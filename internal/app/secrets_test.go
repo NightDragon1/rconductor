@@ -45,7 +45,7 @@ func TestNoSecretsInTheLogs(t *testing.T) {
 	moderator := login(t, s.base, "mod", invited)
 	secrets = append(secrets, inv.Token, invited, moderator.cookie.Value)
 	// A login with the own session cookie sent along ends that session
-	// (AUTH-006, D-043): neither cookie may reach the log.
+	// (AUTH-006, D-052): neither cookie may reach the log.
 	secrets = append(secrets, reloginWith(t, s.base, moderator.cookie, "mod", invited).Value)
 
 	// A temporary password and a change of password.

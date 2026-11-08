@@ -223,7 +223,7 @@ func TestLoginSessionLogout(t *testing.T) {
 }
 
 // TestLoginIssuesNewSession: a login always issues a new session ID, also
-// when the browser already sends a session cookie (AUTH-006, D-043). The
+// when the browser already sends a session cookie (AUTH-006, D-052). The
 // cookie sent along never becomes the session of the user who logs in; the
 // own previous session ends.
 func TestLoginIssuesNewSession(t *testing.T) {

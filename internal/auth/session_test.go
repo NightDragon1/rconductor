@@ -79,7 +79,7 @@ func (f *sessionFixture) count(t *testing.T, q string, args ...any) int {
 // TestLoginEndsSentAlongSession: a login ends the session whose cookie the
 // browser sent along, when it is the user's own; other sessions of the user,
 // a session of another user and a made-up token stay as they are, and a
-// failed login ends nothing (AUTH-006, D-043). The token never reaches the
+// failed login ends nothing (AUTH-006, D-052). The token never reaches the
 // log, the session only as its short hash (SEC-012).
 func TestLoginEndsSentAlongSession(t *testing.T) {
 	ctx := context.Background()

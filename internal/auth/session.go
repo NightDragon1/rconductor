@@ -77,7 +77,7 @@ type Client struct {
 	RequestID string
 	// SessionToken is the session cookie the browser sent along with the
 	// login, if any. A login ends that session when it belongs to the same
-	// user (AUTH-006, D-043). Never logged (SEC-012).
+	// user (AUTH-006, D-052). Never logged (SEC-012).
 	SessionToken string
 }
 
@@ -375,7 +375,7 @@ func (s *Service) createSession(ctx context.Context, u sqlitedb.GetLoginUserRow,
 		return "", Principal{}, err
 	}
 	// The session the browser sent along ends with the login when it is the
-	// user's own; a session of another user stays (AUTH-006, D-043).
+	// user's own; a session of another user stays (AUTH-006, D-052).
 	var ended []string
 	if c.SessionToken != "" {
 		if ended, err = q.DeleteSessionOfUser(ctx, sqlitedb.DeleteSessionOfUserParams{
