@@ -17,6 +17,46 @@ fields of the command page.
 | Anchors | an anchored value must not contain aliases |
 | Nesting | lists and mappings nest at most 64 levels deep |
 
+### Shipped profiles
+
+The panel ships these profiles (1.1). A `specific` profile, such as a modpack or a
+plugin, adds to a `generic` one; a server has one profile, so pick the one that fits
+the server best.
+
+| Id | Name | Kind |
+| --- | --- | --- |
+| `ark-sa` | ARK: Survival Ascended | generic |
+| `ark-se` | ARK: Survival Evolved | generic |
+| `conan-exiles` | Conan Exiles | generic |
+| `factorio` | Factorio | generic |
+| `insurgency-sandstorm` | Insurgency: Sandstorm | generic |
+| `minecraft-create` | Create | specific |
+| `minecraft-essentialsx` | EssentialsX | specific |
+| `minecraft-forge` | Minecraft Forge | generic |
+| `minecraft-ftb-chunks` | FTB Chunks | specific |
+| `minecraft-ftb-essentials` | FTB Essentials | specific |
+| `minecraft-ftb-quests` | FTB Quests | specific |
+| `minecraft-ftb-ranks` | FTB Ranks | specific |
+| `minecraft-ftb-teams` | FTB Teams | specific |
+| `minecraft-gtnh` | Minecraft GT New Horizons (1.7.10) | specific |
+| `minecraft-java-legacy` | Minecraft (Java Edition 1.12.2) | generic |
+| `minecraft-java` | Minecraft (Java Edition) | generic |
+| `minecraft-luckperms` | LuckPerms | specific |
+| `minecraft-neoforge` | Minecraft NeoForge | generic |
+| `minecraft-paper` | Minecraft Paper (Spigot/Bukkit) | generic |
+| `minecraft-pixelmon` | Pixelmon Reforged | specific |
+| `minecraft-spark` | spark (profiler) | specific |
+| `mordhau` | Mordhau | generic |
+| `palworld` | Palworld | generic |
+| `project-zomboid` | Project Zomboid | generic |
+| `source-cs2` | Counter-Strike 2 | specific |
+| `source-engine` | Source Engine (srcds) | generic |
+| `source-gmod` | Garry's Mod | specific |
+| `source-l4d2` | Left 4 Dead 2 | specific |
+| `squad` | Squad | generic |
+| `starbound` | Starbound | generic |
+| `v-rising` | V Rising | generic |
+
 ### Checking a profile
 
 Check a profile before you copy it to `/data/profiles`. The panel image does it
