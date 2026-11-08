@@ -8,6 +8,20 @@ import (
 	"time"
 )
 
+// TestRFC4226 covers the HOTP test vectors of RFC 4226, appendix D: the
+// code of a counter is the code of a step (D-070).
+func TestRFC4226(t *testing.T) {
+	secret := []byte("12345678901234567890")
+	for counter, want := range []string{
+		"755224", "287082", "359152", "969429", "338314",
+		"254676", "287922", "162583", "399871", "520489",
+	} {
+		if got := Code(secret, int64(counter)); got != want {
+			t.Errorf("count=%d: %s, want %s", counter, got, want)
+		}
+	}
+}
+
 // TestRFC6238 covers the SHA-1 test vectors of RFC 6238, appendix B, cut
 // to 6 digits.
 func TestRFC6238(t *testing.T) {
