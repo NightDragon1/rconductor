@@ -107,6 +107,9 @@ func (s *Service) multiOne(ctx context.Context, req users.Request, serverID, inp
 	res, err := s.Send(ctx, req, serverID, input)
 	it := MultiItem{ServerID: serverID, RequestID: req.RequestID, Result: ResultOK, Command: res.Command,
 		Response: res.Response, Truncated: res.Truncated}
+	if err == nil && res.Result == ResultError {
+		it.Result, it.Reason = ResultError, res.Reason
+	}
 	var denied *DeniedError
 	switch {
 	case err == nil:

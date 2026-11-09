@@ -197,3 +197,30 @@ func TestNormalizeFingerprint(t *testing.T) {
 		}
 	}
 }
+
+// TestCommandFailed covers D-072 for every dialect: a command the game
+// runs and reports as failed is rcon.ErrCommandFailed with the game's
+// text; the connection stays usable.
+func TestCommandFailed(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, dialect string, fx httpapitest.Fixture) {
+		ctx := context.Background()
+		s := httpapitest.Start(fx, string(token), 0, func(cmd string) string {
+			if cmd == "nope" {
+				return httpapitest.Failed("Unknown Console Command")
+			}
+			return "ok: " + cmd
+		})
+		defer s.Close()
+		c, err := httpapi.Adapter{}.DialEndpoint(ctx, endpoint(s, dialect, s.Fingerprint, token, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = c.Close() }()
+		if out, err := c.Execute(ctx, "nope"); !errors.Is(err, rcon.ErrCommandFailed) || out != "Unknown Console Command" {
+			t.Errorf("failed command = %q %v, want the text with ErrCommandFailed", out, err)
+		}
+		if out, err := c.Execute(ctx, "say hi"); err != nil || out != "ok: say hi" {
+			t.Errorf("after a failed command = %q %v", out, err)
+		}
+	})
+}

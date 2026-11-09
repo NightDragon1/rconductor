@@ -88,6 +88,24 @@ func (e AuditEntryResult) Valid() bool {
 	}
 }
 
+// Defines values for CommandResultResult.
+const (
+	CommandResultResultError CommandResultResult = "error"
+	CommandResultResultOk    CommandResultResult = "ok"
+)
+
+// Valid indicates whether the value is a known member of the CommandResultResult enum.
+func (e CommandResultResult) Valid() bool {
+	switch e {
+	case CommandResultResultError:
+		return true
+	case CommandResultResultOk:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConnectionTestResultResult.
 const (
 	ConnectionTestResultResultAuthFailed   ConnectionTestResultResult = "auth_failed"
@@ -271,6 +289,7 @@ const (
 	ReasonCodeAgentUnavailable       ReasonCode = "agent_unavailable"
 	ReasonCodeAgentUnsupported       ReasonCode = "agent_unsupported"
 	ReasonCodeBusy                   ReasonCode = "busy"
+	ReasonCodeCommandFailed          ReasonCode = "command_failed"
 	ReasonCodeConflict               ReasonCode = "conflict"
 	ReasonCodeForbidden              ReasonCode = "forbidden"
 	ReasonCodeInvalid                ReasonCode = "invalid"
@@ -296,6 +315,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeAgentUnsupported:
 		return true
 	case ReasonCodeBusy:
+		return true
+	case ReasonCodeCommandFailed:
 		return true
 	case ReasonCodeConflict:
 		return true
@@ -753,16 +774,25 @@ type CommandListUpdate struct {
 // CommandResult defines model for CommandResult.
 type CommandResult struct {
 	// Command The command as sent, after cleaning.
-	Command   string             `json:"command"`
+	Command string `json:"command"`
+
+	// Reason Machine-readable reason of a rejection (Design 3.5).
+	Reason    *ReasonCode        `json:"reason,omitempty"`
 	RequestId openapi_types.UUID `json:"request_id"`
 
 	// Response Foreign data from the game server (SEC-006).
 	Response string `json:"response"`
 
+	// Result ok, or error when the game ran the command and reported it as failed (reason command_failed, D-073); the game's text is in response. RCON commands are always ok here.
+	Result CommandResultResult `json:"result"`
+
 	// Truncated The answer was longer than 64 KiB and is cut.
 	Truncated bool      `json:"truncated"`
 	Ts        time.Time `json:"ts"`
 }
+
+// CommandResultResult ok, or error when the game ran the command and reported it as failed (reason command_failed, D-073); the game's text is in response. RCON commands are always ok here.
+type CommandResultResult string
 
 // ConnectionTest defines model for ConnectionTest.
 type ConnectionTest struct {

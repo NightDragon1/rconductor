@@ -516,7 +516,7 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				continue
 			}
 			j.reply <- result{answer: answer, err: err}
-			if err != nil && !errors.Is(err, rcon.ErrTooLarge) {
+			if err != nil && !errors.Is(err, rcon.ErrTooLarge) && !errors.Is(err, rcon.ErrCommandFailed) {
 				return "connection_error"
 			}
 			used = time.Now()

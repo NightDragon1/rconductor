@@ -50,10 +50,25 @@ func (s *apiServer) SendCommand(ctx context.Context, req api.SendCommandRequestO
 	if err != nil {
 		return nil, commandError(err)
 	}
+	return api.SendCommand200JSONResponse(commandResult(r)), nil
+}
+
+// commandResult is the answer of a single command: result ok, or error
+// with reason command_failed when the game reported it as failed (D-073).
+func commandResult(r commands.Result) api.CommandResult {
 	id, _ := uuid.Parse(r.RequestID)
-	return api.SendCommand200JSONResponse(api.CommandResult{
+	out := api.CommandResult{
 		RequestId: id, Ts: r.TS, Command: r.Command, Response: r.Response, Truncated: r.Truncated,
-	}), nil
+		Result: api.CommandResultResultOk,
+	}
+	if r.Result == commands.ResultError {
+		out.Result = api.CommandResultResultError
+	}
+	if r.Reason != "" {
+		reason := api.ReasonCode(r.Reason)
+		out.Reason = &reason
+	}
+	return out
 }
 
 func (s *apiServer) GetHistory(ctx context.Context, req api.GetHistoryRequestObject) (api.GetHistoryResponseObject, error) {

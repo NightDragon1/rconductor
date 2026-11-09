@@ -86,6 +86,30 @@ describe('useConsoleFeed (CMD-001)', () => {
     expect(result.current.b.cmds).toEqual([]);
   });
 
+  it('shows a command the game reported as failed as error with its text (D-073)', async () => {
+    vi.spyOn(api, 'GET').mockResolvedValue(page as never);
+    vi.spyOn(api, 'POST').mockResolvedValue({
+      data: {
+        request_id: 'f1',
+        ts: '2026-11-06T10:00:00Z',
+        command: 'nope',
+        response: 'Unknown Console Command',
+        truncated: false,
+        result: 'error',
+        reason: 'command_failed',
+      },
+      response: new Response(),
+    } as never);
+    const { result } = feed();
+    act(() => result.current.feed.send.mutate('nope'));
+    await waitFor(() => expect(result.current.a.cmds.map((c) => c.id)).toEqual(['f1']));
+    expect(result.current.a.cmds[0]).toMatchObject({
+      result: 'error',
+      reason: 'command_failed',
+      response: 'Unknown Console Command',
+    });
+  });
+
   it('K-1: keeps the answer of a command from the next user', async () => {
     let answer: (v: unknown) => void = () => undefined;
     bufferOwner('alice');

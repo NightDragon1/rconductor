@@ -19,6 +19,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
@@ -35,6 +36,10 @@ const MaxStoredResponse = 64 << 10
 // ReasonTimeout is the reason code of a command without answer in time
 // (Design 3.5, 504).
 const ReasonTimeout = "timeout"
+
+// ReasonCommandFailed is the reason of a command the game ran and
+// reported as failed; it is answered with 200 and its text (D-073).
+const ReasonCommandFailed = "command_failed"
 
 // Results of a command in audit and history.
 const (
@@ -104,6 +109,10 @@ type Result struct {
 	Command   string
 	Response  string
 	Truncated bool
+	// Result is ok, or error when the game reported the command as
+	// failed (Reason command_failed, D-073); other failures are errors.
+	Result string
+	Reason string
 }
 
 // Entry is one command of the history: a block of the console (CMD-012).
@@ -343,10 +352,15 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	res := Result{RequestID: req.RequestID, TS: start.UTC(), Command: cmd}
 	outcome, reason := ResultOK, ""
 	switch {
-	case err == nil:
+	case err == nil, errors.Is(err, rcon.ErrCommandFailed):
+		// A failure the game reports is an answer: its text is kept and
+		// the command counts as error (D-073).
+		if err != nil {
+			outcome, reason, err = ResultError, ReasonCommandFailed, nil
+		}
 		res.Response, res.Truncated = foreign.Text(answer, MaxStoredResponse)
 		s.log.Info("command answered", append(s.attrs(req, serverID), logging.Event(logging.CmdResponse),
-			slog.Int("bytes", len(answer)), logging.Duration(s.now().Sub(start)))...)
+			slog.Int("bytes", len(answer)), slog.String("result", outcome), logging.Duration(s.now().Sub(start)))...)
 	case errors.Is(err, context.DeadlineExceeded):
 		outcome, reason = ResultTimeout, ReasonTimeout
 		s.log.Warn("command timed out", append(s.attrs(req, serverID), logging.Event(logging.CmdTimeout))...)
@@ -381,6 +395,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	if err != nil {
 		return res, err
 	}
+	res.Result, res.Reason = outcome, reason
 	return res, nil
 }
 

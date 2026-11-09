@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 
 	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
@@ -17,7 +18,8 @@ import (
 // Fixture answers like the game server of one dialect.
 type Fixture interface {
 	// Handler accepts token only and answers a console command with run;
-	// it reports players as the number online.
+	// an answer made with Failed is the game's "failed" with that text.
+	// It reports players as the number online.
 	Handler(token string, players int, run func(command string) string) http.Handler
 }
 
@@ -25,6 +27,13 @@ type Fixture interface {
 var Fixtures = map[string]Fixture{
 	"satisfactory": Satisfactory{},
 }
+
+// failedMark starts an answer of run that the game reports as failed.
+const failedMark = "\x00failed\x00"
+
+// Failed is the answer of run for a command the game ran and reported as
+// failed, with text as its output.
+func Failed(text string) string { return failedMark + text }
 
 // Server is a fake game server over TLS with its own certificate.
 type Server struct {
@@ -100,7 +109,11 @@ func (Satisfactory) Handler(token string, players int, run func(string) string) 
 				"activeSessionName": "test", "numConnectedPlayers": players, "playerLimit": 4,
 			}}})
 		case "RunCommand":
-			write(w, http.StatusOK, map[string]any{"data": map[string]string{"commandResult": run(req.Data.Command)}})
+			out, ok := run(req.Data.Command), true
+			if text, failed := strings.CutPrefix(out, failedMark); failed {
+				out, ok = text, false
+			}
+			write(w, http.StatusOK, map[string]any{"data": map[string]any{"commandResult": out, "returnValue": ok}})
 		default:
 			write(w, http.StatusBadRequest, map[string]string{"errorCode": "unknown_function"})
 		}

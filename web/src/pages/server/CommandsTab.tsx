@@ -39,6 +39,7 @@ const reasons = [
   'server_unavailable',
   'timeout',
   'busy',
+  'command_failed',
 ];
 
 interface Active {
