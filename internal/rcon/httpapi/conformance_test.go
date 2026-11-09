@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/rcon"
@@ -45,9 +46,9 @@ func TestPinning(t *testing.T) {
 		s := httpapitest.Start(fx, string(token), 2, echo)
 		defer s.Close()
 
-		fp, err := httpapi.Adapter{}.Fingerprint(ctx, s.Addr())
-		if err != nil || fp != s.Fingerprint {
-			t.Fatalf("fingerprint = %q %v, want %q", fp, err, s.Fingerprint)
+		cert, err := httpapi.Adapter{}.Certificate(ctx, s.Addr())
+		if err != nil || cert.Fingerprint != s.Fingerprint || !cert.NotAfter.Equal(s.Certificate().NotAfter) {
+			t.Fatalf("certificate = %+v %v, want %q", cert, err, s.Fingerprint)
 		}
 		if _, err := (httpapi.Adapter{}).DialEndpoint(ctx, endpoint(s, dialect, "", token, 0)); !errors.Is(err, rcon.ErrUnpinned) {
 			t.Errorf("unpinned: %v", err)
@@ -196,4 +197,63 @@ func TestNormalizeFingerprint(t *testing.T) {
 			t.Errorf("%q accepted", bad)
 		}
 	}
+}
+
+// TestCommandFailed covers D-072 for every dialect: a command the game
+// runs and reports as failed is rcon.ErrCommandFailed with the game's
+// text; the connection stays usable.
+func TestCommandFailed(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, dialect string, fx httpapitest.Fixture) {
+		ctx := context.Background()
+		s := httpapitest.Start(fx, string(token), 0, func(cmd string) string {
+			if cmd == "nope" {
+				return httpapitest.Failed("Unknown Console Command")
+			}
+			return "ok: " + cmd
+		})
+		defer s.Close()
+		c, err := httpapi.Adapter{}.DialEndpoint(ctx, endpoint(s, dialect, s.Fingerprint, token, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = c.Close() }()
+		if out, err := c.Execute(ctx, "nope"); !errors.Is(err, rcon.ErrCommandFailed) || out != "Unknown Console Command" {
+			t.Errorf("failed command = %q %v, want the text with ErrCommandFailed", out, err)
+		}
+		if out, err := c.Execute(ctx, "say hi"); err != nil || out != "ok: say hi" {
+			t.Errorf("after a failed command = %q %v", out, err)
+		}
+	})
+}
+
+// TestExpiredPinnedCertificate covers D-072 for every dialect: the pin is
+// the fingerprint only, an expired certificate with the pinned
+// fingerprint connects; the connection reports that certificate with its
+// end of validity (D-073).
+func TestExpiredPinnedCertificate(t *testing.T) {
+	cert, err := httpapitest.ExpiredCertificate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	forEachDialect(t, func(t *testing.T, dialect string, fx httpapitest.Fixture) {
+		ctx := context.Background()
+		s := httpapitest.StartWithCertificate(fx, cert, string(token), 1, echo)
+		defer s.Close()
+		read, err := httpapi.Adapter{}.Certificate(ctx, s.Addr())
+		if err != nil || read.Fingerprint != s.Fingerprint || !read.NotAfter.Before(time.Now()) {
+			t.Fatalf("certificate = %+v %v, want the expired one", read, err)
+		}
+		c, err := httpapi.Adapter{}.DialEndpoint(ctx, endpoint(s, dialect, s.Fingerprint, token, 0))
+		if err != nil {
+			t.Fatalf("expired certificate with the pin: %v", err)
+		}
+		defer func() { _ = c.Close() }()
+		if out, err := c.Execute(ctx, "say hi"); err != nil || out != "ok: say hi" {
+			t.Errorf("execute = %q %v", out, err)
+		}
+		got, ok := c.(*httpapi.Conn).Certificate()
+		if !ok || got.Fingerprint != s.Fingerprint || !got.NotAfter.Equal(read.NotAfter) {
+			t.Errorf("pinned certificate of the connection = %+v %v", got, ok)
+		}
+	})
 }

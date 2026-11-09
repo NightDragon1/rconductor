@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/logging"
 )
@@ -25,6 +26,10 @@ var (
 	ErrCertMismatch = errors.New("the certificate of the game server is not the trusted one")
 	// ErrUnpinned means no certificate is trusted yet; nothing was sent.
 	ErrUnpinned = errors.New("no certificate of the game server is trusted yet")
+	// ErrCommandFailed means the game ran the command and reported it as
+	// failed (D-072, D-073); the answer text comes with it. It is a result
+	// of the command, not a broken connection.
+	ErrCommandFailed = errors.New("the game reported the command as failed")
 )
 
 // Endpoint is what an adapter needs beyond address and password: the
@@ -43,11 +48,25 @@ type EndpointDialer interface {
 	DialEndpoint(ctx context.Context, e Endpoint) (Conn, error)
 }
 
+// Certificate is the leaf certificate a game server showed: its SHA-256
+// fingerprint and its end of validity (PROT-003, D-072). The pin is the
+// fingerprint only; NotAfter is shown, never checked.
+type Certificate struct {
+	Fingerprint string
+	NotAfter    time.Time
+}
+
 // FingerprintReader is implemented by adapters with a pinned certificate:
 // it reads the certificate of addr in a handshake that sends nothing
 // else, for the connection test before anything is trusted.
 type FingerprintReader interface {
-	Fingerprint(ctx context.Context, addr string) (string, error)
+	Certificate(ctx context.Context, addr string) (Certificate, error)
+}
+
+// PinnedConn is implemented by connections with a pinned certificate: the
+// certificate of the last handshake, which matched the pin (D-073).
+type PinnedConn interface {
+	Certificate() (Certificate, bool)
 }
 
 // Concurrent is implemented by connections that take several commands at

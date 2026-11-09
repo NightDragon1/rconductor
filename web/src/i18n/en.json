@@ -103,6 +103,7 @@
     "restartLoop": "restarts again and again (3 or more starts in 10 minutes)",
     "rconOffline": "RCON not reachable",
     "rconAuth": "RCON password rejected",
+    "certMismatch": "shows another certificate than the trusted one",
     "containerRunning": "container running",
     "agentGone": "agent disconnected",
     "userLocked": "locked",
@@ -134,7 +135,8 @@
     "unknown": "unknown",
     "online": "online",
     "offline": "offline",
-    "authFailed": "RCON password rejected"
+    "authFailed": "RCON password rejected",
+    "certMismatch": "certificate changed"
   },
   "time": {
     "seconds": "{{count}} s",
@@ -384,6 +386,7 @@
       "server_unavailable": "The server is not reachable",
       "timeout": "The server did not answer in time",
       "busy": "The server is busy",
+      "command_failed": "The game reported the command as failed",
       "other": "The command failed"
     },
     "preview": "› {{command}}"
@@ -620,8 +623,25 @@
     "testResult": {
       "ok": "Connection works: the game server accepted the password.",
       "auth_failed": "The game server refused the password.",
-      "unreachable": "The game server cannot be reached at this address."
+      "unreachable": "The game server cannot be reached at this address.",
+      "ok_token": "Connection works: the game server accepted the API token.",
+      "auth_failed_token": "The game server refused the API token.",
+      "unpinned": "The certificate of the game server is not trusted yet. Compare its fingerprint with the server, then trust it. Nothing was sent.",
+      "cert_mismatch": "The game server shows another certificate than the trusted one. Nothing was sent."
     },
+    "apiPort": "API port",
+    "apiToken": "API token",
+    "newApiToken": "New API token",
+    "apiTokenHint": "Made in the console of the game server. It leaves the panel only to the trusted certificate.",
+    "certificate": "Certificate (SHA-256)",
+    "shownCertificate": "Certificate the server shows",
+    "trustedCertificate": "Trusted certificate",
+    "trust": "Trust this certificate",
+    "trustPending": "Trusted when you save.",
+    "validUntil": "Valid until {{date}}",
+    "validUnknown": "End of validity not known yet",
+    "certSoon": "The trusted certificate ends on {{date}}. The trust holds; when the server makes a new certificate, test and trust it again.",
+    "certExpired": "The trusted certificate ended on {{date}}. The trust holds; when the server makes a new certificate, test and trust it again.",
     "delete": "Delete server …",
     "deleteTitle": "Delete the server {{name}}?",
     "deleteText": "Its history stays in the audit; groups and grants lose it at once. This cannot be undone.",

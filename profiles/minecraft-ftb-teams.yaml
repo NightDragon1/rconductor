@@ -27,21 +27,7 @@ catalog:
     description: Create a server team
     params:
       - { name: name, type: text }
-  - path: ftbteams force add
-    description: Force players into a team (newer versions; team, then players)
-    params:
-      - { name: team_and_players, type: text }
-  - path: ftbteams force remove
-    description: Force players out of a team (newer versions; team, then players)
-    params:
-      - { name: team_and_players, type: text }
-  - path: ftbteams force disband
-    description: Disband a team (newer versions)
+  - path: ftbteams force-disband
+    description: Disband a party team
     params:
       - { name: team, type: text }
-  - path: ftbteams teamstage
-    description: Add, remove or list team stages of a player's team (newer versions)
-    params:
-      - { name: player, type: player }
-      - { name: action, type: choice, values: [add, remove, list] }
-      - { name: stage, type: text, optional: true }

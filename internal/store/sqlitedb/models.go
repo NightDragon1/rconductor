@@ -160,6 +160,7 @@ type Server struct {
 	GamePorts      sql.NullString
 	Version        int64
 	TlsFingerprint string
+	TlsNotAfter    sql.NullString
 }
 
 type ServerGroup struct {

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { certNotice } from '@/lib/cert';
 import { api, must, patchVersioned } from '@/api/client';
 import {
   serverGroupsKey,
@@ -69,7 +70,19 @@ interface Draft {
   container_name: string;
   ownPorts: boolean;
   game_ports: GamePort[];
+  // The certificate to trust (protocol http-api, PROT-003); set from the
+  // connection test, sent with save.
+  tls_fingerprint: string;
 }
+
+// Seen is the certificate the last connection test read.
+interface Seen {
+  fingerprint: string;
+  notAfter?: string;
+}
+
+// groupFingerprint shows a SHA-256 in hex as pairs, easier to compare.
+const groupFingerprint = (fp: string) => fp.match(/.{1,2}/g)?.join(':') ?? fp;
 
 const draftOf = (s?: Server): Draft => ({
   name: s?.name ?? '',
@@ -81,6 +94,7 @@ const draftOf = (s?: Server): Draft => ({
   container_name: s?.container_name ?? '',
   ownPorts: s?.game_ports_override ?? false,
   game_ports: s?.game_ports ?? [],
+  tls_fingerprint: s?.tls_fingerprint ?? '',
 });
 
 // ServerPanel creates or changes a server (SRV-001, SRV-005): only the
@@ -100,7 +114,7 @@ function ServerPanel({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const { saved } = useUndo();
   const profiles = useProfiles();
@@ -111,6 +125,7 @@ function ServerPanel({
   const [conflict, setConflict] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [seen, setSeen] = useState<Seen | null>(null);
   const [base, setBase] = useState(server);
   useUnsaved(JSON.stringify(d) !== JSON.stringify(draftOf(base)));
   const containers = useQuery({
@@ -129,26 +144,36 @@ function ServerPanel({
     agent_id: x.agent_id,
     container_name: x.agent_id ? x.container_name : '',
     game_ports: x.ownPorts ? x.game_ports : [],
+    tls_fingerprint: x.tls_fingerprint || undefined,
   });
   const body = () => bodyOf(d);
+  const httpApi = (profiles.data ?? []).find((p) => p.id === d.profile_id)?.protocol === 'http-api';
+  const lng = i18n.language;
+  const day = (iso: string) => new Date(iso).toLocaleDateString(lng);
 
   // Tests what is in the form without saving it (SRV-007).
   const testConnection = async () => {
     setTesting(true);
     setMessage(null);
+    setSeen(null);
     let result = '';
     const r = await outcome(server?.id ?? 'new', async () => {
-      const { host, port, profile_id, password } = body();
-      ({ result } = must(
+      const { host, port, profile_id, password, tls_fingerprint } = body();
+      const res = must(
         await api.POST('/servers/test-connection', {
-          body: { server_id: server?.id, host, port, profile_id, password },
+          body: { server_id: server?.id, host, port, profile_id, password, tls_fingerprint },
         }),
-      ));
+      );
+      result = res.result;
+      if (res.fingerprint) setSeen({ fingerprint: res.fingerprint, notAfter: res.not_after });
     });
     setTesting(false);
+    // A server with an HTTPS API checks a token, not a password.
+    const key =
+      httpApi && (result === 'ok' || result === 'auth_failed') ? `${result}_token` : result;
     setMessage(
       r.ok
-        ? { ok: result === 'ok', text: t(`servers.testResult.${result}`) }
+        ? { ok: result === 'ok', text: t(`servers.testResult.${key}`) }
         : { ok: false, text: reasonText(t, r) },
     );
   };
@@ -265,7 +290,7 @@ function ServerPanel({
               />
             )}
           </Row>
-          <Row label={t('servers.port')}>
+          <Row label={httpApi ? t('servers.apiPort') : t('servers.port')}>
             {(id) => (
               <Input
                 id={id}
@@ -280,7 +305,17 @@ function ServerPanel({
           </Row>
         </div>
         {canEdit && (
-          <Row label={server ? t('servers.newPassword') : t('servers.password')}>
+          <Row
+            label={
+              httpApi
+                ? server
+                  ? t('servers.newApiToken')
+                  : t('servers.apiToken')
+                : server
+                  ? t('servers.newPassword')
+                  : t('servers.password')
+            }
+          >
             {(id) => (
               <Input
                 id={id}
@@ -294,6 +329,18 @@ function ServerPanel({
               />
             )}
           </Row>
+        )}
+        {httpApi && canEdit && <p className="text-xs text-muted">{t('servers.apiTokenHint')}</p>}
+        {httpApi && (
+          <CertificateBlock
+            trusted={d.tls_fingerprint}
+            stored={base?.tls_fingerprint}
+            notAfter={base?.tls_fingerprint === d.tls_fingerprint ? base?.tls_not_after : undefined}
+            seen={seen}
+            canTrust={!off}
+            onTrust={(fp) => set({ tls_fingerprint: fp })}
+            day={day}
+          />
         )}
         <Row label={t('servers.agent')}>
           {(id) => (
@@ -946,6 +993,85 @@ export function ServersAdminPage() {
           servers={all}
           onClose={() => guard(() => setOpen(null))}
         />
+      )}
+    </div>
+  );
+}
+
+// CertificateBlock shows the trusted certificate of a server with an
+// HTTPS API, its end of validity with the warning 30 days before, and the
+// certificate the last connection test read with "Trust this certificate"
+// (PROT-003, D-071, D-072). Trusting only sets the draft; save sends it.
+function CertificateBlock({
+  trusted,
+  stored,
+  notAfter,
+  seen,
+  canTrust,
+  onTrust,
+  day,
+}: {
+  trusted: string;
+  stored?: string;
+  notAfter?: string;
+  seen: Seen | null;
+  canTrust: boolean;
+  onTrust: (fp: string) => void;
+  day: (iso: string) => string;
+}) {
+  const { t } = useTranslation();
+  const notice = certNotice(notAfter, new Date());
+  return (
+    <div className="flex flex-col gap-1.5 rounded-md border border-border p-3 text-sm">
+      <p className="font-medium">{t('servers.trustedCertificate')}</p>
+      {trusted ? (
+        <code className="font-mono text-xs wrap-anywhere" data-testid="trusted-fingerprint">
+          {groupFingerprint(trusted)}
+        </code>
+      ) : (
+        <p className="text-xs text-muted">–</p>
+      )}
+      {trusted && trusted !== stored && (
+        <p className="text-xs text-warn">{t('servers.trustPending')}</p>
+      )}
+      {trusted && trusted === stored && (
+        <p className="text-xs text-muted">
+          {notAfter ? t('servers.validUntil', { date: day(notAfter) }) : t('servers.validUnknown')}
+        </p>
+      )}
+      {notice && notAfter && (
+        <p
+          role="status"
+          className={notice === 'expired' ? 'text-xs text-danger' : 'text-xs text-warn'}
+        >
+          {t(notice === 'expired' ? 'servers.certExpired' : 'servers.certSoon', {
+            date: day(notAfter),
+          })}
+        </p>
+      )}
+      {seen && seen.fingerprint !== trusted && (
+        <>
+          <p className="mt-1 font-medium">{t('servers.shownCertificate')}</p>
+          <code className="font-mono text-xs wrap-anywhere" data-testid="seen-fingerprint">
+            {groupFingerprint(seen.fingerprint)}
+          </code>
+          {seen.notAfter && (
+            <p className="text-xs text-muted">
+              {t('servers.validUntil', { date: day(seen.notAfter) })}
+            </p>
+          )}
+          {canTrust && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => onTrust(seen.fingerprint)}
+            >
+              {t('servers.trust')}
+            </Button>
+          )}
+        </>
       )}
     </div>
   );

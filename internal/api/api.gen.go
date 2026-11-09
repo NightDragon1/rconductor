@@ -88,6 +88,24 @@ func (e AuditEntryResult) Valid() bool {
 	}
 }
 
+// Defines values for CommandResultResult.
+const (
+	CommandResultResultError CommandResultResult = "error"
+	CommandResultResultOk    CommandResultResult = "ok"
+)
+
+// Valid indicates whether the value is a known member of the CommandResultResult enum.
+func (e CommandResultResult) Valid() bool {
+	switch e {
+	case CommandResultResultError:
+		return true
+	case CommandResultResultOk:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ConnectionTestResultResult.
 const (
 	ConnectionTestResultResultAuthFailed   ConnectionTestResultResult = "auth_failed"
@@ -271,6 +289,7 @@ const (
 	ReasonCodeAgentUnavailable       ReasonCode = "agent_unavailable"
 	ReasonCodeAgentUnsupported       ReasonCode = "agent_unsupported"
 	ReasonCodeBusy                   ReasonCode = "busy"
+	ReasonCodeCommandFailed          ReasonCode = "command_failed"
 	ReasonCodeConflict               ReasonCode = "conflict"
 	ReasonCodeForbidden              ReasonCode = "forbidden"
 	ReasonCodeInvalid                ReasonCode = "invalid"
@@ -296,6 +315,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeAgentUnsupported:
 		return true
 	case ReasonCodeBusy:
+		return true
+	case ReasonCodeCommandFailed:
 		return true
 	case ReasonCodeConflict:
 		return true
@@ -753,16 +774,25 @@ type CommandListUpdate struct {
 // CommandResult defines model for CommandResult.
 type CommandResult struct {
 	// Command The command as sent, after cleaning.
-	Command   string             `json:"command"`
+	Command string `json:"command"`
+
+	// Reason Machine-readable reason of a rejection (Design 3.5).
+	Reason    *ReasonCode        `json:"reason,omitempty"`
 	RequestId openapi_types.UUID `json:"request_id"`
 
 	// Response Foreign data from the game server (SEC-006).
 	Response string `json:"response"`
 
+	// Result ok, or error when the game ran the command and reported it as failed (reason command_failed, D-073); the game's text is in response. RCON commands are always ok here.
+	Result CommandResultResult `json:"result"`
+
 	// Truncated The answer was longer than 64 KiB and is cut.
 	Truncated bool      `json:"truncated"`
 	Ts        time.Time `json:"ts"`
 }
+
+// CommandResultResult ok, or error when the game ran the command and reported it as failed (reason command_failed, D-073); the game's text is in response. RCON commands are always ok here.
+type CommandResultResult string
 
 // ConnectionTest defines model for ConnectionTest.
 type ConnectionTest struct {
@@ -782,6 +812,9 @@ type ConnectionTest struct {
 type ConnectionTestResult struct {
 	// Fingerprint The certificate the server showed (http-api only), SHA-256 in hex.
 	Fingerprint *string `json:"fingerprint,omitempty"`
+
+	// NotAfter End of validity of that certificate (http-api only, D-073).
+	NotAfter *time.Time `json:"not_after,omitempty"`
 
 	// Result unpinned: no certificate is trusted yet, the test only read it; cert_mismatch: the server shows another certificate than the trusted one, nothing was sent (PROT-003, D-071).
 	Result ConnectionTestResultResult `json:"result"`
@@ -1241,6 +1274,9 @@ type Server struct {
 
 	// TlsFingerprint Admins only; the trusted certificate of a server with an HTTPS API (protocol http-api), SHA-256 in hex (PROT-003, D-071).
 	TlsFingerprint *string `json:"tls_fingerprint,omitempty"`
+
+	// TlsNotAfter Admins only; end of validity of the trusted certificate, read when it was pinned or at the first connection with the pin; missing while unknown. Shown only: the pin holds regardless of it (D-072, D-073).
+	TlsNotAfter *time.Time `json:"tls_not_after,omitempty"`
 
 	// Version Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24).
 	Version string `json:"version"`

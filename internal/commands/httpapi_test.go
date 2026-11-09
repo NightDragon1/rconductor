@@ -33,6 +33,9 @@ func TestHTTPAPIThroughThePipeline(t *testing.T) {
 			mu.Lock()
 			got = append(got, cmd)
 			mu.Unlock()
+			if cmd == "nope" {
+				return httpapitest.Failed("Unknown Console Command")
+			}
 			return "done: " + cmd
 		})
 		t.Cleanup(s.Close)
@@ -60,8 +63,18 @@ func TestHTTPAPIThroughThePipeline(t *testing.T) {
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
-		if r, err := w.svc.Send(ctx, w.as("m"), sv.ID, "kick Steve"); err != nil || r.Response != "done: kick Steve" {
+		if r, err := w.svc.Send(ctx, w.as("m"), sv.ID, "kick Steve"); err != nil || r.Response != "done: kick Steve" || r.Result != ResultOK || r.Reason != "" {
 			t.Errorf("%s allowed: %+v %v", d, r, err)
+		}
+		// D-073: the game's "failed" is a result error with its text, no
+		// error of the call; history and audit say the same.
+		r, err := w.svc.Send(ctx, w.as("admin"), sv.ID, "nope")
+		if err != nil || r.Result != ResultError || r.Reason != ReasonCommandFailed || r.Response != "Unknown Console Command" {
+			t.Errorf("%s failed command: %+v %v", d, r, err)
+		}
+		var result, reason string
+		if err := w.st.DB.QueryRow(`SELECT result, COALESCE(reason_code, '') FROM audit_log WHERE target_id = ?`, r.RequestID).Scan(&result, &reason); err != nil || result != ResultError || reason != ReasonCommandFailed {
+			t.Errorf("%s audit of the failed command: %q %q %v", d, result, reason, err)
 		}
 		for cmd, reason := range map[string]string{"op Steve": ReasonNotInList, "execute as @a run op m": ReasonWrapperBlocked} {
 			var denied *DeniedError
@@ -70,7 +83,7 @@ func TestHTTPAPIThroughThePipeline(t *testing.T) {
 			}
 		}
 		mu.Lock()
-		if !slices.Equal(got, []string{"kick Steve"}) {
+		if !slices.Equal(got, []string{"kick Steve", "nope"}) {
 			t.Errorf("%s: the game server got %v", d, got)
 		}
 		mu.Unlock()

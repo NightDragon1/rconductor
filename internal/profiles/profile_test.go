@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -305,6 +306,8 @@ func TestOrigin(t *testing.T) {
 	}
 }
 
+var asOf = regexp.MustCompile(`^as of [0-9]{4}-(0[1-9]|1[0-2])$`)
+
 // TestShippedOrigin covers D-072 for the shipped profiles: each names its
 // status, sources are fields and no longer comments, and the profiles run
 // against a real server are tested.
@@ -328,6 +331,11 @@ func TestShippedOrigin(t *testing.T) {
 		p, err := Parse(data)
 		if err != nil {
 			t.Fatalf("%s: %v", file, err)
+		}
+		// Without a version of the source the date is "as of YYYY-MM", in
+		// English like the rest of the data (D-073).
+		if v := p.ResearchedVersion; strings.HasPrefix(v, "Stand ") || (strings.HasPrefix(v, "as of") && !asOf.MatchString(v)) {
+			t.Errorf("%s: researched_version %q, want a version or \"as of YYYY-MM\"", p.ID, v)
 		}
 		if want := map[bool]string{true: StatusTested, false: StatusUntested}[tested[p.ID]]; p.Status != want {
 			t.Errorf("%s: status %s, want %s", p.ID, p.Status, want)

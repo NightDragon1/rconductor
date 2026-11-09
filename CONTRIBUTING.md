@@ -33,6 +33,12 @@ to accept the Minecraft EULA yourself (see the README).
 `api/openapi.yaml` is the only source of the API: change it first, then
 generate the code.
 
+## Adding a game
+
+A game with Source RCON needs only a game profile under `profiles/`. A game
+with an HTTPS API needs a small dialect in the code; see
+[docs/dev/http-api-games.md](docs/dev/http-api-games.md).
+
 ## Commits
 
 Use small commits with an English message in this form, naming the

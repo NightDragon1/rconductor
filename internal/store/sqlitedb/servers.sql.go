@@ -19,6 +19,25 @@ func (q *Queries) DeleteServerGroupMembers(ctx context.Context, serverGroupID st
 	return err
 }
 
+const fillServerNotAfter = `-- name: FillServerNotAfter :execrows
+UPDATE servers SET tls_not_after = ? WHERE id = ? AND tls_fingerprint = ? AND tls_fingerprint <> '' AND tls_not_after IS NULL AND deleted_at IS NULL
+`
+
+type FillServerNotAfterParams struct {
+	TlsNotAfter    sql.NullString
+	ID             string
+	TlsFingerprint string
+}
+
+// Fills in the end of validity at the first connection with the pin (D-073).
+func (q *Queries) FillServerNotAfter(ctx context.Context, arg FillServerNotAfterParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, fillServerNotAfter, arg.TlsNotAfter, arg.ID, arg.TlsFingerprint)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const getGameProfile = `-- name: GetGameProfile :one
 SELECT id, slug, protocol, default_port, rules FROM game_profiles WHERE id = ?
 `
@@ -45,7 +64,7 @@ func (q *Queries) GetGameProfile(ctx context.Context, id string) (GetGameProfile
 }
 
 const getServer = `-- name: GetServer :one
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint
+SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint, tls_not_after
 FROM servers WHERE id = ? AND deleted_at IS NULL
 `
 
@@ -61,6 +80,7 @@ type GetServerRow struct {
 	ContainerName  sql.NullString
 	GamePorts      sql.NullString
 	TlsFingerprint string
+	TlsNotAfter    sql.NullString
 }
 
 func (q *Queries) GetServer(ctx context.Context, id string) (GetServerRow, error) {
@@ -78,6 +98,7 @@ func (q *Queries) GetServer(ctx context.Context, id string) (GetServerRow, error
 		&i.ContainerName,
 		&i.GamePorts,
 		&i.TlsFingerprint,
+		&i.TlsNotAfter,
 	)
 	return i, err
 }
@@ -237,7 +258,7 @@ func (q *Queries) ListServerGroups(ctx context.Context) ([]ListServerGroupsRow, 
 
 const listServers = `-- name: ListServers :many
 
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint
+SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint, tls_not_after
 FROM servers WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE
 `
 
@@ -253,6 +274,7 @@ type ListServersRow struct {
 	ContainerName  sql.NullString
 	GamePorts      sql.NullString
 	TlsFingerprint string
+	TlsNotAfter    sql.NullString
 }
 
 // Servers and server groups (SRV-001, SRV-003, SRV-005).
@@ -277,6 +299,7 @@ func (q *Queries) ListServers(ctx context.Context) ([]ListServersRow, error) {
 			&i.ContainerName,
 			&i.GamePorts,
 			&i.TlsFingerprint,
+			&i.TlsNotAfter,
 		); err != nil {
 			return nil, err
 		}
@@ -338,6 +361,26 @@ func (q *Queries) RenameServerGroup(ctx context.Context, arg RenameServerGroupPa
 	return err
 }
 
+const setServerNotAfter = `-- name: SetServerNotAfter :execrows
+UPDATE servers SET tls_not_after = ? WHERE id = ? AND tls_fingerprint = ? AND tls_fingerprint <> '' AND deleted_at IS NULL
+`
+
+type SetServerNotAfterParams struct {
+	TlsNotAfter    sql.NullString
+	ID             string
+	TlsFingerprint string
+}
+
+// The end of validity of the certificate the pin names, read when the pin
+// was saved (D-073).
+func (q *Queries) SetServerNotAfter(ctx context.Context, arg SetServerNotAfterParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setServerNotAfter, arg.TlsNotAfter, arg.ID, arg.TlsFingerprint)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setServerSecret = `-- name: SetServerSecret :exec
 UPDATE servers SET secret = ?, updated_at = ? WHERE id = ?
 `
@@ -384,7 +427,7 @@ func (q *Queries) SoftDeleteServerGroup(ctx context.Context, arg SoftDeleteServe
 }
 
 const updateServer = `-- name: UpdateServer :exec
-UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, tls_fingerprint = ?, updated_at = ?
+UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, tls_fingerprint = ?, tls_not_after = ?, updated_at = ?
 WHERE id = ?
 `
 
@@ -398,6 +441,7 @@ type UpdateServerParams struct {
 	AgentID        sql.NullString
 	ContainerName  sql.NullString
 	TlsFingerprint string
+	TlsNotAfter    sql.NullString
 	UpdatedAt      string
 	ID             string
 }
@@ -413,6 +457,7 @@ func (q *Queries) UpdateServer(ctx context.Context, arg UpdateServerParams) erro
 		arg.AgentID,
 		arg.ContainerName,
 		arg.TlsFingerprint,
+		arg.TlsNotAfter,
 		arg.UpdatedAt,
 		arg.ID,
 	)

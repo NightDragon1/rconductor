@@ -30,10 +30,6 @@ catalog:
     description: Remove all claims of all teams
   - path: ftbchunks admin unload_everything
     description: Remove all force-loads of all teams
-  - path: ftbchunks admin unclaim_dimension
-    description: Remove all claims in a dimension (newer versions)
-    params:
-      - { name: dimension, type: text, optional: true }
   - path: ftbchunks admin view_loaded_chunks
     description: Show force-loaded chunks, optional reset and dimension
     params:

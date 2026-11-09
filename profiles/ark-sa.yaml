@@ -4,7 +4,7 @@ schema: 1
 id: ark-sa
 name: "ARK: Survival Ascended"
 kind: generic
-researched_version: "Stand 2026-07"
+researched_version: "as of 2026-07"
 sources:
   - "https://github.com/mschnitzer/ark-survival-ascended-linux-container-image/blob/main/README.md"
 status: untested

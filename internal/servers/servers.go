@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -26,6 +27,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon"
 	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
@@ -76,6 +78,9 @@ type Server struct {
 	// API (PROT-003); it is shown with the details, only the RCON admin
 	// sets it.
 	TLSFingerprint string
+	// TLSNotAfter is the end of validity of the pinned certificate, nil
+	// while unknown (D-073); shown only, the pin does not depend on it.
+	TLSNotAfter *time.Time
 }
 
 // Input is the writable part of a server; nil fields keep their value on
@@ -224,6 +229,11 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 	srv.Credentials = s.credentialState(r.Secret)
 	srv.AgentID, srv.ContainerName = r.AgentID.String, r.ContainerName.String
 	srv.TLSFingerprint = r.TlsFingerprint
+	if r.TlsNotAfter.Valid {
+		if t, err := time.Parse(time.RFC3339, r.TlsNotAfter.String); err == nil {
+			srv.TLSNotAfter = &t
+		}
+	}
 	srv.GamePorts = []profiles.GamePort{}
 	if r.GamePorts.Valid {
 		srv.GamePortsOverride = true
@@ -549,6 +559,53 @@ func (s *Service) pinned(req users.Request, id, fingerprint string) {
 		slog.String(logging.KeyServer, id), slog.String("fingerprint", fingerprint))
 }
 
+// keepNotAfter keeps the end of validity while the pin stays; a new pin
+// clears it (D-073).
+func keepNotAfter(r sqlitedb.GetServerRow, fingerprint string) sql.NullString {
+	if fingerprint == r.TlsFingerprint {
+		return r.TlsNotAfter
+	}
+	return sql.NullString{}
+}
+
+// readNotAfter reads the certificate of a newly pinned server in a
+// handshake that sends no request and no token, as the connection test
+// does, and stores its end of validity only if it is the pinned
+// certificate; otherwise it stays unknown until the first connection with
+// the pin (D-073).
+func (s *Service) readNotAfter(ctx context.Context, id string, f fields) {
+	if f.fingerprint == "" || s.conns == nil {
+		return
+	}
+	cert, ok, err := s.conns.Certificate(ctx, f.protocol, net.JoinHostPort(f.host, strconv.Itoa(f.port)))
+	if !ok || err != nil || cert.Fingerprint != f.fingerprint || cert.NotAfter.IsZero() {
+		return
+	}
+	if _, err := s.st.Queries.SetServerNotAfter(ctx, sqlitedb.SetServerNotAfterParams{
+		TlsNotAfter: notAfterValue(cert.NotAfter), ID: id, TlsFingerprint: f.fingerprint,
+	}); err != nil {
+		s.log.Warn("end of validity of the certificate not stored", slog.String(logging.KeyServer, id), slog.Any("err", err))
+	}
+}
+
+// CertificateSeen fills in the end of validity of the pinned certificate
+// at the first connection with the pin (D-073); the connection manager
+// calls it with the certificate that matched the pin.
+func (s *Service) CertificateSeen(id string, cert rcon.Certificate) {
+	if cert.Fingerprint == "" || cert.NotAfter.IsZero() {
+		return
+	}
+	if _, err := s.st.Queries.FillServerNotAfter(context.Background(), sqlitedb.FillServerNotAfterParams{
+		TlsNotAfter: notAfterValue(cert.NotAfter), ID: id, TlsFingerprint: cert.Fingerprint,
+	}); err != nil {
+		s.log.Warn("end of validity of the certificate not stored", slog.String(logging.KeyServer, id), slog.Any("err", err))
+	}
+}
+
+func notAfterValue(t time.Time) sql.NullString {
+	return sql.NullString{String: t.UTC().Format(time.RFC3339), Valid: true}
+}
+
 // Create adds a server; name, profile, host and password are required, the
 // port defaults to the profile's (SRV-001).
 func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Server, error) {
@@ -603,6 +660,7 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 		return Server{}, err
 	}
 	s.pinned(req, id, f.fingerprint)
+	s.readNotAfter(ctx, id, f)
 	s.perm.Invalidate()
 	s.changed(ctx, id)
 	return s.Get(ctx, req, id)
@@ -674,7 +732,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	if err := q.UpdateServer(ctx, sqlitedb.UpdateServerParams{
 		Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: f.profileID != ""}, Protocol: f.protocol,
 		Host: f.host, Port: int64(f.port), GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
-		TlsFingerprint: f.fingerprint, UpdatedAt: now, ID: id,
+		TlsFingerprint: f.fingerprint, TlsNotAfter: keepNotAfter(r, f.fingerprint), UpdatedAt: now, ID: id,
 	}); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
@@ -694,6 +752,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	}
 	if f.fingerprint != r.TlsFingerprint {
 		s.pinned(req, id, f.fingerprint)
+		s.readNotAfter(ctx, id, f)
 	}
 	s.changed(ctx, id)
 	return s.Get(ctx, req, id)

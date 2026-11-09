@@ -93,6 +93,10 @@ type Options struct {
 	DialTimeout time.Duration
 	// OnStatus is called on every status change, for the event bus.
 	OnStatus func(serverID string, s Status)
+	// OnCertificate is called after each connection with a pinned
+	// certificate, with the certificate the server showed; it matched the
+	// pin (D-073).
+	OnCertificate func(serverID string, c rcon.Certificate)
 }
 
 func (o *Options) defaults() {
@@ -222,22 +226,22 @@ func (m *Manager) Try(ctx context.Context, t Target) error {
 	return conn.Close()
 }
 
-// Fingerprint reads the certificate of a server with a pinned certificate
+// Certificate reads the certificate of a server with a pinned certificate
 // in a handshake that sends nothing else; ok is false for protocols
-// without one (PROT-003).
-func (m *Manager) Fingerprint(ctx context.Context, protocol, addr string) (string, bool, error) {
+// without one (PROT-003, D-073).
+func (m *Manager) Certificate(ctx context.Context, protocol, addr string) (rcon.Certificate, bool, error) {
 	adapter, err := m.adapters.Get(protocol)
 	if err != nil {
-		return "", false, err
+		return rcon.Certificate{}, false, err
 	}
 	r, ok := adapter.(rcon.FingerprintReader)
 	if !ok {
-		return "", false, nil
+		return rcon.Certificate{}, false, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, min(m.opts.DialTimeout, tryTimeout))
 	defer cancel()
-	fp, err := r.Fingerprint(ctx, addr)
-	return fp, true, err
+	c, err := r.Certificate(ctx, addr)
+	return c, true, err
 }
 
 // Execute queues a command for a server and waits for its answer, or for
@@ -445,6 +449,11 @@ func (w *worker) run(ctx context.Context) {
 			lost = false
 			log.Info("connected to the game server", append(w.attrs(t), logging.Event(logging.RCONConnected))...)
 			w.setStatus(Connected)
+			if pc, ok := conn.(rcon.PinnedConn); ok && w.m.opts.OnCertificate != nil {
+				if c, ok := pc.Certificate(); ok {
+					w.m.opts.OnCertificate(t.ID, c)
+				}
+			}
 			reason := w.serve(ctx, conn)
 			_ = conn.Close()
 			w.setStatus(Offline)
@@ -516,7 +525,7 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				continue
 			}
 			j.reply <- result{answer: answer, err: err}
-			if err != nil && !errors.Is(err, rcon.ErrTooLarge) {
+			if err != nil && !errors.Is(err, rcon.ErrTooLarge) && !errors.Is(err, rcon.ErrCommandFailed) {
 				return "connection_error"
 			}
 			used = time.Now()

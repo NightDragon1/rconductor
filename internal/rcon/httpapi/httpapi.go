@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -68,7 +69,9 @@ type Dialect interface {
 	Name() string
 	// Health checks that the server answers and accepts the token.
 	Health(ctx context.Context, c Client) error
-	// Execute runs a console command and returns its output.
+	// Execute runs a console command and returns its output; when the
+	// game reports the command as failed, the output comes with
+	// rcon.ErrCommandFailed.
 	Execute(ctx context.Context, c Client, command string) (string, error)
 	// Players returns the players online; Names is empty if the game
 	// gives none, the interface then shows the count only.
@@ -127,7 +130,7 @@ func NormalizeFingerprint(s string) (string, bool) {
 // exactly the leaf certificate with the pinned fingerprint. With an empty
 // pin it accepts any certificate but reports it to seen; the caller then
 // sends nothing over the connection.
-func tlsConfig(pin string, seen func(string)) *tls.Config {
+func tlsConfig(pin string, seen func(rcon.Certificate)) *tls.Config {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		//nolint:gosec // the chain is replaced by the pin in VerifyConnection (D-071)
@@ -136,12 +139,15 @@ func tlsConfig(pin string, seen func(string)) *tls.Config {
 			if len(cs.PeerCertificates) == 0 {
 				return rcon.ErrCertMismatch
 			}
-			fp := Fingerprint(cs.PeerCertificates[0].Raw)
-			if seen != nil {
-				seen(fp)
-			}
+			leaf := cs.PeerCertificates[0]
+			fp := Fingerprint(leaf.Raw)
 			if pin != "" && fp != pin {
 				return rcon.ErrCertMismatch
+			}
+			// The pin is the fingerprint only: an expired certificate with
+			// the pinned fingerprint is accepted (D-072).
+			if seen != nil {
+				seen(rcon.Certificate{Fingerprint: fp, NotAfter: leaf.NotAfter.UTC()})
 			}
 			return nil
 		},
@@ -162,17 +168,17 @@ func (Adapter) Dial(context.Context, string, logging.Secret) (rcon.Conn, error) 
 	return nil, rcon.ErrUnpinned
 }
 
-// Fingerprint reads the certificate of addr in a TLS handshake and sends
+// Certificate reads the certificate of addr in a TLS handshake and sends
 // nothing else: no request, no token.
-func (Adapter) Fingerprint(ctx context.Context, addr string) (string, error) {
-	var fp string
-	d := tls.Dialer{Config: tlsConfig("", func(s string) { fp = s })}
+func (Adapter) Certificate(ctx context.Context, addr string) (rcon.Certificate, error) {
+	var cert rcon.Certificate
+	d := tls.Dialer{Config: tlsConfig("", func(c rcon.Certificate) { cert = c })}
 	c, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return "", err
+		return rcon.Certificate{}, err
 	}
 	_ = c.Close()
-	return fp, nil
+	return cert, nil
 }
 
 // DialEndpoint connects with the pinned certificate and checks the token
@@ -189,29 +195,26 @@ func (Adapter) DialEndpoint(ctx context.Context, e rcon.Endpoint) (rcon.Conn, er
 	if parallel < 1 {
 		parallel = DefaultParallel
 	}
+	c := &Conn{dialect: d, slots: make(chan struct{}, parallel)}
 	tr := &http.Transport{
 		Proxy:               nil,
 		DialContext:         (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
-		TLSClientConfig:     tlsConfig(e.Fingerprint, nil),
+		TLSClientConfig:     tlsConfig(e.Fingerprint, c.seen),
 		TLSHandshakeTimeout: 5 * time.Second,
 		MaxConnsPerHost:     parallel,
 		MaxIdleConnsPerHost: parallel,
 		IdleConnTimeout:     90 * time.Second,
 		ForceAttemptHTTP2:   false,
 	}
-	c := &Conn{
-		dialect: d,
-		client: &client{
-			base:  "https://" + e.Addr,
-			token: e.Secret,
-			http: &http.Client{
-				Transport: tr,
-				// Never follow a redirect: it could carry the token
-				// elsewhere.
-				CheckRedirect: func(*http.Request, []*http.Request) error { return errRedirect },
-			},
+	c.client = &client{
+		base:  "https://" + e.Addr,
+		token: e.Secret,
+		http: &http.Client{
+			Transport: tr,
+			// Never follow a redirect: it could carry the token
+			// elsewhere.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return errRedirect },
 		},
-		slots: make(chan struct{}, parallel),
 	}
 	if err := d.Health(ctx, c.client); err != nil {
 		_ = c.Close()
@@ -270,13 +273,26 @@ type Conn struct {
 	dialect Dialect
 	client  *client
 	slots   chan struct{}
+	// cert is the certificate of the last handshake; it matched the pin.
+	cert atomic.Pointer[rcon.Certificate]
 }
 
 var (
 	_ rcon.Conn       = (*Conn)(nil)
 	_ rcon.Pinger     = (*Conn)(nil)
 	_ rcon.Concurrent = (*Conn)(nil)
+	_ rcon.PinnedConn = (*Conn)(nil)
 )
+
+func (c *Conn) seen(cert rcon.Certificate) { c.cert.Store(&cert) }
+
+// Certificate is the pinned certificate as the server last showed it.
+func (c *Conn) Certificate() (rcon.Certificate, bool) {
+	if p := c.cert.Load(); p != nil {
+		return *p, true
+	}
+	return rcon.Certificate{}, false
+}
 
 // Concurrent marks the connection as taking several commands at once.
 func (*Conn) Concurrent() {}

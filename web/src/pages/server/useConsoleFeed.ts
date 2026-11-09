@@ -169,7 +169,10 @@ export function useConsoleFeed(id: string, logs: boolean) {
             command: r.command,
             response: r.response,
             truncated: r.truncated,
-            result: 'ok',
+            // error with reason command_failed: the game reported it as
+            // failed; its text stays in response (D-073).
+            result: r.result,
+            reason: r.reason ?? undefined,
           },
         ]),
       ),
