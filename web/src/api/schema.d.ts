@@ -1186,8 +1186,12 @@ export interface components {
         PlayerList: {
             /** @description The game profile defines a player list. */
             available: boolean;
-            /** @description Player names; foreign data (SEC-006). */
+            /** @description Player names; foreign data (SEC-006). Empty when the game gives no names (protocol http-api, such as Satisfactory); count then tells how many are online. */
             players: string[];
+            /** @description Players online; for a game without names the only value. Missing while unknown (PROT-003). */
+            count?: number;
+            /** @description Player limit of the server, if the game tells it; missing otherwise. */
+            max?: number;
             /** Format: date-time */
             updated_at?: string;
             stale: boolean;

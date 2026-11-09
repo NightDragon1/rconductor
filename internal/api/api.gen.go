@@ -1063,7 +1063,13 @@ type PlayerList struct {
 	// Available The game profile defines a player list.
 	Available bool `json:"available"`
 
-	// Players Player names; foreign data (SEC-006).
+	// Count Players online; for a game without names the only value. Missing while unknown (PROT-003).
+	Count *int `json:"count,omitempty"`
+
+	// Max Player limit of the server, if the game tells it; missing otherwise.
+	Max *int `json:"max,omitempty"`
+
+	// Players Player names; foreign data (SEC-006). Empty when the game gives no names (protocol http-api, such as Satisfactory); count then tells how many are online.
 	Players   []string   `json:"players"`
 	Stale     bool       `json:"stale"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
