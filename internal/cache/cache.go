@@ -15,10 +15,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/pattern"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon"
+	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 	"github.com/NightDragon1/rconductor/internal/store"
 )
 
@@ -33,6 +36,8 @@ const (
 const (
 	MaxPlayers    = 500
 	MaxPlayerName = 64
+	// maxCount bounds a count or limit a game reports.
+	maxCount = 1_000_000
 )
 
 // ErrNoPlayerList means the server's profile defines no player list.
@@ -45,6 +50,13 @@ type Executor interface {
 	Execute(ctx context.Context, serverID, command string) (string, error)
 }
 
+// PlayerReader asks a server's connection for its players without a
+// console command (protocol http-api, PROT-003); the connection manager
+// implements it next to Executor.
+type PlayerReader interface {
+	Players(ctx context.Context, serverID string) (rcon.Players, error)
+}
+
 // Players is a cached player list.
 type Players struct {
 	Names     []string
@@ -55,6 +67,10 @@ type Players struct {
 	// Unknown is set when the answer did not fit the profile's pattern;
 	// Names is empty then and says nothing about the players online.
 	Unknown bool
+	// Count is the number online; for a game without names (protocol
+	// http-api) the only value. Max is the limit, 0 if unknown.
+	Count int
+	Max   int
 }
 
 type entry struct {
@@ -191,24 +207,45 @@ func (c *Cache) fetch(ctx context.Context, serverID string) error {
 		close(done)
 	}()
 
-	cfg, err := c.playerConfig(ctx, serverID)
+	cfg, protocol, err := c.playerConfig(ctx, serverID)
 	if err != nil {
 		return err
 	}
 	fctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
-	answer, err := c.exec.Execute(fctx, serverID, cfg.Command)
-	if err != nil {
-		return err
+	var p Players
+	if cfg == nil {
+		// No players block: a game with an HTTPS API tells its players
+		// through the dialect, with or without names (PROT-003).
+		pr, ok := c.exec.(PlayerReader)
+		if !ok || protocol != httpapi.Protocol {
+			return ErrNoPlayerList
+		}
+		got, err := pr.Players(fctx, serverID)
+		if errors.Is(err, connmgr.ErrNoPlayerCounter) {
+			return ErrNoPlayerList
+		}
+		if err != nil {
+			return err
+		}
+		p = fromGame(got)
+	} else {
+		answer, err := c.exec.Execute(fctx, serverID, cfg.Command)
+		if err != nil {
+			return err
+		}
+		names, err := parsePlayers(fctx, answer, cfg)
+		unknown := errors.Is(err, errNoMatch)
+		if err != nil && !unknown {
+			return err
+		}
+		p = Players{Names: names, Unknown: unknown, Count: len(names)}
 	}
-	names, err := parsePlayers(fctx, answer, cfg)
-	unknown := errors.Is(err, errNoMatch)
-	if err != nil && !unknown {
-		return err
-	}
+	unknown := p.Unknown
+	p.UpdatedAt = c.now()
 	c.mu.Lock()
 	first := unknown && !e.players.Unknown
-	e.players = Players{Names: names, Unknown: unknown, UpdatedAt: c.now()}
+	e.players = p
 	e.invalidated = false
 	c.mu.Unlock()
 	if first {
@@ -220,20 +257,40 @@ func (c *Cache) fetch(ctx context.Context, serverID string) error {
 	return nil
 }
 
-func (c *Cache) playerConfig(ctx context.Context, serverID string) (*profiles.Players, error) {
+// playerConfig is the players block of the server's profile, nil if it
+// has none, and the server's protocol.
+func (c *Cache) playerConfig(ctx context.Context, serverID string) (*profiles.Players, string, error) {
 	r, err := c.st.Queries.GetServer(ctx, serverID)
 	if err != nil || !r.ProfileID.Valid {
-		return nil, ErrNoPlayerList
+		return nil, "", ErrNoPlayerList
 	}
 	gp, err := c.st.Queries.GetGameProfile(ctx, r.ProfileID.String)
 	if err != nil {
-		return nil, ErrNoPlayerList
+		return nil, "", ErrNoPlayerList
 	}
 	var rules profiles.Profile
-	if json.Unmarshal([]byte(gp.Rules), &rules) != nil || rules.Players == nil {
-		return nil, ErrNoPlayerList
+	if json.Unmarshal([]byte(gp.Rules), &rules) != nil {
+		return nil, "", ErrNoPlayerList
 	}
-	return rules.Players, nil
+	return rules.Players, r.Protocol, nil
+}
+
+// fromGame takes the players a game reported through its API; count,
+// limit and names are foreign data, bounded like a parsed list (SEC-006).
+func fromGame(g rcon.Players) Players {
+	p := Players{Count: min(max(g.Count, 0), maxCount), Max: g.Max, Names: []string{}}
+	if p.Max < 1 || p.Max > maxCount {
+		p.Max = 0
+	}
+	for _, raw := range g.Names {
+		if name := foreign.Name(raw, MaxPlayerName); name != "" {
+			p.Names = append(p.Names, name)
+			if len(p.Names) == MaxPlayers {
+				break
+			}
+		}
+	}
+	return p
 }
 
 // parsePlayers takes the first capture group of the profile's pattern and

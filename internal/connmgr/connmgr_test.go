@@ -18,6 +18,8 @@ import (
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/rcon"
+	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
+	"github.com/NightDragon1/rconductor/internal/rcon/httpapi/httpapitest"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 	"github.com/NightDragon1/rconductor/internal/rcon/source"
 )
@@ -305,4 +307,54 @@ func TestBackoffInVirtualTime(t *testing.T) {
 			t.Errorf("%d attempts in 10 minutes, want about one per 5 s", n)
 		}
 	})
+}
+
+// TestPlayersOverTheConnection covers PROT-003: a connection with an HTTPS
+// API tells its players through the queue without a console command; an
+// RCON connection cannot, and stays connected.
+func TestPlayersOverTheConnection(t *testing.T) {
+	f := newFixture(t, "secret", func(string) string { return "ok" })
+	f.waitStatus(t, Connected)
+	ctx := context.Background()
+	if _, err := f.m.Players(ctx, "s1"); !errors.Is(err, ErrNoPlayerCounter) {
+		t.Errorf("rcon players: %v, want ErrNoPlayerCounter", err)
+	}
+	if s, _ := f.m.Status("s1"); s != Connected {
+		t.Errorf("status after the players question: %s", s)
+	}
+	if _, err := f.m.Players(ctx, "nope"); !errors.Is(err, ErrUnknownServer) {
+		t.Errorf("unknown server: %v", err)
+	}
+
+	s := httpapitest.Start(httpapitest.Fixtures["satisfactory"], "tok", 3, func(string) string { return "ok" })
+	t.Cleanup(s.Close)
+	src := &fakeSource{targets: map[string]Target{
+		"h1": {ID: "h1", Name: "sf", Protocol: httpapi.Protocol, Addr: s.Addr(), Password: "tok", Usable: true,
+			Fingerprint: s.Fingerprint, Dialect: "satisfactory", Parallel: 2},
+	}}
+	m := New(rcon.Registry{httpapi.Protocol: httpapi.Adapter{}}, src, logging.New(&lockedBuf{}, "panel", config.Log{Format: "json"}).Module("rcon"),
+		Options{ProbeInterval: 50 * time.Millisecond, MaxBackoff: 200 * time.Millisecond})
+	cctx, cancel := context.WithCancel(ctx)
+	t.Cleanup(func() { cancel(); m.Wait() })
+	if err := m.Start(cctx); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if st, _ := m.Status("h1"); st == Connected {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("http-api server not connected")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	before := s.Requests.Load()
+	p, err := m.Players(ctx, "h1")
+	if err != nil || p.Count != 3 || p.Max != 4 || len(p.Names) != 0 {
+		t.Errorf("players = %+v %v, want 3 of 4 without names", p, err)
+	}
+	if s.Requests.Load() != before+1 {
+		t.Errorf("players took %d requests, want 1", s.Requests.Load()-before)
+	}
 }

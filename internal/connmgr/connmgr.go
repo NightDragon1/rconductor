@@ -248,39 +248,58 @@ func (m *Manager) Certificate(ctx context.Context, protocol, addr string) (rcon.
 // ctx to end. Commands of all users go through the same connection one
 // after the other.
 func (m *Manager) Execute(ctx context.Context, id, command string) (string, error) {
+	r, err := m.submit(ctx, id, job{ctx: ctx, command: command, reply: make(chan result, 1)})
+	return r.answer, err
+}
+
+// Players asks a server's connection for its players without a console
+// command (protocol http-api, PROT-003); ErrNoPlayerCounter for one that
+// cannot. It goes through the same queue as commands.
+func (m *Manager) Players(ctx context.Context, id string) (rcon.Players, error) {
+	r, err := m.submit(ctx, id, job{ctx: ctx, players: true, reply: make(chan result, 1)})
+	return r.players, err
+}
+
+func (m *Manager) submit(ctx context.Context, id string, j job) (result, error) {
 	m.mu.Lock()
 	w := m.workers[id]
 	m.mu.Unlock()
 	if w == nil {
-		return "", ErrUnknownServer
+		return result{}, ErrUnknownServer
 	}
 	if s, _ := w.state(); s != Connected {
-		return "", ErrUnavailable
+		return result{}, ErrUnavailable
 	}
-	j := job{ctx: ctx, command: command, reply: make(chan result, 1)}
 	select {
 	case w.jobs <- j:
 	default:
-		return "", ErrQueueFull
+		return result{}, ErrQueueFull
 	}
 	select {
 	case r := <-j.reply:
-		return r.answer, r.err
+		return r, r.err
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return result{}, ctx.Err()
 	}
 }
 
 type job struct {
 	ctx     context.Context
 	command string
+	// players asks the connection for its players instead of a command.
+	players bool
 	reply   chan result
 }
 
 type result struct {
-	answer string
-	err    error
+	answer  string
+	players rcon.Players
+	err     error
 }
+
+// ErrNoPlayerCounter means the connection cannot tell its players without
+// a console command (RCON); the profile's players block is the way then.
+var ErrNoPlayerCounter = errors.New("the connection gives no player count")
 
 type worker struct {
 	m      *Manager
@@ -498,6 +517,22 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 		case j := <-w.jobs:
 			if err := j.ctx.Err(); err != nil {
 				j.reply <- result{err: err}
+				continue
+			}
+			if j.players {
+				pc, ok := conn.(rcon.PlayerCounter)
+				if !ok {
+					j.reply <- result{err: ErrNoPlayerCounter}
+					continue
+				}
+				running.Go(func() {
+					p, err := pc.Players(j.ctx)
+					if err != nil && j.ctx.Err() != nil {
+						err = j.ctx.Err()
+					}
+					j.reply <- result{players: p, err: err}
+				})
+				used = time.Now()
 				continue
 			}
 			if concurrent {

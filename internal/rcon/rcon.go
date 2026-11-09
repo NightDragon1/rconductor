@@ -63,6 +63,19 @@ type FingerprintReader interface {
 	Certificate(ctx context.Context, addr string) (Certificate, error)
 }
 
+// Players are the players online as a game reports them: the count, the
+// limit (0 if unknown) and the names, empty if the game gives none.
+type Players struct {
+	Count, Max int
+	Names      []string
+}
+
+// PlayerCounter is implemented by connections that ask the game for its
+// players without a console command (protocol http-api, PROT-003).
+type PlayerCounter interface {
+	Players(ctx context.Context) (Players, error)
+}
+
 // PinnedConn is implemented by connections with a pinned certificate: the
 // certificate of the last handshake, which matched the pin (D-073).
 type PinnedConn interface {
