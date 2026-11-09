@@ -4,7 +4,7 @@ schema: 1
 id: starbound
 name: Starbound
 kind: generic
-researched_version: "Stand 2026-08"
+researched_version: "as of 2026-08"
 sources:
   - "https://www.gameserverkings.com/knowledge-base/starbound/configuration-overview.md"
 status: untested
