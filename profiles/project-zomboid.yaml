@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://pzwiki.net/wiki/Admin_commands
-# source: https://pzwiki.net/wiki/Server_Settings
 
 schema: 1
 id: project-zomboid
 name: Project Zomboid
 kind: generic
+status: untested
 # No players block: players prints one name per line. Names with spaces
 # must be quoted ("user name"); no player_pattern for that reason.
 protocol:

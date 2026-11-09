@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://pingperfect.com/knowledgebase/782/Mordhau--RCON-Commands-and-How-to-Use-RCON.html
-# source: https://help.freakhosting.com/games/mordhau/using-rcon-for-mordhau.md
 
 schema: 1
 id: mordhau
 name: Mordhau
 kind: generic
+researched_version: "Release 26"
+sources:
+  - "https://pingperfect.com/knowledgebase/782/Mordhau--RCON-Commands-and-How-to-Use-RCON.html"
+  - "https://help.freakhosting.com/games/mordhau/using-rcon-for-mordhau.md"
+status: untested
 # Game.ini [/Script/Mordhau.MordhauGameSession] RconPort=0 means off and
 # there is no default; 7788 is the example of the source (open in INDEX).
 # No players block: playerlist prints one line per player.

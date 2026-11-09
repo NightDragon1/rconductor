@@ -1,13 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://wiki.ronlab.site/content/minecraftwiki_en_all_maxi_2025-11/Commands/execute_(old)
-# source: https://wiki.ronlab.site/content/minecraftwiki_en_all_maxi_2025-11/Commands/function
-# source: https://gist.github.com/maxaxik/b25876b1c5770773715605f738004a52
-# source: profiles/minecraft-gtnh.yaml (list output and version line of the pre-1.13 server)
 
 schema: 1
 id: minecraft-java-legacy
 name: Minecraft (Java Edition 1.12.2)
 kind: generic
+researched_version: "1.12.2"
+sources:
+  - "https://wiki.ronlab.site/content/minecraftwiki_en_all_maxi_2025-11/Commands/execute_(old)"
+  - "https://wiki.ronlab.site/content/minecraftwiki_en_all_maxi_2025-11/Commands/function"
+  - "https://gist.github.com/maxaxik/b25876b1c5770773715605f738004a52"
+  - "profiles/minecraft-gtnh.yaml (list output and version line of the pre-1.13 server)"
+status: untested
 # No match.images: 1.12.2 runs on the same image as current versions
 # (itzg/minecraft-server, VERSION=1.12.2); chosen when the server is created.
 protocol:

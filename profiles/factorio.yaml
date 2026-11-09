@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://wiki.factorio.com/Console
-# source: https://wiki.factorio.com/Command_line_parameters
-# source: https://github.com/factoriotools/factorio-docker/blob/master/README.md
 
 schema: 1
 id: factorio
 name: Factorio
 kind: generic
+researched_version: "Stand 2026-10"
+sources:
+  - "https://wiki.factorio.com/Console"
+  - "https://wiki.factorio.com/Command_line_parameters"
+  - "https://github.com/factoriotools/factorio-docker/blob/master/README.md"
+status: untested
 match:
   images: ["factoriotools/factorio*"]
 # Factorio has no default RCON port (--rcon-port is required); 27015 is
