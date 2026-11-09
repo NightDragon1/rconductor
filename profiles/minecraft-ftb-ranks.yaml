@@ -48,7 +48,7 @@ catalog:
       - { name: player, type: player }
       - { name: rank, type: text }
   - path: ftbranks node add
-    description: Add a permission node to a rank (rank, node, optional value)
+    description: Add a permission node to a rank (rank, node, value)
     params:
       - { name: rank_node_value, type: text }
   - path: ftbranks node remove
@@ -63,9 +63,5 @@ catalog:
     description: Set a rank's condition (rank, condition)
     params:
       - { name: rank_and_condition, type: text }
-  - path: ftbranks edit
-    description: Change a rank's name or power (newer versions; rank, name|power, value)
-    params:
-      - { name: args, type: text }
   - path: ftbranks refresh_readme
     description: Regenerate the FTB Ranks README file
