@@ -653,6 +653,15 @@
     "name": "Name",
     "profile": "Game profile",
     "specificProfile": "{{name}} (specific)",
+    "profiles": "Game profiles, top first",
+    "noProfile": "No game profile yet.",
+    "addProfile": "Add a game profile",
+    "addProfileOption": "+ Profile",
+    "moveUp": "Move {{name}} up",
+    "moveDown": "Move {{name}} down",
+    "profilesHint": "Drag a profile or use the arrows to change the order.",
+    "profileOrder": "A generic profile stands above a specific one; the specific one should be on top.",
+    "topProfile": "{{name}}, +{{count}}",
     "choose": "Choose …",
     "host": "Host",
     "port": "RCON port",
@@ -683,6 +692,7 @@
     "deleteGroupText": "Grants and scopes on this group end at once; the servers stay. This cannot be undone.",
     "explainAdmin": "Create servers, set agent and container, form server groups.",
     "explainRead": "The servers and server groups of your scope, read only.",
+    "explainProfiles": "The servers and server groups of your scope; you may change the game profiles of a server.",
     "credentials": {
       "missing": "No RCON password stored. Enter one.",
       "reenter": "The RCON password was stored with another master key. Enter it again."
