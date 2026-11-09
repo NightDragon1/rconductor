@@ -559,6 +559,18 @@ func (s *Service) pinned(req users.Request, id, fingerprint string) {
 		slog.String(logging.KeyServer, id), slog.String("fingerprint", fingerprint))
 }
 
+// setProfiles stores the profile list of a server (SRV-008, D-074); for
+// now a server has one profile at position 0, or none.
+func setProfiles(ctx context.Context, q *sqlitedb.Queries, id, profileID string) error {
+	if err := q.ClearServerProfiles(ctx, id); err != nil {
+		return err
+	}
+	if profileID == "" {
+		return nil
+	}
+	return q.AddServerProfile(ctx, sqlitedb.AddServerProfileParams{ServerID: id, ProfileID: profileID, Position: 0})
+}
+
 // keepNotAfter keeps the end of validity while the pin stays; a new pin
 // clears it (D-073).
 func keepNotAfter(r sqlitedb.GetServerRow, fingerprint string) sql.NullString {
@@ -639,14 +651,18 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	}
 	defer func() { _ = tx.Rollback() }()
 	now := store.Now()
-	if err := sqlitedb.New(tx).InsertServer(ctx, sqlitedb.InsertServerParams{
-		ID: id, Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: true}, Protocol: f.protocol,
+	q := sqlitedb.New(tx)
+	if err := q.InsertServer(ctx, sqlitedb.InsertServerParams{
+		ID: id, Name: f.name, Protocol: f.protocol,
 		Host: f.host, Port: int64(f.port), Secret: sealed, GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
 		TlsFingerprint: f.fingerprint, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
 		}
+		return Server{}, err
+	}
+	if err := setProfiles(ctx, q, id, f.profileID); err != nil {
 		return Server{}, err
 	}
 	created := map[string]any{"name": f.name, "fields": changedFields(in)}
@@ -730,7 +746,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	}
 	now := store.Now()
 	if err := q.UpdateServer(ctx, sqlitedb.UpdateServerParams{
-		Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: f.profileID != ""}, Protocol: f.protocol,
+		Name: f.name, Protocol: f.protocol,
 		Host: f.host, Port: int64(f.port), GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
 		TlsFingerprint: f.fingerprint, TlsNotAfter: keepNotAfter(r, f.fingerprint), UpdatedAt: now, ID: id,
 	}); err != nil {
@@ -738,6 +754,11 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
 		}
 		return Server{}, err
+	}
+	if f.profileID != r.ProfileID.String {
+		if err := setProfiles(ctx, q, id, f.profileID); err != nil {
+			return Server{}, err
+		}
 	}
 	if sealed != nil {
 		if err := q.SetServerSecret(ctx, sqlitedb.SetServerSecretParams{Secret: sealed, UpdatedAt: now, ID: id}); err != nil {

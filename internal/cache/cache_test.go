@@ -62,8 +62,11 @@ func newCache(t *testing.T) (*Cache, *fakeExec, *lockedLog) {
 	if err := profiles.NewImporter(st, log, os.DirFS("../../profiles"), t.TempDir()).Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, profile_id, created_at, updated_at)
-		SELECT 's1', 'mc', id, 't', 't' FROM game_profiles WHERE slug = 'minecraft-java'`); err != nil {
+	if _, err := st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, created_at, updated_at) VALUES ('s1', 'mc', 't', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DB.ExecContext(ctx, `INSERT INTO server_profiles (server_id, profile_id, position)
+		SELECT 's1', id, 0 FROM game_profiles WHERE slug = 'minecraft-java'`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, created_at, updated_at) VALUES ('s2', 'bare', 't', 't')`); err != nil {
@@ -288,8 +291,8 @@ func (g *gameExec) Players(context.Context, string) (rcon.Players, error) {
 func TestPlayersFromTheGameAPI(t *testing.T) {
 	c, rconExec, _ := newCache(t)
 	ctx := context.Background()
-	if _, err := c.st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, profile_id, protocol, created_at, updated_at)
-		SELECT 'sf', 'factory', id, 'http-api', 't', 't' FROM game_profiles WHERE slug = 'satisfactory'`); err != nil {
+	if _, err := c.st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, protocol, created_at, updated_at) VALUES ('sf', 'factory', 'http-api', 't', 't');
+		INSERT INTO server_profiles (server_id, profile_id, position) SELECT 'sf', id, 0 FROM game_profiles WHERE slug = 'satisfactory'`); err != nil {
 		t.Fatal(err)
 	}
 	g := &gameExec{players: rcon.Players{Count: 3, Max: 8}}
@@ -322,8 +325,8 @@ func TestPlayersFromTheGameAPI(t *testing.T) {
 	}
 	// A connection that cannot count: no player list, as without a block.
 	c2, _, _ := newCache(t)
-	if _, err := c2.st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, profile_id, protocol, created_at, updated_at)
-		SELECT 'sf', 'factory', id, 'http-api', 't', 't' FROM game_profiles WHERE slug = 'satisfactory'`); err != nil {
+	if _, err := c2.st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, protocol, created_at, updated_at) VALUES ('sf', 'factory', 'http-api', 't', 't');
+		INSERT INTO server_profiles (server_id, profile_id, position) SELECT 'sf', id, 0 FROM game_profiles WHERE slug = 'satisfactory'`); err != nil {
 		t.Fatal(err)
 	}
 	c2.exec = &gameExec{err: connmgr.ErrNoPlayerCounter}
