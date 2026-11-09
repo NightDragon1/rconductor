@@ -371,7 +371,7 @@ test('a long server name fits a phone (SEC-006)', async ({ page, state }) => {
       headers: { Origin: new URL(state.base_url).origin, 'If-Match': now.version },
       data: {
         name,
-        profile_id: now.profile_id,
+        profile_ids: now.profile_ids,
         host: now.host,
         port: now.port,
         agent_id: now.agent_id ?? '',

@@ -37,16 +37,24 @@ func TestSecretsNeverLeak(t *testing.T) {
 	profile := profilesList.Items[0].Id.String()
 
 	rec = call2(call{method: http.MethodPost, path: "/api/v1/servers",
-		body: `{"name":"mc","profile_id":"` + profile + `","host":"mc.lan","password":"` + rconPW + `"}`})
+		body: `{"name":"mc","profile_ids":["` + profile + `"],"host":"mc.lan","password":"` + rconPW + `"}`})
 	if rec.code != http.StatusCreated {
 		t.Fatalf("create = %d %s", rec.code, rec.body)
 	}
 	var srv api.Server
 	_ = json.Unmarshal([]byte(rec.body), &srv)
 	id := srv.Id.String()
+	if srv.ProfileIds == nil || len(*srv.ProfileIds) != 1 || (*srv.ProfileIds)[0].String() != profile {
+		t.Errorf("profile_ids = %v", srv.ProfileIds)
+	}
+	// Several profiles follow with SRV-008; until then 422.
+	if r := call2(call{method: http.MethodPost, path: "/api/v1/servers",
+		body: `{"name":"two","profile_ids":["` + profile + `","` + profile + `"],"host":"mc.lan","password":"` + rconPW + `"}`}); r.code != http.StatusUnprocessableEntity {
+		t.Errorf("two profiles = %d %s", r.code, r.body)
+	}
 	call2(call{method: http.MethodPatch, path: "/api/v1/servers/" + id, body: `{"password":"` + rconPW + `x"}`})
 	// An invalid request with the password must not echo it.
-	call2(call{method: http.MethodPost, path: "/api/v1/servers", body: `{"name":"x","host":"bad host","profile_id":"` + profile + `","password":"` + rconPW + `"}`})
+	call2(call{method: http.MethodPost, path: "/api/v1/servers", body: `{"name":"x","host":"bad host","profile_ids":["` + profile + `"],"password":"` + rconPW + `"}`})
 	call2(call{method: http.MethodPatch, path: "/api/v1/servers/" + id, body: `{"password":"` + rconPW + `","port":0}`})
 	call2(call{method: http.MethodGet, path: "/api/v1/servers"})
 	call2(call{method: http.MethodGet, path: "/api/v1/servers/" + id})

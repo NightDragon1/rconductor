@@ -36,7 +36,7 @@ function Cards({
         <ServerCard
           key={s.id}
           server={s}
-          profile={s.profile_id ? profiles.get(s.profile_id) : undefined}
+          profile={s.profile_ids?.[0] ? profiles.get(s.profile_ids[0]) : undefined}
           now={now}
         />
       ))}

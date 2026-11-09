@@ -33,7 +33,7 @@ const data = (notAfter?: string): [readonly unknown[], unknown][] => [
         status: 'cert_mismatch',
         status_since: now,
         version: 'v',
-        profile_id: 'sf',
+        profile_ids: ['sf'],
         host: 'sf.lan',
         port: 7777,
         credentials: 'ok',

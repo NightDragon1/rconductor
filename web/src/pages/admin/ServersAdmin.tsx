@@ -86,7 +86,8 @@ const groupFingerprint = (fp: string) => fp.match(/.{1,2}/g)?.join(':') ?? fp;
 
 const draftOf = (s?: Server): Draft => ({
   name: s?.name ?? '',
-  profile_id: s?.profile_id ?? '',
+  // One profile until the list of SRV-008 follows in the interface.
+  profile_id: s?.profile_ids?.[0] ?? '',
   host: s?.host ?? '',
   port: s?.port ? String(s.port) : '',
   password: '',
@@ -137,7 +138,7 @@ function ServerPanel({
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
   const bodyOf = (x: Draft) => ({
     name: x.name.trim(),
-    profile_id: x.profile_id || undefined,
+    profile_ids: x.profile_id ? [x.profile_id] : undefined,
     host: x.host.trim(),
     port: x.port ? Number(x.port) : undefined,
     password: x.password || undefined,
@@ -158,10 +159,10 @@ function ServerPanel({
     setSeen(null);
     let result = '';
     const r = await outcome(server?.id ?? 'new', async () => {
-      const { host, port, profile_id, password, tls_fingerprint } = body();
+      const { host, port, profile_ids, password, tls_fingerprint } = body();
       const res = must(
         await api.POST('/servers/test-connection', {
-          body: { server_id: server?.id, host, port, profile_id, password, tls_fingerprint },
+          body: { server_id: server?.id, host, port, profile_ids, password, tls_fingerprint },
         }),
       );
       result = res.result;
@@ -820,7 +821,7 @@ export function ServersAdminPage() {
                 onOpen={() => guard(() => setOpen({ kind: 'server', id: s.id }))}
                 facts={[
                   { label: t('admin.statusLabel'), value: t(`status.${cardStatus(s)}`) },
-                  { label: t('servers.profile'), value: profileName(s.profile_id) },
+                  { label: t('servers.profile'), value: profileName(s.profile_ids?.[0]) },
                 ]}
               />
             ))}
@@ -863,7 +864,7 @@ export function ServersAdminPage() {
                         </span>
                       )}
                     </td>
-                    <td className="p-3">{profileName(s.profile_id)}</td>
+                    <td className="p-3">{profileName(s.profile_ids?.[0])}</td>
                     <td className="p-3 font-mono">
                       <bdi>{s.host ? `${s.host}:${s.port ?? ''}` : ''}</bdi>
                     </td>

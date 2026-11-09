@@ -1277,8 +1277,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
-            /** Format: uuid */
-            profile_id?: string;
+            /** @description Game profiles of the server, top first (SRV-008, D-074): for each value the topmost profile that sets it wins; the catalog is the union, wrappers of all profiles hold. */
+            profile_ids?: string[];
             groups: string[];
             /** @description Admins only. */
             protocol?: string;
@@ -1312,8 +1312,8 @@ export interface components {
         };
         ServerInput: {
             name?: string;
-            /** Format: uuid */
-            profile_id?: string;
+            /** @description Game profiles of the server, top first (SRV-008, D-074); all with the same protocol, for http-api the same dialect. Replaces the list as a whole. */
+            profile_ids?: string[];
             host?: string;
             port?: number;
             /**
@@ -1336,8 +1336,8 @@ export interface components {
              * @description The server being edited; missing when a new one is created.
              */
             server_id?: string;
-            /** Format: uuid */
-            profile_id?: string;
+            /** @description Game profiles to test with, top first (SRV-008); the protocol, dialect and default port come from them. */
+            profile_ids?: string[];
             host?: string;
             port?: number;
             /** Format: password */

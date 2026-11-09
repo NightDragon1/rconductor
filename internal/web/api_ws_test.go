@@ -46,7 +46,7 @@ func newWSFixture(t *testing.T) *wsFixture {
 	var pl api.ProfileList
 	_ = json.Unmarshal(rec.Body.Bytes(), &pl)
 	rec = f.do(t, call{method: http.MethodPost, path: "/api/v1/servers", cookies: []*http.Cookie{admin}, origin: "http://panel.lan",
-		body: `{"name":"mc","profile_id":"` + pl.Items[0].Id.String() + `","host":"mc.lan","password":"x"}`})
+		body: `{"name":"mc","profile_ids":["` + pl.Items[0].Id.String() + `"],"host":"mc.lan","password":"x"}`})
 	var s api.Server
 	_ = json.Unmarshal(rec.Body.Bytes(), &s)
 	w.server = s.Id.String()

@@ -43,7 +43,7 @@ const full: Server[] = [
   {
     id: 's1',
     name: 'alpha',
-    profile_id: 'p1',
+    profile_ids: ['p1'],
     groups: ['g1'],
     status: 'connected',
     status_since: now,
@@ -53,7 +53,7 @@ const full: Server[] = [
   {
     id: 's2',
     name: 'beta',
-    profile_id: 'p1',
+    profile_ids: ['p1'],
     groups: [],
     status: 'auth_failed',
     status_since: now,
@@ -69,11 +69,11 @@ const full: Server[] = [
 // What the API gives a moderator: no agent data, but the game version as a
 // server datum (UI-006, AGT-006).
 const reduced: Server[] = full.map(
-  ({ id, name, profile_id, groups, status, status_since, version }) => ({
+  ({ id, name, profile_ids, groups, status, status_since, version }) => ({
     id,
     version,
     name,
-    profile_id,
+    profile_ids,
     groups,
     status,
     status_since,

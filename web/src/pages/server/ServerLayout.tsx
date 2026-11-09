@@ -84,7 +84,7 @@ function Head({ server, role }: { server: Server; role?: string }) {
   const status = cardStatus(server);
   const tone = toneOf[status];
   const c = server.runtime?.container;
-  const profile = profiles.data?.find((p) => p.id === server.profile_id)?.name;
+  const profile = profiles.data?.find((p) => p.id === server.profile_ids?.[0])?.name;
   // Only the RCON admin may read the agents; the server admin sees the
   // state alone (F10).
   const agentName = agents.data?.find((a) => a.id === server.agent_id)?.name;

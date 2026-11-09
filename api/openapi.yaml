@@ -2417,9 +2417,14 @@ components:
           format: uuid
         name:
           type: string
-        profile_id:
-          type: string
-          format: uuid
+        profile_ids:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+            format: uuid
+          description: >-
+            Game profiles of the server, top first (SRV-008, D-074): for each value the topmost profile that sets it wins; the catalog is the union, wrappers of all profiles hold.
         groups:
           type: array
           items:
@@ -2487,9 +2492,14 @@ components:
           type: string
           minLength: 1
           maxLength: 64
-        profile_id:
-          type: string
-          format: uuid
+        profile_ids:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+            format: uuid
+          description: >-
+            Game profiles of the server, top first (SRV-008, D-074); all with the same protocol, for http-api the same dialect. Replaces the list as a whole.
         host:
           type: string
           minLength: 1
@@ -2535,9 +2545,14 @@ components:
           type: string
           format: uuid
           description: The server being edited; missing when a new one is created.
-        profile_id:
-          type: string
-          format: uuid
+        profile_ids:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+            format: uuid
+          description: >-
+            Game profiles to test with, top first (SRV-008); the protocol, dialect and default port come from them.
         host:
           type: string
           minLength: 1
