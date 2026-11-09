@@ -4,7 +4,7 @@ schema: 1
 id: source-cs2
 name: Counter-Strike 2
 kind: specific
-researched_version: "Stand 2026-11"
+researched_version: "as of 2026-11"
 sources:
   - "https://supercraft.host/wiki/counter-strike-2/rcon_commands/"
 status: untested
