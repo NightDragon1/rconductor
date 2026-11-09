@@ -182,6 +182,9 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	conns := connmgr.New(rcon.Registry{"source-rcon": source.Adapter{}, httpapi.Protocol: httpapi.Adapter{}}, serverSvc, logs.Module("rcon"), connmgr.Options{
 		ProbeInterval: cfg.RCON.Probe, IdleProbe: cfg.RCON.IdleProbe, ProbeTimeout: cfg.RCON.ProbeTimeout,
 		MaxBackoff: cfg.RCON.MaxBackoff, DialTimeout: cfg.RCON.DialTimeout, QueueSize: cfg.RCON.Queue,
+		// The end of validity of a pinned certificate is filled in at
+		// the first connection with the pin (D-073).
+		OnCertificate: serverSvc.CertificateSeen,
 		OnStatus: func(id string, s connmgr.Status) {
 			if s != connmgr.Connected && runtime != nil {
 				runtime.Invalidate(id, "rcon_"+string(s))

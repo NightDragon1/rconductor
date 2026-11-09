@@ -108,6 +108,19 @@ Each side has its own Ed25519 key pair, created at first start: the panel in
 started by the agent. Both sides pin the key of the other, so a changed key is refused
 with `pin_mismatch` on both sides. A token is ignored once it has been used.
 
+## Certificates of game servers with an HTTPS API
+
+A game server with an HTTPS API (protocol `http-api`, such as Satisfactory) usually has a
+self-signed certificate. The RCON admin trusts it by its SHA-256 fingerprint, as the
+connection test shows it; until then, and whenever the server shows another certificate
+(`cert_mismatch`), the API token never leaves the panel.
+
+| Topic | Behaviour |
+| --- | --- |
+| Expiry | the trust is the fingerprint only and holds after the certificate's end of validity; the panel stores that date when the certificate is trusted, or at the first connection with it, and shows it |
+| Renewal | when the server makes a new certificate (for example after its settings were reset or the old one ran out), the fingerprint changes and the server shows `cert_mismatch` |
+| Trusting again | run the connection test, compare the new fingerprint with the server, then trust it; the stored date is cleared with the old fingerprint |
+
 ## Revocation
 
 Revoking an agent in the panel closes its connection and detaches its servers. The agent
