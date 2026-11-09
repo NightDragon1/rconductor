@@ -275,9 +275,11 @@ func TestFailureCategories(t *testing.T) {
 			if tc.encryption == EncryptionSTARTTLS && (contains(plain, "AUTH") || contains(plain, "MAIL")) {
 				t.Errorf("fell back to plain text: %v", plain)
 			}
+			// The server's own reply text must not reach the log; its
+			// code alone would also match a timestamp such as 08.550Z.
 			logs := f.logs.String()
 			if !strings.Contains(logs, `"event":"mail.failed"`) || !strings.Contains(logs, `"reason":"`+tc.want+`"`) ||
-				strings.Contains(logs, "550") || strings.Contains(logs, "smtp-Secret-4711") {
+				strings.Contains(logs, "no such user") || strings.Contains(logs, "smtp-Secret-4711") {
 				t.Errorf("log = %s", logs)
 			}
 			if n := f.count(t, `SELECT count(*) FROM audit_log WHERE action = 'settings.smtp.test' AND result = 'error' AND reason_code = ?`, tc.want); n != 1 {
