@@ -157,7 +157,7 @@ func (v *View) RuntimeFor(ctx context.Context, serverID string, level Level) Run
 	rt := Runtime{Kind: "runtime", ServerID: serverID}
 	if v.players != nil {
 		if p, ok := v.players.Cached(serverID); ok && !p.Unknown {
-			n, at := len(p.Names), p.UpdatedAt
+			n, at := p.Count, p.UpdatedAt
 			rt.Players, rt.PlayersAt, rt.PlayersStale = &n, &at, p.Stale
 		}
 	}

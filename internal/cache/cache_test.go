@@ -14,9 +14,11 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
@@ -262,5 +264,75 @@ func TestPlayerNamesAreForeignData(t *testing.T) {
 	many := "online: " + strings.Repeat("p, ", MaxPlayers+50)
 	if names, _ := parsePlayers(context.Background(), many, cfg); len(names) != MaxPlayers {
 		t.Errorf("count = %d, want %d", len(names), MaxPlayers)
+	}
+}
+
+// gameExec is a connection manager whose game tells its players through
+// its API (protocol http-api).
+type gameExec struct {
+	fakeExec
+	players rcon.Players
+	err     error
+	asked   atomic.Int64
+}
+
+func (g *gameExec) Players(context.Context, string) (rcon.Players, error) {
+	g.asked.Add(1)
+	return g.players, g.err
+}
+
+// TestPlayersFromTheGameAPI covers PROT-003 with the shipped Satisfactory
+// profile, which has no players block: count and limit come through the
+// dialect, without names and without a console command; reported values
+// are foreign data and bounded; RCON lists count their names.
+func TestPlayersFromTheGameAPI(t *testing.T) {
+	c, rconExec, _ := newCache(t)
+	ctx := context.Background()
+	if _, err := c.st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, profile_id, protocol, created_at, updated_at)
+		SELECT 'sf', 'factory', id, 'http-api', 't', 't' FROM game_profiles WHERE slug = 'satisfactory'`); err != nil {
+		t.Fatal(err)
+	}
+	g := &gameExec{players: rcon.Players{Count: 3, Max: 8}}
+	c.exec = g
+	p, err := c.Players(ctx, "sf")
+	if err != nil || p.Count != 3 || p.Max != 8 || len(p.Names) != 0 || p.Unknown {
+		t.Fatalf("players = %+v %v", p, err)
+	}
+	if g.calls.Load() != 0 || g.asked.Load() != 1 {
+		t.Errorf("%d console commands, %d API questions; want 0 and 1", g.calls.Load(), g.asked.Load())
+	}
+	for name, tc := range map[string]struct {
+		in         rcon.Players
+		count, max int
+	}{
+		"negative":  {rcon.Players{Count: -5, Max: -1}, 0, 0},
+		"huge":      {rcon.Players{Count: 1 << 40, Max: 1 << 40}, maxCount, 0},
+		"no limit":  {rcon.Players{Count: 2}, 2, 0},
+		"with name": {rcon.Players{Count: 1, Max: 4, Names: []string{"\x1b[31mAda\x00", strings.Repeat("x", 500)}}, 1, 4},
+	} {
+		got := fromGame(tc.in)
+		if got.Count != tc.count || got.Max != tc.max {
+			t.Errorf("%s: %+v, want count %d max %d", name, got, tc.count, tc.max)
+		}
+		for _, n := range got.Names {
+			if strings.ContainsAny(n, "\x1b\x00") || len(n) > MaxPlayerName {
+				t.Errorf("%s: name %q not cleaned", name, n)
+			}
+		}
+	}
+	// A connection that cannot count: no player list, as without a block.
+	c2, _, _ := newCache(t)
+	if _, err := c2.st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, profile_id, protocol, created_at, updated_at)
+		SELECT 'sf', 'factory', id, 'http-api', 't', 't' FROM game_profiles WHERE slug = 'satisfactory'`); err != nil {
+		t.Fatal(err)
+	}
+	c2.exec = &gameExec{err: connmgr.ErrNoPlayerCounter}
+	if _, err := c2.Players(ctx, "sf"); !errors.Is(err, ErrNoPlayerList) {
+		t.Errorf("no counter: %v, want ErrNoPlayerList", err)
+	}
+	// RCON: the count is the number of names.
+	c.exec = rconExec
+	if p, err := c.Players(ctx, "s1"); err != nil || p.Count != 2 {
+		t.Errorf("rcon count: %+v %v", p, err)
 	}
 }

@@ -522,9 +522,13 @@ func TestPlayersAfterRestart(t *testing.T) {
 	r.waitServer("connected")
 	players := func() {
 		t.Helper()
-		var p struct{ Players []string }
+		var p struct {
+			Players []string
+			Count   *int
+		}
 		r.admin.must(http.MethodGet, "/servers/"+r.server+"/players", nil, &p, http.StatusOK)
-		if len(p.Players) != 1 || p.Players[0] != "Steve" {
+		// count comes with the names (PROT-003).
+		if len(p.Players) != 1 || p.Players[0] != "Steve" || p.Count == nil || *p.Count != 1 {
 			t.Errorf("players = %+v", p)
 		}
 	}
