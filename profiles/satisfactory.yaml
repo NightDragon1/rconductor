@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+schema: 1
+id: satisfactory
+name: Satisfactory
+kind: generic
+researched_version: "CL-517554"
+sources:
+  - "https://satisfactory.wiki.gg/wiki/Dedicated_servers"
+  - "https://satisfactory.wiki.gg/wiki/Dedicated_servers/HTTPS_API"
+  - "https://github.com/wolveix/satisfactory-server/blob/main/README.md"
+status: tested
+match:
+  images: ["wolveix/satisfactory-server*", "robtme/satisfactory-server*"]
+# No RCON: the server has an HTTPS API on the game port (7777/tcp), with a
+# self-signed certificate and an Application Token made in the server
+# console with server.GenerateAPIToken. Commands run through the API's
+# RunCommand; the player count comes from QueryServerState, which has no
+# names, so there is no players block. server.GenerateAPIToken and
+# server.InvalidateAPITokens are left out of the catalog: the first prints
+# a token, the second would revoke the panel's own token.
+protocol:
+  type: http-api
+  default_port: 7777
+http_api:
+  dialect: satisfactory
+ports:
+  game:
+    - { port: 7777, proto: udp, name: game }
+    - { port: 7777, proto: tcp, name: api }
+    - { port: 8888, proto: tcp, name: messaging }
+syntax:
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
+  wrappers: []
+stop:
+  command: quit
+catalog:
+  - path: server.SaveGame
+    description: Save the current session under a name (quote names with spaces)
+    params:
+      - { name: save_name, type: text }
+  - path: quit
+    description: Shut down the server process

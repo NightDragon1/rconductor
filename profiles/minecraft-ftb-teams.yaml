@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/FTBTeam/FTB-Teams/tree/main/common/src/main/java/dev/ftb/mods/ftbteams/command
-# source: https://github.com/FTBTeam/FTB-Teams/tree/1.20.1/main (cross-check of command names)
 
 schema: 1
 id: minecraft-ftb-teams
 name: FTB Teams
 kind: specific
+researched_version: "2001.3.2 (MC 1.20.1)"
+sources:
+  - "https://github.com/FTBTeam/FTB-Teams/blob/1.20.1/main/common/src/main/java/dev/ftb/mods/ftbteams/data/FTBTeamsCommands.java"
+status: untested
 # Layer on minecraft-forge or minecraft-neoforge.
 protocol:
   type: source-rcon

@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://xgamingserver.com/docs/ark-survival-evolved/rcon-setup
-# source: https://github.com/arkmanager/ark-server-tools/blob/master/tools/arkmanager
-# source: https://github.com/arkmanager/ark-server-tools/blob/master/tools/instance.cfg.example
-# source: https://www.survivalservers.com/wiki/ARK:_Survival_Ascended_Admin_Commands
 
 schema: 1
 id: ark-se
 name: "ARK: Survival Evolved"
 kind: generic
+researched_version: "Stand 2026-07"
+sources:
+  - "https://xgamingserver.com/docs/ark-survival-evolved/rcon-setup"
+  - "https://github.com/arkmanager/ark-server-tools/blob/master/tools/arkmanager"
+  - "https://github.com/arkmanager/ark-server-tools/blob/master/tools/instance.cfg.example"
+status: untested
 # No players block: ListPlayers prints one line per player
 # ("0. Name, SteamID"); the panel reads only a single-line list.
 # Kick/ban take the Steam id, not the name, so no player params.

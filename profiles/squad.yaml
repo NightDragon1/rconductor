@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://xgamingserver.com/docs/squad/admin-console-commands
-# source: https://low.ms/knowledgebase/squad-server-configuration
 
 schema: 1
 id: squad
 name: Squad
 kind: generic
+sources:
+  - "https://xgamingserver.com/docs/squad/admin-console-commands"
+  - "https://low.ms/knowledgebase/squad-server-configuration"
+status: untested
 # Rcon.cfg example port 21114; hosters often use game port + 1.
 # No players block: ListPlayers prints one line per player.
 protocol:

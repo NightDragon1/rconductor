@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/FTBTeam/FTB-Quests/tree/main/common/src/main/java/dev/ftb/mods/ftbquests/command
-# source: https://github.com/FTBTeam/FTB-Quests/tree/1.20.1/main (cross-check of command names)
 
 schema: 1
 id: minecraft-ftb-quests
 name: FTB Quests
 kind: specific
+researched_version: "2001.4.22 (MC 1.20.1)"
+sources:
+  - "https://github.com/FTBTeam/FTB-Quests/tree/1.20.1/main/common/src/main/java/dev/ftb/mods/ftbquests/command"
+status: untested
 # Layer on minecraft-forge or minecraft-neoforge. Note: completing a quest
 # runs its command rewards, which the pack author defined.
 protocol:

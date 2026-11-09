@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://pixelmonmod.com/wiki/Changelog/Version_6
-# source: https://pixelmonmod.com/wiki/Pokemon_spec
-# source: https://nodecraft.com/support/games/minecraft/mods/pixelmon/how-to-configure-pixelmon-commands-and-permissions
 
 schema: 1
 id: minecraft-pixelmon
 name: Pixelmon Reforged
 kind: specific
+researched_version: "6.3.4 (MC 1.12.2)"
+sources:
+  - "https://pixelmonmod.com/wiki/Changelog/Version_6"
+  - "https://pixelmonmod.com/wiki/Pokemon_spec"
+  - "https://nodecraft.com/support/games/minecraft/mods/pixelmon/how-to-configure-pixelmon-commands-and-permissions"
+status: untested
 # Layer on minecraft-forge (Pixelmon is a closed-source mod; only commands
 # named in the official wiki are listed).
 protocol:

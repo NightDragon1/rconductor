@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://developer.valvesoftware.com/wiki/List_of_console_scripting_commands
-# source: https://supercraft.host/wiki/counter-strike-2/rcon-commands/
 
 schema: 1
 id: source-cs2
 name: Counter-Strike 2
 kind: specific
+researched_version: "Stand 2026-11"
+sources:
+  - "https://supercraft.host/wiki/counter-strike-2/rcon_commands/"
+status: untested
 # Layer on source-engine.
 protocol:
   type: source-rcon

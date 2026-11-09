@@ -1,13 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/io/papermc/paper/command/PaperCommand.java
-# source: https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/io/papermc/paper/command/PaperCommands.java
-# source: https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/org/spigotmc/SpigotConfig.java
-# source: https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java
 
 schema: 1
 id: minecraft-paper
 name: Minecraft Paper (Spigot/Bukkit)
 kind: generic
+researched_version: "MC 26.3"
+sources:
+  - "https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/io/papermc/paper/command/PaperCommand.java"
+  - "https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/io/papermc/paper/command/PaperCommands.java"
+  - "https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/org/spigotmc/SpigotConfig.java"
+  - "https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/org/bukkit/craftbukkit/command/VanillaCommandWrapper.java"
+status: untested
 # Layer on minecraft-java. No match.images: Paper runs on
 # itzg/minecraft-server (TYPE=PAPER). Paper keeps the vanilla line
 # "Starting minecraft server version", so no own version.pattern.
