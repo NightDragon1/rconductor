@@ -384,6 +384,7 @@
       "server_unavailable": "The server is not reachable",
       "timeout": "The server did not answer in time",
       "busy": "The server is busy",
+      "command_failed": "The game reported the command as failed",
       "other": "The command failed"
     },
     "preview": "› {{command}}"

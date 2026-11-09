@@ -25,6 +25,10 @@ var (
 	ErrCertMismatch = errors.New("the certificate of the game server is not the trusted one")
 	// ErrUnpinned means no certificate is trusted yet; nothing was sent.
 	ErrUnpinned = errors.New("no certificate of the game server is trusted yet")
+	// ErrCommandFailed means the game ran the command and reported it as
+	// failed (D-072, D-073); the answer text comes with it. It is a result
+	// of the command, not a broken connection.
+	ErrCommandFailed = errors.New("the game reported the command as failed")
 )
 
 // Endpoint is what an adapter needs beyond address and password: the

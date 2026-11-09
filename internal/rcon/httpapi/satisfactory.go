@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/NightDragon1/rconductor/internal/rcon"
 )
 
 // Satisfactory is the HTTPS API of the Satisfactory dedicated server: one
@@ -78,13 +80,19 @@ func (d Satisfactory) Health(ctx context.Context, c Client) error {
 	return d.call(ctx, c, "QueryServerState", nil, &state)
 }
 
-// Execute runs a console command; 204 means it ran without output.
+// Execute runs a console command; 204 means it ran without output. A
+// returnValue of false is the game's "failed": the text comes back with
+// rcon.ErrCommandFailed (D-072).
 func (d Satisfactory) Execute(ctx context.Context, c Client, command string) (string, error) {
 	var out struct {
 		CommandResult string `json:"commandResult"`
+		ReturnValue   *bool  `json:"returnValue"`
 	}
 	if err := d.call(ctx, c, "RunCommand", map[string]string{"command": command}, &out); err != nil {
 		return "", err
+	}
+	if out.ReturnValue != nil && !*out.ReturnValue {
+		return out.CommandResult, rcon.ErrCommandFailed
 	}
 	return out.CommandResult, nil
 }

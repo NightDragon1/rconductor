@@ -68,7 +68,9 @@ type Dialect interface {
 	Name() string
 	// Health checks that the server answers and accepts the token.
 	Health(ctx context.Context, c Client) error
-	// Execute runs a console command and returns its output.
+	// Execute runs a console command and returns its output; when the
+	// game reports the command as failed, the output comes with
+	// rcon.ErrCommandFailed.
 	Execute(ctx context.Context, c Client, command string) (string, error)
 	// Players returns the players online; Names is empty if the game
 	// gives none, the interface then shows the count only.

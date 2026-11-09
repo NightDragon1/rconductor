@@ -2256,7 +2256,7 @@ components:
 
     CommandResult:
       type: object
-      required: [request_id, ts, command, response, truncated]
+      required: [request_id, ts, command, response, truncated, result]
       properties:
         request_id:
           type: string
@@ -2273,6 +2273,15 @@ components:
         truncated:
           type: boolean
           description: The answer was longer than 64 KiB and is cut.
+        result:
+          type: string
+          enum: [ok, error]
+          description: >-
+            ok, or error when the game ran the command and reported it as
+            failed (reason command_failed, D-073); the game's text is in
+            response. RCON commands are always ok here.
+        reason:
+          $ref: "#/components/schemas/ReasonCode"
 
     MultiCommandInput:
       type: object
@@ -3676,6 +3685,7 @@ components:
         - conflict
         - precondition_required
         - totp_setup_required
+        - command_failed
 
     Problem:
       type: object

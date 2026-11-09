@@ -57,3 +57,19 @@ func TestActionErrors(t *testing.T) {
 		}
 	}
 }
+
+// TestCommandResult covers D-073: a single command answers with result ok,
+// or error with reason command_failed and the game's text in response.
+func TestCommandResult(t *testing.T) {
+	ok := commandResult(commands.Result{RequestID: "0b6f1a7e-8d2c-4f3a-9e1b-2c3d4e5f6a7b", Command: "say hi", Response: "hi", Result: commands.ResultOK})
+	if ok.Result != api.CommandResultResultOk || ok.Reason != nil || ok.Response != "hi" {
+		t.Errorf("ok: %+v", ok)
+	}
+	if empty := commandResult(commands.Result{Command: "list"}); empty.Result != api.CommandResultResultOk {
+		t.Errorf("without result: %+v", empty)
+	}
+	failed := commandResult(commands.Result{Command: "nope", Response: "Unknown Console Command", Result: commands.ResultError, Reason: commands.ReasonCommandFailed})
+	if failed.Result != api.CommandResultResultError || failed.Reason == nil || *failed.Reason != api.ReasonCodeCommandFailed || failed.Response != "Unknown Console Command" {
+		t.Errorf("failed: %+v", failed)
+	}
+}

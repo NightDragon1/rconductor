@@ -1206,6 +1206,12 @@ export interface components {
             response: string;
             /** @description The answer was longer than 64 KiB and is cut. */
             truncated: boolean;
+            /**
+             * @description ok, or error when the game ran the command and reported it as failed (reason command_failed, D-073); the game's text is in response. RCON commands are always ok here.
+             * @enum {string}
+             */
+            result: "ok" | "error";
+            reason?: components["schemas"]["ReasonCode"];
         };
         MultiCommandInput: {
             server_ids: string[];
@@ -1854,7 +1860,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "command_failed";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
