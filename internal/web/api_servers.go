@@ -15,6 +15,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/servers"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
 func uuids(ids []string) []uuid.UUID {
@@ -30,7 +31,7 @@ func uuids(ids []string) []uuid.UUID {
 func toAPIServer(s servers.Server) api.Server {
 	id, _ := uuid.Parse(s.ID)
 	out := api.Server{
-		Id: id, Name: s.Name, ProfileId: uuidPtr(s.ProfileID), Groups: uuids(s.GroupIDs),
+		Id: id, Name: s.Name, ProfileIds: profileIDs(s.ProfileID), Groups: uuids(s.GroupIDs),
 		Status: api.ServerStatus(s.Status), StatusSince: s.StatusSince,
 	}
 	if !s.Detailed {
@@ -49,11 +50,14 @@ func toAPIServer(s servers.Server) api.Server {
 	return out
 }
 
-func serverInput(b *api.ServerInput) servers.Input {
+func serverInput(b *api.ServerInput) (servers.Input, error) {
 	in := servers.Input{Name: b.Name, Host: b.Host, Port: b.Port, AgentID: b.AgentId, ContainerName: b.ContainerName,
 		TLSFingerprint: b.TlsFingerprint}
-	if b.ProfileId != nil {
-		p := b.ProfileId.String()
+	if b.ProfileIds != nil {
+		p, err := firstProfile(*b.ProfileIds)
+		if err != nil {
+			return servers.Input{}, err
+		}
 		in.ProfileID = &p
 	}
 	if b.Password != nil {
@@ -67,7 +71,7 @@ func serverInput(b *api.ServerInput) servers.Input {
 		}
 		in.GamePorts = &ports
 	}
-	return in
+	return in, nil
 }
 
 func bodyRequired() error {
@@ -90,7 +94,11 @@ func (s *apiServer) CreateServer(ctx context.Context, req api.CreateServerReques
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	sv, err := s.servers.Create(ctx, adminRequest(ctx), serverInput(req.Body))
+	in, err := serverInput(req.Body)
+	if err != nil {
+		return nil, adminError(err)
+	}
+	sv, err := s.servers.Create(ctx, adminRequest(ctx), in)
 	if err != nil {
 		return nil, adminError(err)
 	}
@@ -105,8 +113,11 @@ func (s *apiServer) TestServerConnection(ctx context.Context, req api.TestServer
 	if id := req.Body.ServerId; id != nil {
 		in.ServerID = id.String()
 	}
-	if id := req.Body.ProfileId; id != nil {
-		v := id.String()
+	if ids := req.Body.ProfileIds; ids != nil {
+		v, err := firstProfile(*ids)
+		if err != nil {
+			return nil, adminError(err)
+		}
 		in.ProfileID = &v
 	}
 	if pw := req.Body.Password; pw != nil {
@@ -140,7 +151,10 @@ func (s *apiServer) UpdateServer(ctx context.Context, req api.UpdateServerReques
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	in := serverInput(req.Body)
+	in, err := serverInput(req.Body)
+	if err != nil {
+		return nil, adminError(err)
+	}
 	in.Version = ifMatch(req.Params.IfMatch)
 	sv, err := s.servers.Update(ctx, adminRequest(ctx), req.Id.String(), in)
 	if err != nil {
@@ -369,4 +383,28 @@ func (s *apiServer) apiServerGroup(ctx context.Context, g servers.Group) api.Ser
 	out := toAPIServerGroup(g)
 	out.Version = s.serverGroupVersions(ctx)[g.ID]
 	return out
+}
+
+// profileIDs is the profile list of a server. Until the list behind it
+// follows (SRV-008, D-074), a server has at most one profile.
+func profileIDs(id string) *[]uuid.UUID {
+	out := []uuid.UUID{}
+	if u, err := uuid.Parse(id); err == nil {
+		out = append(out, u)
+	}
+	return &out
+}
+
+// errProfiles refuses a list of several profiles until SRV-008 follows.
+var errProfiles = &users.InvalidError{Detail: "profile_ids takes one profile for now"}
+
+// firstProfile takes the only profile of a list; an empty list clears it.
+func firstProfile(ids []uuid.UUID) (string, error) {
+	switch len(ids) {
+	case 0:
+		return "", nil
+	case 1:
+		return ids[0].String(), nil
+	}
+	return "", errProfiles
 }

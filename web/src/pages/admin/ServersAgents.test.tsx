@@ -28,7 +28,7 @@ const data: [readonly unknown[], unknown][] = [
         status: 'connected',
         status_since: now,
         version: 'v',
-        profile_id: 'p1',
+        profile_ids: ['p1'],
         host: 'mc.lan',
         port: 25575,
         credentials: 'reenter',

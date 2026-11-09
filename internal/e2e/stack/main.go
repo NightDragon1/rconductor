@@ -335,7 +335,7 @@ func seed(panel, public, console, gameAddr string) (State, error) {
 	p, _ := strconv.Atoi(port)
 	var srv struct{ ID string }
 	if err := admin.call(http.MethodPost, "/servers", map[string]any{
-		"name": st.ServerName, "profile_id": profile, "host": host, "port": p, "password": rconPassword,
+		"name": st.ServerName, "profile_ids": []string{profile}, "host": host, "port": p, "password": rconPassword,
 	}, &srv); err != nil {
 		return st, err
 	}

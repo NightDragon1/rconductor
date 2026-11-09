@@ -156,7 +156,7 @@ test('an older agent hides what it cannot do (AGT-013)', async ({ browser, page,
   const created = await adminPage.request.post('api/v1/servers', {
     data: {
       name: 'legacy',
-      profile_id: outpost.profile_id,
+      profile_ids: outpost.profile_ids,
       host: outpost.host,
       port: outpost.port,
       password: 'e2e-rcon',

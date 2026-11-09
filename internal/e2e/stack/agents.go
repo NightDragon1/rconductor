@@ -326,7 +326,7 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 	} {
 		var srv struct{ ID string }
 		if err := admin.call(http.MethodPost, "/servers", map[string]any{
-			"name": s.name, "profile_id": profile, "host": host, "port": s.port, "password": s.password,
+			"name": s.name, "profile_ids": []string{profile}, "host": host, "port": s.port, "password": s.password,
 			"agent_id": hostID, "container_name": "mc-" + s.name,
 		}, &srv); err != nil {
 			return err
@@ -337,7 +337,7 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 	// candidate 16).
 	var outpost struct{ ID string }
 	if err := admin.call(http.MethodPost, "/servers", map[string]any{
-		"name": "outpost", "profile_id": profile, "host": host, "port": p, "password": rconPassword,
+		"name": "outpost", "profile_ids": []string{profile}, "host": host, "port": p, "password": rconPassword,
 	}, &outpost); err != nil {
 		return err
 	}
@@ -347,7 +347,7 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 	hp, _ := strconv.Atoi(hostilePort)
 	var hostile struct{ ID string }
 	if err := admin.call(http.MethodPost, "/servers", map[string]any{
-		"name": "hostile", "profile_id": profile, "host": hostileHost, "port": hp, "password": rconPassword,
+		"name": "hostile", "profile_ids": []string{profile}, "host": hostileHost, "port": hp, "password": rconPassword,
 		"agent_id": hostID, "container_name": hostileContainer,
 	}, &hostile); err != nil {
 		return err

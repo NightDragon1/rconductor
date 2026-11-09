@@ -796,10 +796,12 @@ type CommandResultResult string
 
 // ConnectionTest defines model for ConnectionTest.
 type ConnectionTest struct {
-	Host      *string             `json:"host,omitempty"`
-	Password  *string             `json:"password,omitempty"`
-	Port      *int                `json:"port,omitempty"`
-	ProfileId *openapi_types.UUID `json:"profile_id,omitempty"`
+	Host     *string `json:"host,omitempty"`
+	Password *string `json:"password,omitempty"`
+	Port     *int    `json:"port,omitempty"`
+
+	// ProfileIds Game profiles to test with, top first (SRV-008); the protocol, dialect and default port come from them.
+	ProfileIds *[]openapi_types.UUID `json:"profile_ids,omitempty"`
 
 	// ServerId The server being edited; missing when a new one is created.
 	ServerId *openapi_types.UUID `json:"server_id,omitempty"`
@@ -1265,8 +1267,10 @@ type Server struct {
 	Name string             `json:"name"`
 
 	// Port Admins only.
-	Port      *int                `json:"port,omitempty"`
-	ProfileId *openapi_types.UUID `json:"profile_id,omitempty"`
+	Port *int `json:"port,omitempty"`
+
+	// ProfileIds Game profiles of the server, top first (SRV-008, D-074): for each value the topmost profile that sets it wins; the catalog is the union, wrappers of all profiles hold.
+	ProfileIds *[]openapi_types.UUID `json:"profile_ids,omitempty"`
 
 	// Protocol Admins only.
 	Protocol *string `json:"protocol,omitempty"`
@@ -1351,9 +1355,11 @@ type ServerInput struct {
 	Name      *string     `json:"name,omitempty"`
 
 	// Password RCON password, or the API token of a server with an HTTPS API; stored encrypted, never returned.
-	Password  *string             `json:"password,omitempty"`
-	Port      *int                `json:"port,omitempty"`
-	ProfileId *openapi_types.UUID `json:"profile_id,omitempty"`
+	Password *string `json:"password,omitempty"`
+	Port     *int    `json:"port,omitempty"`
+
+	// ProfileIds Game profiles of the server, top first (SRV-008, D-074); all with the same protocol, for http-api the same dialect. Replaces the list as a whole.
+	ProfileIds *[]openapi_types.UUID `json:"profile_ids,omitempty"`
 
 	// TlsFingerprint Trusts the certificate of a server with an HTTPS API, as the connection test showed it; required for protocol http-api (PROT-003, D-071). Colons and upper case are accepted.
 	TlsFingerprint *string `json:"tls_fingerprint,omitempty"`

@@ -136,7 +136,7 @@ func newStack(t *testing.T, addr, rconPassword string) *stack {
 	p, _ := strconv.Atoi(port)
 	var srv struct{ ID string }
 	admin.must(http.MethodPost, "/servers", map[string]any{
-		"name": "mc", "profile_id": profile, "host": host, "port": p, "password": rconPassword,
+		"name": "mc", "profile_ids": []string{profile}, "host": host, "port": p, "password": rconPassword,
 	}, &srv, http.StatusCreated)
 	s.server = srv.ID
 	// The rate limits of Design 3.4 would stop a burst of 20 commands.
