@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Issue form for shipped game profiles (DOC-005): a new game or a
+# correction to one in profiles/.
+name: "Game profile: new game or correction"
+description: Ask for a profile for a new game, or report a wrong or missing command in a shipped one.
+title: "Game profile: "
+labels: ["profile"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Profiles are orientation only: they fill the command catalog, the player
+        list and the fields of the command page, and they allow and forbid nothing.
+        The shipped profiles, their status and their sources are on the wiki page
+        [Supported games](https://github.com/NightDragon1/rconductor/wiki/Supported-games).
+        Do not paste passwords, RCON secrets or API tokens.
+  - type: input
+    id: game
+    attributes:
+      label: Game and version
+      description: The game, and the version of the server you mean, as the server reports it.
+      placeholder: "Satisfactory, CL-517554"
+    validations:
+      required: true
+  - type: input
+    id: image
+    attributes:
+      label: Server image or install
+      description: The container image with its tag, or how the server is installed.
+      placeholder: "wolveix/satisfactory-server:latest"
+    validations:
+      required: true
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: Protocol
+      options:
+        - RCON (Source)
+        - HTTPS API
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing
+      description: Commands, parameters, player list or version line; for a new game, the commands that matter most.
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Source links
+      description: Where the commands come from, one link per line, such as the game's wiki, the server documentation or the source code.
+    validations:
+      required: true
+  - type: dropdown
+    id: tested
+    attributes:
+      label: Tested against a real server
+      options:
+        - "Yes, with a real server"
+        - "No, from the sources only"
+    validations:
+      required: true
