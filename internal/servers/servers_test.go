@@ -88,7 +88,7 @@ func (f *fixture) as(name string) users.Request {
 func (f *fixture) create(name string) Server {
 	f.t.Helper()
 	host, pw, profile := "mc.lan", logging.Secret(rconPassword), f.ids["profile"]
-	s, err := f.svc.Create(context.Background(), f.as("admin"), Input{Name: &name, ProfileID: &profile, Host: &host, Password: &pw})
+	s, err := f.svc.Create(context.Background(), f.as("admin"), Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Password: &pw})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -127,11 +127,11 @@ func TestCreateServer(t *testing.T) {
 	var inv *users.InvalidError
 	name := "Other"
 	for what, in := range map[string]Input{
-		"missing password": {Name: &name, ProfileID: new(f.ids["profile"]), Host: new("mc.lan")},
-		"bad host":         {Name: &name, ProfileID: new(f.ids["profile"]), Host: new("mc lan"), Password: new(logging.Secret("x"))},
-		"unknown profile":  {Name: &name, ProfileID: new("nope"), Host: new("mc.lan"), Password: new(logging.Secret("x"))},
-		"duplicate name":   {Name: new("survival"), ProfileID: new(f.ids["profile"]), Host: new("mc.lan"), Password: new(logging.Secret("x"))},
-		"bad port":         {Name: &name, ProfileID: new(f.ids["profile"]), Host: new("mc.lan"), Port: new(70000), Password: new(logging.Secret("x"))},
+		"missing password": {Name: &name, ProfileIDs: &[]string{f.ids["profile"]}, Host: new("mc.lan")},
+		"bad host":         {Name: &name, ProfileIDs: &[]string{f.ids["profile"]}, Host: new("mc lan"), Password: new(logging.Secret("x"))},
+		"unknown profile":  {Name: &name, ProfileIDs: &[]string{"nope"}, Host: new("mc.lan"), Password: new(logging.Secret("x"))},
+		"duplicate name":   {Name: new("survival"), ProfileIDs: &[]string{f.ids["profile"]}, Host: new("mc.lan"), Password: new(logging.Secret("x"))},
+		"bad port":         {Name: &name, ProfileIDs: &[]string{f.ids["profile"]}, Host: new("mc.lan"), Port: new(70000), Password: new(logging.Secret("x"))},
 	} {
 		if _, err := f.svc.Create(ctx, f.as("admin"), in); !errors.As(err, &inv) {
 			t.Errorf("%s: %v", what, err)
@@ -263,7 +263,7 @@ func TestConnectsWithStoredCredentials(t *testing.T) {
 	host, port, _ := net.SplitHostPort(srv.Addr)
 	p, _ := strconv.Atoi(port)
 	name, wrong, profile := "local", logging.Secret("wrong"), f.ids["profile"]
-	s, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileID: &profile, Host: &host, Port: &p, Password: &wrong})
+	s, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &p, Password: &wrong})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func connectionFixture(t *testing.T) (*fixture, *rcontest.Server, ConnectionData
 	t.Cleanup(cancel)
 	host, port, _ := net.SplitHostPort(srv.Addr)
 	p, _ := strconv.Atoi(port)
-	return f, srv, ConnectionData{ProfileID: &[]string{f.ids["profile"]}[0], Host: &host, Port: &p}
+	return f, srv, ConnectionData{ProfileIDs: &[]string{f.ids["profile"]}, Host: &host, Port: &p}
 }
 
 func secretOf(s string) *logging.Secret {
@@ -397,7 +397,7 @@ func TestConnectionRunning(t *testing.T) {
 	f, srv, in := connectionFixture(t)
 	ctx := context.Background()
 	name := "local"
-	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileID: in.ProfileID, Host: in.Host, Port: in.Port, Password: secretOf(rconPassword)})
+	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileIDs: in.ProfileIDs, Host: in.Host, Port: in.Port, Password: secretOf(rconPassword)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,7 +443,7 @@ func TestConnectionRunning(t *testing.T) {
 		t.Errorf("%d connections at the new address, want 1", other.Connections())
 	}
 	var inv *users.InvalidError
-	if _, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ProfileID: in.ProfileID, Host: &host, Port: &p}); !errors.As(err, &inv) {
+	if _, err := f.svc.TestConnection(ctx, f.as("admin"), ConnectionData{ProfileIDs: in.ProfileIDs, Host: &host, Port: &p}); !errors.As(err, &inv) {
 		t.Errorf("without server and password: %v", err)
 	}
 }
@@ -455,7 +455,7 @@ func TestHostChangeKeepsPassword(t *testing.T) {
 	f, _, in := connectionFixture(t)
 	ctx := context.Background()
 	name := "moved"
-	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileID: in.ProfileID, Host: in.Host, Port: in.Port, Password: secretOf(rconPassword)})
+	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileIDs: in.ProfileIDs, Host: in.Host, Port: in.Port, Password: secretOf(rconPassword)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -536,7 +536,7 @@ func TestB4PasswordFromTheReadOfTheAddress(t *testing.T) {
 	f, _, in := connectionFixture(t)
 	ctx := context.Background()
 	name := "local"
-	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileID: in.ProfileID, Host: in.Host, Port: in.Port, Password: secretOf(rconPassword)})
+	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileIDs: in.ProfileIDs, Host: in.Host, Port: in.Port, Password: secretOf(rconPassword)})
 	if err != nil {
 		t.Fatal(err)
 	}

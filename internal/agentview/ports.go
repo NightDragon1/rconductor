@@ -95,10 +95,8 @@ func (v *View) portsOf(ctx context.Context, r sqlitedb.GetServerRow, snapshot []
 // whether its profile offers the Steam link.
 func (v *View) gamePorts(ctx context.Context, r sqlitedb.GetServerRow) ([]profiles.GamePort, bool) {
 	var rules profiles.Profile
-	if r.ProfileID.Valid {
-		if gp, err := v.st.Queries.GetGameProfile(ctx, r.ProfileID.String); err == nil {
-			_ = json.Unmarshal([]byte(gp.Rules), &rules)
-		}
+	if eff, _, err := profiles.ForServer(ctx, v.st.Queries, r.ID); err == nil && eff != nil {
+		rules = *eff
 	}
 	game := rules.Ports.Game
 	if r.GamePorts.Valid {

@@ -8,7 +8,6 @@ package cache
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
@@ -264,12 +263,9 @@ func (c *Cache) playerConfig(ctx context.Context, serverID string) (*profiles.Pl
 	if err != nil || !r.ProfileID.Valid {
 		return nil, "", ErrNoPlayerList
 	}
-	gp, err := c.st.Queries.GetGameProfile(ctx, r.ProfileID.String)
-	if err != nil {
-		return nil, "", ErrNoPlayerList
-	}
-	var rules profiles.Profile
-	if json.Unmarshal([]byte(gp.Rules), &rules) != nil {
+	// The players block of the topmost profile that has one (D-074).
+	rules, _, err := profiles.ForServer(ctx, c.st.Queries, serverID)
+	if err != nil || rules == nil {
 		return nil, "", ErrNoPlayerList
 	}
 	return rules.Players, r.Protocol, nil

@@ -46,7 +46,7 @@ func TestHTTPAPIThroughThePipeline(t *testing.T) {
 		host, port, _ := net.SplitHostPort(s.Addr())
 		p, _ := strconv.Atoi(port)
 		name, tok := "http-"+d, logging.Secret("tok")
-		sv, err := w.srv.Create(ctx, w.as("admin"), servers.Input{Name: &name, ProfileID: &profile, Host: &host, Port: &p, Password: &tok, TLSFingerprint: &s.Fingerprint})
+		sv, err := w.srv.Create(ctx, w.as("admin"), servers.Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &p, Password: &tok, TLSFingerprint: &s.Fingerprint})
 		if err != nil {
 			t.Fatal(err)
 		}

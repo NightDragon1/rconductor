@@ -432,7 +432,7 @@ func TestRestartWithoutAgent(t *testing.T) {
 	var profile string
 	_ = st.DB.QueryRowContext(ctx, `SELECT id FROM game_profiles WHERE slug = 'minecraft-java'`).Scan(&profile)
 	name, host, pw := "mc", "127.0.0.1", logging.Secret("rconpw")
-	srv, err := svc.Create(ctx, admin, servers.Input{Name: &name, ProfileID: &profile, Host: &host, Port: &port, Password: &pw})
+	srv, err := svc.Create(ctx, admin, servers.Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: &pw})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -50,7 +50,7 @@ func TestB10_1AuditNamesSentNotChangedFields(t *testing.T) {
 	name, host, port, profile := "beta", sv.Host, sv.Port, sv.ProfileID
 	agent, container := "", ""
 	if _, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{
-		Name: &name, ProfileID: &profile, Host: &host, Port: &port,
+		Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port,
 		AgentID: &agent, ContainerName: &container, Version: f.version(sv.ID),
 	}); err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestB10_1AuditNamesSentNotChangedFields(t *testing.T) {
 	}
 	newHost, newPort := "elsewhere.example", 27015
 	if _, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{
-		Name: &name, ProfileID: &profile, Host: &newHost, Port: &newPort,
+		Name: &name, ProfileIDs: &[]string{profile}, Host: &newHost, Port: &newPort,
 		AgentID: &agent, ContainerName: &container, Version: f.version(sv.ID),
 	}); err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func TestB10_2ProfileChangeMovesPortUnaudited(t *testing.T) {
 	if err := f.st.DB.QueryRowContext(ctx, `SELECT id FROM game_profiles WHERE slug = 'minecraft-gtnh'`).Scan(&other); err != nil {
 		t.Fatal(err)
 	}
-	got, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{ProfileID: &other, Version: f.version(sv.ID)})
+	got, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{ProfileIDs: &[]string{other}, Version: f.version(sv.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestB10_2ProfileChangeMovesPortUnaudited(t *testing.T) {
 		t.Fatalf("port did not move: %d", got.Port)
 	}
 	p, _ := lastUpdate(t, f, sv.ID)
-	if !slices.Equal(p.Fields, []string{"port", "profile_id"}) || p.Port == nil || p.Port.From != sv.Port || p.Port.To != 4444 {
+	if !slices.Equal(p.Fields, []string{"port", "profile_ids"}) || p.Port == nil || p.Port.From != sv.Port || p.Port.To != 4444 {
 		t.Errorf("port moved %d -> %d, audit = %+v", sv.Port, got.Port, p)
 	}
 }

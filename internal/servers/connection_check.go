@@ -50,11 +50,12 @@ var ErrTestRateLimited = errors.New("too many connection tests")
 // ConnectionData is what a connection test looks at; ServerID is empty for
 // a server not created yet, nil fields keep the values of the server.
 type ConnectionData struct {
-	ServerID  string
-	ProfileID *string
-	Host      *string
-	Port      *int
-	Password  *logging.Secret
+	ServerID string
+	// ProfileIDs are the profiles to test with, top first (SRV-008).
+	ProfileIDs *[]string
+	Host       *string
+	Port       *int
+	Password   *logging.Secret
 	// TLSFingerprint is the certificate to trust for the test of a server
 	// with an HTTPS API; without it the stored one counts.
 	TLSFingerprint *string
@@ -130,7 +131,7 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 		base = fields{profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port), fingerprint: r.TlsFingerprint}
 		sealed = r.Secret
 	}
-	f, err := s.check(ctx, s.st.Queries, base, Input{ProfileID: in.ProfileID, Host: in.Host, Port: in.Port})
+	f, err := s.check(ctx, s.st.Queries, base, Input{ProfileIDs: in.ProfileIDs, Host: in.Host, Port: in.Port})
 	if err != nil {
 		return ConnectionResult{}, err
 	}
