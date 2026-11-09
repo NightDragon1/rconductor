@@ -90,9 +90,15 @@ jobs:
       - run: go vet ./...
       - run: make lint
 
-  go-test:
-    name: Go test
+  # scripts/go-test-shard.sh splits the packages and checks that its shard
+  # count is the size of this matrix.
+  go-test-shard:
+    name: Go test shard ${{ matrix.shard }}
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -100,7 +106,32 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - run: go test -race ./...
+      - name: Every package is in exactly one shard
+        env:
+          TOTAL: ${{ strategy.job-total }}
+        run: scripts/go-test-shard.sh --check "$TOTAL"
+      - name: Tests
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          pkgs=$(scripts/go-test-shard.sh "$SHARD")
+          [ -n "$pkgs" ]
+          # shellcheck disable=SC2086
+          go test -race $pkgs
+
+  # One stable name for the ruleset, as with E2E: the shards are always
+  # due, so anything but success fails.
+  go-test:
+    name: Go test
+    needs: go-test-shard
+    if: ${{ !cancelled() }}
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    steps:
+      - env:
+          RESULT: ${{ needs.go-test-shard.result }}
+        run: |
+          echo "shards: $RESULT"
+          [ "$RESULT" = success ]
 
   govulncheck:
     name: govulncheck
