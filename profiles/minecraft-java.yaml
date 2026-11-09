@@ -4,6 +4,7 @@ schema: 1
 id: minecraft-java
 name: Minecraft (Java Edition)
 kind: generic
+status: tested
 match:
   images: ["itzg/minecraft-server*"]
 protocol:

@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/thijsvanloef/palworld-server-docker/blob/main/scripts/helper_functions.sh
-# source: https://github.com/thijsvanloef/palworld-server-docker/blob/main/README.md
-# source: https://berrybyte.net/wiki/games/palworld/all-admin-commands
-# source: https://xgamingserver.com/tools/palworld/admin-commands
 
 schema: 1
 id: palworld
 name: Palworld
 kind: generic
+sources:
+  - "https://github.com/thijsvanloef/palworld-server-docker/blob/main/scripts/helper_functions.sh"
+  - "https://github.com/thijsvanloef/palworld-server-docker/blob/main/README.md"
+  - "https://berrybyte.net/wiki/games/palworld/all-admin-commands"
+  - "https://xgamingserver.com/tools/palworld/admin-commands"
+status: untested
 match:
   images: ["thijsvanloef/palworld-server-docker*"]
 # RCON is deprecated by Pocketpair in favour of the REST API (HTTP

@@ -5,6 +5,7 @@ package profiles
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -263,5 +264,73 @@ func TestSteamConnect(t *testing.T) {
 	bad := strings.Replace(design74, "ports:\n  game:", "ports:\n  steam_connect: \"yes please\"\n  game:", 1)
 	if _, err := Parse([]byte(bad)); err == nil {
 		t.Error("a string as steam_connect accepted")
+	}
+}
+
+// TestOrigin covers the origin fields of D-072: researched_version,
+// sources and status (tested or untested, default untested).
+func TestOrigin(t *testing.T) {
+	p, err := Parse([]byte(design74))
+	if err != nil || p.Status != StatusUntested || p.ResearchedVersion != "" || p.Sources == nil || len(p.Sources) != 0 {
+		t.Fatalf("without origin: %+v %v", p, err)
+	}
+	with := strings.Replace(design74, "name: Minecraft (Java Edition)\n",
+		"name: Minecraft (Java Edition)\nresearched_version: \"26.3\"\nsources:\n  - \"https://example.org/a\"\n  - \"profiles/x.yaml (list output)\"\nstatus: tested\n", 1)
+	p, err = Parse([]byte(with))
+	if err != nil || p.Status != StatusTested || p.ResearchedVersion != "26.3" || len(p.Sources) != 2 {
+		t.Fatalf("with origin: %+v %v", p, err)
+	}
+	many := "sources:\n" + strings.Repeat("  - x\n", maxSources+1)
+	for name, tc := range map[string]struct{ add, want string }{
+		"unknown status":     {"status: works\n", "status must be tested or untested"},
+		"status upper case":  {"status: Tested\n", "status must be tested or untested"},
+		"status as list":     {"status: [tested]\n", "Profile.Status"},
+		"long version":       {"researched_version: " + strings.Repeat("1", maxVersionLen+1) + "\n", "researched_version must be"},
+		"control in version": {"researched_version: \"1.0\\n2\"\n", "researched_version must be"},
+		"too many sources":   {many, "at most 20 sources"},
+		"empty source":       {"sources: [\"  \"]\n", "sources[0] must be"},
+		"long source":        {"sources: [" + strings.Repeat("s", maxSourceLen+1) + "]\n", "sources[0] must be"},
+		"control in source":  {"sources: [\"a\\tb\"]\n", "sources[0] must be"},
+		"sources as text":    {"sources: https://example.org\n", "sequence is expected"},
+	} {
+		text := strings.Replace(design74, "name: Minecraft (Java Edition)\n", "name: Minecraft (Java Edition)\n"+tc.add, 1)
+		if _, err := Parse([]byte(text)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	// profile check names the line of the field.
+	f := Check([]byte(strings.Replace(design74, "name: Minecraft (Java Edition)\n", "name: Minecraft (Java Edition)\nstatus: works\n", 1)))
+	if len(f) == 0 || f[0].Line == 0 {
+		t.Errorf("findings without a line: %+v", f)
+	}
+}
+
+// TestShippedOrigin covers D-072 for the shipped profiles: each names its
+// status, sources are fields and no longer comments, and the profiles run
+// against a real server are tested.
+func TestShippedOrigin(t *testing.T) {
+	tested := map[string]bool{"minecraft-java": true, "minecraft-gtnh": true, "satisfactory": true}
+	files, err := filepath.Glob("../../profiles/*.yaml")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no profiles: %v", err)
+	}
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "# source:") {
+			t.Errorf("%s keeps source comments", file)
+		}
+		if !strings.Contains(string(data), "\nstatus: ") {
+			t.Errorf("%s names no status", file)
+		}
+		p, err := Parse(data)
+		if err != nil {
+			t.Fatalf("%s: %v", file, err)
+		}
+		if want := map[bool]string{true: StatusTested, false: StatusUntested}[tested[p.ID]]; p.Status != want {
+			t.Errorf("%s: status %s, want %s", p.ID, p.Status, want)
+		}
 	}
 }

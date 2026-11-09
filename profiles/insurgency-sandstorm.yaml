@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://znodgaming.com/~znodusers/stingtwo/sandstormServerAdminGuide.pdf (copy of NWI "Sandstorm-Server-Admin-Guide-1.4.pdf")
 
 schema: 1
 id: insurgency-sandstorm
 name: "Insurgency: Sandstorm"
 kind: generic
+sources:
+  - "https://znodgaming.com/~znodusers/stingtwo/sandstormServerAdminGuide.pdf (copy of NWI \"Sandstorm-Server-Admin-Guide-1.4.pdf\")"
+status: untested
 # RconListenPort 27015 is the guide's example, not a stated default.
 # Unknown commands run as engine console commands while
 # [Rcon] bAllowConsoleCommands=True (default); see INDEX.md.

@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/MinecraftForge/MinecraftForge/tree/1.20.x/src/main/java/net/minecraftforge/server/command
-# source: https://github.com/MinecraftForge/MinecraftForge/tree/1.12.x/src/main/java/net/minecraftforge/server/command
 
 schema: 1
 id: minecraft-forge
 name: Minecraft Forge
 kind: generic
+sources:
+  - "https://github.com/MinecraftForge/MinecraftForge/tree/1.20.x/src/main/java/net/minecraftforge/server/command"
+  - "https://github.com/MinecraftForge/MinecraftForge/tree/1.12.x/src/main/java/net/minecraftforge/server/command"
+status: untested
 # Layer on minecraft-java (1.13+) or minecraft-java-legacy (1.12.2).
 # No match.images: Forge runs on itzg/minecraft-server (TYPE=FORGE).
 # No version.pattern: the Minecraft version from the base profile stays

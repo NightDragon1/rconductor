@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://www.gameserverkings.com/knowledge-base/starbound/configuration-overview.md
-# source: https://www.survivalservers.com/wiki/Starbound_Admin_Commands
 
 schema: 1
 id: starbound
 name: Starbound
 kind: generic
+sources:
+  - "https://www.gameserverkings.com/knowledge-base/starbound/configuration-overview.md"
+  - "https://www.survivalservers.com/wiki/Starbound_Admin_Commands"
+status: untested
 # starbound_server.config: runRconServer true, rconServerPort 21026.
 # No player list command over RCON.
 protocol:

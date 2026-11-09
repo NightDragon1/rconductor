@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/FTBTeam/FTB-Chunks/blob/main/common/src/main/java/dev/ftb/mods/ftbchunks/command/AdminCommand.java
-# source: https://github.com/FTBTeam/FTB-Chunks/tree/1.20.1/main (cross-check of command names)
 
 schema: 1
 id: minecraft-ftb-chunks
 name: FTB Chunks
 kind: specific
+sources:
+  - "https://github.com/FTBTeam/FTB-Chunks/blob/main/common/src/main/java/dev/ftb/mods/ftbchunks/command/AdminCommand.java"
+  - "https://github.com/FTBTeam/FTB-Chunks/tree/1.20.1/main (cross-check of command names)"
+status: untested
 # Layer on minecraft-forge or minecraft-neoforge. Only admin commands that
 # work from the console; claim/unclaim/load act on the sender's position.
 protocol:

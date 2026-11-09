@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/lucko/spark/tree/master/spark-common/src/main/java/me/lucko/spark/common/command/modules
-# source: https://github.com/lucko/spark/blob/master/spark-minecraft/src/main/java/me/lucko/spark/minecraft/plugin/MinecraftServerSparkPlugin.java
 
 schema: 1
 id: minecraft-spark
 name: spark (profiler)
 kind: specific
+sources:
+  - "https://github.com/lucko/spark/tree/master/spark-common/src/main/java/me/lucko/spark/common/command/modules"
+  - "https://github.com/lucko/spark/blob/master/spark-minecraft/src/main/java/me/lucko/spark/minecraft/plugin/MinecraftServerSparkPlugin.java"
+status: untested
 # Layer on any loader or Paper.
 protocol:
   type: source-rcon

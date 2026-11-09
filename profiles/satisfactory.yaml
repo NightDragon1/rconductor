@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://satisfactory.wiki.gg/wiki/Dedicated_servers
-# source: https://satisfactory.wiki.gg/wiki/Dedicated_servers/HTTPS_API
-# source: https://github.com/wolveix/satisfactory-server/blob/main/README.md
 
 schema: 1
 id: satisfactory
 name: Satisfactory
 kind: generic
+researched_version: "CL-517554"
+sources:
+  - "https://satisfactory.wiki.gg/wiki/Dedicated_servers"
+  - "https://satisfactory.wiki.gg/wiki/Dedicated_servers/HTTPS_API"
+  - "https://github.com/wolveix/satisfactory-server/blob/main/README.md"
+status: tested
 match:
   images: ["wolveix/satisfactory-server*", "robtme/satisfactory-server*"]
 # No RCON: the server has an HTTPS API on the game port (7777/tcp), with a
@@ -25,6 +28,7 @@ ports:
   game:
     - { port: 7777, proto: udp, name: game }
     - { port: 7777, proto: tcp, name: api }
+    - { port: 8888, proto: tcp, name: messaging }
 syntax:
   case_sensitive: false
   strip_prefix: "/"

@@ -16,6 +16,7 @@
 - Game profiles name their kind, `generic` or `specific` (a modpack or plugin above a game); without it a profile is generic. Profiles with `kind` fail the profile check of panel 1.0 (CAT-007).
 - The Minecraft profile treats `function`, `return` and `schedule` as wrappers like `execute`: moderators and supporters cannot send them (CMD-005).
 - 29 more shipped game profiles: ARK, Conan Exiles, Factorio, Insurgency: Sandstorm, Mordhau, Palworld, Project Zomboid, Squad, Starbound, V Rising, Source games, Minecraft Forge, NeoForge, Paper and 1.12.2, and Minecraft mods and plugins; the list is in the technical notes (CAT-001, DOC-005).
+- Game profiles name their origin: `researched_version`, `sources` and `status` (`tested` or `untested`, default `untested`); the shipped profiles use them instead of source comments. Profiles with these fields fail the profile check of panel 1.0 (CAT-001, CAT-007, DOC-005).
 
 ## 1.0
 

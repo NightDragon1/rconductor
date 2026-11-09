@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/StunlockStudios/vrising-dedicated-server-instructions/blob/master/1.1.x-pc/INSTRUCTIONS.md
 
 schema: 1
 id: v-rising
 name: V Rising
 kind: generic
+sources:
+  - "https://github.com/StunlockStudios/vrising-dedicated-server-instructions/blob/master/1.1.x-pc/INSTRUCTIONS.md"
+status: untested
 # RCON offers only the commands below; kick/ban exist only in the
 # in-game admin console. No player list over RCON.
 protocol:

@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://www.conanexiles.com/?p=4957
-# source: https://pingperfect.com/index.php/knowledgebase/743/Conan-Exiles--RCON-Commands.html
 
 schema: 1
 id: conan-exiles
 name: Conan Exiles
 kind: generic
+sources:
+  - "https://www.conanexiles.com/?p=4957"
+  - "https://pingperfect.com/index.php/knowledgebase/743/Conan-Exiles--RCON-Commands.html"
+status: untested
 # No players block: listplayers prints one line per player.
 protocol:
   type: source-rcon

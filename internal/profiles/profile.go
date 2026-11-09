@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
@@ -33,6 +34,9 @@ const (
 	maxParams        = 8
 	maxPathLen       = 256
 	maxDescription   = 256
+	maxVersionLen    = 64
+	maxSources       = 20
+	maxSourceLen     = 512
 	DefaultMaxLength = 1000
 	maxMaxLength     = 10000
 	// maxAliases and maxDepth are limits of the file format like its size:
@@ -81,7 +85,20 @@ type Profile struct {
 	Version    *Version  `yaml:"version" json:"version,omitempty"`
 	Formatting string    `yaml:"formatting" json:"formatting,omitempty"`
 	Catalog    []Command `yaml:"catalog" json:"-"`
+	// ResearchedVersion, Sources and Status describe where the profile
+	// comes from (D-072): the game version the commands were researched
+	// for, the sources, and whether a run with a real server confirmed it.
+	ResearchedVersion string   `yaml:"researched_version" json:"-"`
+	Sources           []string `yaml:"sources" json:"-"`
+	Status            string   `yaml:"status" json:"-"`
 }
+
+// Statuses of a profile (D-072): tested after a run with a real server,
+// untested otherwise; a profile without status is untested.
+const (
+	StatusTested   = "tested"
+	StatusUntested = "untested"
+)
 
 // Match preselects the profile for container images.
 type Match struct {
@@ -273,6 +290,12 @@ func NormalizePath(path string) string { return strings.Join(strings.Fields(path
 
 func (p *Profile) defaults() {
 	p.Kind = KindOf(p)
+	if p.Status == "" {
+		p.Status = StatusUntested
+	}
+	if p.Sources == nil {
+		p.Sources = []string{}
+	}
 	if p.Syntax.CaseSensitive == nil {
 		f := false
 		p.Syntax.CaseSensitive = &f
@@ -313,6 +336,20 @@ func (p *Profile) check() []string {
 	}
 	if p.Kind != "" && p.Kind != KindGeneric && p.Kind != KindSpecific {
 		bad("kind must be %s or %s", KindGeneric, KindSpecific)
+	}
+	if p.Status != "" && p.Status != StatusTested && p.Status != StatusUntested {
+		bad("status must be %s or %s", StatusTested, StatusUntested)
+	}
+	if v := p.ResearchedVersion; len(v) > maxVersionLen || hasControl(v) {
+		bad("researched_version must be at most %d printable characters", maxVersionLen)
+	}
+	if len(p.Sources) > maxSources {
+		bad("at most %d sources", maxSources)
+	}
+	for i, src := range p.Sources {
+		if strings.TrimSpace(src) == "" || len(src) > maxSourceLen || hasControl(src) {
+			bad("sources[%d] must be 1 to %d printable characters", i, maxSourceLen)
+		}
 	}
 	if !slices.Contains(Protocols, p.Protocol.Type) {
 		bad("protocol.type must be one of %s", strings.Join(Protocols, ", "))
@@ -424,3 +461,6 @@ func checkParams(i int, params []Param) []string {
 	}
 	return probs
 }
+
+// hasControl reports whether s has a control character.
+func hasControl(s string) bool { return strings.ContainsFunc(s, unicode.IsControl) }

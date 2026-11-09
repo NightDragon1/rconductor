@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/Creators-of-Create/Create/tree/mc1.20.1/dev/src/main/java/com/simibubi/create/infrastructure/command
 
 schema: 1
 id: minecraft-create
 name: Create
 kind: specific
+sources:
+  - "https://github.com/Creators-of-Create/Create/tree/mc1.20.1/dev/src/main/java/com/simibubi/create/infrastructure/command"
+status: untested
 # Layer on minecraft-forge or minecraft-neoforge. Create also registers
 # /c as a short form of /create.
 # Note: "create util replaceInCommandBlocks" rewrites command block

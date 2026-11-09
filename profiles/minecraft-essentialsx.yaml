@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/EssentialsX/Essentials/blob/2.x/Essentials/src/main/resources/plugin.yml
 
 schema: 1
 id: minecraft-essentialsx
 name: EssentialsX
 kind: specific
+sources:
+  - "https://github.com/EssentialsX/Essentials/blob/2.x/Essentials/src/main/resources/plugin.yml"
+status: untested
 # Layer on minecraft-paper. Bukkit also registers every command as
 # essentials:<name>; those forms are listed as wrappers, too.
 protocol:

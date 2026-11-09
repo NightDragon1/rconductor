@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# source: https://github.com/LuckPerms/LuckPerms/blob/master/common/minecraft/src/main/java/me/lucko/luckperms/common/minecraft/command/MinecraftCommandExecutor.java
-# source: https://github.com/LuckPerms/LuckPerms/blob/master/common/src/main/java/me/lucko/luckperms/common/command/spec/CommandSpec.java
 
 schema: 1
 id: minecraft-luckperms
 name: LuckPerms
 kind: specific
+sources:
+  - "https://github.com/LuckPerms/LuckPerms/blob/master/common/minecraft/src/main/java/me/lucko/luckperms/common/minecraft/command/MinecraftCommandExecutor.java"
+  - "https://github.com/LuckPerms/LuckPerms/blob/master/common/src/main/java/me/lucko/luckperms/common/command/spec/CommandSpec.java"
+status: untested
 # Layer on any loader or Paper. Root aliases: luckperms, lp, perm, perms,
 # permission, permissions; the catalog uses lp.
 protocol:
