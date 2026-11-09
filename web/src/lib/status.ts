@@ -9,7 +9,8 @@ export type CardStatus =
   | 'unknown'
   | 'online'
   | 'offline'
-  | 'authFailed';
+  | 'authFailed'
+  | 'certMismatch';
 
 export type Tone = 'ok' | 'warn' | 'danger' | 'muted';
 
@@ -20,6 +21,7 @@ export const toneOf: Record<CardStatus, Tone> = {
   rconError: 'danger',
   offline: 'danger',
   authFailed: 'danger',
+  certMismatch: 'danger',
   stopped: 'muted',
   unknown: 'muted',
 };
@@ -35,6 +37,7 @@ export function cardStatus(s: Server): CardStatus {
   const c = s.runtime?.container;
   if (!c) {
     if (s.status === 'connected') return 'online';
+    if (s.status === 'cert_mismatch') return 'certMismatch';
     return s.status === 'auth_failed' ? 'authFailed' : 'offline';
   }
   if (c.state === 'unknown') return 'unknown';
