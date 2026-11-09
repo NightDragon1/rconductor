@@ -359,8 +359,11 @@ func TestRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	key := f.enable(t, "kiwi")
+	// Each mail is sent in the background; waiting after each request
+	// keeps the order of the links, so mails[0] is the older one.
 	f.svc.RequestRecovery(ctx, "nobody", client)
 	f.svc.RequestRecovery(ctx, "kiwi", client)
+	f.svc.WaitMail()
 	f.svc.RequestRecovery(ctx, "kiwi", client)
 	f.svc.WaitMail()
 	mails := f.mail.all()
