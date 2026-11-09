@@ -61,8 +61,9 @@ and the full list of variables and settings:
 [Docker Compose](https://github.com/NightDragon1/rconductor/wiki/Installation-with-Docker-Compose),
 [reverse proxy with Let's Encrypt](https://github.com/NightDragon1/rconductor/wiki/Reverse-proxy-with-Lets-Encrypt),
 [agent on another host](https://github.com/NightDragon1/rconductor/wiki/Agent-on-another-host),
-[things to note](https://github.com/NightDragon1/rconductor/wiki/Things-to-note) and
-[configuration](https://github.com/NightDragon1/rconductor/wiki/Configuration).
+[things to note](https://github.com/NightDragon1/rconductor/wiki/Things-to-note),
+[configuration](https://github.com/NightDragon1/rconductor/wiki/Configuration) and
+[supported games](https://github.com/NightDragon1/rconductor/wiki/Supported-games).
 The guides in [docs/user](docs/user) describe the code on `main`. Releases are
 listed in the [changelog](CHANGELOG.md).
 

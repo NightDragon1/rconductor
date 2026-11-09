@@ -22,7 +22,10 @@ fields of the command page.
 
 The panel ships these profiles (new in 1.1). A `specific` profile, such as a modpack or a
 plugin, adds to a `generic` one; a server has one profile, so pick the one that fits
-the server best.
+the server best. The wiki page
+[Supported games](https://github.com/NightDragon1/rconductor/wiki/Supported-games)
+adds the protocol, researched version, status and sources of each profile; it is
+generated from `profiles/` by `scripts/wiki-supported-games.sh`.
 
 | Id | Name | Kind |
 | --- | --- | --- |
