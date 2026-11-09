@@ -27,6 +27,7 @@ import { ago, clock, useNow } from '@/lib/format';
 import { usePhone } from '@/lib/phone';
 import { stripCodes } from '@/lib/serverpage';
 import { fillTemplate, matchesTemplate, templateParams, type Template } from '@/lib/templates';
+import { playerCount } from '@/lib/players';
 import { cn } from '@/lib/utils';
 import { useConsoleFeed } from './useConsoleFeed';
 
@@ -381,6 +382,7 @@ function ServerCommands() {
 
   // Color codes are no part of a name (SEC-006).
   const names = (players.data?.players ?? []).map(stripCodes);
+  const pc = playerCount(players.data);
   const isPlayer = playerRule(allowed.data?.player_pattern);
   const set = (path: string, name: string, v: string) =>
     setValues((all) => ({ ...all, [path]: { ...all[path], [name]: v } }));
@@ -399,7 +401,9 @@ function ServerCommands() {
     <>
       {t('commands.players')}
       <span className="font-mono text-muted">
-        {t('card.playersValue', { count: names.length })}
+        {pc.max
+          ? t('overview.playerCountOf', { count: pc.count, max: pc.max })
+          : t('card.playersValue', { count: pc.count })}
       </span>
     </>
   );
@@ -503,9 +507,10 @@ function ServerCommands() {
               {players.data && !players.data.available && (
                 <p className="text-sm text-muted">{t('overview.noPlayerList')}</p>
               )}
-              {players.data?.available && names.length === 0 && (
+              {players.data?.available && pc.count === 0 && (
                 <p className="text-sm text-muted">{t('overview.noPlayers')}</p>
               )}
+              {pc.noNames && <p className="text-sm text-muted">{t('overview.noNames')}</p>}
               <ul data-scrolls className="flex gap-2 max-md:overflow-x-auto md:flex-wrap">
                 {names.map((n) => {
                   // Only a name the backend takes as player can be picked.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { playerCount } from '@/lib/players';
 import { usePlayers } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { ago, dateTime, decimal, gib, useNow } from '@/lib/format';
@@ -64,6 +65,7 @@ export function OverviewTab() {
       ? t('overview.bytes', { value: decimal(lng, gib(bytes)), unit: 'GB' })
       : t('overview.bytes', { value: decimal(lng, bytes / 2 ** 20), unit: 'MB' });
   const p = players.data;
+  const pc = playerCount(p);
   const admin = isAdmin(session?.user.role);
   const ports = admin ? portsOf(server) : [];
   const volumes = admin ? (server.runtime?.container?.volumes ?? []) : [];
@@ -79,9 +81,17 @@ export function OverviewTab() {
       </Panel>
       <Panel title={t('overview.players')}>
         {p && !p.available && <p className="text-sm text-muted">{t('overview.noPlayerList')}</p>}
-        {p?.available && p.players.length === 0 && (
+        {p?.available && (
+          <p className="text-sm" data-testid="player-count">
+            {pc.max
+              ? t('overview.playerCountOf', { count: pc.count, max: pc.max })
+              : t('overview.playerCount', { count: pc.count })}
+          </p>
+        )}
+        {p?.available && pc.count === 0 && (
           <p className="text-sm text-muted">{t('overview.noPlayers')}</p>
         )}
+        {pc.noNames && <p className="text-sm text-muted">{t('overview.noNames')}</p>}
         {p?.available && p.players.length > 0 && (
           <ul className="flex flex-wrap gap-2">
             {p.players.map(stripCodes).map((name) => (

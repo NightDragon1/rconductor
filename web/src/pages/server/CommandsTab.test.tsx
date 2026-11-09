@@ -43,6 +43,27 @@ describe('command cards', () => {
     expect(unmarked(container).filter((s) => !data.test(s))).toEqual([]);
   });
 
+  it('keep a player field as free text when the game gives no names (PROT-003)', async () => {
+    setLanguage('en');
+    const { container } = await renderPage(() => (
+      <CommandCard
+        c={kick}
+        values={{}}
+        players={[]}
+        listId="p"
+        busy={false}
+        isPlayer={() => true}
+        onChange={() => undefined}
+        onFocusPlayer={() => undefined}
+        onRun={() => undefined}
+      />
+    ));
+    const input = container.querySelector('input');
+    expect(input).toBeTruthy();
+    expect(input?.getAttribute('list')).toBeNull();
+    expect(container.querySelector('datalist')).toBeNull();
+  });
+
   it('fold on a phone and show no fields then (Design 6.6)', async () => {
     setLanguage('en');
     const onToggle = vi.fn();
