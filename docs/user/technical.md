@@ -11,7 +11,7 @@ fields of the command page.
 | Storage | shipped profiles are built into the panel image (`profiles/` in the repository); your own go to `/data/profiles/*.yaml` |
 | Loading | changes arrive by file events; in addition the panel compares files every `profiles.poll_interval`, because network drives send no events |
 | Precedence | your profile with the id of a shipped one replaces it and is marked as adapted |
-| Kind | `kind: generic` for a game as such, `kind: specific` for a modpack or plugin that ranks above it; a profile without `kind` is generic. Profiles inherit nothing from each other (1.1) |
+| Kind | `kind: generic` for a game as such, `kind: specific` for a modpack or plugin that ranks above it; a profile without `kind` is generic. Profile files inherit nothing from each other; a server combines the profiles in its list (1.1) |
 | Origin | `researched_version` names the game version the commands were researched for, `sources` lists where they come from, `status` is `tested` after a run with a real server and `untested` otherwise; a profile without `status` is untested (1.1) |
 | Errors | an invalid file is not imported; the last valid state stays active, the error is in the log and the health overview |
 | Aliases | a file has at most 100 YAML aliases |
@@ -21,8 +21,8 @@ fields of the command page.
 ### Shipped profiles
 
 The panel ships these profiles (1.1). A `specific` profile, such as a modpack or a
-plugin, adds to a `generic` one; a server has one profile, so pick the one that fits
-the server best.
+plugin, adds to a `generic` one; give the server both, the specific one on top (see
+[several profiles per server](#several-profiles-per-server)).
 
 | Id | Name | Kind |
 | --- | --- | --- |
@@ -59,6 +59,25 @@ the server best.
 | `starbound` | Starbound | generic |
 | `v-rising` | V Rising | generic |
 
+### Several profiles per server
+
+A server has an ordered list of game profiles, top first (1.1). For each value the
+topmost profile that sets it wins; a value that no profile sets keeps its default.
+This holds field by field. Example: a modpack profile (specific) without its own
+prefix rule above a Minecraft profile (generic): the commands of both apply, and the
+prefix rule comes from Minecraft.
+
+| Topic | Behaviour |
+| --- | --- |
+| Values | field by field from the topmost profile that sets them: syntax (case sensitivity, prefix removal, maximum length, player pattern, separators), game ports, Steam connect, players block, stop command, version pattern, formatting |
+| Command catalog | the union of all profiles; with the same path the entry of the upper profile wins |
+| Wrappers | the wrappers of all profiles hold together; no profile lifts one |
+| Protocol | all profiles of a server have the same protocol, for `http-api` also the same dialect; otherwise saving is refused (422) |
+| Adding | a specific profile goes above the topmost generic one, a generic one goes to the end; the interface marks a generic profile above a specific one |
+| Who changes it | the RCON admin; the server admin on servers in his scope, but only the profile list (other server fields give 403 and change nothing) |
+| API | the server has `profile_ids`, top first; the former `profile_id` is gone, so scripts that used it must change |
+| Update from 1.0 | the database migration moves the one profile of each server to the top of the list; nothing to do |
+
 ### Checking a profile
 
 Check a profile before you copy it to `/data/profiles`. The panel image does it
@@ -78,14 +97,14 @@ that passes is imported.
 
 Command lists live in the database and are managed under **Command lists**. An entry is
 a path of whole tokens: `whitelist add` allows `whitelist add x`, but not `whitelist
-remove x`, and `op` does not allow `opfoo`. Comparison follows the game profile, by
-default without regard to case.
+remove x`, and `op` does not allow `opfoo`. Comparison follows the game profiles of the
+server, by default without regard to case.
 
 | Topic | Behaviour |
 | --- | --- |
 | Which list applies | the list of the moderator group through which a moderator has the server; several ways to one server add up |
 | Supporters | the commands marked passable in the list of their moderator |
-| Precedence | wrapper commands of the game profile are always blocked for moderators and supporters, whatever the list says |
+| Precedence | wrapper commands of the server's game profiles are always blocked for moderators and supporters, whatever the list says |
 | Catalog check | with a catalog entry, moderators and supporters are also checked against its parameters: a player must be a player name, so selectors like `@a` are refused; a choice must be listed, a number in range |
 | Command separators | a profile can name them in `syntax.separators`, such as `;` on Source servers; moderators and supporters cannot send a command that holds one. Set this in your own profiles if the game's console splits commands |
 | Admins | free input, no list |

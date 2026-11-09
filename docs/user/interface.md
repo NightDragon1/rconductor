@@ -14,7 +14,7 @@ Entries you may not use are hidden, not greyed out.
 | Users | yes | moderators, supporters | supporters, if released | – |
 | Groups | yes | moderator groups | – | – |
 | Command lists | yes | own | – | – |
-| Servers and groups | yes | read-only, in scope | – | – |
+| Servers and groups | yes | read-only, in scope; game profiles of a server | – | – |
 | Agents | yes | – | – | – |
 | Settings | yes | – | – | – |
 
@@ -108,6 +108,17 @@ someone else changed the object in the meantime, you see "Changed by someone els
 reload" and nothing is overwritten.
 
 Keyboard shortcuts are off unless the RCON admin switches them on.
+
+### Game profiles of a server
+
+In the server form, Game profiles is a list, top first. **+** adds a profile, **−**
+removes one. Drag a profile, or use its move buttons, to change the order. A new
+specific profile goes above the topmost generic one, a new generic one to the end.
+If a generic profile stands above a specific one, a hint says so; you can still
+save. All profiles need the same protocol, otherwise saving is refused. The server
+admin can change this list on the servers of his scope, but no other field of the
+server. How the profiles combine is in the [technical
+notes](technical.md#several-profiles-per-server).
 
 ## On a phone
 
