@@ -4,6 +4,7 @@ schema: 1
 id: minecraft-paper
 name: Minecraft Paper (Spigot/Bukkit)
 kind: generic
+researched_version: "MC 26.3"
 sources:
   - "https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/io/papermc/paper/command/PaperCommand.java"
   - "https://github.com/PaperMC/Paper/blob/main/paper-server/src/main/java/io/papermc/paper/command/PaperCommands.java"

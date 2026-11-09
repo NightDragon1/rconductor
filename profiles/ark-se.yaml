@@ -4,11 +4,11 @@ schema: 1
 id: ark-se
 name: "ARK: Survival Evolved"
 kind: generic
+researched_version: "Stand 2026-07"
 sources:
   - "https://xgamingserver.com/docs/ark-survival-evolved/rcon-setup"
   - "https://github.com/arkmanager/ark-server-tools/blob/master/tools/arkmanager"
   - "https://github.com/arkmanager/ark-server-tools/blob/master/tools/instance.cfg.example"
-  - "https://www.survivalservers.com/wiki/ARK:_Survival_Ascended_Admin_Commands"
 status: untested
 # No players block: ListPlayers prints one line per player
 # ("0. Name, SteamID"); the panel reads only a single-line list.

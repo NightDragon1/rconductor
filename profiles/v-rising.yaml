@@ -4,6 +4,7 @@ schema: 1
 id: v-rising
 name: V Rising
 kind: generic
+researched_version: "1.1.x"
 sources:
   - "https://github.com/StunlockStudios/vrising-dedicated-server-instructions/blob/master/1.1.x-pc/INSTRUCTIONS.md"
 status: untested

@@ -4,6 +4,7 @@ schema: 1
 id: minecraft-java
 name: Minecraft (Java Edition)
 kind: generic
+researched_version: "26.3"
 status: tested
 match:
   images: ["itzg/minecraft-server*"]

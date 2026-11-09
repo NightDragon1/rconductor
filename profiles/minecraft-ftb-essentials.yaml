@@ -4,9 +4,9 @@ schema: 1
 id: minecraft-ftb-essentials
 name: FTB Essentials
 kind: specific
+researched_version: "2001.2.4 (MC 1.20.1)"
 sources:
-  - "https://github.com/FTBTeam/FTB-Essentials/tree/main/common/src/main/java/dev/ftb/mods/ftbessentials/commands"
-  - "https://github.com/FTBTeam/FTB-Essentials/tree/1.20.1/main (cross-check of command names)"
+  - "https://github.com/FTBTeam/FTB-Essentials/tree/1.20.1/main/common/src/main/java/dev/ftb/mods/ftbessentials/command"
 status: untested
 # Layer on minecraft-forge or minecraft-neoforge. Commands are top-level;
 # newer versions can register them under /ftbessentials instead (startup

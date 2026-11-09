@@ -4,6 +4,7 @@ schema: 1
 id: palworld
 name: Palworld
 kind: generic
+researched_version: "Stand 2026-08"
 sources:
   - "https://github.com/thijsvanloef/palworld-server-docker/blob/main/scripts/helper_functions.sh"
   - "https://github.com/thijsvanloef/palworld-server-docker/blob/main/README.md"

@@ -4,6 +4,7 @@ schema: 1
 id: minecraft-luckperms
 name: LuckPerms
 kind: specific
+researched_version: "5.5-SNAPSHOT"
 sources:
   - "https://github.com/LuckPerms/LuckPerms/blob/master/common/minecraft/src/main/java/me/lucko/luckperms/common/minecraft/command/MinecraftCommandExecutor.java"
   - "https://github.com/LuckPerms/LuckPerms/blob/master/common/src/main/java/me/lucko/luckperms/common/command/spec/CommandSpec.java"

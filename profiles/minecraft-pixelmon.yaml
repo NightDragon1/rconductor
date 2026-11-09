@@ -4,6 +4,7 @@ schema: 1
 id: minecraft-pixelmon
 name: Pixelmon Reforged
 kind: specific
+researched_version: "6.3.4 (MC 1.12.2)"
 sources:
   - "https://pixelmonmod.com/wiki/Changelog/Version_6"
   - "https://pixelmonmod.com/wiki/Pokemon_spec"

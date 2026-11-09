@@ -4,6 +4,7 @@ schema: 1
 id: factorio
 name: Factorio
 kind: generic
+researched_version: "Stand 2026-10"
 sources:
   - "https://wiki.factorio.com/Console"
   - "https://wiki.factorio.com/Command_line_parameters"

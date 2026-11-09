@@ -4,6 +4,7 @@ schema: 1
 id: minecraft-forge
 name: Minecraft Forge
 kind: generic
+researched_version: "MC 1.20.6; MC 1.12.2"
 sources:
   - "https://github.com/MinecraftForge/MinecraftForge/tree/1.20.x/src/main/java/net/minecraftforge/server/command"
   - "https://github.com/MinecraftForge/MinecraftForge/tree/1.12.x/src/main/java/net/minecraftforge/server/command"

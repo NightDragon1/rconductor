@@ -4,11 +4,6 @@ schema: 1
 id: source-engine
 name: Source Engine (srcds)
 kind: generic
-sources:
-  - "https://developer.valvesoftware.com/wiki/Source_RCON_Protocol"
-  - "https://developer.valvesoftware.com/wiki/List_of_console_scripting_commands"
-  - "https://developer.valvesoftware.com/wiki/List_of_Left_4_Dead_2_console_commands_and_variables"
-  - "https://developer.valvesoftware.com/wiki/Banip"
 status: untested
 # No match.images and no players block: "status" lists one player per
 # line, the panel reads only a single-line list (see INDEX.md).

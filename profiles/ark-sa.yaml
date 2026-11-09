@@ -4,9 +4,9 @@ schema: 1
 id: ark-sa
 name: "ARK: Survival Ascended"
 kind: generic
+researched_version: "Stand 2026-07"
 sources:
   - "https://github.com/mschnitzer/ark-survival-ascended-linux-container-image/blob/main/README.md"
-  - "https://www.survivalservers.com/wiki/ARK:_Survival_Ascended_Admin_Commands"
 status: untested
 match:
   images: ["mschnitzer/asa-linux-server*"]

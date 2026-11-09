@@ -4,6 +4,7 @@ schema: 1
 id: minecraft-create
 name: Create
 kind: specific
+researched_version: "6.0.8 (MC 1.20.1)"
 sources:
   - "https://github.com/Creators-of-Create/Create/tree/mc1.20.1/dev/src/main/java/com/simibubi/create/infrastructure/command"
 status: untested

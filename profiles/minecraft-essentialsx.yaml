@@ -4,6 +4,7 @@ schema: 1
 id: minecraft-essentialsx
 name: EssentialsX
 kind: specific
+researched_version: "2.22.1-SNAPSHOT"
 sources:
   - "https://github.com/EssentialsX/Essentials/blob/2.x/Essentials/src/main/resources/plugin.yml"
 status: untested
