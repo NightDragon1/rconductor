@@ -1297,6 +1297,11 @@ export interface components {
             game_ports_override?: boolean;
             /** @description Admins only; the trusted certificate of a server with an HTTPS API (protocol http-api), SHA-256 in hex (PROT-003, D-071). */
             tls_fingerprint?: string;
+            /**
+             * Format: date-time
+             * @description Admins only; end of validity of the trusted certificate, read when it was pinned or at the first connection with the pin; missing while unknown. Shown only: the pin holds regardless of it (D-072, D-073).
+             */
+            tls_not_after?: string;
         };
         ServerList: {
             items: components["schemas"]["Server"][];
@@ -1344,6 +1349,11 @@ export interface components {
             result: "ok" | "auth_failed" | "unreachable" | "unpinned" | "cert_mismatch";
             /** @description The certificate the server showed (http-api only), SHA-256 in hex. */
             fingerprint?: string;
+            /**
+             * Format: date-time
+             * @description End of validity of that certificate (http-api only, D-073).
+             */
+            not_after?: string;
         };
         /** @description Runtime data, kept in memory with its age (NFR-005); the same data comes live in servers.overview with kind runtime. Player count for everyone in scope, the container only for RCON admin and server admin (UI-006). */
         ServerRuntime: {

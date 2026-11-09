@@ -14,6 +14,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/profiles"
+	"github.com/NightDragon1/rconductor/internal/rcon"
 	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
@@ -25,7 +26,7 @@ type Connections interface {
 	Reload(ctx context.Context, id string) error
 	Status(id string) (connmgr.Status, time.Time)
 	Try(ctx context.Context, t connmgr.Target) error
-	Fingerprint(ctx context.Context, protocol, addr string) (string, bool, error)
+	Certificate(ctx context.Context, protocol, addr string) (rcon.Certificate, bool, error)
 }
 
 // SetConnections links the connection manager: it is told about every

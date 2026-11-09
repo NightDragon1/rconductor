@@ -1,11 +1,11 @@
 -- Servers and server groups (SRV-001, SRV-003, SRV-005).
 
 -- name: ListServers :many
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint
+SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint, tls_not_after
 FROM servers WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE;
 
 -- name: GetServer :one
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint
+SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint, tls_not_after
 FROM servers WHERE id = ? AND deleted_at IS NULL;
 
 -- name: ListServersByContainer :many
@@ -16,8 +16,17 @@ INSERT INTO servers (id, name, profile_id, protocol, host, port, secret, game_po
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateServer :exec
-UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, tls_fingerprint = ?, updated_at = ?
+UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, tls_fingerprint = ?, tls_not_after = ?, updated_at = ?
 WHERE id = ?;
+
+-- name: SetServerNotAfter :execrows
+-- The end of validity of the certificate the pin names, read when the pin
+-- was saved (D-073).
+UPDATE servers SET tls_not_after = ? WHERE id = ? AND tls_fingerprint = ? AND tls_fingerprint <> '' AND deleted_at IS NULL;
+
+-- name: FillServerNotAfter :execrows
+-- Fills in the end of validity at the first connection with the pin (D-073).
+UPDATE servers SET tls_not_after = ? WHERE id = ? AND tls_fingerprint = ? AND tls_fingerprint <> '' AND tls_not_after IS NULL AND deleted_at IS NULL;
 
 -- name: SetServerSecret :exec
 UPDATE servers SET secret = ?, updated_at = ? WHERE id = ?;

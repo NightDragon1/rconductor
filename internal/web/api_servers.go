@@ -45,6 +45,7 @@ func toAPIServer(s servers.Server) api.Server {
 	out.AgentId, out.ContainerName = strPtr(s.AgentID), strPtr(s.ContainerName)
 	out.GamePorts, out.GamePortsOverride = &ports, &s.GamePortsOverride
 	out.TlsFingerprint = strPtr(s.TLSFingerprint)
+	out.TlsNotAfter = s.TLSNotAfter
 	return out
 }
 
@@ -119,7 +120,12 @@ func (s *apiServer) TestServerConnection(ctx context.Context, req api.TestServer
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.TestServerConnection200JSONResponse{Result: api.ConnectionTestResultResult(result.Result), Fingerprint: strPtr(result.Fingerprint)}, nil
+	out := api.TestServerConnection200JSONResponse{Result: api.ConnectionTestResultResult(result.Result), Fingerprint: strPtr(result.Fingerprint)}
+	if !result.NotAfter.IsZero() {
+		na := result.NotAfter
+		out.NotAfter = &na
+	}
+	return out, nil
 }
 
 func (s *apiServer) GetServer(ctx context.Context, req api.GetServerRequestObject) (api.GetServerResponseObject, error) {

@@ -6,11 +6,20 @@
 package httpapitest
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 )
@@ -50,9 +59,43 @@ type Server struct {
 
 // Start runs the fake server of a dialect.
 func Start(f Fixture, token string, players int, run func(command string) string) *Server {
+	return start(f, nil, token, players, run)
+}
+
+// StartWithCertificate runs the fake server with the given certificate,
+// such as an expired one from ExpiredCertificate.
+func StartWithCertificate(f Fixture, cert tls.Certificate, token string, players int, run func(command string) string) *Server {
+	return start(f, &cert, token, players, run)
+}
+
+// ExpiredCertificate is a self-signed certificate for 127.0.0.1 whose
+// validity ended a day ago.
+func ExpiredCertificate() (tls.Certificate, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	now := time.Now()
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "expired"},
+		NotBefore:    now.Add(-48 * time.Hour),
+		NotAfter:     now.Add(-24 * time.Hour),
+		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1)},
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}, nil
+}
+
+func start(f Fixture, cert *tls.Certificate, token string, players int, run func(command string) string) *Server {
 	s := &Server{}
 	inner := f.Handler(token, players, run)
-	s.Server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.Server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.Requests.Add(1)
 		if r.Header.Get("Authorization") != "" {
 			s.Authorized.Add(1)
@@ -63,6 +106,10 @@ func Start(f Fixture, token string, players int, run func(command string) string
 		}
 		inner.ServeHTTP(w, r)
 	}))
+	if cert != nil {
+		s.TLS = &tls.Config{Certificates: []tls.Certificate{*cert}}
+	}
+	s.StartTLS()
 	s.Fingerprint = httpapi.Fingerprint(s.Certificate().Raw)
 	return s
 }

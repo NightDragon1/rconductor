@@ -813,6 +813,9 @@ type ConnectionTestResult struct {
 	// Fingerprint The certificate the server showed (http-api only), SHA-256 in hex.
 	Fingerprint *string `json:"fingerprint,omitempty"`
 
+	// NotAfter End of validity of that certificate (http-api only, D-073).
+	NotAfter *time.Time `json:"not_after,omitempty"`
+
 	// Result unpinned: no certificate is trusted yet, the test only read it; cert_mismatch: the server shows another certificate than the trusted one, nothing was sent (PROT-003, D-071).
 	Result ConnectionTestResultResult `json:"result"`
 }
@@ -1271,6 +1274,9 @@ type Server struct {
 
 	// TlsFingerprint Admins only; the trusted certificate of a server with an HTTPS API (protocol http-api), SHA-256 in hex (PROT-003, D-071).
 	TlsFingerprint *string `json:"tls_fingerprint,omitempty"`
+
+	// TlsNotAfter Admins only; end of validity of the trusted certificate, read when it was pinned or at the first connection with the pin; missing while unknown. Shown only: the pin holds regardless of it (D-072, D-073).
+	TlsNotAfter *time.Time `json:"tls_not_after,omitempty"`
 
 	// Version Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24).
 	Version string `json:"version"`

@@ -39,6 +39,9 @@ const (
 type ConnectionResult struct {
 	Result      string
 	Fingerprint string
+	// NotAfter is the end of validity of that certificate (D-073); zero
+	// when no certificate was read.
+	NotAfter time.Time
 }
 
 // ErrTestRateLimited means the user has used up his connection tests.
@@ -210,12 +213,13 @@ func (s *Service) runningResult(id string) string {
 // trusted one (D-071).
 func (s *Service) tryPinned(ctx context.Context, req users.Request, id string, f fields, pin string, token logging.Secret) ConnectionResult {
 	addr := net.JoinHostPort(f.host, strconv.Itoa(f.port))
-	fp, _, err := s.conns.Fingerprint(ctx, f.protocol, addr)
+	cert, _, err := s.conns.Certificate(ctx, f.protocol, addr)
 	if err != nil {
 		s.log.Debug("certificate not readable", slog.Any("err", err))
 		return ConnectionResult{Result: ConnectionUnreachable}
 	}
-	res := ConnectionResult{Fingerprint: fp}
+	fp := cert.Fingerprint
+	res := ConnectionResult{Fingerprint: fp, NotAfter: cert.NotAfter}
 	switch {
 	case pin == "":
 		res.Result = ConnectionUnpinned
