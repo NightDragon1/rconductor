@@ -18,8 +18,8 @@ catalog:
     description: Reset or complete a quest object for players (players, reset|complete, quest id)
     params:
       - { name: player, type: player }
-      - { name: action, type: choice, values: [reset, complete, reset-all, complete-all] }
-      - { name: quest_object, type: text, optional: true }
+      - { name: action, type: choice, values: [reset, complete] }
+      - { name: quest_object, type: text }
   - path: ftbquests editing_mode
     description: Switch quest editing mode for a player
     params:
@@ -35,15 +35,8 @@ catalog:
     params:
       - { name: enabled, type: choice, values: ["true", "false"] }
       - { name: player, type: player, optional: true }
-  - path: ftbquests pause_progression
-    description: Pause quest progression for a player's team (newer versions)
-    params:
-      - { name: enabled, type: choice, values: ["true", "false"] }
-      - { name: player, type: player, optional: true }
   - path: ftbquests reload
-    description: Reload quests or team progress (newer versions; older ones reload without argument)
-    params:
-      - { name: what, type: choice, values: [quests, team_progress], optional: true }
+    description: Reload quests from disk
   - path: ftbquests delete_empty_reward_tables
     description: Delete reward tables without entries
   - path: ftbquests clear_item_display_cache
