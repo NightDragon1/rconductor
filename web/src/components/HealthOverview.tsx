@@ -102,7 +102,11 @@ export function HealthOverview({
       tone: 'danger' as const,
       name: s.name,
       text:
-        (s.status === 'auth_failed' ? t('health.rconAuth') : t('health.rconOffline')) +
+        (s.status === 'auth_failed'
+          ? t('health.rconAuth')
+          : s.status === 'cert_mismatch'
+            ? t('health.certMismatch')
+            : t('health.rconOffline')) +
         (s.runtime?.container?.state === 'running' ? ` · ${t('health.containerRunning')}` : ''),
       time: t('health.since', { time: clock(lng, s.status_since) }),
       link: openServer(s),
