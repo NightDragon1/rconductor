@@ -736,6 +736,9 @@ type tokens struct {
 	last time.Time
 }
 
+// maxOrderBuckets bounds the containers an orderLimiter counts.
+const maxOrderBuckets = 10000
+
 func newOrderLimiter(perMinute, burst int) *orderLimiter {
 	return &orderLimiter{perMinute: float64(perMinute), burst: float64(burst), now: time.Now, buckets: map[string]*tokens{}}
 }
@@ -746,8 +749,18 @@ func (l *orderLimiter) allow(name string) bool {
 	now := l.now()
 	b := l.buckets[name]
 	if b == nil {
-		if len(l.buckets) >= 10000 {
-			clear(l.buckets)
+		// A full table drops only buckets that are full again; if it stays
+		// full, a new container counts as over its limit, and no count
+		// already held is lost (D-076).
+		if len(l.buckets) >= maxOrderBuckets {
+			for k, old := range l.buckets {
+				if old.n+now.Sub(old.last).Minutes()*l.perMinute >= l.burst {
+					delete(l.buckets, k)
+				}
+			}
+		}
+		if len(l.buckets) >= maxOrderBuckets {
+			return false
 		}
 		b = &tokens{n: l.burst, last: now}
 		l.buckets[name] = b

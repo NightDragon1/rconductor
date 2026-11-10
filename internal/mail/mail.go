@@ -351,13 +351,26 @@ func (s *Service) take(ctx context.Context, user string) bool {
 	now := s.now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.testers) >= maxTesters {
-		clear(s.testers)
-	}
 	w := s.testers[user]
-	if w == nil || now.Sub(w.start) >= time.Minute {
+	if w == nil {
+		// A full table drops only windows whose minute ended; if it stays
+		// full, a new user counts as over the limit, and no count already
+		// held is lost (D-076).
+		if len(s.testers) >= maxTesters {
+			for k, old := range s.testers {
+				if now.Sub(old.start) >= time.Minute {
+					delete(s.testers, k)
+				}
+			}
+		}
+		if len(s.testers) >= maxTesters {
+			return false
+		}
 		w = &window{start: now}
 		s.testers[user] = w
+	}
+	if now.Sub(w.start) >= time.Minute {
+		*w = window{start: now}
 	}
 	if w.count >= limit {
 		return false
