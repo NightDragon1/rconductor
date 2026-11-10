@@ -19,6 +19,8 @@
 - Game profiles name their origin: `researched_version`, `sources` and `status` (`tested` or `untested`, default `untested`); the shipped profiles use them instead of source comments. Profiles with these fields fail the profile check of panel 1.0 (CAT-001, CAT-007, DOC-005).
 - A command that the game runs and reports as failed (Satisfactory) shows as error with the game's text; the single-command API gives `result` and `reason` (`command_failed`) like history and multi-command (PROT-003).
 - Servers with an HTTPS API: the end of validity of the trusted certificate is stored and given with the server and the connection test; the trust holds regardless of it. The technical notes describe renewal and trusting again (PROT-003).
+- A server has an ordered list of game profiles, such as a modpack above its game: for each value the topmost profile that sets it wins, the command catalog is the union, wrappers of all profiles hold. All profiles need the same protocol. The server admin may change the list on servers in his scope. Servers of panel 1.0 keep their profile as the only entry (SRV-008, CAT-007).
+- API: the server field `profile_id` is replaced by the list `profile_ids`, top first; scripts that use `profile_id` must change (SRV-008).
 
 ## 1.0
 
