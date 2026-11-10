@@ -163,6 +163,16 @@ describe('ordered profile list of a server (SRV-008, CAT-007)', () => {
     expect(order()).toEqual(['Vanilla', 'Modpack (specific)', 'Minecraft']);
   });
 
+  it('marks every draggable entry as a sortable list entry with arrow buttons (UI-001, D-075)', async () => {
+    await open(['pack', 'mc']);
+    for (const item of screen.getAllByTestId('profile-item')) {
+      expect(item.getAttribute('draggable')).toBe('true');
+      expect(item.hasAttribute('data-sortable-list')).toBe(true);
+      expect(item.parentElement?.tagName).toBe('OL');
+      expect(within(item).getAllByRole('button', { name: /^Move .* (up|down)$/ })).toHaveLength(2);
+    }
+  });
+
   it('sends the whole list with the connection test', async () => {
     const post = vi.spyOn(api, 'POST').mockResolvedValue({
       data: { result: 'ok' },

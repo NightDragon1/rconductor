@@ -75,6 +75,9 @@ export function ProfileList({
             return (
               <li
                 key={id}
+                // A sortable list entry, the one exception to "nothing can be
+                // dragged" (UI-001, D-075); it also has the arrow buttons.
+                data-sortable-list=""
                 draggable={!disabled}
                 onDragStart={(e) => {
                   setDrag(i);
