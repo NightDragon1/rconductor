@@ -102,7 +102,8 @@ type secondFactorState struct {
 	// full is set while a full client table refuses new clients; the
 	// warning goes out once per such spell.
 	full bool
-	// send delivers recovery mail in the background; tests wait on it.
+	// send runs the background part of recovery requests, mail included;
+	// tests and the shutdown wait on it.
 	send sync.WaitGroup
 }
 
@@ -655,17 +656,31 @@ func domainOf(addr string) string {
 }
 
 // RequestRecovery answers every request alike: whether user and address
-// exist shows neither in the answer nor in its time. For a user with an
-// address and the second factor on, within auth.recovery_per_hour per user
-// and per client, a new link replaces the last one and goes out in the
-// background (AUTH-008, NFR-017).
+// exist shows neither in the answer nor in its time. The answer waits only
+// for the limit per client; looking up the user, the limit per user, the
+// stored link, audit, log and mail run in the background, the same for
+// every name. For a user with an address and the second factor on, within
+// auth.recovery_per_hour per user and per client, a new link replaces the
+// last one (AUTH-008, NFR-017).
 func (s *Service) RequestRecovery(ctx context.Context, pseudonym string, c Client) {
 	if s.sf == nil || len(pseudonym) > 4*maxAccountKey {
 		return
 	}
-	clientOK := s.takeRecoveryClient(ctx, c.IP)
+	if !s.takeRecoveryClient(ctx, c.IP) {
+		return
+	}
+	bctx := context.WithoutCancel(ctx)
+	s.sf.send.Go(func() {
+		ctx, cancel := context.WithTimeout(bctx, 2*time.Minute)
+		defer cancel()
+		s.sendRecovery(ctx, pseudonym, c.RequestID)
+	})
+}
+
+// sendRecovery is the background part of RequestRecovery.
+func (s *Service) sendRecovery(ctx context.Context, pseudonym, requestID string) {
 	u, err := s.st.Queries.GetRecoveryTarget(ctx, pseudonym)
-	if err != nil || !clientOK || u.DisabledAt.Valid || !u.TotpEnabled || u.Email == "" {
+	if err != nil || u.DisabledAt.Valid || !u.TotpEnabled || u.Email == "" {
 		return
 	}
 	if !s.takeRecoveryUser(ctx, u.ID) {
@@ -686,23 +701,18 @@ func (s *Service) RequestRecovery(ctx context.Context, pseudonym string, c Clien
 	}
 	s.audit(ctx, audit.Entry{
 		Kind: audit.KindAuth, TargetType: "user", TargetID: u.ID, Action: "totp.recovery_request", Result: audit.ResultOK,
-		Payload: map[string]string{"request_id": c.RequestID, "domain": domainOf(u.Email)},
+		Payload: map[string]string{"request_id": requestID, "domain": domainOf(u.Email)},
 	})
-	s.log.Info("recovery requested", logging.Event(logging.AuthRecoveryRequested), slog.String(logging.KeyRequestID, c.RequestID),
+	s.log.Info("recovery requested", logging.Event(logging.AuthRecoveryRequested), slog.String(logging.KeyRequestID, requestID),
 		slog.String("user_id", u.ID), slog.String("domain", domainOf(u.Email)))
 	if s.sf.cfg.Mail == nil || s.sf.cfg.LinkBase == "" {
-		s.log.Warn("recovery mail not sent: no SMTP or no RCD_PUBLIC_URL", slog.String(logging.KeyRequestID, c.RequestID))
+		s.log.Warn("recovery mail not sent: no SMTP or no RCD_PUBLIC_URL", slog.String(logging.KeyRequestID, requestID))
 		return
 	}
 	link := strings.TrimRight(s.sf.cfg.LinkBase, "/") + "/recover#" + token
-	to, requestID := u.Email, c.RequestID
-	s.sf.send.Go(func() {
-		mctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-		defer cancel()
-		if category := s.sf.cfg.Mail.SendRecovery(mctx, to, link); category != "" {
-			s.log.Warn("recovery mail not sent", slog.String(logging.KeyRequestID, requestID), slog.String(logging.KeyReason, category))
-		}
-	})
+	if category := s.sf.cfg.Mail.SendRecovery(ctx, u.Email, link); category != "" {
+		s.log.Warn("recovery mail not sent", slog.String(logging.KeyRequestID, requestID), slog.String(logging.KeyReason, category))
+	}
 }
 
 // RedeemRecovery resets the second factor with the link and the password.
