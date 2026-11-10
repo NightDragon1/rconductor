@@ -40,6 +40,8 @@ function storeHelp(on: boolean) {
 const keyTexts = [
   'auth_recovery_lifetime',
   'auth_recovery_per_hour',
+  'auth_recovery_queue',
+  'auth_recovery_workers',
   'auth_second_factor_window',
   'auth_totp_required',
   'agent_version_retry',

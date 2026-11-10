@@ -39,6 +39,15 @@ const (
 	SettingRecoveryPerHour    = "auth.recovery_per_hour"
 	DefaultRecoveryPerHour    = 3
 	MinRecoveryPerHour        = 1
+	// The background part of recovery requests runs in a pool of at most
+	// auth.recovery_workers jobs at a time, with at most
+	// auth.recovery_queue waiting; further jobs are dropped (D-077).
+	SettingRecoveryWorkers = "auth.recovery_workers"
+	DefaultRecoveryWorkers = 4
+	MinRecoveryWorkers     = 1
+	SettingRecoveryQueue   = "auth.recovery_queue"
+	DefaultRecoveryQueue   = 100
+	MinRecoveryQueue       = 1
 )
 
 // Fixed limits of the second factor.
@@ -99,12 +108,28 @@ type secondFactorState struct {
 	// users with an address and the second factor get a window, so the
 	// users table bounds it; it is never cleared early.
 	users map[string]*recoveryWindow
-	// full is set while a full client table refuses new clients; the
-	// warning goes out once per such spell.
+	// overflow is the one window that all new clients share while the
+	// client table is full; it has the limit of one client (D-077).
+	overflow recoveryWindow
+	// full is set while the client table is full; the warning goes out
+	// once per such spell.
 	full bool
-	// send runs the background part of recovery requests, mail included;
-	// tests and the shutdown wait on it.
+
+	// The pool for the background part of recovery requests (D-077).
+	poolMu  sync.Mutex
+	queue   []recoveryJob
+	running int
+	// workers and queueLen, if set, replace the settings; tests only.
+	workers, queueLen int
+	// send counts the jobs queued or running; tests and the shutdown wait
+	// on it.
 	send sync.WaitGroup
+}
+
+type recoveryJob struct {
+	ctx       context.Context
+	pseudonym string
+	requestID string
 }
 
 // SetSecondFactor enables the second factor (AUTH-008).
@@ -127,6 +152,8 @@ func EnsureSecondFactorDefaults(ctx context.Context, st *store.Store) error {
 		SettingSecondFactorWindow: DefaultSecondFactorWindow.String(),
 		SettingRecoveryLifetime:   DefaultRecoveryLifetime.String(),
 		SettingRecoveryPerHour:    DefaultRecoveryPerHour,
+		SettingRecoveryWorkers:    DefaultRecoveryWorkers,
+		SettingRecoveryQueue:      DefaultRecoveryQueue,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
@@ -602,9 +629,9 @@ func takeWindow(w *recoveryWindow, now time.Time, limit int) bool {
 }
 
 // takeRecoveryClient counts a request of the client. A full table drops
-// only windows whose hour ended; if it stays full, a new client counts as
-// over its limit, while known clients and all user windows keep their
-// counts (D-076).
+// only windows whose hour ended; if it stays full, all new clients share
+// one overflow window with the limit of one client, while known clients
+// and all user windows keep their counts (D-076, D-077).
 func (s *Service) takeRecoveryClient(ctx context.Context, ip netip.Addr) bool {
 	limit := s.recoveryLimit(ctx)
 	key := netlimit.ClientKey(ip)
@@ -623,9 +650,9 @@ func (s *Service) takeRecoveryClient(ctx context.Context, ip netip.Addr) bool {
 		if len(s.sf.clients) >= maxRecoveryKeys {
 			if !s.sf.full {
 				s.sf.full = true
-				s.log.Warn("recovery limit table full, requests of new clients are refused", slog.Int("limit", maxRecoveryKeys))
+				s.log.Warn("recovery limit table full, new clients share one limit", slog.Int("limit", maxRecoveryKeys))
 			}
-			return false
+			return takeWindow(&s.sf.overflow, now, limit)
 		}
 		s.sf.full = false
 		w = &recoveryWindow{start: now}
@@ -669,12 +696,72 @@ func (s *Service) RequestRecovery(ctx context.Context, pseudonym string, c Clien
 	if !s.takeRecoveryClient(ctx, c.IP) {
 		return
 	}
-	bctx := context.WithoutCancel(ctx)
-	s.sf.send.Go(func() {
-		ctx, cancel := context.WithTimeout(bctx, 2*time.Minute)
-		defer cancel()
-		s.sendRecovery(ctx, pseudonym, c.RequestID)
-	})
+	s.enqueueRecovery(ctx, recoveryJob{ctx: context.WithoutCancel(ctx), pseudonym: pseudonym, requestID: c.RequestID})
+}
+
+// poolSize returns the number of workers and the length of the queue.
+func (s *Service) poolSize(ctx context.Context) (workers, queue int) {
+	workers, queue = DefaultRecoveryWorkers, DefaultRecoveryQueue
+	var v int
+	if err := s.st.GlobalSetting(ctx, SettingRecoveryWorkers, &v); err == nil {
+		workers = max(v, MinRecoveryWorkers)
+	}
+	if err := s.st.GlobalSetting(ctx, SettingRecoveryQueue, &v); err == nil {
+		queue = max(v, MinRecoveryQueue)
+	}
+	if s.sf.workers > 0 {
+		workers = s.sf.workers
+	}
+	if s.sf.queueLen > 0 {
+		queue = s.sf.queueLen
+	}
+	return workers, queue
+}
+
+// enqueueRecovery hands the job to the pool. A worker starts when fewer
+// than the pool size run and ends when the queue is empty, so an idle pool
+// holds no goroutine. With the queue full the job is dropped; the answer
+// stays the same (D-077).
+func (s *Service) enqueueRecovery(ctx context.Context, j recoveryJob) {
+	workers, queue := s.poolSize(ctx)
+	sf := s.sf
+	sf.poolMu.Lock()
+	if len(sf.queue) >= queue {
+		sf.poolMu.Unlock()
+		s.log.Warn("recovery request dropped, queue full", logging.Event(logging.AuthRecoveryDropped),
+			slog.String(logging.KeyRequestID, j.requestID), slog.Int("queue", queue))
+		return
+	}
+	sf.queue = append(sf.queue, j)
+	sf.send.Add(1)
+	start := sf.running < workers
+	if start {
+		sf.running++
+	}
+	sf.poolMu.Unlock()
+	if start {
+		go s.recoveryWorker()
+	}
+}
+
+func (s *Service) recoveryWorker() {
+	sf := s.sf
+	for {
+		sf.poolMu.Lock()
+		if len(sf.queue) == 0 {
+			sf.running--
+			sf.poolMu.Unlock()
+			return
+		}
+		j := sf.queue[0]
+		sf.queue[0] = recoveryJob{}
+		sf.queue = sf.queue[1:]
+		sf.poolMu.Unlock()
+		ctx, cancel := context.WithTimeout(j.ctx, 2*time.Minute)
+		s.sendRecovery(ctx, j.pseudonym, j.requestID)
+		cancel()
+		sf.send.Done()
+	}
 }
 
 // sendRecovery is the background part of RequestRecovery.

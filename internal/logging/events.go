@@ -33,11 +33,13 @@ const (
 	// AuthEmergencyReset is new in revision 2.1 (AUTH-011).
 	AuthEmergencyReset Code = "auth.emergency_admin.reset"
 	// Second factor (AUTH-008): switched on, switched off (also by reset or
-	// recovery, with the cause), a recovery link requested and used.
+	// recovery, with the cause), a recovery link requested and used, a
+	// recovery request dropped with the queue full (D-077).
 	AuthTOTPEnabled       Code = "auth.totp.enabled"
 	AuthTOTPDisabled      Code = "auth.totp.disabled"
 	AuthRecoveryRequested Code = "auth.recovery.requested"
 	AuthRecoveryUsed      Code = "auth.recovery.used"
+	AuthRecoveryDropped   Code = "auth.recovery.dropped"
 )
 
 // Permissions.
@@ -124,7 +126,7 @@ var AllCodes = []Code{
 	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge, AuditLost,
 	AuthLoginOK, AuthLoginFailed, AuthLockout, AuthLogout, AuthSessionRevoked,
 	AuthInitialPassword, AuthInviteUsed, AuthEmergencyReset,
-	AuthTOTPEnabled, AuthTOTPDisabled, AuthRecoveryRequested, AuthRecoveryUsed,
+	AuthTOTPEnabled, AuthTOTPDisabled, AuthRecoveryRequested, AuthRecoveryUsed, AuthRecoveryDropped,
 	PermDenied, PermRecomputed,
 	CmdAccepted, CmdDenied, CmdSent, CmdResponse, CmdTimeout,
 	RCONConnected, RCONAuthFailed, RCONDisconnected, RCONReconnect, RCONConnectionTest,
