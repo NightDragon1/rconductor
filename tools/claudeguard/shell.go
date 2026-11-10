@@ -32,10 +32,11 @@ func lit(s string) arg { return arg{val: s, suffix: s} }
 // is reports whether the word is the literal s.
 func (a arg) is(s string) bool { return !a.dyn && a.val == s }
 
-// opaque reports whether a dynamic word is still one word that can be
-// neither an option nor a refspec with a leading "+" or ":".
+// opaque reports whether a dynamic word starts with literal text that is
+// neither an option nor a refspec with a leading "+" or ":". Such a word is
+// accepted as an operand; the decision rests on the literal words.
 func (a arg) opaque() bool {
-	return a.dyn && !a.split && a.val != "" && !strings.ContainsRune("-+:", rune(a.val[0]))
+	return a.dyn && a.val != "" && !strings.ContainsRune("-+:", rune(a.val[0]))
 }
 
 type checker struct {
@@ -185,8 +186,12 @@ func unescapeUnquoted(s string) (string, bool) {
 				b.WriteByte(s[i])
 			}
 			continue
-		case ch == '*' || ch == '?' || ch == '[':
+		case ch == '*' || ch == '?':
 			special = true
+		case ch == '[':
+			// Only a bracket expression with content and a closing "]" is
+			// a pattern; a lone "[" (the test builtin) is literal.
+			special = i+2 < len(s) && strings.IndexByte(s[i+2:], ']') >= 0
 		case ch == '{':
 			if end := strings.IndexByte(s[i:], '}'); end > 0 {
 				inner := s[i+1 : i+end]

@@ -102,11 +102,11 @@ deny	FC	"$(echo git)" push origin main
 deny	FC	git push origin "$branch"
 deny	FC	git push $args
 deny	FC	git push origin {+main,dev}
-deny	FC	git -C $dir push origin main
+deny	FC	git -C $dir push -f origin main
 deny	FC	gh $cmd
 deny	FC	gh pr "$sub" 12
 deny	FC	gh api "$endpoint"
-deny	FC	gh api repos/x/$y
+deny	FC	gh api repos/x/$y -X DELETE
 deny	FC	gh api graph"$x"
 deny	FC	gh api -X "$m" repos/x/y
 deny	FC	gh pr merge $n --auto
@@ -252,3 +252,31 @@ allow	ok	sh -c 'git status'
 allow	ok	env GOFLAGS=-p=4 go test ./...
 allow	ok	echo hi > /tmp/out.txt
 allow	ok	jq -r '.permissions.deny[]' .claude/settings.json | grep git
+allow	ok	[ -n "$m" ] && break
+allow	ok	[ -z "$out" ] && break
+allow	ok	test -n "$x" && [[ -z $y ]] && echo ok
+allow	ok	echo [ a] [
+deny	FC	[ -n "$m" ] && git push -vvf origin main
+allow	ok	git -C /home/x/rconductor-wt-$w status --short
+allow	ok	git -C ../rconductor-gr-$x log --oneline -3
+allow	ok	git --git-dir="$d/.git" --work-tree=$w status
+allow	ok	git -C $dir push origin main
+deny	FC	git -C "$x" push -f origin main
+deny	FC	git -C /home/x/rconductor-wt-$w push --del origin feature
+deny	FC	git --work-tree=$w config remote.origin.mirror true
+allow	ok	gh run watch $id --exit-status
+allow	ok	gh api repos/o/r/actions/jobs/$j/logs
+allow	ok	gh api repos/x/$y
+allow	ok	gh pr view "$n"
+allow	ok	gh issue close $1 -R o/r -c "x"
+allow	ok	gh pr merge 12 --auto --squash -R "$repo"
+deny	FC	gh api $endpoint
+deny	FC	gh api repos/o/r/git/refs/$r -X DELETE
+deny	FC	gh api repos/o/r/issues/$n -f body=x
+deny	FC	gh pr merge 12 --squash $extra
+deny	FC	gh pr merge 12 --squash -R $repo
+allow	ok	push(){ w=$1; b=$2; cd "$w" && git push -q origin HEAD:refs/heads/$b; }; push a b
+allow	ok	git push origin HEAD:refs/heads/"$b"
+deny	FC	push(){ git push -q origin :refs/heads/$1; }; push a
+deny	FC	push(){ git push -q origin +HEAD:refs/heads/$1; }; push a
+deny	FC	push(){ git push -q origin "$1"; }; push a

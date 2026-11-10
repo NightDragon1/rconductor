@@ -44,6 +44,10 @@ func (c *checker) git(args []arg, depth int) {
 	for ; i < len(args); i++ {
 		a := args[i]
 		if a.dyn {
+			// A dynamic directory only selects the repository.
+			if hasAnyPrefix(a.val, gitDirOptsEq...) {
+				continue
+			}
 			c.deny("git argument before the subcommand is not literal")
 			return
 		}
@@ -54,11 +58,9 @@ func (c *checker) git(args []arg, depth int) {
 		switch {
 		case v == "-C" || v == "--git-dir" || v == "--work-tree" || v == "--namespace" ||
 			v == "--super-prefix" || v == "--attr-source":
+			// The value only selects a directory or namespace; the
+			// decision follows the subcommand.
 			i++
-			if i < len(args) && args[i].split {
-				c.deny("git " + v + " with a value that is not literal")
-				return
-			}
 		case v == "-c" || v == "--config-env":
 			i++
 			if i >= len(args) {
@@ -122,6 +124,17 @@ func (c *checker) git(args []arg, depth int) {
 	default:
 		c.deny("git " + name + " is not on the guard's list of known subcommands")
 	}
+}
+
+var gitDirOptsEq = []string{"--git-dir=", "--work-tree=", "--namespace=", "--super-prefix=", "--attr-source="}
+
+func hasAnyPrefix(s string, prefixes ...string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
 }
 
 var gitGlobalFlags = setOf("-p", "--paginate", "-P", "--no-pager", "--no-replace-objects", "--bare",

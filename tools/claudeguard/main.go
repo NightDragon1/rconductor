@@ -31,7 +31,9 @@
 // A denied call exits with status 2 and the reason on stderr; an allowed
 // call exits 0 without output, so the normal permission flow applies.
 // .claude/hooks/guard.sh builds this program once per source hash into the
-// user cache and runs it.
+// user cache and runs it. Known limit: Claude Code lets a call through when
+// a PreToolUse hook runs past its timeout (the hook has no onFailure
+// setting), so the guard decides only when it finishes in time.
 package main
 
 import (

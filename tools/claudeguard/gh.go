@@ -130,7 +130,7 @@ func (c *checker) ghFlagDenied(cmd string, args []arg, flag string, valFlags map
 	for i, a := range args {
 		if a.dyn {
 			prevVal := i > 0 && !args[i-1].dyn && valFlags[args[i-1].val]
-			if a.split || (!prevVal && !a.opaque()) {
+			if (!prevVal || a.split) && !a.opaque() {
 				c.deny(cmd + " with an argument that is not literal cannot be checked")
 				return
 			}
