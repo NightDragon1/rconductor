@@ -137,8 +137,8 @@ func TestMergeCatalogs(t *testing.T) {
 
 // TestExplicitValuesCountAsSet covers D-074: a field the file writes counts
 // as set by its key, also with false, 0, "" or []; so a specific profile
-// can set steam_connect false over a generic true, and empty separators
-// or formatting over a generic profile's.
+// can set steam_connect false over a generic true, and an empty formatting
+// over a generic profile's.
 func TestExplicitValuesCountAsSet(t *testing.T) {
 	generic, err := Parse([]byte("schema: 1\nid: g\nname: G\nprotocol: { type: source-rcon, default_port: 1 }\nports:\n  steam_connect: true\nsyntax:\n  separators: [\";\"]\nformatting: minecraft\n"))
 	if err != nil {
@@ -154,9 +154,13 @@ func TestExplicitValuesCountAsSet(t *testing.T) {
 		}
 	}
 	eff := Effective([]*Profile{specific, generic})
-	if eff.Ports.SteamConnect || len(eff.Syntax.Separators) != 0 || eff.Formatting != "" {
-		t.Errorf("steam_connect %v separators %v formatting %q, want the specific profile's false, none, empty",
-			eff.Ports.SteamConnect, eff.Syntax.Separators, eff.Formatting)
+	if eff.Ports.SteamConnect || eff.Formatting != "" {
+		t.Errorf("steam_connect %v formatting %q, want the specific profile's false and empty",
+			eff.Ports.SteamConnect, eff.Formatting)
+	}
+	// Separators hold from every profile; an empty list lifts none (D-076).
+	if !slices.Equal(eff.Syntax.Separators, []string{";"}) {
+		t.Errorf("separators %v, want the generic profile's", eff.Syntax.Separators)
 	}
 	// Absent keys stay unset, and the generic values hold.
 	bare, err := Parse([]byte("schema: 1\nid: b\nname: B\nkind: specific\nprotocol: { type: source-rcon, default_port: 1 }\n"))
@@ -235,6 +239,80 @@ func TestShippedProfilesWithoutNull(t *testing.T) {
 		}
 		if f := Check(data); len(f) > 0 {
 			t.Errorf("%s: %+v", e.Name(), f)
+		}
+	}
+}
+
+// TestSeparatorsOfAllProfilesC20 covers D-076: command separators of every
+// profile of a server hold; an upper profile with separators: [] lifts
+// none.
+func TestSeparatorsOfAllProfilesC20(t *testing.T) {
+	gtnh, src := shipped(t, "minecraft-gtnh.yaml"), shipped(t, "source-engine.yaml")
+	eff := Effective([]*Profile{gtnh, src})
+	for _, sep := range src.Syntax.Separators {
+		if !slices.Contains(eff.Syntax.Separators, sep) {
+			t.Errorf("separator %q of source-engine lifted: %v", sep, eff.Syntax.Separators)
+		}
+	}
+}
+
+// TestKeyFormsCountAsSetC21 covers D-074: a key counts as written in every
+// YAML form that decodes to it: quoted, tagged, anchored or explicit.
+func TestKeyFormsCountAsSetC21(t *testing.T) {
+	head := "schema: 1\nid: k\nname: K\nprotocol: { type: source-rcon, default_port: 1 }\n"
+	for name, body := range map[string]string{
+		"double quoted": "syntax:\n  \"separators\": [\";\"]\n",
+		"single quoted": "syntax:\n  'separators': [\";\"]\n",
+		"quoted parent": "\"syntax\":\n  separators: [\";\"]\n",
+		"tagged":        "syntax:\n  !!str separators: [\";\"]\n",
+		"anchored":      "syntax:\n  &k separators: [\";\"]\n",
+		"explicit":      "syntax:\n  ? separators\n  : [\";\"]\n",
+		"json":          "{\"schema\": 1, \"id\": \"k\", \"name\": \"K\", \"protocol\": {\"type\": \"source-rcon\", \"default_port\": 1}, \"syntax\": {\"separators\": [\";\"]}}\n",
+	} {
+		text := head + body
+		if name == "json" {
+			text = body
+		}
+		p, err := Parse([]byte(text))
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if !p.Sets(FieldSeparators) {
+			t.Errorf("%s: separators not counted as set: %v", name, p.Set)
+		}
+	}
+}
+
+// TestLegacyRulesDoNotWinWithDefaultsC22 covers D-074: rules stored before
+// the fields were recorded win a field only with a value of their own,
+// never with a default.
+func TestLegacyRulesDoNotWinWithDefaultsC22(t *testing.T) {
+	legacy := shipped(t, "minecraft-gtnh.yaml")
+	legacy.Set = nil
+	lower, err := Parse([]byte("schema: 1\nid: l\nname: L\nprotocol: { type: source-rcon, default_port: 1 }\nsyntax:\n  strip_prefix: \"!\"\n  max_length: 200\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	eff := Effective([]*Profile{legacy, lower})
+	if *eff.Syntax.StripPrefix != "!" || eff.Syntax.MaxLength != 200 {
+		t.Errorf("prefix %q length %d, want the lower profile's", *eff.Syntax.StripPrefix, eff.Syntax.MaxLength)
+	}
+	if eff.Syntax.PlayerPattern != legacy.Syntax.PlayerPattern {
+		t.Errorf("player pattern %q, want the legacy rules' own", eff.Syntax.PlayerPattern)
+	}
+}
+
+// TestCommandsPrintableC24 covers CAT-005: the players and stop commands
+// of a profile hold no control characters.
+func TestCommandsPrintableC24(t *testing.T) {
+	head := "schema: 1\nid: c\nname: C\nprotocol: { type: source-rcon, default_port: 1 }\n"
+	for name, body := range map[string]string{
+		"players": "players:\n  command: \"list\\nop me\"\n  pattern: \"(.*)\"\n",
+		"stop":    "stop:\n  command: \"stop\\u0000\"\n",
+	} {
+		if _, err := Parse([]byte(head + body)); err == nil || !strings.Contains(err.Error(), "printable") {
+			t.Errorf("%s: %v, want refused", name, err)
 		}
 	}
 }
