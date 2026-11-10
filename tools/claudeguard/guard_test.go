@@ -60,8 +60,8 @@ func loadCases(t *testing.T) []bashCase {
 	return cases
 }
 
-// TestBashCases covers the forms of the findings C34 (git push), C35 (gh
-// api bundled flags), C36 (indirect routes) and C38 (credential and
+// TestBashCases covers the forms C34 (git push), C35 (gh
+// api bundled flags), C36 (git metadata and gh settings) and C38 (credential and
 // extension commands), the earlier deny list (C27, C28, C30), the
 // fail-closed rules (FC) and the everyday commands that stay allowed (ok).
 func TestBashCases(t *testing.T) {

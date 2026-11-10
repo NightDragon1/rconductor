@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# want<TAB>label<TAB>command, read by guard_test.go. Labels: finding IDs, FC (fail closed), ok (allowed).
+# want<TAB>label<TAB>command, read by guard_test.go. Labels: case IDs, FC (fail closed), ok (allowed).
 deny	C34	git push --del origin feature
 deny	C34	git push origin --delet feature
 deny	C34	git push --mirr origin
@@ -213,12 +213,12 @@ allow	ok	gh pr comment 12 --body text
 allow	ok	gh pr checks 12 --watch
 allow	ok	gh pr diff 12
 allow	ok	gh pr view 12 --json body -q .body | grep x
-allow	ok	gh issue create --title t --body b --label finding
+allow	ok	gh issue create --title t --body b --label bug
 allow	ok	gh issue view 3
-allow	ok	gh issue list --label finding
+allow	ok	gh issue list --label bug
 allow	ok	gh issue comment 3 --body b
 allow	ok	gh issue close 3
-allow	ok	gh issue edit 3 --add-label finding
+allow	ok	gh issue edit 3 --add-label bug
 allow	ok	gh run list --branch main -L 5
 allow	ok	gh run view 123 --log-failed
 allow	ok	gh run watch 123 --exit-status
