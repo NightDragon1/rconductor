@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/mail"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/auth/totp"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/netlimit"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -90,16 +92,23 @@ type recoveryWindow struct {
 type secondFactorState struct {
 	cfg SecondFactor
 	mu  sync.Mutex
-	// recovery counts recovery requests per user and per client in the
-	// current hour.
-	recovery map[string]*recoveryWindow
+	// clients counts recovery requests per client (an IPv6 client per /64)
+	// in the current hour; at most maxRecoveryKeys of them (D-076).
+	clients map[netip.Addr]*recoveryWindow
+	// users counts recovery requests per user in the current hour. Only
+	// users with an address and the second factor get a window, so the
+	// users table bounds it; it is never cleared early.
+	users map[string]*recoveryWindow
+	// full is set while a full client table refuses new clients; the
+	// warning goes out once per such spell.
+	full bool
 	// send delivers recovery mail in the background; tests wait on it.
 	send sync.WaitGroup
 }
 
 // SetSecondFactor enables the second factor (AUTH-008).
 func (s *Service) SetSecondFactor(cfg SecondFactor) {
-	s.sf = &secondFactorState{cfg: cfg, recovery: map[string]*recoveryWindow{}}
+	s.sf = &secondFactorState{cfg: cfg, clients: map[netip.Addr]*recoveryWindow{}, users: map[string]*recoveryWindow{}}
 }
 
 // WaitMail waits for recovery mail sent in the background, for tests and
@@ -569,28 +578,73 @@ func (s *Service) SetEmail(ctx context.Context, p Principal, c Client, email, pw
 	return tx.Commit()
 }
 
-func (s *Service) takeRecovery(ctx context.Context, key string) bool {
-	limit := DefaultRecoveryPerHour
+// recoveryLimit is auth.recovery_per_hour.
+func (s *Service) recoveryLimit(ctx context.Context) int {
 	var v int
 	if err := s.st.GlobalSetting(ctx, SettingRecoveryPerHour, &v); err == nil {
-		limit = max(v, MinRecoveryPerHour)
+		return max(v, MinRecoveryPerHour)
 	}
-	now := s.now()
-	s.sf.mu.Lock()
-	defer s.sf.mu.Unlock()
-	if len(s.sf.recovery) >= maxRecoveryKeys {
-		clear(s.sf.recovery)
-	}
-	w := s.sf.recovery[key]
-	if w == nil || now.Sub(w.start) >= time.Hour {
-		w = &recoveryWindow{start: now}
-		s.sf.recovery[key] = w
+	return DefaultRecoveryPerHour
+}
+
+// takeWindow spends one request of w, opening a new hour when the last
+// one ended.
+func takeWindow(w *recoveryWindow, now time.Time, limit int) bool {
+	if now.Sub(w.start) >= time.Hour {
+		*w = recoveryWindow{start: now}
 	}
 	if w.count >= limit {
 		return false
 	}
 	w.count++
 	return true
+}
+
+// takeRecoveryClient counts a request of the client. A full table drops
+// only windows whose hour ended; if it stays full, a new client counts as
+// over its limit, while known clients and all user windows keep their
+// counts (D-076).
+func (s *Service) takeRecoveryClient(ctx context.Context, ip netip.Addr) bool {
+	limit := s.recoveryLimit(ctx)
+	key := netlimit.ClientKey(ip)
+	now := s.now()
+	s.sf.mu.Lock()
+	defer s.sf.mu.Unlock()
+	w := s.sf.clients[key]
+	if w == nil {
+		if len(s.sf.clients) >= maxRecoveryKeys {
+			for k, old := range s.sf.clients {
+				if now.Sub(old.start) >= time.Hour {
+					delete(s.sf.clients, k)
+				}
+			}
+		}
+		if len(s.sf.clients) >= maxRecoveryKeys {
+			if !s.sf.full {
+				s.sf.full = true
+				s.log.Warn("recovery limit table full, requests of new clients are refused", slog.Int("limit", maxRecoveryKeys))
+			}
+			return false
+		}
+		s.sf.full = false
+		w = &recoveryWindow{start: now}
+		s.sf.clients[key] = w
+	}
+	return takeWindow(w, now, limit)
+}
+
+// takeRecoveryUser counts a request for the user.
+func (s *Service) takeRecoveryUser(ctx context.Context, userID string) bool {
+	limit := s.recoveryLimit(ctx)
+	now := s.now()
+	s.sf.mu.Lock()
+	defer s.sf.mu.Unlock()
+	w := s.sf.users[userID]
+	if w == nil {
+		w = &recoveryWindow{start: now}
+		s.sf.users[userID] = w
+	}
+	return takeWindow(w, now, limit)
 }
 
 func domainOf(addr string) string {
@@ -609,12 +663,12 @@ func (s *Service) RequestRecovery(ctx context.Context, pseudonym string, c Clien
 	if s.sf == nil || len(pseudonym) > 4*maxAccountKey {
 		return
 	}
-	clientOK := s.takeRecovery(ctx, "client:"+c.IP.String())
+	clientOK := s.takeRecoveryClient(ctx, c.IP)
 	u, err := s.st.Queries.GetRecoveryTarget(ctx, pseudonym)
 	if err != nil || !clientOK || u.DisabledAt.Valid || !u.TotpEnabled || u.Email == "" {
 		return
 	}
-	if !s.takeRecovery(ctx, "user:"+u.ID) {
+	if !s.takeRecoveryUser(ctx, u.ID) {
 		return
 	}
 	token, err := newToken()
