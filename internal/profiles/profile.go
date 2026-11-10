@@ -114,25 +114,23 @@ const (
 	FieldFormatting    = "formatting"
 )
 
-// setFields lists the fields the parsed file sets, before defaults().
-func (p *Profile) setFields() []string {
+// mergedFields are the fields Effective merges one by one (D-074); each is
+// also its YAML path.
+var mergedFields = []string{
+	FieldCaseSensitive, FieldStripPrefix, FieldMaxLength, FieldPlayerPattern, FieldSeparators,
+	FieldGamePorts, FieldSteamConnect, FieldPlayers, FieldStop, FieldVersion, FieldFormatting,
+}
+
+// setFields lists the fields the file writes itself, by the keys in the
+// YAML, so false, 0, "" and [] count as set (D-074).
+func setFields(file *ast.File) []string {
+	present := presentKeys(file)
 	out := []string{}
-	add := func(ok bool, f string) {
-		if ok {
+	for _, f := range mergedFields {
+		if present[f] {
 			out = append(out, f)
 		}
 	}
-	add(p.Syntax.CaseSensitive != nil, FieldCaseSensitive)
-	add(p.Syntax.StripPrefix != nil, FieldStripPrefix)
-	add(p.Syntax.MaxLength != 0, FieldMaxLength)
-	add(p.Syntax.PlayerPattern != "", FieldPlayerPattern)
-	add(p.Syntax.Separators != nil, FieldSeparators)
-	add(p.Ports.Game != nil, FieldGamePorts)
-	add(p.Ports.SteamConnect, FieldSteamConnect)
-	add(p.Players != nil, FieldPlayers)
-	add(p.Stop != nil, FieldStop)
-	add(p.Version != nil, FieldVersion)
-	add(p.Formatting != "", FieldFormatting)
 	return out
 }
 
@@ -263,6 +261,9 @@ func parse(data []byte) (*Profile, *ast.File, error) {
 	if prob := checkAliases(file); prob != "" {
 		return nil, file, &Error{Problems: []string{prob}}
 	}
+	if probs := checkNulls(file); len(probs) > 0 {
+		return nil, file, &Error{Problems: probs}
+	}
 	var p Profile
 	if len(file.Docs) > 0 && file.Docs[0].Body != nil {
 		if err := yaml.NodeToValue(file.Docs[0].Body, &p, yaml.DisallowUnknownField()); err != nil {
@@ -272,7 +273,7 @@ func parse(data []byte) (*Profile, *ast.File, error) {
 	if probs := p.check(); len(probs) > 0 {
 		return nil, file, &Error{Problems: probs}
 	}
-	p.Set = p.setFields()
+	p.Set = setFields(file)
 	p.defaults()
 	return &p, file, nil
 }
@@ -309,6 +310,22 @@ func checkShape(tokens token.Tokens) string {
 		}
 	}
 	return ""
+}
+
+// checkNulls refuses null values, also a key without a value: a field is
+// either written with a value or left out; an empty value is written as
+// [] or "" (D-074).
+func checkNulls(file *ast.File) []string {
+	var probs []string
+	for _, doc := range file.Docs {
+		if doc == nil || doc.Body == nil {
+			continue
+		}
+		for _, n := range ast.Filter(ast.NullType, doc.Body) {
+			probs = append(probs, fmt.Sprintf("%s null not allowed; write [] or \"\" for an empty value", at(n.GetToken())))
+		}
+	}
+	return probs
 }
 
 // checkAliases refuses an alias inside an anchored value: anchors that

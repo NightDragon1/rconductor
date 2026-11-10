@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -131,5 +132,109 @@ func TestMergeCatalogs(t *testing.T) {
 	got := MergeCatalogs([][]Command{upper, lower})
 	if len(got) != 3 || got[0].Description != "upper" || got[2].Path != "say" {
 		t.Errorf("catalog = %+v", got)
+	}
+}
+
+// TestExplicitValuesCountAsSet covers D-074: a field the file writes counts
+// as set by its key, also with false, 0, "" or []; so a specific profile
+// can set steam_connect false over a generic true, and empty separators
+// or formatting over a generic profile's.
+func TestExplicitValuesCountAsSet(t *testing.T) {
+	generic, err := Parse([]byte("schema: 1\nid: g\nname: G\nprotocol: { type: source-rcon, default_port: 1 }\nports:\n  steam_connect: true\nsyntax:\n  separators: [\";\"]\nformatting: minecraft\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	specific, err := Parse([]byte("schema: 1\nid: s\nname: S\nkind: specific\nprotocol: { type: source-rcon, default_port: 1 }\nports:\n  steam_connect: false\nsyntax:\n  separators: []\n  player_pattern: \"\"\nformatting: \"\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{FieldSteamConnect, FieldSeparators, FieldPlayerPattern, FieldFormatting} {
+		if !specific.Sets(f) {
+			t.Errorf("explicit %s not counted as set", f)
+		}
+	}
+	eff := Effective([]*Profile{specific, generic})
+	if eff.Ports.SteamConnect || len(eff.Syntax.Separators) != 0 || eff.Formatting != "" {
+		t.Errorf("steam_connect %v separators %v formatting %q, want the specific profile's false, none, empty",
+			eff.Ports.SteamConnect, eff.Syntax.Separators, eff.Formatting)
+	}
+	// Absent keys stay unset, and the generic values hold.
+	bare, err := Parse([]byte("schema: 1\nid: b\nname: B\nkind: specific\nprotocol: { type: source-rcon, default_port: 1 }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bare.Set) != 0 {
+		t.Errorf("a profile without fields sets %v", bare.Set)
+	}
+	if eff := Effective([]*Profile{bare, generic}); !eff.Ports.SteamConnect || len(eff.Syntax.Separators) != 1 || eff.Formatting != "minecraft" {
+		t.Errorf("generic values lost: %+v %v %q", eff.Ports, eff.Syntax.Separators, eff.Formatting)
+	}
+}
+
+// TestPresenceThroughAnchors covers D-074 for own profiles that use
+// anchors, aliases or merge keys: the keys they bring count as written.
+func TestPresenceThroughAnchors(t *testing.T) {
+	text := "schema: 1\nid: a\nname: A\nprotocol: { type: source-rcon, default_port: 1 }\n" +
+		"stop: &s { command: quit }\n" +
+		"ports: &p\n  steam_connect: false\n" +
+		"syntax:\n  <<: { case_sensitive: false }\n  strip_prefix: \"\"\n"
+	p, err := Parse([]byte(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{FieldStop, FieldSteamConnect, FieldCaseSensitive, FieldStripPrefix} {
+		if !p.Sets(f) {
+			t.Errorf("%s not counted as set: %v", f, p.Set)
+		}
+	}
+	if p.Sets(FieldMaxLength) || p.Sets(FieldGamePorts) {
+		t.Errorf("absent fields counted as set: %v", p.Set)
+	}
+}
+
+// TestNullRefused covers D-074: null, also a key without a value, is
+// refused with its line; an empty value is written as [] or "".
+func TestNullRefused(t *testing.T) {
+	base := "schema: 1\nid: n\nname: N\nprotocol: { type: source-rcon, default_port: 1 }\n"
+	for name, add := range map[string]string{
+		"null":        "stop: null\n",
+		"tilde":       "formatting: ~\n",
+		"empty value": "syntax:\n  separators:\n",
+		"in a list":   "syntax:\n  wrappers: [null]\n",
+		"nested":      "ports:\n  steam_connect: null\n",
+	} {
+		_, err := Parse([]byte(base + add))
+		if err == nil || !strings.Contains(err.Error(), "null not allowed") {
+			t.Errorf("%s: %v, want null not allowed", name, err)
+			continue
+		}
+		f := Check([]byte(base + add))
+		if len(f) == 0 || f[0].Line < 5 {
+			t.Errorf("%s: findings %+v, want the line of the null", name, f)
+		}
+	}
+	if _, err := Parse([]byte(base + "syntax:\n  separators: []\n  player_pattern: \"\"\n")); err != nil {
+		t.Errorf("explicit empty values: %v", err)
+	}
+}
+
+// TestShippedProfilesWithoutNull covers D-074: no shipped profile holds a
+// null.
+func TestShippedProfilesWithoutNull(t *testing.T) {
+	entries, err := os.ReadDir("../../profiles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		data, err := os.ReadFile("../../profiles/" + e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := Check(data); len(f) > 0 {
+			t.Errorf("%s: %+v", e.Name(), f)
+		}
 	}
 }
