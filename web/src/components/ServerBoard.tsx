@@ -8,6 +8,7 @@ import { useLiveServers } from '@/api/live-servers';
 import { ServerCard } from '@/components/ServerCard';
 import { Input } from '@/components/ui/input';
 import { useNow } from '@/lib/format';
+import { topProfile } from '@/lib/profiles';
 import { isUp } from '@/lib/status';
 import { cn } from '@/lib/utils';
 
@@ -27,16 +28,17 @@ function Cards({
   now,
 }: {
   servers: Server[];
-  profiles: Map<string, string>;
+  profiles: { id: string; name: string }[];
   now: number;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
       {servers.map((s) => (
         <ServerCard
           key={s.id}
           server={s}
-          profile={s.profile_ids?.[0] ? profiles.get(s.profile_ids[0]) : undefined}
+          profile={topProfile(t, s.profile_ids, profiles) || undefined}
           now={now}
         />
       ))}
@@ -114,7 +116,7 @@ export function ServerBoard({
   const all = servers.data ?? [];
   const q = query.trim().toLowerCase();
   const shown = q ? all.filter((s) => s.name.toLowerCase().includes(q)) : all;
-  const profileNames = new Map((profiles.data ?? []).map((p) => [p.id, p.name]));
+  const profileNames = profiles.data ?? [];
   const line = [
     t('home.summaryServers', { count: all.length }),
     admin && groups.data ? t('home.summaryGroups', { count: groups.data.length }) : undefined,

@@ -19,7 +19,7 @@ test('a server with profile, host, port, password and an agent container (SRV-00
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
   await panel.getByLabel('Name').fill('e2e-new');
-  await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
   await panel.getByLabel('Host').fill('mc.example');
   await panel.getByLabel('RCON port').fill('25575');
   await panel.getByLabel('RCON password').fill('a secret rcon password');
@@ -72,7 +72,7 @@ test('a server needs no agent (SRV-001)', async ({ page, state }) => {
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
   await panel.getByLabel('Name').fill('e2e-plain');
-  await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
   await panel.getByLabel('Host').fill('mc.example');
   await panel.getByLabel('RCON port').fill('25575');
   await panel.getByLabel('RCON password').fill('a secret rcon password');
@@ -125,13 +125,18 @@ test('a server can be in several server groups (SRV-003)', async ({ page, state 
   await expect(survival).not.toContainText('e2e-group');
 });
 
-test('the server admin reads servers and groups only (Design 6.2)', async ({ page, state }) => {
+test('the server admin changes only the profile list (Design 6.2, SRV-008)', async ({
+  page,
+  state,
+}) => {
   await as(page, state, 'sadmin', 'admin/servers', 'Servers and groups');
   await expect(page.getByRole('button', { name: 'New server' })).toHaveCount(0);
   await page.getByRole('button', { name: 'survival', exact: true }).click();
   const panel = page.getByRole('complementary', { name: 'Details of survival' });
   await expect(panel.getByLabel('Name')).toBeDisabled();
-  await expect(panel.getByRole('button', { name: 'Save' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Save' })).toHaveCount(1);
+  await expect(panel.getByRole('button', { name: 'Test connection' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Delete server …' })).toHaveCount(0);
   await expect(panel.getByLabel('RCON password')).toHaveCount(0);
 });
 
@@ -183,7 +188,7 @@ test('test connection reports the state without saving (SRV-007)', async ({ page
   await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
-  await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
   await panel.getByLabel('Host').fill('127.0.0.1');
   await panel.getByLabel('RCON port').fill('1');
   await panel.getByLabel('RCON password').fill('some password');
@@ -206,7 +211,9 @@ test('a refused input shows the reason of the backend (UI-016)', async ({ page, 
     await page.getByRole('button', { name: 'New server' }).click();
     const panel = page.getByRole('complementary', { name: 'Details of New server' });
     await panel.getByLabel('Name').fill(name);
-    await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+    await panel
+      .getByLabel('Add a game profile')
+      .selectOption({ label: 'Minecraft (Java Edition)' });
     await panel.getByLabel('Host').fill('twice.example');
     await panel.getByLabel('RCON port').fill('25575');
     await panel.getByLabel('RCON password').fill('a secret rcon password');
