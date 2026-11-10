@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Three stages (scripts/ci-scope.sh decides):
-#   1. every run: SPDX, Go lint, Go test, web lint and test, govulncheck
+#   1. every run: SPDX, script tests, Go lint, Go test, web lint and test, govulncheck
 #   2. push to main and pull requests: integration, E2E, amd64 image
 #   3. nightly, manual and tags: arm64 images, Minecraft and the long tests
 #      in real time, and everything else regardless of paths
@@ -60,6 +60,22 @@ jobs:
         with:
           persist-credentials: false
       - run: scripts/check-spdx.sh
+
+  scripts:
+    name: Script tests
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: scripts/ci-scope-test.sh
+      - run: scripts/go-test-shard-test.sh
+      - run: scripts/deny-rules-test.sh
+      - run: scripts/format-hook-test.sh
 
   go-lint:
     name: Go lint
