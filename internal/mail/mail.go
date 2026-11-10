@@ -122,6 +122,9 @@ type Service struct {
 
 	mu      sync.Mutex
 	testers map[string]*window
+	// overflow is the one window that all new users share while testers
+	// is full; it has the limit of one user (D-077).
+	overflow window
 }
 
 type window struct {
@@ -354,8 +357,8 @@ func (s *Service) take(ctx context.Context, user string) bool {
 	w := s.testers[user]
 	if w == nil {
 		// A full table drops only windows whose minute ended; if it stays
-		// full, a new user counts as over the limit, and no count already
-		// held is lost (D-076).
+		// full, new users share the overflow window, and no count already
+		// held is lost (D-076, D-077).
 		if len(s.testers) >= maxTesters {
 			for k, old := range s.testers {
 				if now.Sub(old.start) >= time.Minute {
@@ -364,10 +367,11 @@ func (s *Service) take(ctx context.Context, user string) bool {
 			}
 		}
 		if len(s.testers) >= maxTesters {
-			return false
+			w = &s.overflow
+		} else {
+			w = &window{start: now}
+			s.testers[user] = w
 		}
-		w = &window{start: now}
-		s.testers[user] = w
 	}
 	if now.Sub(w.start) >= time.Minute {
 		*w = window{start: now}

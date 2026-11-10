@@ -9,9 +9,9 @@ import (
 )
 
 // TestOrderLimiterFullTableKeepsCountsD076: a full order limiter is never
-// cleared as a whole: a spent bucket keeps its count, a new container is
-// refused while no bucket is full again, and room comes back as buckets
-// refill (AGT-003, D-076).
+// cleared as a whole: a spent bucket keeps its count, new containers share
+// one overflow bucket until its limit applies, and room comes back as
+// buckets refill (AGT-003, D-076, D-077).
 func TestOrderLimiterFullTableKeepsCountsD076(t *testing.T) {
 	l := newOrderLimiter(10, 3)
 	now := time.Unix(1_000_000, 0)
@@ -27,8 +27,14 @@ func TestOrderLimiterFullTableKeepsCountsD076(t *testing.T) {
 		}
 	}
 	now = now.Add(time.Second)
+	// New containers share one overflow bucket with the limit of one.
+	for i := range 3 {
+		if !l.allow("new" + strconv.Itoa(i)) {
+			t.Errorf("new container %d not served by the overflow bucket", i)
+		}
+	}
 	if l.allow("new") {
-		t.Error("new container on a full table was let through")
+		t.Error("new container past the overflow limit was let through")
 	}
 	if l.allow("spent") {
 		t.Error("spent bucket lost its count on a full table")

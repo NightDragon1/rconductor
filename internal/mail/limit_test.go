@@ -10,9 +10,9 @@ import (
 )
 
 // TestTestMailFullTableKeepsCountsD076: a full table of test mail windows
-// is never cleared as a whole: windows that still count stay, a new user is
-// refused while it is full, and room comes back as windows end (NFR-017,
-// D-076).
+// is never cleared as a whole: windows that still count stay, new users
+// share one overflow window until its limit applies, and room comes back
+// as windows end (NFR-017, D-076, D-077).
 func TestTestMailFullTableKeepsCountsD076(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
@@ -29,11 +29,20 @@ func TestTestMailFullTableKeepsCountsD076(t *testing.T) {
 		}
 	}
 	now = now.Add(10 * time.Second)
+	// New users share one overflow window with the limit of one user.
+	for i := range DefaultTestPerMinute {
+		if !f.svc.take(ctx, "new"+strconv.Itoa(i)) {
+			t.Errorf("new user %d not served by the overflow window", i)
+		}
+	}
 	if f.svc.take(ctx, "new") {
-		t.Error("new user on a full table was let through")
+		t.Error("new user past the overflow limit was let through")
 	}
 	if f.svc.take(ctx, "spent") {
 		t.Error("spent window lost its count on a full table")
+	}
+	if !f.svc.take(ctx, "u0") {
+		t.Error("known user lost its own window on a full table")
 	}
 	now = now.Add(time.Minute)
 	if !f.svc.take(ctx, "new") {
