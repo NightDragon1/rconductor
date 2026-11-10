@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Checks the deny list in .claude/settings.json (NFR-013, C27-C30, C36,
-# C38). It only
+# C38, C43). It only
 # reads the JSON: required patterns must be present, no pattern may use the
 # legacy ":*" suffix, and a model of the wildcard matching must deny the
 # listed forms and leave the allowed commands alone. The model: "*" matches
@@ -95,6 +95,13 @@ for p in 'gh auth token*' 'gh ssh-key add*' 'gh repo deploy-key add*' 'gh extens
   'gh extensions install*' 'gh ext install*'; do
   has "Bash($p)" C38
 done
+for p in 'git commit *--no-verify*' 'git commit -n*' 'git commit * -n*' 'git * --no-verify*' \
+  'git -c *core.hooksPath*' 'git config set *core.hooksPath*' 'git config unset *core.hooksPath*' \
+  'git config --add *core.hooksPath*' 'git config * --add *core.hooksPath*' \
+  'git config --replace-all *core.hooksPath*' 'git config * --replace-all *core.hooksPath*' \
+  'git config --unset*core.hooksPath*' 'git config * --unset*core.hooksPath*'; do
+  has "Bash($p)" C43
+done
 # File tools: Edit rules cover Edit, Write, MultiEdit and NotebookEdit.
 for p in 'Edit(.git)' 'Edit(**/.git/**)' 'Edit(//**/.git)' 'Edit(//**/.git/**)' \
   'Edit(~/.gitconfig)' 'Edit(~/.config/git/**)' 'Edit(~/.cache/rconductor-claudeguard/**)'; do
@@ -170,6 +177,21 @@ denied 'gh ssh-key add key.pub' C38
 denied 'gh repo deploy-key add key.pub' C38
 denied 'gh extension install owner/gh-ext' C38
 denied 'gh ext install owner/gh-ext' C38
+denied 'git commit --no-verify -m x' C43
+denied 'git commit -n -m x' C43
+denied 'git commit -m x -n' C43
+denied 'git push --no-verify origin main' C43
+denied 'git merge --no-verify origin/main' C43
+denied 'git rebase --no-verify origin/main' C43
+denied 'git pull --no-verify' C43
+denied 'git -C /w commit --no-verify -m x' C43
+denied 'git -c core.hooksPath=/dev/null commit -m x' C43
+denied 'git config --add core.hooksPath /tmp/h' C43
+denied 'git config --global --replace-all core.hooksPath /tmp/h' C43
+denied 'git config --unset core.hooksPath' C43
+denied 'git config --global --unset-all core.hooksPath' C43
+denied 'git config set core.hooksPath /tmp/h' C43
+denied 'git config unset core.hooksPath' C43
 
 allowed 'git push'
 allowed 'git push -u origin chore/claude-deny-and-hook'
@@ -202,5 +224,16 @@ allowed 'gh repo sync'
 allowed 'gh auth status'
 allowed 'gh extension list'
 allowed 'gh alias list'
+allowed 'git push -n origin main'
+allowed 'git merge -n origin/main'
+allowed 'git commit --amend --no-edit'
+allowed 'git commit -m msg'
+allowed 'git config --get core.hooksPath'
+allowed 'git config --get-all core.hooksPath'
+allowed 'git config core.hooksPath'
+allowed 'git config --global core.hooksPath'
+allowed 'git config --show-origin core.hooksPath'
+allowed 'git config --list --show-origin'
+allowed 'git config get core.hooksPath'
 
 exit "$fail"

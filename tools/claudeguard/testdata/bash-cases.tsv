@@ -189,7 +189,6 @@ allow	ok	git config remote.origin.url
 allow	ok	git config get remote.origin.url
 allow	ok	git config --list
 allow	ok	git config -l --show-origin
-allow	ok	git config core.hooksPath .githooks
 allow	ok	git config --global user.email a@example.invalid
 allow	ok	git ls-files | wc -l
 allow	ok	git cat-file -p HEAD
@@ -280,3 +279,55 @@ allow	ok	git push origin HEAD:refs/heads/"$b"
 deny	FC	push(){ git push -q origin :refs/heads/$1; }; push a
 deny	FC	push(){ git push -q origin +HEAD:refs/heads/$1; }; push a
 deny	FC	push(){ git push -q origin "$1"; }; push a
+deny	C43	git commit --no-verify -m x
+deny	C43	git commit -n -m x
+deny	C43	git commit -an -m x
+deny	C43	git commit -nm x
+deny	C43	git commit -m x --no-ver
+deny	C43	git commit --no-v -m x
+deny	C43	git -C /w commit -qn -m x
+deny	C43	git commit -m "$msg" -n
+deny	C43	git commit "$opt" -m x
+deny	C43	git push --no-verify origin main
+deny	C43	git push origin main --no-ver
+deny	C43	git merge --no-verify origin/main
+deny	C43	git merge --no-veri origin/main
+deny	C43	git rebase --no-verify origin/main
+deny	C43	git pull --no-verify
+deny	C43	git am -n x.patch
+deny	C43	git am --no-verify x.patch
+deny	C43	git -c core.hooksPath=/dev/null commit -m x
+deny	C43	git -c Core.HooksPath=/tmp/h commit -m x
+deny	C43	git --config-env=core.hooksPath=H commit -m x
+deny	C43	GIT_CONFIG_PARAMETERS="'core.hooksPath=/tmp'" git commit -m x
+deny	C43	git config core.hooksPath /dev/null
+deny	C43	git config core.hooksPath .githooks
+deny	C43	git config --global core.hooksPath /tmp/h
+deny	C43	git config --local core.HooksPath /tmp/h
+deny	C43	git config --file .git/config core.hooksPath /tmp/h
+deny	C43	git config --add core.hooksPath /tmp/h
+deny	C43	git config --replace-all core.hooksPath /tmp/h
+deny	C43	git config --unset core.hooksPath
+deny	C43	git config set core.hooksPath /tmp/h
+deny	C43	git config unset core.hooksPath
+allow	ok	git push -n origin main
+allow	ok	git push --dry-run origin main
+allow	ok	git push --verify origin main
+allow	ok	git merge -n origin/main
+allow	ok	git merge --no-edit origin/main
+allow	ok	git rebase -n origin/main
+allow	ok	git pull -n
+allow	ok	git cherry-pick -n abc123
+allow	ok	git revert -n abc123
+allow	ok	git commit --no-edit --amend
+allow	ok	git commit -m "-n is a flag"
+allow	ok	git commit -m --no-verify
+allow	ok	git commit -am "$msg"
+allow	ok	git commit -F "$f"
+allow	ok	git config --get core.hooksPath
+allow	ok	git config --get-all core.hooksPath
+allow	ok	git config core.hooksPath
+allow	ok	git config --show-origin core.hooksPath
+allow	ok	git config --list --show-origin
+allow	ok	git config get core.hooksPath
+allow	ok	git -c core.editor=true commit --amend --no-edit

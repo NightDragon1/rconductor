@@ -24,7 +24,8 @@
 // A git or gh call is allowed only when its subcommand is on a known list;
 // a call the guard cannot read (parse error, a command name or argument
 // that is not literal where it decides, an unknown subcommand or option) is
-// denied. Edit, Write, MultiEdit and NotebookEdit are denied for paths in a
+// denied. --no-verify (and -n where it means --no-verify) and writes to
+// core.hooksPath are denied, so the repository hooks keep running. Edit, Write, MultiEdit and NotebookEdit are denied for paths in a
 // .git directory or a .git file, for the user's git configuration and for
 // the guard's own build cache.
 //

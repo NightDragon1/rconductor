@@ -13,6 +13,10 @@ var blockedConfigPrefixes = []string{"remote.", "include.", "includeif.", "alias
 
 func blockedConfigKey(k string) bool {
 	k = strings.ToLower(k)
+	// core.hooksPath decides which hooks run.
+	if k == "core.hookspath" {
+		return true
+	}
 	for _, p := range blockedConfigPrefixes {
 		if strings.HasPrefix(k, p) || k == strings.TrimSuffix(p, ".") {
 			return true
@@ -106,7 +110,11 @@ func (c *checker) git(args []arg, depth int) {
 	case name == "tag":
 		c.gitTag(rest)
 	case name == "rebase":
-		c.gitRebase(rest, depth)
+		if c.gitHooks(name, rest, rebaseHooks) {
+			c.gitRebase(rest, depth)
+		}
+	case name == "commit" || name == "am" || name == "merge" || name == "pull":
+		c.gitHooks(name, rest, hookOpts[name])
 	case name == "bisect":
 		if len(rest) > 1 && rest[0].is("run") {
 			c.call(rest[1:], nil, depth)
@@ -309,6 +317,10 @@ func (c *checker) gitPush(args []arg) {
 			c.deny("git push --mirror and --prune are not allowed")
 			return
 		}
+		if o.has("no-verify") {
+			c.deny("git push --no-verify skips the hooks and is not allowed")
+			return
+		}
 	}
 	for _, a := range operands {
 		if strings.HasPrefix(a.val, "+") {
@@ -421,6 +433,103 @@ func (c *checker) gitTag(args []arg) {
 			return
 		}
 	}
+}
+
+// hookSpec describes the options of a git command that takes --no-verify.
+type hookSpec struct {
+	shortN   bool     // -n means --no-verify
+	valShort string   // short options with a value
+	optShort string   // short options with an optional attached value
+	valLong  []string // long options with a required value
+}
+
+var hookOpts = map[string]hookSpec{
+	"commit": {
+		shortN: true, valShort: "FmcCtU", optShort: "Su",
+		valLong: []string{"file", "message", "reedit-message", "reuse-message", "fixup", "squash", "author",
+			"date", "template", "cleanup", "trailer", "pathspec-from-file", "unified"},
+	},
+	"am": {
+		shortN: true, valShort: "Cp", optShort: "S",
+		valLong: []string{"whitespace", "directory", "exclude", "include", "patch-format", "resolvemsg", "quoted-cr", "empty"},
+	},
+	"merge": {
+		valShort: "mFsX", optShort: "S",
+		valLong: []string{"message", "file", "strategy", "strategy-option", "cleanup", "into-name"},
+	},
+	"pull": {
+		valShort: "sXo", optShort: "Sr",
+		valLong: []string{"strategy", "strategy-option", "depth", "deepen", "shallow-since", "shallow-exclude",
+			"upload-pack", "server-option", "negotiation-tip", "refmap", "cleanup"},
+	},
+}
+
+var rebaseHooks = hookSpec{
+	valShort: "sXxC", optShort: "S",
+	valLong: []string{"onto", "strategy", "strategy-option", "exec", "whitespace", "empty"},
+}
+
+// gitHooks denies --no-verify in every form git accepts: exact, as an
+// abbreviation, and as -n where it means --no-verify (commit, am), also in
+// a bundle. A dynamic word is accepted as the value of an option or when
+// it starts with literal text that is not an option. It returns false
+// after a denial.
+func (c *checker) gitHooks(cmd string, args []arg, h hookSpec) bool {
+	deny := func() bool {
+		c.deny("git " + cmd + " --no-verify skips the hooks and is not allowed")
+		return false
+	}
+	valueNext := false
+	for _, a := range args {
+		if a.dyn {
+			if valueNext && !a.split {
+				valueNext = false
+				continue
+			}
+			if !a.opaque() {
+				c.deny("git " + cmd + " with an argument that is not literal cannot be checked")
+				return false
+			}
+			valueNext = false
+			continue
+		}
+		if valueNext {
+			valueNext = false
+			continue
+		}
+		v := a.val
+		switch {
+		case v == "--":
+			return true
+		case strings.HasPrefix(v, "--"):
+			name, _, hasVal := strings.Cut(v[2:], "=")
+			if len(name) >= 2 && abbreviates(name, "no-verify") {
+				return deny()
+			}
+			if !hasVal && name != "" {
+				for _, l := range h.valLong {
+					if abbreviates(name, l) {
+						valueNext = true
+					}
+				}
+			}
+		case strings.HasPrefix(v, "-") && v != "-":
+			for j := 1; j < len(v); j++ {
+				ch := v[j]
+				if ch == 'n' && h.shortN {
+					return deny()
+				}
+				if strings.IndexByte(h.valShort, ch) >= 0 {
+					valueNext = j == len(v)-1
+					break
+				}
+				if strings.IndexByte(h.optShort, ch) >= 0 {
+					break
+				}
+			}
+		}
+	}
+	return true
 }
 
 // gitRebase checks the commands of rebase --exec.
