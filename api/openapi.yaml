@@ -433,7 +433,7 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateServer
-      summary: Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only.
+      summary: Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076).
       tags: [servers]
       parameters:
         - $ref: "#/components/parameters/IfMatch"

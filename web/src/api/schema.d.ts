@@ -309,7 +309,7 @@ export interface paths {
         delete: operations["deleteServer"];
         options?: never;
         head?: never;
-        /** Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only. */
+        /** Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076). */
         patch: operations["updateServer"];
         trace?: never;
     };
