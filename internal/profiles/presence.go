@@ -23,10 +23,10 @@ func presentKeys(file *ast.File) map[string]bool {
 		}
 	}
 	for _, top := range entries(file.Docs[0].Body, anchors, 0) {
-		key := top.Key.String()
+		key := keyName(top.Key)
 		out[key] = true
 		for _, sub := range entries(top.Value, anchors, 0) {
-			out[key+"."+sub.Key.String()] = true
+			out[key+"."+keyName(sub.Key)] = true
 		}
 	}
 	return out
@@ -59,7 +59,7 @@ func entries(n ast.Node, anchors map[string]ast.Node, depth int) []*ast.MappingV
 func expand(vals []*ast.MappingValueNode, anchors map[string]ast.Node, depth int) []*ast.MappingValueNode {
 	var out []*ast.MappingValueNode
 	for _, mv := range vals {
-		if mv.Key != nil && mv.Key.String() == "<<" {
+		if mv.Key != nil && keyName(mv.Key) == "<<" {
 			out = append(out, entries(mv.Value, anchors, depth+1)...)
 			if seq, ok := mv.Value.(*ast.SequenceNode); ok {
 				for _, item := range seq.Values {
@@ -71,4 +71,24 @@ func expand(vals []*ast.MappingValueNode, anchors map[string]ast.Node, depth int
 		out = append(out, mv)
 	}
 	return out
+}
+
+// keyName is the name a mapping key decodes to: without quotes, tag or
+// anchor, also for an explicit "? key".
+func keyName(k ast.Node) string {
+	switch v := k.(type) {
+	case nil:
+		return ""
+	case *ast.StringNode:
+		return v.Value
+	case *ast.MappingKeyNode:
+		return keyName(v.Value)
+	case *ast.TagNode:
+		return keyName(v.Value)
+	case *ast.AnchorNode:
+		return keyName(v.Value)
+	case *ast.MergeKeyNode:
+		return "<<"
+	}
+	return k.String()
 }

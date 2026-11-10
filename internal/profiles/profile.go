@@ -446,15 +446,15 @@ func (p *Profile) check() []string {
 		}
 	}
 	if pl := p.Players; pl != nil {
-		if strings.TrimSpace(pl.Command) == "" {
-			bad("players.command is required with players")
+		if strings.TrimSpace(pl.Command) == "" || hasControl(pl.Command) || len(pl.Command) > maxPathLen {
+			bad("players.command is required with players, printable, at most %d characters", maxPathLen)
 		}
 		if _, err := pattern.Compile(pl.Pattern, 1); err != nil {
 			bad("players.pattern: %v", err)
 		}
 	}
-	if p.Stop != nil && strings.TrimSpace(p.Stop.Command) == "" {
-		bad("stop.command is required with stop")
+	if p.Stop != nil && (strings.TrimSpace(p.Stop.Command) == "" || hasControl(p.Stop.Command) || len(p.Stop.Command) > maxPathLen) {
+		bad("stop.command is required with stop, printable, at most %d characters", maxPathLen)
 	}
 	if p.Version != nil {
 		if _, err := pattern.Compile(p.Version.Pattern, 1); err != nil {

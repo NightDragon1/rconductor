@@ -715,3 +715,21 @@ func TestHistoryOutsideScopeLoggedC13(t *testing.T) {
 	}
 	logtest.Wait(t, w.logs, `"action":"history"`)
 }
+
+// TestUnreadableProfileRefusesC23 covers D-076: when the rules of the
+// server's profiles cannot be read, a command is refused and nothing is
+// sent.
+func TestUnreadableProfileRefusesC23(t *testing.T) {
+	w := newWorld(t)
+	w.exec(`UPDATE game_profiles SET rules = 'not json' WHERE id IN (SELECT profile_id FROM server_profiles WHERE server_id = ?)`, w.server)
+	before := w.game.Commands()
+	if _, err := w.send("m", "whitelist add steve"); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("moderator: %v, want ErrUnavailable", err)
+	}
+	if _, err := w.send("admin", "say hi"); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("admin: %v, want ErrUnavailable", err)
+	}
+	if w.game.Commands() != before {
+		t.Errorf("%d commands reached the game server", w.game.Commands()-before)
+	}
+}

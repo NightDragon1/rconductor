@@ -77,7 +77,7 @@ type candidate struct {
 
 // rulesFormat is part of the hash: a new format of the stored rules
 // imports every profile once again (D-074: the fields a profile sets).
-const rulesFormat = "rules-4\n"
+const rulesFormat = "rules-5\n"
 
 func hashOf(b []byte) string {
 	sum := sha256.Sum256(append([]byte(rulesFormat), b...))
