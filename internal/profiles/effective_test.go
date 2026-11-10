@@ -284,6 +284,113 @@ func TestKeyFormsCountAsSetC21(t *testing.T) {
 	}
 }
 
+// TestBlockScalarKeyCountsAsSetC42 covers D-074: a key written as a block
+// scalar, folded or literal, also with chomping and indentation
+// indicators, counts as set exactly when it decodes to the field.
+func TestBlockScalarKeyCountsAsSetC42(t *testing.T) {
+	head := "schema: 1\nid: k\nname: K\nprotocol: { type: source-rcon, default_port: 1 }\n"
+	for name, c := range map[string]struct{ body, field string }{
+		"folded max_length":           {"syntax:\n  ? >-\n    max_length\n  : 50\n", FieldMaxLength},
+		"literal max_length":          {"syntax:\n  ? |-\n    max_length\n  : 50\n", FieldMaxLength},
+		"folded stop":                 {"? >-\n  stop\n: {command: stop}\n", FieldStop},
+		"folded players":              {"? >-\n  players\n: {command: list, pattern: \"(.*)\"}\n", FieldPlayers},
+		"literal with indent":         {"syntax:\n  ? |2-\n    max_length\n  : 50\n", FieldMaxLength},
+		"folded indent then chomp":    {"syntax:\n  ? >2-\n    max_length\n  : 50\n", FieldMaxLength},
+		"literal chomp then indent":   {"syntax:\n  ? |-2\n    max_length\n  : 50\n", FieldMaxLength},
+		"folded over two lines":       {"? >-\n  ver\n  sion\n: {command: version, pattern: \"(.*)\"}\n", ""},
+		"literal parent":              {"? |-\n  syntax\n: {max_length: 50}\n", FieldMaxLength},
+		"tagged literal max_length":   {"syntax:\n  ? !!str |-\n    max_length\n  : 50\n", FieldMaxLength},
+		"anchored literal max_length": {"syntax:\n  ? &k |-\n    max_length\n  : 50\n", FieldMaxLength},
+	} {
+		p, err := Parse([]byte(head + c.body))
+		if c.field == "" {
+			// "ver sion" is no field: refused as unknown, never counted.
+			if err == nil {
+				t.Errorf("%s: accepted, set %v", name, p.Set)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if !p.Sets(c.field) {
+			t.Errorf("%s: value decoded (max %d, stop %v, players %v) but %s not counted as set: %v",
+				name, p.Syntax.MaxLength, p.Stop, p.Players, c.field, p.Set)
+		}
+	}
+	// Keeping the trailing line break, or more indentation, is another
+	// key: refused as unknown.
+	for name, body := range map[string]string{
+		"literal clip": "syntax:\n  ? |\n    max_length\n  : 50\n",
+		"folded keep":  "syntax:\n  ? >+\n    max_length\n  : 50\n",
+		"extra indent": "syntax:\n  ? |2-\n      max_length\n  : 50\n",
+	} {
+		if p, err := Parse([]byte(head + body)); err == nil {
+			t.Errorf("%s: accepted, max %d, set %v", name, p.Syntax.MaxLength, p.Set)
+		}
+	}
+	// In a list, the specific profile's own length wins.
+	top, err := Parse([]byte(head + "kind: specific\nsyntax:\n  ? >-\n    max_length\n  : 50\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lower, err := Parse([]byte("schema: 1\nid: l\nname: L\nprotocol: { type: source-rcon, default_port: 1 }\nsyntax:\n  max_length: 5000\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if eff := Effective([]*Profile{top, lower}); eff.Syntax.MaxLength != 50 {
+		t.Errorf("effective length %d, want the top profile's 50", eff.Syntax.MaxLength)
+	}
+}
+
+// TestAliasKeyCountsAsSet covers D-074: a key written as an alias of an
+// anchored scalar decodes to that scalar and counts as set.
+func TestAliasKeyCountsAsSet(t *testing.T) {
+	head := "schema: 1\nid: k\nprotocol: { type: source-rcon, default_port: 1 }\n"
+	for name, c := range map[string]struct{ body, field string }{
+		"implicit": {"name: &a max_length\nsyntax:\n  *a : 50\n", FieldMaxLength},
+		"explicit": {"name: &a max_length\nsyntax:\n  ? *a\n  : 50\n", FieldMaxLength},
+		"top":      {"name: &a stop\n? *a\n: {command: halt}\n", FieldStop},
+		// The decoder reads every anchor before the fields: the last
+		// definition of a name counts.
+		"redefined": {"name: &a max_length\nsources: [&a stop]\n? *a\n: {command: halt}\n", FieldStop},
+	} {
+		p, err := Parse([]byte(head + c.body))
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if !p.Sets(c.field) {
+			t.Errorf("%s: decoded (max %d, stop %v) but %s not counted as set: %v", name, p.Syntax.MaxLength, p.Stop, c.field, p.Set)
+		}
+	}
+}
+
+// TestNonStringKeyRefused covers D-074: a key that does not decode to a
+// string is refused with its position; the decoder would drop its whole
+// mapping while the other keys counted as set.
+func TestNonStringKeyRefused(t *testing.T) {
+	head := "schema: 1\nid: k\nname: K\nprotocol: { type: source-rcon, default_port: 1 }\n"
+	for name, body := range map[string]string{
+		"integer":      "syntax:\n  max_length: 50\n  1: x\n",
+		"bool":         "syntax:\n  max_length: 50\n  true: x\n",
+		"float":        "syntax:\n  max_length: 50\n  1.5: x\n",
+		"binary":       "syntax:\n  !!binary bWF4X2xlbmd0aA==: 50\n",
+		"top":          "2: x\n",
+		"in a command": "catalog:\n  - path: list\n    description: List\n    7: x\n",
+		"alias of int": "sources: [&n 3]\nsyntax:\n  max_length: 50\n  *n : x\n",
+	} {
+		_, err := Parse([]byte(head + body))
+		if err == nil || !strings.Contains(err.Error(), "a key must be a string") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := Parse([]byte(head + "syntax:\n  !!str 1: x\n")); err == nil || strings.Contains(err.Error(), "a key must be a string") {
+		t.Errorf("tagged string key: %v", err)
+	}
+}
+
 // TestLegacyRulesDoNotWinWithDefaultsC22 covers D-074: rules stored before
 // the fields were recorded win a field only with a value of their own,
 // never with a default.
