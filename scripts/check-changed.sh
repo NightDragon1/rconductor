@@ -23,6 +23,14 @@ if [[ -n "$go_dirs" ]]; then
   # vet their files directly instead.
   pkg_dirs=""
   for d in $go_dirs; do
+    # Packages of a nested module (tools/) are checked inside that module.
+    mod=$(cd "$d" && go env GOMOD)
+    if [[ "$mod" != "$PWD/go.mod" ]]; then
+      moddir=$(dirname "$mod")
+      rel=./$(realpath --relative-to="$moddir" "$d")
+      (cd "$moddir" && go tool golangci-lint run "$rel" && CGO_ENABLED=1 go test -race "$rel")
+      continue
+    fi
     if [[ -n $(go list -e -f '{{if or .GoFiles .TestGoFiles .XTestGoFiles}}pkg{{end}}' "$d") ]]; then
       pkg_dirs+="$d "
     else
