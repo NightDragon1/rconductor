@@ -410,7 +410,7 @@ func (s *Service) check(ctx context.Context, q *sqlitedb.Queries, f fields, in I
 				f.port = top.Rules.Protocol.DefaultPort
 			}
 			f.protocol = top.Protocol
-		case top.Protocol != f.protocol:
+		case top.Protocol != f.protocol || !sameDialect(ctx, q, f.profileIDs, list):
 			// The profile list never changes the protocol or the port of
 			// a server; a change of protocol comes only with new
 			// credentials in the same request, and drops the pin (D-076).
@@ -647,6 +647,27 @@ func checkProfiles(ctx context.Context, q *sqlitedb.Queries, old, given []string
 		}
 	}
 	return sortIn(old, loaded), nil
+}
+
+// sameDialect reports whether the new list keeps the http-api dialect of
+// the server's current top profile (D-076); without a current list it
+// does.
+func sameDialect(ctx context.Context, q *sqlitedb.Queries, old []string, list []profiles.Loaded) bool {
+	if len(old) == 0 {
+		return true
+	}
+	cur, err := profiles.Load(ctx, q, old[:1])
+	if err != nil || len(cur) == 0 {
+		return false
+	}
+	return dialectOf(cur[0]) == dialectOf(list[0])
+}
+
+func dialectOf(l profiles.Loaded) string {
+	if l.Rules.HTTPAPI == nil {
+		return ""
+	}
+	return l.Rules.HTTPAPI.Dialect
 }
 
 // sortIn keeps the given order of profiles that were on the list and
