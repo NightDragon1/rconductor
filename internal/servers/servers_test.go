@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"slices"
@@ -557,5 +558,35 @@ func TestB4PasswordFromTheReadOfTheAddress(t *testing.T) {
 	}
 	if pw := f.svc.storedPassword(sv.ID, []byte("broken")); pw != "" {
 		t.Errorf("broken secret = %q", pw)
+	}
+}
+
+// TestConnectionTestLimiterFullTableD077 covers D-077: a full table of the
+// connection test limit keeps the counts of known users, and new users
+// share an overflow window until its limit applies; windows of a past
+// minute make room.
+func TestConnectionTestLimiterFullTableD077(t *testing.T) {
+	var l testLimiter
+	now := time.Now()
+	for i := range maxTestUsers {
+		if !l.take(fmt.Sprintf("u%d", i), 2, now) {
+			t.Fatalf("user %d refused", i)
+		}
+	}
+	if !l.take("u0", 2, now) || l.take("u0", 2, now) {
+		t.Error("a known user lost or exceeded its count")
+	}
+	if !l.take("new1", 2, now) || !l.take("new2", 2, now) {
+		t.Error("new users not served by the overflow window")
+	}
+	if l.take("new3", 2, now) {
+		t.Error("overflow window without a limit")
+	}
+	later := now.Add(time.Minute)
+	if !l.take("new4", 2, later) {
+		t.Error("a past minute did not make room")
+	}
+	if len(l.users) > maxTestUsers {
+		t.Errorf("table grew to %d", len(l.users))
 	}
 }

@@ -71,21 +71,39 @@ type testWindow struct {
 }
 
 // testLimiter limits connection tests per user and minute (Design 5.6).
+// A full table is never cleared: windows of a past minute go, and while it
+// stays full, new users share one overflow window with the same limit
+// (D-077); known users keep their counts.
 type testLimiter struct {
-	mu    sync.Mutex
-	users map[string]*testWindow
+	mu       sync.Mutex
+	users    map[string]*testWindow
+	overflow testWindow
 }
 
 func (l *testLimiter) take(user string, limit int, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.users == nil || len(l.users) >= maxTestUsers {
+	if l.users == nil {
 		l.users = map[string]*testWindow{}
 	}
 	w := l.users[user]
-	if w == nil || now.Sub(w.start) >= time.Minute {
+	if w == nil && len(l.users) >= maxTestUsers {
+		for k, old := range l.users {
+			if now.Sub(old.start) >= time.Minute {
+				delete(l.users, k)
+			}
+		}
+	}
+	switch {
+	case w != nil:
+	case len(l.users) < maxTestUsers:
 		w = &testWindow{start: now}
 		l.users[user] = w
+	default:
+		w = &l.overflow
+	}
+	if now.Sub(w.start) >= time.Minute {
+		w.start, w.count = now, 0
 	}
 	if w.count >= limit {
 		return false
