@@ -5,7 +5,6 @@ package servers
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -108,7 +107,7 @@ func (s *Service) Action(ctx context.Context, req users.Request, id, action stri
 		s.actionAudit(ctx, req, id, action, "", audit.ResultError, "agent_unavailable", nil)
 		return ActionResult{}, ErrAgentUnavailable
 	}
-	return s.rconRestart(ctx, req, id, r.ProfileID)
+	return s.rconRestart(ctx, req, id)
 }
 
 // ReasonAgentUnsupported is the reason of a refusal for a missing
@@ -174,15 +173,11 @@ func (s *Service) agentAction(ctx context.Context, req users.Request, id, agentI
 
 // rconRestart sends the profile's stop command; the container comes back
 // by its restart policy unless-stopped (AGT-009).
-func (s *Service) rconRestart(ctx context.Context, req users.Request, id string, profileID sql.NullString) (ActionResult, error) {
+func (s *Service) rconRestart(ctx context.Context, req users.Request, id string) (ActionResult, error) {
 	cmd := ""
-	if profileID.Valid {
-		if p, err := s.st.Queries.GetGameProfile(ctx, profileID.String); err == nil {
-			var rules profiles.Profile
-			if json.Unmarshal([]byte(p.Rules), &rules) == nil && rules.Stop != nil {
-				cmd = rules.Stop.Command
-			}
-		}
+	// The stop command of the topmost profile that has one (D-074).
+	if eff, _, err := profiles.ForServer(ctx, s.st.Queries, id); err == nil && eff != nil && eff.Stop != nil {
+		cmd = eff.Stop.Command
 	}
 	if cmd == "" || s.rcon == nil {
 		s.actionAudit(ctx, req, id, agentproto.ActionRestart, "rcon", audit.ResultError, "agent_unavailable", nil)

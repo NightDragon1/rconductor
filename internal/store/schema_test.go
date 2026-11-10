@@ -9,6 +9,8 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/pressly/goose/v3"
+
 	"github.com/NightDragon1/rconductor/migrations"
 )
 
@@ -104,16 +106,25 @@ func TestServerProfileSchema(t *testing.T) {
 	if exec(`INSERT INTO catalog_commands (id, profile_id, position, path) VALUES ('c2', 'p1', 1, 'list')`) == nil {
 		t.Error("duplicate catalog path accepted")
 	}
-	if err := exec(`INSERT INTO servers (id, name, profile_id, host, port, secret, created_at, updated_at)
-		VALUES ('s1', 'mc', 'p1', 'mc.lan', 25575, x'00', 't', 't')`); err != nil {
+	if err := exec(`INSERT INTO servers (id, name, host, port, secret, created_at, updated_at)
+		VALUES ('s1', 'mc', 'mc.lan', 25575, x'00', 't', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec(`INSERT INTO server_profiles (server_id, profile_id, position) VALUES ('s1', 'p1', 0)`); err != nil {
 		t.Fatal(err)
 	}
 	var protocol string
 	if err := s.DB.QueryRowContext(ctx, `SELECT protocol FROM servers WHERE id = 's1'`).Scan(&protocol); err != nil || protocol != "source-rcon" {
 		t.Errorf("default protocol = %q, %v", protocol, err)
 	}
-	if exec(`INSERT INTO servers (id, name, profile_id, created_at, updated_at) VALUES ('s2', 'x', 'nope', 't', 't')`) == nil {
+	if err := exec(`INSERT INTO servers (id, name, created_at, updated_at) VALUES ('s2', 'x', 't', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	if exec(`INSERT INTO server_profiles (server_id, profile_id, position) VALUES ('s2', 'nope', 0)`) == nil {
 		t.Error("unknown profile accepted")
+	}
+	if exec(`INSERT INTO server_profiles (server_id, profile_id, position) VALUES ('s1', 'p1', 1)`) == nil {
+		t.Error("a profile twice on a server accepted")
 	}
 	if err := exec(`DELETE FROM game_profiles WHERE id = 'p1'`); err == nil {
 		t.Error("profile in use deleted")
@@ -189,5 +200,66 @@ func TestServersAgentFK(t *testing.T) {
 	}
 	if count(`SELECT COUNT(*) FROM server_group_members`) != 1 {
 		t.Error("deleting the agent touched the memberships")
+	}
+}
+
+// TestServerProfilesMigration covers D-074: 00017 takes the one profile of
+// a server of 1.0 as its only profile at position 0, keeps a server
+// without profile without one, drops servers.profile_id, and goes back.
+func TestServerProfilesMigration(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "data"))
+	ctx := context.Background()
+	p, err := goose.NewProvider(goose.DialectSQLite3, s.DB, migrations.SQLite(), goose.WithGoMigrations(migrations.SQLiteGo()...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.UpTo(ctx, 16); err != nil {
+		t.Fatal(err)
+	}
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := s.DB.ExecContext(ctx, q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`INSERT INTO game_profiles (id, slug, name, protocol, default_port, rules, source_file, content_hash, imported_at)
+		VALUES ('p1', 'mc', 'mc', 'source-rcon', 25575, '{}', 'f', 'h', 't')`)
+	exec(`INSERT INTO servers (id, name, profile_id, created_at, updated_at) VALUES ('with', 'with', 'p1', 't', 't')`)
+	exec(`INSERT INTO servers (id, name, created_at, updated_at) VALUES ('without', 'without', 't', 't')`)
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	count := func(q string) int {
+		t.Helper()
+		var n int
+		if err := s.DB.QueryRowContext(ctx, q).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if count(`SELECT COUNT(*) FROM server_profiles WHERE server_id = 'with' AND profile_id = 'p1' AND position = 0`) != 1 {
+		t.Error("the profile of a 1.0 server is not its only profile at position 0")
+	}
+	if count(`SELECT COUNT(*) FROM server_profiles WHERE server_id = 'without'`) != 0 {
+		t.Error("a server without profile got one")
+	}
+	if count(`SELECT COUNT(*) FROM pragma_table_info('servers') WHERE name = 'profile_id'`) != 0 {
+		t.Error("servers.profile_id is still there")
+	}
+	if count(`SELECT COUNT(*) FROM pragma_foreign_key_check`) != 0 {
+		t.Error("foreign key violations after the migration")
+	}
+	// Deleting a server takes its profile list with it.
+	exec(`DELETE FROM servers WHERE id = 'with'`)
+	if count(`SELECT COUNT(*) FROM server_profiles`) != 0 {
+		t.Error("the profile list outlived its server")
+	}
+	exec(`INSERT INTO servers (id, name, created_at, updated_at) VALUES ('again', 'again', 't', 't')`)
+	exec(`INSERT INTO server_profiles (server_id, profile_id, position) VALUES ('again', 'p1', 0)`)
+	if _, err := p.DownTo(ctx, 16); err != nil {
+		t.Fatal(err)
+	}
+	if count(`SELECT COUNT(*) FROM servers WHERE id = 'again' AND profile_id = 'p1'`) != 1 {
+		t.Error("down did not bring the top profile back to servers.profile_id")
 	}
 }

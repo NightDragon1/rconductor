@@ -137,7 +137,7 @@ func newWorld(t *testing.T) *world {
 	host, port, _ := net.SplitHostPort(game.Addr)
 	p, _ := strconv.Atoi(port)
 	name, pw := "mc", logging.Secret("rconpw")
-	s, err := srvSvc.Create(ctx, w.as("admin"), servers.Input{Name: &name, ProfileID: &profile, Host: &host, Port: &p, Password: &pw})
+	s, err := srvSvc.Create(ctx, w.as("admin"), servers.Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &p, Password: &pw})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -667,5 +667,40 @@ func TestPruneDropsFullBuckets(t *testing.T) {
 	}
 	if ok, _ := l.take("busy", "", lim, now); ok {
 		t.Error("a used-up bucket got a new start")
+	}
+}
+
+// TestWrappersOfAllProfiles covers SRV-008 and D-074 in the pipeline: with
+// GTNH (no wrappers of its own) above Minecraft, Minecraft's wrapper
+// execute stays refused for moderators; no profile lifts a wrapper. The
+// catalog is the union of both profiles.
+func TestWrappersOfAllProfiles(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	var mc, gtnh string
+	_ = w.st.DB.QueryRowContext(ctx, `SELECT id FROM game_profiles WHERE slug = 'minecraft-java'`).Scan(&mc)
+	_ = w.st.DB.QueryRowContext(ctx, `SELECT id FROM game_profiles WHERE slug = 'minecraft-gtnh'`).Scan(&gtnh)
+	var v int64
+	_ = w.st.DB.QueryRowContext(ctx, `SELECT version FROM servers WHERE id = ?`, w.server).Scan(&v)
+	if _, err := w.srv.Update(ctx, w.as("admin"), w.server, servers.Input{ProfileIDs: &[]string{gtnh, mc}, Version: &v}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.send("m", "execute as @a run say hi"); reason(err) != ReasonWrapperBlocked {
+		t.Errorf("execute with GTNH on top: %v, want wrapper_blocked", err)
+	}
+	cat, err := w.svc.catalog(ctx, w.server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := map[string]bool{}
+	for _, c := range cat {
+		if paths[c.Path] {
+			t.Errorf("path %q twice in the catalog", c.Path)
+		}
+		paths[c.Path] = true
+	}
+	// backup list is only in GTNH, defaultgamemode only in Minecraft.
+	if !paths["backup list"] || !paths["defaultgamemode"] || !paths["gamerule"] {
+		t.Errorf("catalog is not the union: %v %v %v", paths["backup list"], paths["defaultgamemode"], paths["gamerule"])
 	}
 }
