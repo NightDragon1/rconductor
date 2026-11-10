@@ -9,6 +9,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -262,6 +263,35 @@ func TestParallelCode(t *testing.T) {
 	wg.Wait()
 	if ok != 1 || f.count(t, `SELECT count(*) FROM sessions`) != before+1 {
 		t.Errorf("sessions from one step: %d", ok)
+	}
+}
+
+// TestParallelCodeOneLoginC6 covers AUTH-008: the same right code sent
+// ten times at once gives exactly one session, also when the call that
+// used the code is slow afterwards.
+func TestParallelCodeOneLoginC6(t *testing.T) {
+	f := newSFFixture(t)
+	f.svc.codeTaken = func() { time.Sleep(50 * time.Millisecond) }
+	f.user(t, storetest.User{Pseudonym: "kiwi"})
+	key := f.enable(t, "kiwi")
+	_, pending, _ := f.login(t, "kiwi", client)
+	before := f.count(t, `SELECT count(*) FROM sessions`)
+	c := f.code(key)
+	var wg sync.WaitGroup
+	var ok atomic.Int64
+	for range 10 {
+		wg.Go(func() {
+			if _, _, err := f.svc.LoginCode(context.Background(), pending, c, client); err == nil {
+				ok.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	if ok.Load() != 1 || f.count(t, `SELECT count(*) FROM sessions`) != before+1 {
+		t.Errorf("sessions from one step: %d", ok.Load())
+	}
+	if f.count(t, `SELECT count(*) FROM login_pending`) != 0 {
+		t.Error("the open login outlived its use")
 	}
 }
 

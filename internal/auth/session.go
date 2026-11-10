@@ -102,6 +102,9 @@ type Service struct {
 
 	// sf is the second factor (AUTH-008); nil without it.
 	sf *secondFactorState
+	// codeTaken runs after a code took the open login; tests only, to
+	// widen the window between the two (nil in the panel).
+	codeTaken func()
 }
 
 // OnSessionsEnded registers f to learn about every ended session, so that
