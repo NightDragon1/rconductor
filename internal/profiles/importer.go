@@ -54,6 +54,9 @@ type Importer struct {
 	noNotify bool
 	// interval overrides the poll setting, for tests.
 	interval time.Duration
+	// beforeWrite runs after a changed profile was read and before its
+	// write transaction begins, for tests of writes in between.
+	beforeWrite func()
 }
 
 // NewImporter returns an importer for the shipped profiles and the custom
@@ -210,17 +213,20 @@ func boolInt(b bool) int64 {
 	return 0
 }
 
-// keepsProtocol refuses a new version of a profile that servers use when
-// it changes the protocol or the http-api dialect: the profile list of a
-// server never changes its protocol (D-076). The last valid state stays.
-func (im *Importer) keepsProtocol(ctx context.Context, id string, c candidate) (bool, error) {
-	old, err := im.st.Queries.GetGameProfile(ctx, id)
+// keepsProtocol reports whether a new version of a profile that servers
+// use keeps the protocol and the http-api dialect: the profile list of a
+// server never changes its protocol (D-076). It reads through q, inside the
+// write transaction of the import, so a profile list change commits either
+// before the check or after the new version. On refusal it returns the
+// problem; the last valid state stays.
+func keepsProtocol(ctx context.Context, q *sqlitedb.Queries, id string, c candidate) (string, error) {
+	old, err := q.GetGameProfile(ctx, id)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	var rules Profile
 	if err := json.Unmarshal([]byte(old.Rules), &rules); err != nil {
-		return false, err
+		return "", err
 	}
 	dialect := func(p *Profile) string {
 		if p.HTTPAPI == nil {
@@ -229,15 +235,13 @@ func (im *Importer) keepsProtocol(ctx context.Context, id string, c candidate) (
 		return p.HTTPAPI.Dialect
 	}
 	if old.Protocol == c.p.Protocol.Type && dialect(&rules) == dialect(c.p) {
-		return true, nil
+		return "", nil
 	}
-	n, err := im.st.Queries.CountProfileServers(ctx, id)
+	n, err := q.CountProfileServers(ctx, id)
 	if err != nil || n == 0 {
-		return err == nil, err
+		return "", err
 	}
-	im.reject(ctx, filepath.Base(c.source), c.p.ID, []string{fmt.Sprintf(
-		"protocol or http_api.dialect changed, but %d server(s) use the profile; the last valid state stays", n)})
-	return false, nil
+	return fmt.Sprintf("protocol or http_api.dialect changed, but %d server(s) use the profile; the last valid state stays", n), nil
 }
 
 // store writes one profile and its catalog if its content or override
@@ -251,15 +255,15 @@ func (im *Importer) store(ctx context.Context, c candidate) error {
 	if exists && cur.ContentHash == c.hash && (cur.Overridden == 1) == c.overridden {
 		return nil
 	}
-	if exists {
-		if keep, err := im.keepsProtocol(ctx, cur.ID, c); err != nil || !keep {
-			return err
-		}
-	}
 	rules, err := json.Marshal(c.p)
 	if err != nil {
 		return err
 	}
+	if im.beforeWrite != nil {
+		im.beforeWrite()
+	}
+	// An immediate transaction (store pragmas): it holds the write lock
+	// from the protocol check to the commit.
 	tx, err := im.st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -269,6 +273,17 @@ func (im *Importer) store(ctx context.Context, c candidate) error {
 	now := store.Now()
 	id := cur.ID
 	if exists {
+		problem, cerr := keepsProtocol(ctx, q, id, c)
+		if cerr != nil {
+			return cerr
+		}
+		if problem != "" {
+			// The rejection writes on its own connection: release the
+			// write lock first.
+			_ = tx.Rollback()
+			im.reject(ctx, filepath.Base(c.source), c.p.ID, []string{problem})
+			return nil
+		}
 		err = q.UpdateGameProfile(ctx, sqlitedb.UpdateGameProfileParams{
 			Name: c.p.Name, Protocol: c.p.Protocol.Type, DefaultPort: int64(c.p.Protocol.DefaultPort), Rules: string(rules),
 			SourceFile: c.source, ContentHash: c.hash, Overridden: boolInt(c.overridden), ImportedAt: now, ID: id,
