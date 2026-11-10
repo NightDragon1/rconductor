@@ -15,9 +15,12 @@ protocol:
 ports:
   game:
     - { port: 25565, proto: tcp, name: game }
-# No case_sensitive, strip_prefix or max_length: the defaults hold, and on
-# a server with a Minecraft profile below they come from it (D-074).
 syntax:
+  # Set here although they equal the defaults: a specific profile sets every
+  # field that may differ from the generic one below it (D-074).
+  case_sensitive: false
+  strip_prefix: "/"
+  max_length: 1000
   # 1.7.10 has no /execute.
   wrappers: []
   player_pattern: "^[A-Za-z0-9_]{1,16}$"
