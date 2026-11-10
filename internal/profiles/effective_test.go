@@ -3,6 +3,7 @@
 package profiles
 
 import (
+	"encoding/json"
 	"os"
 	"slices"
 	"testing"
@@ -22,20 +23,20 @@ func shipped(t *testing.T, file string) *Profile {
 }
 
 // TestEffectiveGTNHOverMinecraft covers D-074 with the shipped profiles:
-// GTNH (specific, without its own prefix rule) above Minecraft (generic):
-// the prefix rule and the length come from Minecraft, the player pattern
-// GTNH sets wins, the wrappers of Minecraft hold although GTNH lists none.
+// GTNH (specific) sets its syntax values itself, so above Minecraft
+// (generic) they are GTNH's; the wrappers of Minecraft hold although GTNH
+// lists none.
 func TestEffectiveGTNHOverMinecraft(t *testing.T) {
 	gtnh, mc := shipped(t, "minecraft-gtnh.yaml"), shipped(t, "minecraft-java.yaml")
-	if gtnh.Sets(FieldStripPrefix) || !mc.Sets(FieldStripPrefix) {
-		t.Fatalf("test data: gtnh sets prefix %v, minecraft %v", gtnh.Sets(FieldStripPrefix), mc.Sets(FieldStripPrefix))
+	for _, f := range []string{FieldCaseSensitive, FieldStripPrefix, FieldMaxLength, FieldPlayerPattern} {
+		if !gtnh.Sets(f) {
+			t.Errorf("GTNH does not set %s itself", f)
+		}
 	}
 	eff := Effective([]*Profile{gtnh, mc})
-	if *eff.Syntax.StripPrefix != *mc.Syntax.StripPrefix || eff.Syntax.MaxLength != mc.Syntax.MaxLength {
-		t.Errorf("prefix %q length %d, want Minecraft's", *eff.Syntax.StripPrefix, eff.Syntax.MaxLength)
-	}
-	if eff.Syntax.PlayerPattern != gtnh.Syntax.PlayerPattern {
-		t.Errorf("player pattern %q, want GTNH's", eff.Syntax.PlayerPattern)
+	if *eff.Syntax.StripPrefix != *gtnh.Syntax.StripPrefix || eff.Syntax.MaxLength != gtnh.Syntax.MaxLength ||
+		*eff.Syntax.CaseSensitive != *gtnh.Syntax.CaseSensitive || eff.Syntax.PlayerPattern != gtnh.Syntax.PlayerPattern {
+		t.Errorf("syntax %+v, want GTNH's", eff.Syntax)
 	}
 	for _, w := range mc.Syntax.Wrappers {
 		if !slices.Contains(eff.Syntax.Wrappers, w) {
@@ -44,6 +45,41 @@ func TestEffectiveGTNHOverMinecraft(t *testing.T) {
 	}
 	if eff.ID != gtnh.ID || eff.Version == nil || eff.Version.Pattern != gtnh.Version.Pattern {
 		t.Errorf("top profile %q, version %+v", eff.ID, eff.Version)
+	}
+}
+
+// TestEffectiveSpecificWithoutPrefix covers D-074: a specific profile
+// without its own prefix rule above Minecraft takes Minecraft's.
+func TestEffectiveSpecificWithoutPrefix(t *testing.T) {
+	mc := shipped(t, "minecraft-java.yaml")
+	pack, err := Parse([]byte("schema: 1\nid: pack\nname: Pack\nkind: specific\nprotocol: { type: source-rcon, default_port: 25575 }\nsyntax:\n  strip_prefix: \"\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bare, err := Parse([]byte("schema: 1\nid: bare\nname: Bare\nkind: specific\nprotocol: { type: source-rcon, default_port: 25575 }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := *Effective([]*Profile{bare, pack}).Syntax.StripPrefix; got != "" {
+		t.Errorf("prefix %q, want the lower profile's empty one", got)
+	}
+	// The same after the rules went through the database as JSON.
+	var stored Profile
+	b, _ := json.Marshal(bare)
+	if err := json.Unmarshal(b, &stored); err != nil || stored.Set == nil {
+		t.Fatalf("stored set = %v %v, want an empty list", stored.Set, err)
+	}
+	if got := *Effective([]*Profile{&stored, pack}).Syntax.StripPrefix; got != "" {
+		t.Errorf("stored: prefix %q, want the lower profile's empty one", got)
+	}
+	// Rules stored before the fields were recorded count as setting all.
+	legacy := *pack
+	legacy.Set = nil
+	if got := *Effective([]*Profile{&legacy, mc}).Syntax.StripPrefix; got != "" {
+		t.Errorf("legacy: prefix %q, want its own", got)
+	}
+	if got := Effective([]*Profile{bare, mc}); *got.Syntax.StripPrefix != *mc.Syntax.StripPrefix || got.Syntax.MaxLength != mc.Syntax.MaxLength {
+		t.Errorf("prefix %q length %d, want Minecraft's", *got.Syntax.StripPrefix, got.Syntax.MaxLength)
 	}
 }
 

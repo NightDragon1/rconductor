@@ -94,7 +94,9 @@ type Profile struct {
 	// Set lists the fields the file sets itself, before the defaults are
 	// filled in (D-074): with several profiles on a server the topmost
 	// profile that sets a field wins.
-	Set []string `yaml:"-" json:"set,omitempty"`
+	// Stored always, also empty: a missing list marks rules stored before
+	// the fields were recorded.
+	Set []string `yaml:"-" json:"set"`
 }
 
 // Fields a profile can set; Effective merges them one by one (D-074).
@@ -114,7 +116,7 @@ const (
 
 // setFields lists the fields the parsed file sets, before defaults().
 func (p *Profile) setFields() []string {
-	var out []string
+	out := []string{}
 	add := func(ok bool, f string) {
 		if ok {
 			out = append(out, f)

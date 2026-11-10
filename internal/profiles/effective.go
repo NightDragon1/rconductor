@@ -74,7 +74,7 @@ func Effective(list []*Profile) *Profile {
 	}
 	out.Status = top.Status
 	out.defaults()
-	out.Set = nil
+	out.Set = []string{}
 	return out
 }
 
