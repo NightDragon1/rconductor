@@ -1,0 +1,333 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# want<TAB>label<TAB>command, read by guard_test.go. Labels: case IDs, FC (fail closed), ok (allowed).
+deny	C34	git push --del origin feature
+deny	C34	git push origin --delet feature
+deny	C34	git push --mirr origin
+deny	C34	git push origin --prun
+deny	C34	git push -vvf origin main
+deny	C34	git push -4uf origin main
+deny	C34	git push -uvqf origin main
+deny	C34	git push -vvd origin feature
+deny	C34	git -P push -f origin main
+deny	C34	git --no-pager push --force origin main
+deny	C34	git --git-dir=.git push -f origin main
+deny	C34	git --work-tree=. push origin :feature
+deny	C34	git --namespace x push -vvf origin main
+deny	C34	git --literal-pathspecs --bare push -vvf origin main
+deny	C34	git push --forc origin main
+deny	C34	git push origin --mir
+deny	C34	git push origin main --for
+deny	C34	git push origin '+main'
+deny	C34	git push origin "+refs/heads/main:refs/heads/main"
+deny	C34	git push origin \+main
+deny	C34	git push origin ':feature'
+deny	C34	git push origin "":feature
+deny	C34	/usr/bin/git push -vvf origin main
+deny	C34	/usr/lib/git-core/git-push -f origin main
+deny	C34	"git" push -f origin main
+deny	C34	g\it push -f origin main
+deny	C34	cd /w && git push -vvf origin main
+deny	C34	echo "$(git push -vvf origin main)"
+deny	C34	(git push --del origin feature)
+deny	C34	true || { git push --mirr origin; }
+deny	C34	nice -n 5 git push -vvf origin main
+deny	C34	timeout 60 git push -vvf origin main
+deny	C34	nohup git push --del origin feature
+deny	C34	exec git push --mirr origin
+deny	C34	sudo -u x git push -vvf origin main
+deny	C34	echo feature | xargs git push --del origin
+deny	C34	find . -maxdepth 0 -exec git push -vvf origin main \;
+deny	C34	watch -n 5 git push -vvf origin main
+deny	C34	f() { git push -vvf origin main; }; f
+deny	C34	for b in a; do git push --del origin $b; done
+deny	C35	gh api -iX DELETE repos/x/y/git/refs/heads/main
+deny	C35	gh api repos/x/y/issues -iF title=t
+deny	C35	gh api repos/x/y/issues -if title=t
+deny	C35	gh api -iXDELETE repos/x/y
+deny	C35	gh api -iX=PUT repos/x/y
+deny	C35	gh api repos/x/y/issues -iFtitle=t
+deny	C35	gh api -ifbody=x repos/x/y/issues
+deny	C35	gh "api" -X DELETE repos/x/y
+deny	C28	gh api repos/x/y -i -X PATCH
+deny	C35	gh api repos/x/y/issues '-iF' title=t
+deny	C35	echo "$(gh api -iX DELETE repos/x/y)"
+deny	C36	git config remote.origin.mirror true
+deny	C36	git config remote.origin.push +refs/heads/*:refs/heads/*
+deny	C36	git config include.path /tmp/x.gitconfig
+deny	C36	git config --global includeIf.gitdir:/x/.path /tmp/x
+deny	C36	git config url.https://example.invalid/.insteadOf https://github.com/
+deny	C36	git config --add Remote.Origin.Push +main
+deny	C36	git config set url.x.insteadOf y
+deny	C36	git config --replace-all remote.origin.url https://example.invalid/r.git
+deny	C36	git config --unset-a remote.origin.push
+deny	C36	git config --rename-section remote.origin remote.x
+deny	C36	git config -e
+deny	C36	git -c include.path=/tmp/x status
+deny	C36	git -c remote.origin.mirror=true fetch
+deny	C36	git --config-env=alias.p=X p
+deny	C36	git --config-env alias.p=X p
+deny	C36	GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.p GIT_CONFIG_VALUE_0=push git p
+deny	C36	export GIT_CONFIG_PARAMETERS="'alias.p=push'"
+deny	C36	git p origin main
+deny	C36	git remote add up https://example.invalid/r.git
+deny	C36	git remote set-url origin https://example.invalid/r.git
+deny	C36	git remote rename origin x
+deny	C36	gh alias set p 'api -X DELETE repos/x/y'
+deny	C36	gh alias import aliases.yml
+deny	C36	gh repo sync x/y --source a/b --force
+deny	C36	gh repo sync --force
+deny	C36	gh pr merge 12 --admin --squash
+deny	C36	gh pr merge 12 --squash --admin=true
+deny	C36	echo x > .git/config
+deny	C36	echo x >> ../wt/.git
+deny	C36	tee .git/hooks/pre-commit < hook.sh
+deny	C36	git submodule foreach 'git push -f'
+deny	C36	git rebase -x 'git push -f origin main' main
+deny	C36	git rebase --exec='git push --del origin x' main
+deny	C36	git bisect run git push -vvf origin main
+deny	C36	alias p='git push -vvf origin main'
+deny	C36	git grep -O'git push' x
+deny	C38	gh auth token
+deny	C38	gh auth token --hostname github.com
+deny	C38	gh auth login
+deny	C38	gh ssh-key add key.pub
+deny	C38	gh repo deploy-key add key.pub
+deny	C38	gh extension install owner/gh-ext
+deny	C38	gh ext install owner/gh-ext
+deny	C38	gh extensions install owner/gh-ext
+deny	FC	git "$x" origin main
+deny	FC	git $(echo push) -f
+deny	FC	$GIT push origin main
+deny	FC	"$(echo git)" push origin main
+deny	FC	git push origin "$branch"
+deny	FC	git push $args
+deny	FC	git push origin {+main,dev}
+deny	FC	git -C $dir push -f origin main
+deny	FC	gh $cmd
+deny	FC	gh pr "$sub" 12
+deny	FC	gh api "$endpoint"
+deny	FC	gh api repos/x/$y -X DELETE
+deny	FC	gh api graph"$x"
+deny	FC	gh api -X "$m" repos/x/y
+deny	FC	gh pr merge $n --auto
+deny	FC	eval "$cmd"
+deny	FC	bash -c "$cmd"
+deny	FC	echo 'git push -f' | bash
+deny	FC	git frobnicate
+deny	FC	gh codespace list
+deny	FC	git --frob status
+deny	FC	git push --unknown-opt origin main
+deny	FC	git push 'unterminated
+deny	FC	gh -R x/y pr merge 1
+deny	FC	gh pr -R x/y merge 1
+deny	FC	env -S 'git push -f'
+deny	FC	ls ~/.cache/rconductor-claudeguard
+deny	C27	git push -f origin main
+deny	C27	git push --force
+deny	C27	git push origin --delete feature
+deny	C27	git push origin :feature
+deny	C27	git push upstream +main
+deny	C27	git push --mirror origin
+deny	C27	git tag -d v1.0.0
+deny	C27	git tag --delete v1.0.0
+deny	C28	gh api -X DELETE repos/x/y
+deny	C28	gh api --method=PATCH repos/x/y
+deny	C28	gh api repos/x/y/issues -f title=t
+deny	C28	gh api repos/x/y/issues --input body.json
+deny	C28	gh api graphql -f query=q
+deny	C30	git config alias.p push
+deny	C30	git config --global alias.p push
+deny	C30	bash -c "git push -f"
+deny	C30	gh secret set X
+deny	C30	gh variable set X
+deny	C30	gh ruleset list
+deny	C30	gh workflow run ci.yml
+deny	C30	gh workflow disable ci.yml
+deny	C30	gh run cancel 123
+deny	C30	gh run delete 123
+deny	C30	gh repo delete x/y
+deny	C30	gh repo edit x/y
+deny	C30	gh repo archive x/y
+deny	C30	gh repo rename z
+deny	C30	gh label delete bug
+deny	C30	gh issue delete 1
+deny	C30	gh release create v1.0.0
+allow	ok	git status
+allow	ok	git push
+allow	ok	git push -u origin feat/x
+allow	ok	git push origin HEAD:refs/heads/topic
+allow	ok	git push origin main --follow-tags
+allow	ok	git push --no-force origin main
+allow	ok	git push --dry-run origin main
+allow	ok	git push origin HEAD
+allow	ok	git -C /w/x status
+allow	ok	git -C "$wt" log --oneline -5
+allow	ok	git --no-pager log -3
+allow	ok	git log --oneline main..HEAD | head -5
+allow	ok	git log @{u}..HEAD
+allow	ok	git diff --stat; git diff --cached
+allow	ok	git add -A && git commit -m 'feat: x (NFR-013)'
+allow	ok	git commit -F msg.txt
+allow	ok	git checkout -b fix/x origin/main
+allow	ok	git switch main
+allow	ok	git restore --staged a.go
+allow	ok	git reset --hard origin/main
+allow	ok	git reset HEAD~1
+allow	ok	git merge --ff-only origin/main
+allow	ok	git fetch origin && git pull --rebase
+allow	ok	git worktree add ../wt -b x origin/main
+allow	ok	git worktree remove ../wt
+allow	ok	git stash && git stash pop
+allow	ok	git branch -D old
+allow	ok	git branch --show-current
+allow	ok	git tag
+allow	ok	git tag -l 'v*'
+allow	ok	git tag -n5 -l
+allow	ok	git config user.name
+allow	ok	git config --get remote.origin.url
+allow	ok	git config remote.origin.url
+allow	ok	git config get remote.origin.url
+allow	ok	git config --list
+allow	ok	git config -l --show-origin
+allow	ok	git config --global user.email a@example.invalid
+allow	ok	git ls-files | wc -l
+allow	ok	git cat-file -p HEAD
+allow	ok	git read-tree --empty
+allow	ok	git remote -v
+allow	ok	git remote
+allow	ok	git remote show origin
+allow	ok	git remote get-url origin
+allow	ok	git rev-parse --show-toplevel
+allow	ok	git show HEAD:go.mod
+allow	ok	git grep -n claudeguard -- '*.go'
+allow	ok	git rebase origin/main
+allow	ok	git -c color.ui=never log -1
+allow	ok	gh pr create --fill
+allow	ok	gh pr create --title t --body "$(cat body.md)"
+allow	ok	gh pr view 12 --json state
+allow	ok	gh pr list --state open
+allow	ok	gh pr merge 12 --auto --squash
+allow	ok	gh pr merge 12 --auto --squash --subject "$title"
+allow	ok	gh pr comment 12 --body text
+allow	ok	gh pr checks 12 --watch
+allow	ok	gh pr diff 12
+allow	ok	gh pr view 12 --json body -q .body | grep x
+allow	ok	gh issue create --title t --body b --label bug
+allow	ok	gh issue view 3
+allow	ok	gh issue list --label bug
+allow	ok	gh issue comment 3 --body b
+allow	ok	gh issue close 3
+allow	ok	gh issue edit 3 --add-label bug
+allow	ok	gh run list --branch main -L 5
+allow	ok	gh run view 123 --log-failed
+allow	ok	gh run watch 123 --exit-status
+allow	ok	gh run rerun 123 --failed
+allow	ok	timeout 1800 gh run watch $id --exit-status
+allow	ok	id=$(gh run list -L1 --json databaseId -q '.[0].databaseId') && gh run watch "$id"
+allow	ok	for id in $(gh run list -L 3 --json databaseId -q '.[].databaseId'); do gh run view $id; done
+allow	ok	gh api repos/x/y
+allow	ok	gh api repos/x/y/pulls --paginate --jq '.[].number'
+allow	ok	gh api -X GET repos/x/y/commits
+allow	ok	gh api --method=get repos/x/y
+allow	ok	gh api repos/x/y/actions/runs/"$id"/jobs --jq '.jobs[].name'
+allow	ok	gh api -H 'Accept: application/vnd.github+json' repos/x/y
+allow	ok	gh api -i repos/x/y
+allow	ok	gh repo view --json name
+allow	ok	gh release view v0.1.0
+allow	ok	gh release list
+allow	ok	gh label list
+allow	ok	gh auth status
+allow	ok	gh --version
+allow	ok	make test 2>&1 | tail -20
+allow	ok	GOFLAGS=-p=4 go test ./internal/...
+allow	ok	cd /w && go build ./...
+allow	ok	command -v gh
+allow	ok	echo "$(git rev-parse HEAD)"
+allow	ok	find . -name '*.go' -exec gofmt -l {} +
+allow	ok	xargs -r gofmt -l < files.txt
+allow	ok	bash scripts/check.sh --no-tests
+allow	ok	"$repo/scripts/deny-rules-test.sh"
+allow	ok	sh -c 'git status'
+allow	ok	env GOFLAGS=-p=4 go test ./...
+allow	ok	echo hi > /tmp/out.txt
+allow	ok	jq -r '.permissions.deny[]' .claude/settings.json | grep git
+allow	ok	[ -n "$m" ] && break
+allow	ok	[ -z "$out" ] && break
+allow	ok	test -n "$x" && [[ -z $y ]] && echo ok
+allow	ok	echo [ a] [
+deny	FC	[ -n "$m" ] && git push -vvf origin main
+allow	ok	git -C /home/x/rconductor-wt-$w status --short
+allow	ok	git -C ../rconductor-gr-$x log --oneline -3
+allow	ok	git --git-dir="$d/.git" --work-tree=$w status
+allow	ok	git -C $dir push origin main
+deny	FC	git -C "$x" push -f origin main
+deny	FC	git -C /home/x/rconductor-wt-$w push --del origin feature
+deny	FC	git --work-tree=$w config remote.origin.mirror true
+allow	ok	gh run watch $id --exit-status
+allow	ok	gh api repos/o/r/actions/jobs/$j/logs
+allow	ok	gh api repos/x/$y
+allow	ok	gh pr view "$n"
+allow	ok	gh issue close $1 -R o/r -c "x"
+allow	ok	gh pr merge 12 --auto --squash -R "$repo"
+deny	FC	gh api $endpoint
+deny	FC	gh api repos/o/r/git/refs/$r -X DELETE
+deny	FC	gh api repos/o/r/issues/$n -f body=x
+deny	FC	gh pr merge 12 --squash $extra
+deny	FC	gh pr merge 12 --squash -R $repo
+allow	ok	push(){ w=$1; b=$2; cd "$w" && git push -q origin HEAD:refs/heads/$b; }; push a b
+allow	ok	git push origin HEAD:refs/heads/"$b"
+deny	FC	push(){ git push -q origin :refs/heads/$1; }; push a
+deny	FC	push(){ git push -q origin +HEAD:refs/heads/$1; }; push a
+deny	FC	push(){ git push -q origin "$1"; }; push a
+deny	C43	git commit --no-verify -m x
+deny	C43	git commit -n -m x
+deny	C43	git commit -an -m x
+deny	C43	git commit -nm x
+deny	C43	git commit -m x --no-ver
+deny	C43	git commit --no-v -m x
+deny	C43	git -C /w commit -qn -m x
+deny	C43	git commit -m "$msg" -n
+deny	C43	git commit "$opt" -m x
+deny	C43	git push --no-verify origin main
+deny	C43	git push origin main --no-ver
+deny	C43	git merge --no-verify origin/main
+deny	C43	git merge --no-veri origin/main
+deny	C43	git rebase --no-verify origin/main
+deny	C43	git pull --no-verify
+deny	C43	git am -n x.patch
+deny	C43	git am --no-verify x.patch
+deny	C43	git -c core.hooksPath=/dev/null commit -m x
+deny	C43	git -c Core.HooksPath=/tmp/h commit -m x
+deny	C43	git --config-env=core.hooksPath=H commit -m x
+deny	C43	GIT_CONFIG_PARAMETERS="'core.hooksPath=/tmp'" git commit -m x
+deny	C43	git config core.hooksPath /dev/null
+deny	C43	git config core.hooksPath .githooks
+deny	C43	git config --global core.hooksPath /tmp/h
+deny	C43	git config --local core.HooksPath /tmp/h
+deny	C43	git config --file .git/config core.hooksPath /tmp/h
+deny	C43	git config --add core.hooksPath /tmp/h
+deny	C43	git config --replace-all core.hooksPath /tmp/h
+deny	C43	git config --unset core.hooksPath
+deny	C43	git config set core.hooksPath /tmp/h
+deny	C43	git config unset core.hooksPath
+allow	ok	git push -n origin main
+allow	ok	git push --dry-run origin main
+allow	ok	git push --verify origin main
+allow	ok	git merge -n origin/main
+allow	ok	git merge --no-edit origin/main
+allow	ok	git rebase -n origin/main
+allow	ok	git pull -n
+allow	ok	git cherry-pick -n abc123
+allow	ok	git revert -n abc123
+allow	ok	git commit --no-edit --amend
+allow	ok	git commit -m "-n is a flag"
+allow	ok	git commit -m --no-verify
+allow	ok	git commit -am "$msg"
+allow	ok	git commit -F "$f"
+allow	ok	git config --get core.hooksPath
+allow	ok	git config --get-all core.hooksPath
+allow	ok	git config core.hooksPath
+allow	ok	git config --show-origin core.hooksPath
+allow	ok	git config --list --show-origin
+allow	ok	git config get core.hooksPath
+allow	ok	git -c core.editor=true commit --amend --no-edit

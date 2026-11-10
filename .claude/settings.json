@@ -1,5 +1,11 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [{ "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.sh", "timeout": 300 }]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
@@ -120,12 +126,55 @@
       "Bash(gh label delete*)",
       "Bash(gh issue delete*)",
       "Bash(gh ruleset*)",
+      "Bash(git config include.*)",
+      "Bash(git config * include.*)",
+      "Bash(git config includeIf.*)",
+      "Bash(git config * includeIf.*)",
+      "Bash(git config url.*)",
+      "Bash(git config * url.*)",
+      "Bash(git -c *include.*)",
+      "Bash(git -c *remote.*)",
+      "Bash(git --config-env*)",
+      "Bash(git remote add*)",
+      "Bash(git remote set-url*)",
+      "Bash(gh alias set*)",
+      "Bash(gh alias import*)",
+      "Bash(gh repo sync --force*)",
+      "Bash(gh repo sync * --force*)",
+      "Bash(gh pr merge --admin*)",
+      "Bash(gh pr merge * --admin*)",
+      "Bash(gh auth token*)",
+      "Bash(gh ssh-key add*)",
+      "Bash(gh repo deploy-key add*)",
+      "Bash(gh extension install*)",
+      "Bash(gh extensions install*)",
+      "Bash(gh ext install*)",
+      "Bash(git commit *--no-verify*)",
+      "Bash(git commit -n*)",
+      "Bash(git commit * -n*)",
+      "Bash(git * --no-verify*)",
+      "Bash(git -c *core.hooksPath*)",
+      "Bash(git config set *core.hooksPath*)",
+      "Bash(git config unset *core.hooksPath*)",
+      "Bash(git config --add *core.hooksPath*)",
+      "Bash(git config * --add *core.hooksPath*)",
+      "Bash(git config --replace-all *core.hooksPath*)",
+      "Bash(git config * --replace-all *core.hooksPath*)",
+      "Bash(git config --unset*core.hooksPath*)",
+      "Bash(git config * --unset*core.hooksPath*)",
       "Bash(docker system prune*)",
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~*)",
       "Bash(rm -rf ..*)",
       "Bash(rm -rf $HOME*)",
-      "Bash(sudo rm*)"
+      "Bash(sudo rm*)",
+      "Edit(.git)",
+      "Edit(**/.git/**)",
+      "Edit(//**/.git)",
+      "Edit(//**/.git/**)",
+      "Edit(~/.gitconfig)",
+      "Edit(~/.config/git/**)",
+      "Edit(~/.cache/rconductor-claudeguard/**)"
     ]
   }
 }
