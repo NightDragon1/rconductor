@@ -104,7 +104,8 @@ func newInsightFixture(t *testing.T, caps ...string) *insightFixture {
 		VALUES ('p1', 'mc', 'mc', 'source-rcon', 25575, '{"version":{"pattern":"version (\\S+)"}}', 'f', 'h', 't')`)
 	exec(`INSERT INTO agents (id, name, public_key, fingerprint, status, created_at) VALUES ('a1', 'host', x'00', 'fp', 'active', 't')`)
 	for _, id := range []string{"s1", "s2"} {
-		exec(`INSERT INTO servers (id, name, created_at, updated_at, profile_id, agent_id, container_name) VALUES (?, ?, 't', 't', 'p1', 'a1', 'mc')`, id, id)
+		exec(`INSERT INTO servers (id, name, created_at, updated_at, agent_id, container_name) VALUES (?, ?, 't', 't', 'a1', 'mc')`, id, id)
+		exec(`INSERT INTO server_profiles (server_id, profile_id, position) VALUES (?, 'p1', 0)`, id)
 	}
 	log := slog.New(slog.DiscardHandler)
 	f := &insightFixture{st: st, data: cache.NewAgentData(log), ag: &fakeAgents{caps: caps}}

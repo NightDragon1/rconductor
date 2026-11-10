@@ -105,6 +105,7 @@ func TestServerAgentFields(t *testing.T) {
 	if err != nil || got.AgentID != "" || got.ContainerName != "" {
 		t.Errorf("clear = %+v %v", got, err)
 	}
+	// A server admin may change only the profile list (TestProfileListRights).
 	if _, err := f.svc.Update(ctx, f.as("sa"), s.ID, Input{AgentID: &agent, ContainerName: &name}); !errors.Is(err, users.ErrForbidden) {
 		t.Errorf("server admin sets the agent: %v", err)
 	}

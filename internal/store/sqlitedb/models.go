@@ -150,7 +150,6 @@ type Server struct {
 	CreatedAt      string
 	UpdatedAt      string
 	DeletedAt      sql.NullString
-	ProfileID      sql.NullString
 	Protocol       string
 	Host           string
 	Port           int64
@@ -175,6 +174,12 @@ type ServerGroup struct {
 type ServerGroupMember struct {
 	ServerGroupID string
 	ServerID      string
+}
+
+type ServerProfile struct {
+	ServerID  string
+	ProfileID string
+	Position  int64
 }
 
 type Session struct {

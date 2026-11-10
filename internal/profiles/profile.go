@@ -91,7 +91,51 @@ type Profile struct {
 	ResearchedVersion string   `yaml:"researched_version" json:"-"`
 	Sources           []string `yaml:"sources" json:"-"`
 	Status            string   `yaml:"status" json:"-"`
+	// Set lists the fields the file sets itself, before the defaults are
+	// filled in (D-074): with several profiles on a server the topmost
+	// profile that sets a field wins.
+	Set []string `yaml:"-" json:"set,omitempty"`
 }
+
+// Fields a profile can set; Effective merges them one by one (D-074).
+const (
+	FieldCaseSensitive = "syntax.case_sensitive"
+	FieldStripPrefix   = "syntax.strip_prefix"
+	FieldMaxLength     = "syntax.max_length"
+	FieldPlayerPattern = "syntax.player_pattern"
+	FieldSeparators    = "syntax.separators"
+	FieldGamePorts     = "ports.game"
+	FieldSteamConnect  = "ports.steam_connect"
+	FieldPlayers       = "players"
+	FieldStop          = "stop"
+	FieldVersion       = "version"
+	FieldFormatting    = "formatting"
+)
+
+// setFields lists the fields the parsed file sets, before defaults().
+func (p *Profile) setFields() []string {
+	var out []string
+	add := func(ok bool, f string) {
+		if ok {
+			out = append(out, f)
+		}
+	}
+	add(p.Syntax.CaseSensitive != nil, FieldCaseSensitive)
+	add(p.Syntax.StripPrefix != nil, FieldStripPrefix)
+	add(p.Syntax.MaxLength != 0, FieldMaxLength)
+	add(p.Syntax.PlayerPattern != "", FieldPlayerPattern)
+	add(p.Syntax.Separators != nil, FieldSeparators)
+	add(p.Ports.Game != nil, FieldGamePorts)
+	add(p.Ports.SteamConnect, FieldSteamConnect)
+	add(p.Players != nil, FieldPlayers)
+	add(p.Stop != nil, FieldStop)
+	add(p.Version != nil, FieldVersion)
+	add(p.Formatting != "", FieldFormatting)
+	return out
+}
+
+// Sets reports whether the profile sets field itself.
+func (p *Profile) Sets(field string) bool { return slices.Contains(p.Set, field) }
 
 // Statuses of a profile (D-072): tested after a run with a real server,
 // untested otherwise; a profile without status is untested.
@@ -226,6 +270,7 @@ func parse(data []byte) (*Profile, *ast.File, error) {
 	if probs := p.check(); len(probs) > 0 {
 		return nil, file, &Error{Problems: probs}
 	}
+	p.Set = p.setFields()
 	p.defaults()
 	return &p, file, nil
 }

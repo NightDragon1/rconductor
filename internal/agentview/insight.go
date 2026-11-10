@@ -4,7 +4,6 @@ package agentview
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"slices"
 	"sync"
@@ -159,7 +158,7 @@ func (v *View) Pass(ctx context.Context) {
 		agents[r.AgentID.String] = append(agents[r.AgentID.String], r.ID)
 		pat := ""
 		if r.ProfileID.Valid {
-			pat = v.versionPattern(ctx, r.ProfileID.String)
+			pat = v.versionPattern(ctx, r.ID)
 		}
 		v.versionAttempt(ctx, r.ID, r.AgentID.String, r.ContainerName.String, pat, retry, window)
 	}
@@ -175,13 +174,11 @@ func (v *View) Pass(ctx context.Context) {
 	}
 }
 
-func (v *View) versionPattern(ctx context.Context, profileID string) string {
-	gp, err := v.st.Queries.GetGameProfile(ctx, profileID)
-	if err != nil {
-		return ""
-	}
-	var p profiles.Profile
-	if err := json.Unmarshal([]byte(gp.Rules), &p); err != nil || p.Version == nil {
+// versionPattern is the version pattern of the topmost profile of the
+// server that has one (D-074).
+func (v *View) versionPattern(ctx context.Context, serverID string) string {
+	p, _, err := profiles.ForServer(ctx, v.st.Queries, serverID)
+	if err != nil || p == nil || p.Version == nil {
 		return ""
 	}
 	return p.Version.Pattern

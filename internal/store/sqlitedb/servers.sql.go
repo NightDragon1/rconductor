@@ -10,6 +10,30 @@ import (
 	"database/sql"
 )
 
+const addServerProfile = `-- name: AddServerProfile :exec
+INSERT INTO server_profiles (server_id, profile_id, position) VALUES (?, ?, ?)
+`
+
+type AddServerProfileParams struct {
+	ServerID  string
+	ProfileID string
+	Position  int64
+}
+
+func (q *Queries) AddServerProfile(ctx context.Context, arg AddServerProfileParams) error {
+	_, err := q.db.ExecContext(ctx, addServerProfile, arg.ServerID, arg.ProfileID, arg.Position)
+	return err
+}
+
+const clearServerProfiles = `-- name: ClearServerProfiles :exec
+DELETE FROM server_profiles WHERE server_id = ?
+`
+
+func (q *Queries) ClearServerProfiles(ctx context.Context, serverID string) error {
+	_, err := q.db.ExecContext(ctx, clearServerProfiles, serverID)
+	return err
+}
+
 const deleteServerGroupMembers = `-- name: DeleteServerGroupMembers :exec
 DELETE FROM server_group_members WHERE server_group_id = ?
 `
@@ -64,8 +88,9 @@ func (q *Queries) GetGameProfile(ctx context.Context, id string) (GetGameProfile
 }
 
 const getServer = `-- name: GetServer :one
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint, tls_not_after
-FROM servers WHERE id = ? AND deleted_at IS NULL
+SELECT s.id, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
+FROM servers s LEFT JOIN server_profiles sp ON sp.server_id = s.id AND sp.position = 0
+WHERE s.id = ? AND s.deleted_at IS NULL
 `
 
 type GetServerRow struct {
@@ -119,15 +144,41 @@ func (q *Queries) GetServerGroup(ctx context.Context, id string) (GetServerGroup
 	return i, err
 }
 
+const getServerProfiles = `-- name: GetServerProfiles :many
+SELECT profile_id FROM server_profiles WHERE server_id = ? ORDER BY position
+`
+
+func (q *Queries) GetServerProfiles(ctx context.Context, serverID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getServerProfiles, serverID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var profile_id string
+		if err := rows.Scan(&profile_id); err != nil {
+			return nil, err
+		}
+		items = append(items, profile_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertServer = `-- name: InsertServer :exec
-INSERT INTO servers (id, name, profile_id, protocol, host, port, secret, game_ports, agent_id, container_name, tls_fingerprint, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO servers (id, name, protocol, host, port, secret, game_ports, agent_id, container_name, tls_fingerprint, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertServerParams struct {
 	ID             string
 	Name           string
-	ProfileID      sql.NullString
 	Protocol       string
 	Host           string
 	Port           int64
@@ -144,7 +195,6 @@ func (q *Queries) InsertServer(ctx context.Context, arg InsertServerParams) erro
 	_, err := q.db.ExecContext(ctx, insertServer,
 		arg.ID,
 		arg.Name,
-		arg.ProfileID,
 		arg.Protocol,
 		arg.Host,
 		arg.Port,
@@ -256,10 +306,38 @@ func (q *Queries) ListServerGroups(ctx context.Context) ([]ListServerGroupsRow, 
 	return items, nil
 }
 
+const listServerProfiles = `-- name: ListServerProfiles :many
+SELECT server_id, profile_id, position FROM server_profiles ORDER BY server_id, position
+`
+
+func (q *Queries) ListServerProfiles(ctx context.Context) ([]ServerProfile, error) {
+	rows, err := q.db.QueryContext(ctx, listServerProfiles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ServerProfile{}
+	for rows.Next() {
+		var i ServerProfile
+		if err := rows.Scan(&i.ServerID, &i.ProfileID, &i.Position); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServers = `-- name: ListServers :many
 
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint, tls_not_after
-FROM servers WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE
+SELECT s.id, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
+FROM servers s LEFT JOIN server_profiles sp ON sp.server_id = s.id AND sp.position = 0
+WHERE s.deleted_at IS NULL ORDER BY s.name COLLATE NOCASE
 `
 
 type ListServersRow struct {
@@ -278,6 +356,8 @@ type ListServersRow struct {
 }
 
 // Servers and server groups (SRV-001, SRV-003, SRV-005).
+// profile_id is the top profile of the server (SRV-008); the whole list
+// comes from ListServerProfiles.
 func (q *Queries) ListServers(ctx context.Context) ([]ListServersRow, error) {
 	rows, err := q.db.QueryContext(ctx, listServers)
 	if err != nil {
@@ -427,13 +507,12 @@ func (q *Queries) SoftDeleteServerGroup(ctx context.Context, arg SoftDeleteServe
 }
 
 const updateServer = `-- name: UpdateServer :exec
-UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, tls_fingerprint = ?, tls_not_after = ?, updated_at = ?
+UPDATE servers SET name = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, tls_fingerprint = ?, tls_not_after = ?, updated_at = ?
 WHERE id = ?
 `
 
 type UpdateServerParams struct {
 	Name           string
-	ProfileID      sql.NullString
 	Protocol       string
 	Host           string
 	Port           int64
@@ -449,7 +528,6 @@ type UpdateServerParams struct {
 func (q *Queries) UpdateServer(ctx context.Context, arg UpdateServerParams) error {
 	_, err := q.db.ExecContext(ctx, updateServer,
 		arg.Name,
-		arg.ProfileID,
 		arg.Protocol,
 		arg.Host,
 		arg.Port,

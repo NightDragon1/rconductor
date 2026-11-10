@@ -4,7 +4,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -80,18 +79,16 @@ func (s *Service) catalog(ctx context.Context, serverID string) ([]profiles.Comm
 	if err != nil || !r.ProfileID.Valid {
 		return nil, err
 	}
-	rows, err := s.st.Queries.ListCatalogOfProfile(ctx, r.ProfileID.String)
+	// The union of the catalogs of the server's profiles, the upper entry
+	// wins for the same path (SRV-008, D-074).
+	out, err := profiles.CatalogForServer(ctx, s.st.Queries, serverID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]profiles.Command, 0, len(rows))
-	for _, row := range rows {
-		c := profiles.Command{Path: row.Path, Description: row.Description, Params: []profiles.Param{}}
-		_ = json.Unmarshal([]byte(row.Params), &c.Params)
-		if c.Params == nil {
-			c.Params = []profiles.Param{}
+	for i := range out {
+		if out[i].Params == nil {
+			out[i].Params = []profiles.Param{}
 		}
-		out = append(out, c)
 	}
 	return out, nil
 }

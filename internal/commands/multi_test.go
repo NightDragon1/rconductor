@@ -22,7 +22,7 @@ func (w *world) second(t *testing.T, name string) string {
 	var profile string
 	_ = w.st.DB.QueryRow(`SELECT id FROM game_profiles WHERE slug = 'minecraft-java'`).Scan(&profile)
 	host, port, pw := "127.0.0.1", 1, logging.Secret("x")
-	s, err := w.srv.Create(context.Background(), w.as("admin"), servers.Input{Name: &name, ProfileID: &profile, Host: &host, Port: &port, Password: &pw})
+	s, err := w.srv.Create(context.Background(), w.as("admin"), servers.Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: &pw})
 	if err != nil {
 		t.Fatal(err)
 	}
