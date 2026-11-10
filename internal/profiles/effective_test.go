@@ -133,3 +133,60 @@ func TestMergeCatalogs(t *testing.T) {
 		t.Errorf("catalog = %+v", got)
 	}
 }
+
+// TestExplicitValuesCountAsSet covers D-074: a field the file writes counts
+// as set by its key, also with false, 0, "" or []; so a specific profile
+// can set steam_connect false over a generic true, and empty separators
+// or formatting over a generic profile's.
+func TestExplicitValuesCountAsSet(t *testing.T) {
+	generic, err := Parse([]byte("schema: 1\nid: g\nname: G\nprotocol: { type: source-rcon, default_port: 1 }\nports:\n  steam_connect: true\nsyntax:\n  separators: [\";\"]\nformatting: minecraft\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	specific, err := Parse([]byte("schema: 1\nid: s\nname: S\nkind: specific\nprotocol: { type: source-rcon, default_port: 1 }\nports:\n  steam_connect: false\nsyntax:\n  separators: []\n  player_pattern: \"\"\nformatting: \"\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{FieldSteamConnect, FieldSeparators, FieldPlayerPattern, FieldFormatting} {
+		if !specific.Sets(f) {
+			t.Errorf("explicit %s not counted as set", f)
+		}
+	}
+	eff := Effective([]*Profile{specific, generic})
+	if eff.Ports.SteamConnect || len(eff.Syntax.Separators) != 0 || eff.Formatting != "" {
+		t.Errorf("steam_connect %v separators %v formatting %q, want the specific profile's false, none, empty",
+			eff.Ports.SteamConnect, eff.Syntax.Separators, eff.Formatting)
+	}
+	// Absent keys stay unset, and the generic values hold.
+	bare, err := Parse([]byte("schema: 1\nid: b\nname: B\nkind: specific\nprotocol: { type: source-rcon, default_port: 1 }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bare.Set) != 0 {
+		t.Errorf("a profile without fields sets %v", bare.Set)
+	}
+	if eff := Effective([]*Profile{bare, generic}); !eff.Ports.SteamConnect || len(eff.Syntax.Separators) != 1 || eff.Formatting != "minecraft" {
+		t.Errorf("generic values lost: %+v %v %q", eff.Ports, eff.Syntax.Separators, eff.Formatting)
+	}
+}
+
+// TestPresenceThroughAnchors covers D-074 for own profiles that use
+// anchors, aliases or merge keys: the keys they bring count as written.
+func TestPresenceThroughAnchors(t *testing.T) {
+	text := "schema: 1\nid: a\nname: A\nprotocol: { type: source-rcon, default_port: 1 }\n" +
+		"stop: &s { command: quit }\n" +
+		"ports: &p\n  steam_connect: false\n" +
+		"syntax:\n  <<: { case_sensitive: false }\n  strip_prefix: \"\"\n"
+	p, err := Parse([]byte(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{FieldStop, FieldSteamConnect, FieldCaseSensitive, FieldStripPrefix} {
+		if !p.Sets(f) {
+			t.Errorf("%s not counted as set: %v", f, p.Set)
+		}
+	}
+	if p.Sets(FieldMaxLength) || p.Sets(FieldGamePorts) {
+		t.Errorf("absent fields counted as set: %v", p.Set)
+	}
+}

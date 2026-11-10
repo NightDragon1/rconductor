@@ -23,6 +23,8 @@ syntax:
   max_length: 1000
   # 1.7.10 has no /execute.
   wrappers: []
+  # No command separators on 1.7.10; set so none come from below.
+  separators: []
   player_pattern: "^[A-Za-z0-9_]{1,16}$"
 players:
   command: list
