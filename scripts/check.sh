@@ -34,6 +34,7 @@ scripts/release-test.sh
 
 step CI scripts
 scripts/ci-scope-test.sh
+scripts/go-test-shard-test.sh
 
 step generated code
 go generate ./...
