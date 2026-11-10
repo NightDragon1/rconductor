@@ -233,3 +233,61 @@ func TestImportKeepsProtocolC25(t *testing.T) {
 		t.Errorf("unused profile: protocol %q %v", protocol, err)
 	}
 }
+
+// TestImportKeepsProtocolWithParallelProfileChangeC41: a profile list
+// change that commits after the import has read the profile and before it
+// writes is seen by the protocol check (D-076, SRV-008). The check runs in
+// the write transaction of the import, so no server ends with a top
+// profile of another protocol or dialect.
+func TestImportKeepsProtocolWithParallelProfileChangeC41(t *testing.T) {
+	f := newImportFixture(t)
+	ctx := context.Background()
+	f.write(t, "game.yaml", custom("game", "Game"))
+	if err := f.im.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var id string
+	if err := f.st.DB.QueryRowContext(ctx, `SELECT id FROM game_profiles WHERE slug = 'game'`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.st.DB.ExecContext(ctx, `INSERT INTO servers (id, name, protocol, created_at, updated_at) VALUES ('s1', 's1', 'source-rcon', 't', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	// The profile list change in its own write transaction, as
+	// servers.Update does: it adds the profile, still source-rcon.
+	calls := 0
+	f.im.beforeWrite = func() {
+		calls++
+		tx, err := f.st.DB.BeginTx(ctx, nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+		if _, err := tx.ExecContext(ctx, `INSERT INTO server_profiles (server_id, profile_id, position) VALUES ('s1', ?, 0)`, id); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			t.Error(err)
+		}
+	}
+	f.write(t, "game.yaml", "schema: 1\nid: game\nname: Game moved\nprotocol: { type: http-api, default_port: 7777 }\nhttp_api: { dialect: satisfactory }\n")
+	if err := f.im.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("profile list change ran %d times, want 1", calls)
+	}
+	var protocol, srvProtocol string
+	var lastErr sql.NullString
+	if err := f.st.DB.QueryRowContext(ctx, `SELECT protocol, last_error FROM game_profiles WHERE slug = 'game'`).Scan(&protocol, &lastErr); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.st.DB.QueryRowContext(ctx, `SELECT protocol FROM servers WHERE id = 's1'`).Scan(&srvProtocol); err != nil {
+		t.Fatal(err)
+	}
+	if protocol != srvProtocol || !lastErr.Valid || !strings.Contains(lastErr.String, "server(s) use the profile") {
+		t.Errorf("server protocol %s, its profile %s, error %v", srvProtocol, protocol, lastErr)
+	}
+}

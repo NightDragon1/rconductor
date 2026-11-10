@@ -912,7 +912,7 @@
       },
       "auth_recovery_per_hour": {
         "label": "Recovery requests per hour",
-        "help": "Per user and per client address."
+        "help": "Per user and per client address (IPv6 per /64)."
       },
       "auth_recovery_workers": {
         "label": "Recovery workers",

@@ -264,6 +264,9 @@ func parse(data []byte) (*Profile, *ast.File, error) {
 	if probs := checkNulls(file); len(probs) > 0 {
 		return nil, file, &Error{Problems: probs}
 	}
+	if probs := checkKeys(file); len(probs) > 0 {
+		return nil, file, &Error{Problems: probs}
+	}
 	var p Profile
 	if len(file.Docs) > 0 && file.Docs[0].Body != nil {
 		if err := yaml.NodeToValue(file.Docs[0].Body, &p, yaml.DisallowUnknownField()); err != nil {
