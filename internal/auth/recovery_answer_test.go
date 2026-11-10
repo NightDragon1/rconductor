@@ -4,12 +4,15 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/netip"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
+	"time"
 )
 
 // holdHandler holds every log record with message msg until release is
@@ -124,6 +127,73 @@ func TestRecoveryPoolDropsWhenFullC9(t *testing.T) {
 		f.svc.WaitMail()
 		if n := f.mailsTo("kiwi@example.org"); n != 2 {
 			t.Errorf("mails = %d, want 2 of the queued jobs", n)
+		}
+	})
+}
+
+// TestRecoveryDropReportPerWindowC9: dropped recovery jobs are reported at
+// most once per window, each entry with the number dropped since the last
+// one; together they count every drop, also those of the last window
+// (D-077).
+func TestRecoveryDropReportPerWindowC9(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newSFFixture(t)
+		f.recoveryUser(t, "kiwi")
+		f.set(t, "auth.recovery_workers", "1")
+		f.set(t, "auth.recovery_queue", "1")
+		release := make(chan struct{})
+		unhold := sync.OnceFunc(func() { close(release) })
+		defer f.svc.WaitMail()
+		defer unhold()
+		f.svc.log = slog.New(holdHandler{f.svc.log.Handler(), "recovery requested", release})
+		ctx := context.Background()
+		ip := netip.MustParseAddr("10.0.0.1")
+		ask := func() {
+			f.svc.RequestRecovery(ctx, "kiwi", Client{IP: ip, RequestID: "r"})
+			ip = ip.Next()
+		}
+		// One job holds the worker, one waits; all further ones are dropped.
+		ask()
+		synctest.Wait()
+		ask()
+		const drops = 1000
+		for i := range drops {
+			ask()
+			if i%100 == 99 {
+				time.Sleep(25 * time.Second)
+			}
+		}
+		time.Sleep(2 * dropReportGap)
+		synctest.Wait()
+		unhold()
+		f.svc.WaitMail()
+		total := 0
+		var last time.Time
+		entries := 0
+		for line := range strings.SplitSeq(f.logs.String(), "\n") {
+			if !strings.Contains(line, `"event":"auth.recovery.dropped"`) {
+				continue
+			}
+			var e struct {
+				TS      time.Time `json:"ts"`
+				Dropped int       `json:"dropped"`
+			}
+			if err := json.Unmarshal([]byte(line), &e); err != nil {
+				t.Fatal(err)
+			}
+			if entries > 0 && e.TS.Sub(last) < dropReportGap {
+				t.Errorf("entries %v apart, window %v", e.TS.Sub(last), dropReportGap)
+			}
+			last = e.TS
+			entries++
+			total += e.Dropped
+		}
+		if total != drops {
+			t.Errorf("dropped counted %d in %d entries, want %d", total, entries, drops)
+		}
+		// 250 s of drops make at most one entry per begun window.
+		if entries < 2 || entries > 6 {
+			t.Errorf("entries = %d, want one per window", entries)
 		}
 	})
 }
