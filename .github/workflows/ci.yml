@@ -91,7 +91,8 @@ jobs:
       - run: make lint
 
   # scripts/go-test-shard.sh splits the packages and checks that its shard
-  # count is the size of this matrix.
+  # count is the size of this matrix and that each job's shard is its job
+  # index + 1, so the matrix is exactly 1 to N.
   go-test-shard:
     name: Go test shard ${{ matrix.shard }}
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
@@ -109,7 +110,9 @@ jobs:
       - name: Every package is in exactly one shard
         env:
           TOTAL: ${{ strategy.job-total }}
-        run: scripts/go-test-shard.sh --check "$TOTAL"
+          INDEX: ${{ strategy.job-index }}
+          SHARD: ${{ matrix.shard }}
+        run: scripts/go-test-shard.sh --check "$TOTAL" "$INDEX" "$SHARD"
       - name: Tests
         env:
           SHARD: ${{ matrix.shard }}

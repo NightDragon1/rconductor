@@ -704,3 +704,14 @@ func TestWrappersOfAllProfiles(t *testing.T) {
 		t.Errorf("catalog is not the union: %v %v %v", paths["backup list"], paths["defaultgamemode"], paths["gamerule"])
 	}
 }
+
+// TestHistoryOutsideScopeLoggedC13 covers ROLE-009: a history read of a
+// server outside the caller's scope answers not found and is logged as
+// denied.
+func TestHistoryOutsideScopeLoggedC13(t *testing.T) {
+	w := newWorld(t)
+	if _, _, err := w.svc.History(context.Background(), w.as("m"), "no-such-server", 10, "", false); !errors.Is(err, users.ErrNotFound) {
+		t.Fatalf("history: %v", err)
+	}
+	logtest.Wait(t, w.logs, `"action":"history"`)
+}

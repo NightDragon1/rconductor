@@ -32,6 +32,10 @@ scripts/check-spdx.sh
 step release scripts
 scripts/release-test.sh
 
+step CI scripts
+scripts/ci-scope-test.sh
+scripts/go-test-shard-test.sh
+
 step generated code
 go generate ./...
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff

@@ -386,7 +386,10 @@ type fields struct {
 
 // check applies an input to the checked state f; q reads profile and agent,
 // inside the transaction of an update.
-func (s *Service) check(ctx context.Context, q *sqlitedb.Queries, f fields, in Input) (fields, error) {
+// check applies an input to the checked state f; protocolChange allows the
+// profiles to bring another protocol (an update by the RCON admin with new
+// credentials, D-076).
+func (s *Service) check(ctx context.Context, q *sqlitedb.Queries, f fields, in Input, protocolChange bool) (fields, error) {
 	var err error
 	if in.Name != nil {
 		if f.name, err = plainName(*in.Name); err != nil {
@@ -399,10 +402,24 @@ func (s *Service) check(ctx context.Context, q *sqlitedb.Queries, f fields, in I
 			return f, err
 		}
 		top := list[0]
-		if f.profileID != top.ID && in.Port == nil {
-			f.port = top.Rules.Protocol.DefaultPort
+		switch {
+		case f.protocol == "":
+			// A new server: the protocol comes from its profiles, the
+			// default port only as the starting value (D-076).
+			if in.Port == nil {
+				f.port = top.Rules.Protocol.DefaultPort
+			}
+			f.protocol = top.Protocol
+		case top.Protocol != f.protocol || !sameDialect(ctx, q, f.profileIDs, list):
+			// The profile list never changes the protocol or the port of
+			// a server; a change of protocol comes only with new
+			// credentials in the same request, and drops the pin (D-076).
+			if !protocolChange {
+				return f, &users.InvalidError{Detail: "the profiles need the protocol of the server (" + f.protocol + "); change the protocol together with new credentials"}
+			}
+			f.protocol, f.fingerprint = top.Protocol, ""
 		}
-		f.profileIDs, f.profileID, f.protocol = ids(list), top.ID, top.Protocol
+		f.profileIDs, f.profileID = ids(list), top.ID
 	}
 	if in.Host != nil {
 		h := strings.TrimSpace(*in.Host)
@@ -530,6 +547,7 @@ func updateAudit(r sqlitedb.GetServerRow, old []string, f fields, password bool)
 		"port": f.port != int(r.Port), "password": password, "game_ports": f.gamePorts != r.GamePorts,
 		"agent_id": f.agentID != r.AgentID, "container_name": f.container != r.ContainerName,
 		"tls_fingerprint": f.fingerprint != r.TlsFingerprint,
+		"protocol":        f.protocol != r.Protocol,
 	}
 	var names []string
 	for name, c := range changed {
@@ -547,6 +565,9 @@ func updateAudit(r sqlitedb.GetServerRow, old []string, f fields, password bool)
 	}
 	if changed["port"] {
 		out["port"] = map[string]int{"from": int(r.Port), "to": f.port}
+	}
+	if changed["protocol"] {
+		out["protocol"] = map[string]string{"from": r.Protocol, "to": f.protocol}
 	}
 	if changed["profile_ids"] {
 		out["profile_ids"] = map[string][]string{"from": old, "to": f.profileIDs}
@@ -626,6 +647,27 @@ func checkProfiles(ctx context.Context, q *sqlitedb.Queries, old, given []string
 		}
 	}
 	return sortIn(old, loaded), nil
+}
+
+// sameDialect reports whether the new list keeps the http-api dialect of
+// the server's current top profile (D-076); without a current list it
+// does.
+func sameDialect(ctx context.Context, q *sqlitedb.Queries, old []string, list []profiles.Loaded) bool {
+	if len(old) == 0 {
+		return true
+	}
+	cur, err := profiles.Load(ctx, q, old[:1])
+	if err != nil || len(cur) == 0 {
+		return false
+	}
+	return dialectOf(cur[0]) == dialectOf(list[0])
+}
+
+func dialectOf(l profiles.Loaded) string {
+	if l.Rules.HTTPAPI == nil {
+		return ""
+	}
+	return l.Rules.HTTPAPI.Dialect
 }
 
 // sortIn keeps the given order of profiles that were on the list and
@@ -720,7 +762,7 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	if in.Name == nil || in.ProfileIDs == nil || in.Host == nil || in.Password == nil {
 		return Server{}, &users.InvalidError{Detail: "name, profile_ids, host and password are required"}
 	}
-	f, err := s.check(ctx, s.st.Queries, fields{}, in)
+	f, err := s.check(ctx, s.st.Queries, fields{}, in, false)
 	if err != nil {
 		return Server{}, err
 	}
@@ -826,7 +868,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	f, err := s.check(ctx, q, fields{
 		name: r.Name, profileID: r.ProfileID.String, profileIDs: oldProfiles, protocol: r.Protocol, host: r.Host, port: int(r.Port), gamePorts: r.GamePorts,
 		agentID: r.AgentID, container: r.ContainerName, fingerprint: r.TlsFingerprint,
-	}, in)
+	}, in, req.Actor.Role == perm.RCONAdmin && in.Password != nil)
 	if err != nil {
 		return Server{}, err
 	}
