@@ -192,9 +192,12 @@ func (s *Service) syntax(ctx context.Context, serverID string) (Syntax, error) {
 	}
 	// The effective rules of all profiles of the server, field by field;
 	// wrappers of all profiles hold (SRV-008, D-074).
+	// Without them the command is refused, never sent with the defaults
+	// (D-076).
 	eff, _, err := profiles.ForServer(ctx, s.st.Queries, serverID)
 	if err != nil || eff == nil {
-		return syn, nil //nolint:nilerr // a missing profile falls back to the defaults
+		s.log.Warn("rules of the game profiles not readable", slog.String(logging.KeyServer, serverID), slog.Any("err", err))
+		return Syntax{}, ErrUnavailable
 	}
 	rules := *eff
 	if rules.Syntax.CaseSensitive != nil {

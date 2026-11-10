@@ -39,9 +39,6 @@ func Effective(list []*Profile) *Profile {
 	if p := owner(FieldPlayerPattern); p != nil {
 		out.Syntax.PlayerPattern = p.Syntax.PlayerPattern
 	}
-	if p := owner(FieldSeparators); p != nil {
-		out.Syntax.Separators = append([]string(nil), p.Syntax.Separators...)
-	}
 	if p := owner(FieldGamePorts); p != nil {
 		out.Ports.Game = append([]GamePort(nil), p.Ports.Game...)
 	}
@@ -59,6 +56,20 @@ func Effective(list []*Profile) *Profile {
 	}
 	if p := owner(FieldFormatting); p != nil {
 		out.Formatting = p.Formatting
+	}
+	// Separators, like wrappers, hold from every profile; no profile lifts
+	// one (D-076).
+	sepSeen := map[string]bool{}
+	for _, p := range list {
+		if p == nil {
+			continue
+		}
+		for _, sep := range p.Syntax.Separators {
+			if sep != "" && !sepSeen[sep] {
+				sepSeen[sep] = true
+				out.Syntax.Separators = append(out.Syntax.Separators, sep)
+			}
+		}
 	}
 	seen := map[string]bool{}
 	for _, p := range list {
@@ -78,13 +89,44 @@ func Effective(list []*Profile) *Profile {
 	return out
 }
 
-// setsField is Sets, and true for every field of a profile stored before
-// the fields were recorded: it then counts as setting what it has.
+// setsField is Sets; for a profile stored before the fields were
+// recorded it judges by the values (legacySets).
 func (p *Profile) setsField(f string) bool {
 	if p.Set == nil {
-		return true
+		return p.legacySets(f)
 	}
 	return p.Sets(f)
+}
+
+// legacySets judges a profile stored before the fields were recorded by
+// its values: a value that is not the default counts as set, so such rules
+// never win a field with a default over a lower profile.
+func (p *Profile) legacySets(f string) bool {
+	switch f {
+	case FieldCaseSensitive:
+		return p.Syntax.CaseSensitive != nil && *p.Syntax.CaseSensitive
+	case FieldStripPrefix:
+		return p.Syntax.StripPrefix != nil && *p.Syntax.StripPrefix != "/"
+	case FieldMaxLength:
+		return p.Syntax.MaxLength != 0 && p.Syntax.MaxLength != DefaultMaxLength
+	case FieldPlayerPattern:
+		return p.Syntax.PlayerPattern != ""
+	case FieldSeparators:
+		return len(p.Syntax.Separators) > 0
+	case FieldGamePorts:
+		return len(p.Ports.Game) > 0
+	case FieldSteamConnect:
+		return p.Ports.SteamConnect
+	case FieldPlayers:
+		return p.Players != nil
+	case FieldStop:
+		return p.Stop != nil
+	case FieldVersion:
+		return p.Version != nil
+	case FieldFormatting:
+		return p.Formatting != ""
+	}
+	return false
 }
 
 // MergeCatalogs is the catalog of a server: the union of the catalogs of
