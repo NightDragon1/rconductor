@@ -126,7 +126,7 @@ are written like `24h`, `15m`, `30s`.
 | `auth.totp_required` | boolean | off | on, off | two-factor sign-in for everyone; who has none yet must set it up before anything else |
 | `auth.second_factor_window` | duration | 5m | 1m to 1h | time for the code after the right password; 5 wrong codes end it too |
 | `auth.recovery_lifetime` | duration | 30m | 5m to 24h | validity of a recovery link for the second factor; only the last one requested holds |
-| `auth.recovery_per_hour` | number | 3 | 1 to 100 | recovery requests per user and per client address and hour; while the table of client addresses is full, all new addresses share one such limit |
+| `auth.recovery_per_hour` | number | 3 | 1 to 100 | recovery requests per user and per client address (IPv6 per /64) and hour; while the table of client addresses is full, all new addresses share one such limit |
 | `auth.recovery_workers` | number | 4 | 1 to 64 | recovery requests worked on at the same time in the background |
 | `auth.recovery_queue` | number | 100 | 1 to 10000 | recovery requests waiting in the background; further ones are dropped with the same answer and logged as `auth.recovery.dropped` |
 | `smtp.timeout` | duration | 10s | 1s to 5m | longest time for one mail, from connecting to the end |
