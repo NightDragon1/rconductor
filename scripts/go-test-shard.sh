@@ -3,10 +3,14 @@
 #
 # Splits the Go packages into the shards of the CI job "Go test".
 #   go-test-shard.sh N        prints the import paths of shard N
-#   go-test-shard.sh --check [TOTAL]
+#   go-test-shard.sh --check [TOTAL [INDEX SHARD]]
 #                             fails unless every package of go list ./...
-#                             is in exactly one shard, and, with TOTAL (the
-#                             matrix size), unless SHARDS matches it
+#                             is in exactly one shard, with TOTAL (the
+#                             matrix size) unless SHARDS matches it, and
+#                             with INDEX (the job index from 0) and SHARD
+#                             (its matrix value) unless SHARD is INDEX + 1;
+#                             run in every job, that makes the matrix
+#                             exactly 1 to SHARDS
 # The slow packages are spread by name so that each shard takes about the
 # same time; the last shard takes everything not listed, so a new package
 # lands there by itself. Times come from the CI logs (go test -race, per
@@ -44,6 +48,16 @@ check() {
     echo "the matrix has $1 shards, this script $SHARDS"
     exit 1
   fi
+  if [ -n "${2:-}${3:-}" ]; then
+    case "${2:-}:${3:-}" in
+      [0-9]:[1-9]) ;;
+      *) echo "job index [${2:-}] or shard [${3:-}] is not a number"; exit 1 ;;
+    esac
+    if [ "$3" -ne $(($2 + 1)) ]; then
+      echo "job $(($2 + 1)) of the matrix is shard $3; the matrix must be 1 to $SHARDS in order"
+      exit 1
+    fi
+  fi
   all=$(go list ./... | sort)
   got=$(i=1; while [ "$i" -le "$SHARDS" ]; do shard "$i"; i=$((i + 1)); done | sort)
   twice=$(printf '%s\n' "$got" | uniq -d)
@@ -72,10 +86,10 @@ tmp() {
 }
 
 case "${1:-}" in
-  --check) check "${2:-}" ;;
+  --check) check "${2:-}" "${3:-}" "${4:-}" ;;
   [1-9])
     [ "$1" -le "$SHARDS" ] || { echo "no shard $1 of $SHARDS" >&2; exit 2; }
     shard "$1"
     ;;
-  *) echo "usage: $0 N | --check [TOTAL]" >&2; exit 2 ;;
+  *) echo "usage: $0 N | --check [TOTAL [INDEX SHARD]]" >&2; exit 2 ;;
 esac
