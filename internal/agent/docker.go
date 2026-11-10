@@ -729,12 +729,18 @@ type orderLimiter struct {
 
 	mu      sync.Mutex
 	buckets map[string]*tokens
+	// overflow is the one bucket that all new containers share while
+	// buckets is full; it has the limit of one container (D-077).
+	overflow *tokens
 }
 
 type tokens struct {
 	n    float64
 	last time.Time
 }
+
+// maxOrderBuckets bounds the containers an orderLimiter counts.
+const maxOrderBuckets = 10000
 
 func newOrderLimiter(perMinute, burst int) *orderLimiter {
 	return &orderLimiter{perMinute: float64(perMinute), burst: float64(burst), now: time.Now, buckets: map[string]*tokens{}}
@@ -746,11 +752,26 @@ func (l *orderLimiter) allow(name string) bool {
 	now := l.now()
 	b := l.buckets[name]
 	if b == nil {
-		if len(l.buckets) >= 10000 {
-			clear(l.buckets)
+		// A full table drops only buckets that are full again; if it stays
+		// full, new containers share the overflow bucket, and no count
+		// already held is lost (D-076, D-077).
+		if len(l.buckets) >= maxOrderBuckets {
+			for k, old := range l.buckets {
+				if old.n+now.Sub(old.last).Minutes()*l.perMinute >= l.burst {
+					delete(l.buckets, k)
+				}
+			}
 		}
-		b = &tokens{n: l.burst, last: now}
-		l.buckets[name] = b
+		switch {
+		case len(l.buckets) < maxOrderBuckets:
+			b = &tokens{n: l.burst, last: now}
+			l.buckets[name] = b
+		case l.overflow == nil:
+			l.overflow = &tokens{n: l.burst, last: now}
+			b = l.overflow
+		default:
+			b = l.overflow
+		}
 	}
 	b.n = min(l.burst, b.n+now.Sub(b.last).Minutes()*l.perMinute)
 	b.last = now

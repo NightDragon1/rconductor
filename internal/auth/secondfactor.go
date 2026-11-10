@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/mail"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/auth/totp"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/netlimit"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -37,6 +39,15 @@ const (
 	SettingRecoveryPerHour    = "auth.recovery_per_hour"
 	DefaultRecoveryPerHour    = 3
 	MinRecoveryPerHour        = 1
+	// The background part of recovery requests runs in a pool of at most
+	// auth.recovery_workers jobs at a time, with at most
+	// auth.recovery_queue waiting; further jobs are dropped (D-077).
+	SettingRecoveryWorkers = "auth.recovery_workers"
+	DefaultRecoveryWorkers = 4
+	MinRecoveryWorkers     = 1
+	SettingRecoveryQueue   = "auth.recovery_queue"
+	DefaultRecoveryQueue   = 100
+	MinRecoveryQueue       = 1
 )
 
 // Fixed limits of the second factor.
@@ -90,24 +101,67 @@ type recoveryWindow struct {
 type secondFactorState struct {
 	cfg SecondFactor
 	mu  sync.Mutex
-	// recovery counts recovery requests per user and per client in the
-	// current hour.
-	recovery map[string]*recoveryWindow
-	// send delivers recovery mail in the background; tests wait on it.
+	// clients counts recovery requests per client (an IPv6 client per /64)
+	// in the current hour; at most maxRecoveryKeys of them (D-076).
+	clients map[netip.Addr]*recoveryWindow
+	// users counts recovery requests per user in the current hour. Only
+	// users with an address and the second factor get a window, so the
+	// users table bounds it; it is never cleared early.
+	users map[string]*recoveryWindow
+	// overflow is the one window that all new clients share while the
+	// client table is full; it has the limit of one client (D-077).
+	overflow recoveryWindow
+	// full is set while the client table is full; the warning goes out
+	// once per such spell.
+	full bool
+
+	// The pool for the background part of recovery requests (D-077).
+	poolMu  sync.Mutex
+	queue   []recoveryJob
+	running int
+	// workers and queueLen, if set, replace the settings; tests only.
+	workers, queueLen int
+	// send counts the jobs queued or running; tests and the shutdown wait
+	// on it.
 	send sync.WaitGroup
+	// dropped counts the jobs dropped since the last report; report is
+	// the timer of the running report window, nil without one.
+	dropped int
+	report  *time.Timer
+	// reportGen tells a timer of an ended window from the running one.
+	reportGen int
+}
+
+// dropReportGap is the window of the reports of dropped recovery jobs:
+// at most one entry per window, like the other reports of a full table.
+const dropReportGap = time.Minute
+
+type recoveryJob struct {
+	ctx       context.Context
+	pseudonym string
+	requestID string
 }
 
 // SetSecondFactor enables the second factor (AUTH-008).
 func (s *Service) SetSecondFactor(cfg SecondFactor) {
-	s.sf = &secondFactorState{cfg: cfg, recovery: map[string]*recoveryWindow{}}
+	s.sf = &secondFactorState{cfg: cfg, clients: map[netip.Addr]*recoveryWindow{}, users: map[string]*recoveryWindow{}}
 }
 
 // WaitMail waits for recovery mail sent in the background, for tests and
 // the shutdown.
 func (s *Service) WaitMail() {
-	if s.sf != nil {
-		s.sf.send.Wait()
+	if s.sf == nil {
+		return
 	}
+	s.sf.send.Wait()
+	// Drops not yet reported go out now, so that the count stays exact.
+	s.sf.poolMu.Lock()
+	defer s.sf.poolMu.Unlock()
+	if s.sf.report != nil {
+		s.sf.report.Stop()
+		s.sf.report = nil
+	}
+	s.reportDropped()
 }
 
 // EnsureSecondFactorDefaults stores the defaults of the settings.
@@ -117,6 +171,8 @@ func EnsureSecondFactorDefaults(ctx context.Context, st *store.Store) error {
 		SettingSecondFactorWindow: DefaultSecondFactorWindow.String(),
 		SettingRecoveryLifetime:   DefaultRecoveryLifetime.String(),
 		SettingRecoveryPerHour:    DefaultRecoveryPerHour,
+		SettingRecoveryWorkers:    DefaultRecoveryWorkers,
+		SettingRecoveryQueue:      DefaultRecoveryQueue,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
@@ -569,28 +625,73 @@ func (s *Service) SetEmail(ctx context.Context, p Principal, c Client, email, pw
 	return tx.Commit()
 }
 
-func (s *Service) takeRecovery(ctx context.Context, key string) bool {
-	limit := DefaultRecoveryPerHour
+// recoveryLimit is auth.recovery_per_hour.
+func (s *Service) recoveryLimit(ctx context.Context) int {
 	var v int
 	if err := s.st.GlobalSetting(ctx, SettingRecoveryPerHour, &v); err == nil {
-		limit = max(v, MinRecoveryPerHour)
+		return max(v, MinRecoveryPerHour)
 	}
-	now := s.now()
-	s.sf.mu.Lock()
-	defer s.sf.mu.Unlock()
-	if len(s.sf.recovery) >= maxRecoveryKeys {
-		clear(s.sf.recovery)
-	}
-	w := s.sf.recovery[key]
-	if w == nil || now.Sub(w.start) >= time.Hour {
-		w = &recoveryWindow{start: now}
-		s.sf.recovery[key] = w
+	return DefaultRecoveryPerHour
+}
+
+// takeWindow spends one request of w, opening a new hour when the last
+// one ended.
+func takeWindow(w *recoveryWindow, now time.Time, limit int) bool {
+	if now.Sub(w.start) >= time.Hour {
+		*w = recoveryWindow{start: now}
 	}
 	if w.count >= limit {
 		return false
 	}
 	w.count++
 	return true
+}
+
+// takeRecoveryClient counts a request of the client. A full table drops
+// only windows whose hour ended; if it stays full, all new clients share
+// one overflow window with the limit of one client, while known clients
+// and all user windows keep their counts (D-076, D-077).
+func (s *Service) takeRecoveryClient(ctx context.Context, ip netip.Addr) bool {
+	limit := s.recoveryLimit(ctx)
+	key := netlimit.ClientKey(ip)
+	now := s.now()
+	s.sf.mu.Lock()
+	defer s.sf.mu.Unlock()
+	w := s.sf.clients[key]
+	if w == nil {
+		if len(s.sf.clients) >= maxRecoveryKeys {
+			for k, old := range s.sf.clients {
+				if now.Sub(old.start) >= time.Hour {
+					delete(s.sf.clients, k)
+				}
+			}
+		}
+		if len(s.sf.clients) >= maxRecoveryKeys {
+			if !s.sf.full {
+				s.sf.full = true
+				s.log.Warn("recovery limit table full, new clients share one limit", slog.Int("limit", maxRecoveryKeys))
+			}
+			return takeWindow(&s.sf.overflow, now, limit)
+		}
+		s.sf.full = false
+		w = &recoveryWindow{start: now}
+		s.sf.clients[key] = w
+	}
+	return takeWindow(w, now, limit)
+}
+
+// takeRecoveryUser counts a request for the user.
+func (s *Service) takeRecoveryUser(ctx context.Context, userID string) bool {
+	limit := s.recoveryLimit(ctx)
+	now := s.now()
+	s.sf.mu.Lock()
+	defer s.sf.mu.Unlock()
+	w := s.sf.users[userID]
+	if w == nil {
+		w = &recoveryWindow{start: now}
+		s.sf.users[userID] = w
+	}
+	return takeWindow(w, now, limit)
 }
 
 func domainOf(addr string) string {
@@ -601,20 +702,128 @@ func domainOf(addr string) string {
 }
 
 // RequestRecovery answers every request alike: whether user and address
-// exist shows neither in the answer nor in its time. For a user with an
-// address and the second factor on, within auth.recovery_per_hour per user
-// and per client, a new link replaces the last one and goes out in the
-// background (AUTH-008, NFR-017).
+// exist shows neither in the answer nor in its time. The answer waits only
+// for the limit per client; looking up the user, the limit per user, the
+// stored link, audit, log and mail run in the background, the same for
+// every name. For a user with an address and the second factor on, within
+// auth.recovery_per_hour per user and per client, a new link replaces the
+// last one (AUTH-008, NFR-017).
 func (s *Service) RequestRecovery(ctx context.Context, pseudonym string, c Client) {
 	if s.sf == nil || len(pseudonym) > 4*maxAccountKey {
 		return
 	}
-	clientOK := s.takeRecovery(ctx, "client:"+c.IP.String())
-	u, err := s.st.Queries.GetRecoveryTarget(ctx, pseudonym)
-	if err != nil || !clientOK || u.DisabledAt.Valid || !u.TotpEnabled || u.Email == "" {
+	if !s.takeRecoveryClient(ctx, c.IP) {
 		return
 	}
-	if !s.takeRecovery(ctx, "user:"+u.ID) {
+	s.enqueueRecovery(ctx, recoveryJob{ctx: context.WithoutCancel(ctx), pseudonym: pseudonym, requestID: c.RequestID})
+}
+
+// poolSize returns the number of workers and the length of the queue.
+func (s *Service) poolSize(ctx context.Context) (workers, queue int) {
+	workers, queue = DefaultRecoveryWorkers, DefaultRecoveryQueue
+	var v int
+	if err := s.st.GlobalSetting(ctx, SettingRecoveryWorkers, &v); err == nil {
+		workers = max(v, MinRecoveryWorkers)
+	}
+	if err := s.st.GlobalSetting(ctx, SettingRecoveryQueue, &v); err == nil {
+		queue = max(v, MinRecoveryQueue)
+	}
+	if s.sf.workers > 0 {
+		workers = s.sf.workers
+	}
+	if s.sf.queueLen > 0 {
+		queue = s.sf.queueLen
+	}
+	return workers, queue
+}
+
+// enqueueRecovery hands the job to the pool. A worker starts when fewer
+// than the pool size run and ends when the queue is empty, so an idle pool
+// holds no goroutine. With the queue full the job is dropped; the answer
+// stays the same (D-077).
+func (s *Service) enqueueRecovery(ctx context.Context, j recoveryJob) {
+	workers, queue := s.poolSize(ctx)
+	sf := s.sf
+	sf.poolMu.Lock()
+	if len(sf.queue) >= queue {
+		sf.dropped++
+		if sf.report == nil {
+			// The first drop is reported at once and opens a window; the
+			// drops within it are reported when it ends.
+			s.reportDropped()
+			sf.reportGen++
+			gen := sf.reportGen
+			sf.report = time.AfterFunc(dropReportGap, func() { s.dropWindowEnded(gen) })
+		}
+		sf.poolMu.Unlock()
+		return
+	}
+	sf.queue = append(sf.queue, j)
+	sf.send.Add(1)
+	start := sf.running < workers
+	if start {
+		sf.running++
+	}
+	sf.poolMu.Unlock()
+	if start {
+		go s.recoveryWorker()
+	}
+}
+
+// reportDropped logs the drops counted so far; s.sf.poolMu is held.
+func (s *Service) reportDropped() {
+	if s.sf.dropped == 0 {
+		return
+	}
+	s.log.Warn("recovery requests dropped, queue full", logging.Event(logging.AuthRecoveryDropped),
+		slog.Int("dropped", s.sf.dropped), slog.Duration("window", dropReportGap))
+	s.sf.dropped = 0
+}
+
+// dropWindowEnded reports the drops of the ended window; with any, the
+// next window opens, without any the next drop is reported at once.
+func (s *Service) dropWindowEnded(gen int) {
+	sf := s.sf
+	sf.poolMu.Lock()
+	defer sf.poolMu.Unlock()
+	if sf.report == nil || gen != sf.reportGen {
+		return
+	}
+	if sf.dropped == 0 {
+		sf.report = nil
+		return
+	}
+	s.reportDropped()
+	sf.report.Reset(dropReportGap)
+}
+
+func (s *Service) recoveryWorker() {
+	sf := s.sf
+	for {
+		sf.poolMu.Lock()
+		if len(sf.queue) == 0 {
+			sf.running--
+			sf.poolMu.Unlock()
+			return
+		}
+		j := sf.queue[0]
+		sf.queue[0] = recoveryJob{}
+		sf.queue = sf.queue[1:]
+		sf.poolMu.Unlock()
+		ctx, cancel := context.WithTimeout(j.ctx, 2*time.Minute)
+		s.sendRecovery(ctx, j.pseudonym, j.requestID)
+		cancel()
+		sf.send.Done()
+	}
+}
+
+// sendRecovery is the background part of RequestRecovery.
+func (s *Service) sendRecovery(ctx context.Context, pseudonym, requestID string) {
+	u, err := s.st.Queries.GetRecoveryTarget(ctx, pseudonym)
+	if err != nil || u.DisabledAt.Valid || !u.TotpEnabled || u.Email == "" {
+		return
+	}
+	if !s.takeRecoveryUser(ctx, u.ID) {
 		return
 	}
 	token, err := newToken()
@@ -632,23 +841,18 @@ func (s *Service) RequestRecovery(ctx context.Context, pseudonym string, c Clien
 	}
 	s.audit(ctx, audit.Entry{
 		Kind: audit.KindAuth, TargetType: "user", TargetID: u.ID, Action: "totp.recovery_request", Result: audit.ResultOK,
-		Payload: map[string]string{"request_id": c.RequestID, "domain": domainOf(u.Email)},
+		Payload: map[string]string{"request_id": requestID, "domain": domainOf(u.Email)},
 	})
-	s.log.Info("recovery requested", logging.Event(logging.AuthRecoveryRequested), slog.String(logging.KeyRequestID, c.RequestID),
+	s.log.Info("recovery requested", logging.Event(logging.AuthRecoveryRequested), slog.String(logging.KeyRequestID, requestID),
 		slog.String("user_id", u.ID), slog.String("domain", domainOf(u.Email)))
 	if s.sf.cfg.Mail == nil || s.sf.cfg.LinkBase == "" {
-		s.log.Warn("recovery mail not sent: no SMTP or no RCD_PUBLIC_URL", slog.String(logging.KeyRequestID, c.RequestID))
+		s.log.Warn("recovery mail not sent: no SMTP or no RCD_PUBLIC_URL", slog.String(logging.KeyRequestID, requestID))
 		return
 	}
 	link := strings.TrimRight(s.sf.cfg.LinkBase, "/") + "/recover#" + token
-	to, requestID := u.Email, c.RequestID
-	s.sf.send.Go(func() {
-		mctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
-		defer cancel()
-		if category := s.sf.cfg.Mail.SendRecovery(mctx, to, link); category != "" {
-			s.log.Warn("recovery mail not sent", slog.String(logging.KeyRequestID, requestID), slog.String(logging.KeyReason, category))
-		}
-	})
+	if category := s.sf.cfg.Mail.SendRecovery(ctx, u.Email, link); category != "" {
+		s.log.Warn("recovery mail not sent", slog.String(logging.KeyRequestID, requestID), slog.String(logging.KeyReason, category))
+	}
 }
 
 // RedeemRecovery resets the second factor with the link and the password.

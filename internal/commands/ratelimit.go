@@ -22,15 +22,26 @@ var DefaultLimits = map[string]Limit{
 	"supporter":    {PerMinute: 10, Burst: 3},
 }
 
+// bucket keeps the rate and burst it was last filled with, so that
+// pruning judges it by its own limits, not by the caller's.
 type bucket struct {
 	tokens float64
 	last   time.Time
+	rate   float64 // tokens per second
+	burst  float64
+}
+
+// full reports whether b has refilled to its burst by now, or was idle for
+// an hour; dropping it then loses no count.
+func (b *bucket) full(now time.Time) bool {
+	return b.tokens+now.Sub(b.last).Seconds()*b.rate >= b.burst || now.Sub(b.last) > time.Hour
 }
 
 type bucketKey struct{ user, server string }
 
-// maxBuckets is where pruning starts: buckets that are full again go. What
-// stays is bounded by users times servers, and none of them loses its count.
+// maxBuckets is where pruning starts: buckets that are full again by their
+// own limits go; the table is never cleared as a whole (D-076). What stays
+// is bounded by users times servers, and none of them loses its count.
 const maxBuckets = 10000
 
 // limiter holds one bucket per user and server (CMD-019).
@@ -51,7 +62,7 @@ func (l *limiter) take(user, server string, lim Limit, now time.Time) (bool, tim
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if len(l.buckets) >= maxBuckets {
-		l.prune(now, rate, float64(lim.Burst))
+		l.prune(now)
 	}
 	k := bucketKey{user, server}
 	b := l.buckets[k]
@@ -60,7 +71,7 @@ func (l *limiter) take(user, server string, lim Limit, now time.Time) (bool, tim
 		l.buckets[k] = b
 	}
 	b.tokens = min(float64(lim.Burst), b.tokens+now.Sub(b.last).Seconds()*rate)
-	b.last = now
+	b.last, b.rate, b.burst = now, rate, float64(lim.Burst)
 	if b.tokens >= 1 {
 		b.tokens--
 		return true, 0
@@ -68,9 +79,9 @@ func (l *limiter) take(user, server string, lim Limit, now time.Time) (bool, tim
 	return false, time.Duration((1 - b.tokens) / rate * float64(time.Second))
 }
 
-func (l *limiter) prune(now time.Time, rate, burst float64) {
+func (l *limiter) prune(now time.Time) {
 	for k, b := range l.buckets {
-		if b.tokens+now.Sub(b.last).Seconds()*rate >= burst || now.Sub(b.last) > time.Hour {
+		if b.full(now) {
 			delete(l.buckets, k)
 		}
 	}

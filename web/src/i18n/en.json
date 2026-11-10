@@ -913,6 +913,14 @@
       "auth_recovery_per_hour": {
         "label": "Recovery requests per hour",
         "help": "Per user and per client address."
+      },
+      "auth_recovery_workers": {
+        "label": "Recovery workers",
+        "help": "Recovery requests worked on at the same time in the background."
+      },
+      "auth_recovery_queue": {
+        "label": "Recovery queue",
+        "help": "Recovery requests waiting in the background; further ones are dropped with the same answer."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."

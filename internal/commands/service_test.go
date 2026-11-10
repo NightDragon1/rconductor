@@ -656,9 +656,9 @@ func TestPruneDropsFullBuckets(t *testing.T) {
 	lim := Limit{PerMinute: 60, Burst: 2}
 	now := time.Now()
 	for i := range maxBuckets {
-		l.buckets[bucketKey{user: strconv.Itoa(i)}] = &bucket{tokens: 2, last: now}
+		l.buckets[bucketKey{user: strconv.Itoa(i)}] = &bucket{tokens: 2, last: now, rate: 1, burst: 2}
 	}
-	l.buckets[bucketKey{user: "busy"}] = &bucket{tokens: 0, last: now}
+	l.buckets[bucketKey{user: "busy"}] = &bucket{tokens: 0, last: now, rate: 1, burst: 2}
 	if ok, _ := l.take("new", "s", lim, now); !ok {
 		t.Fatal("refused")
 	}
