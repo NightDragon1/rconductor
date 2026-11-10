@@ -210,6 +210,36 @@ func boolInt(b bool) int64 {
 	return 0
 }
 
+// keepsProtocol refuses a new version of a profile that servers use when
+// it changes the protocol or the http-api dialect: the profile list of a
+// server never changes its protocol (D-076). The last valid state stays.
+func (im *Importer) keepsProtocol(ctx context.Context, id string, c candidate) (bool, error) {
+	old, err := im.st.Queries.GetGameProfile(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	var rules Profile
+	if err := json.Unmarshal([]byte(old.Rules), &rules); err != nil {
+		return false, err
+	}
+	dialect := func(p *Profile) string {
+		if p.HTTPAPI == nil {
+			return ""
+		}
+		return p.HTTPAPI.Dialect
+	}
+	if old.Protocol == c.p.Protocol.Type && dialect(&rules) == dialect(c.p) {
+		return true, nil
+	}
+	n, err := im.st.Queries.CountProfileServers(ctx, id)
+	if err != nil || n == 0 {
+		return err == nil, err
+	}
+	im.reject(ctx, filepath.Base(c.source), c.p.ID, []string{fmt.Sprintf(
+		"protocol or http_api.dialect changed, but %d server(s) use the profile; the last valid state stays", n)})
+	return false, nil
+}
+
 // store writes one profile and its catalog if its content or override
 // state changed.
 func (im *Importer) store(ctx context.Context, c candidate) error {
@@ -220,6 +250,11 @@ func (im *Importer) store(ctx context.Context, c candidate) error {
 	}
 	if exists && cur.ContentHash == c.hash && (cur.Overridden == 1) == c.overridden {
 		return nil
+	}
+	if exists {
+		if keep, err := im.keepsProtocol(ctx, cur.ID, c); err != nil || !keep {
+			return err
+		}
 	}
 	rules, err := json.Marshal(c.p)
 	if err != nil {

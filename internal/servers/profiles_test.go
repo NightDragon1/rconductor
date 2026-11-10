@@ -156,3 +156,29 @@ func TestProfileListRights(t *testing.T) {
 		t.Errorf("after the server admin's change: %v", got)
 	}
 }
+
+// TestProfileListKeepsPortC10 covers D-076: a server admin's profile list
+// keeps the port the RCON admin set.
+func TestProfileListKeepsPortC10(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	mc, src := f.profileID(t, "minecraft-java"), f.profileID(t, "source-engine")
+	name, host, port, pw := "own-port", "mc.lan", 30000, secretOf(rconPassword)
+	sv, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileIDs: &[]string{mc}, Host: &host, Port: &port, Password: pw})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := f.svc.CreateGroup(ctx, f.as("admin"), "scope", []string{sv.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.exec(`INSERT INTO admin_scopes (id, user_id, server_group_id, assigned_by, created_at) VALUES ('c10', ?, ?, ?, 't')`, f.ids["sa"], g.ID, f.ids["admin"])
+	f.c.Invalidate()
+	got, err := f.svc.Update(ctx, f.as("sa"), sv.ID, Input{ProfileIDs: &[]string{src}, Version: f.version(sv.ID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Port != 30000 {
+		t.Errorf("port %d, want 30000", got.Port)
+	}
+}

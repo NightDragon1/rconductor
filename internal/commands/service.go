@@ -419,6 +419,10 @@ func (s *Service) History(ctx context.Context, req users.Request, serverID strin
 		return nil, "", err
 	}
 	if _, ok := rights.Server(serverID); !ok {
+		perm.LogDenied(s.log, perm.Denial{
+			RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym, Role: req.Actor.Role,
+			Server: serverID, Reason: "not_found", Action: "history",
+		})
 		return nil, "", users.ErrNotFound
 	}
 	if limit <= 0 {

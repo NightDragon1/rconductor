@@ -131,7 +131,9 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 		base = fields{profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port), fingerprint: r.TlsFingerprint}
 		sealed = r.Secret
 	}
-	f, err := s.check(ctx, s.st.Queries, base, Input{ProfileIDs: in.ProfileIDs, Host: in.Host, Port: in.Port})
+	// A test with profiles of another protocol needs a password given with
+	// it: the stored one belongs to the stored protocol (D-076).
+	f, err := s.check(ctx, s.st.Queries, base, Input{ProfileIDs: in.ProfileIDs, Host: in.Host, Port: in.Port}, in.Password != nil)
 	if err != nil {
 		return ConnectionResult{}, err
 	}
