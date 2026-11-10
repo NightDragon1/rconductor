@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -188,5 +189,52 @@ func TestPresenceThroughAnchors(t *testing.T) {
 	}
 	if p.Sets(FieldMaxLength) || p.Sets(FieldGamePorts) {
 		t.Errorf("absent fields counted as set: %v", p.Set)
+	}
+}
+
+// TestNullRefused covers D-074: null, also a key without a value, is
+// refused with its line; an empty value is written as [] or "".
+func TestNullRefused(t *testing.T) {
+	base := "schema: 1\nid: n\nname: N\nprotocol: { type: source-rcon, default_port: 1 }\n"
+	for name, add := range map[string]string{
+		"null":        "stop: null\n",
+		"tilde":       "formatting: ~\n",
+		"empty value": "syntax:\n  separators:\n",
+		"in a list":   "syntax:\n  wrappers: [null]\n",
+		"nested":      "ports:\n  steam_connect: null\n",
+	} {
+		_, err := Parse([]byte(base + add))
+		if err == nil || !strings.Contains(err.Error(), "null not allowed") {
+			t.Errorf("%s: %v, want null not allowed", name, err)
+			continue
+		}
+		f := Check([]byte(base + add))
+		if len(f) == 0 || f[0].Line < 5 {
+			t.Errorf("%s: findings %+v, want the line of the null", name, f)
+		}
+	}
+	if _, err := Parse([]byte(base + "syntax:\n  separators: []\n  player_pattern: \"\"\n")); err != nil {
+		t.Errorf("explicit empty values: %v", err)
+	}
+}
+
+// TestShippedProfilesWithoutNull covers D-074: no shipped profile holds a
+// null.
+func TestShippedProfilesWithoutNull(t *testing.T) {
+	entries, err := os.ReadDir("../../profiles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		data, err := os.ReadFile("../../profiles/" + e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f := Check(data); len(f) > 0 {
+			t.Errorf("%s: %+v", e.Name(), f)
+		}
 	}
 }

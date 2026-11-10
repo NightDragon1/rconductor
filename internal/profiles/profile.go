@@ -261,6 +261,9 @@ func parse(data []byte) (*Profile, *ast.File, error) {
 	if prob := checkAliases(file); prob != "" {
 		return nil, file, &Error{Problems: []string{prob}}
 	}
+	if probs := checkNulls(file); len(probs) > 0 {
+		return nil, file, &Error{Problems: probs}
+	}
 	var p Profile
 	if len(file.Docs) > 0 && file.Docs[0].Body != nil {
 		if err := yaml.NodeToValue(file.Docs[0].Body, &p, yaml.DisallowUnknownField()); err != nil {
@@ -307,6 +310,22 @@ func checkShape(tokens token.Tokens) string {
 		}
 	}
 	return ""
+}
+
+// checkNulls refuses null values, also a key without a value: a field is
+// either written with a value or left out; an empty value is written as
+// [] or "" (D-074).
+func checkNulls(file *ast.File) []string {
+	var probs []string
+	for _, doc := range file.Docs {
+		if doc == nil || doc.Body == nil {
+			continue
+		}
+		for _, n := range ast.Filter(ast.NullType, doc.Body) {
+			probs = append(probs, fmt.Sprintf("%s null not allowed; write [] or \"\" for an empty value", at(n.GetToken())))
+		}
+	}
+	return probs
 }
 
 // checkAliases refuses an alias inside an anchored value: anchors that

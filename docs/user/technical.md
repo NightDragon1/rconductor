@@ -17,6 +17,7 @@ fields of the command page.
 | Aliases | a file has at most 100 YAML aliases |
 | Anchors | an anchored value must not contain aliases |
 | Nesting | lists and mappings nest at most 64 levels deep |
+| Empty values | a field is written with a value or left out; `null` and a key without a value are refused, write `[]` or `""` for an empty value |
 
 ### Shipped profiles
 
