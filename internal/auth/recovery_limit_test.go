@@ -98,8 +98,14 @@ func TestRecoveryFullTableKeepsCountsC8(t *testing.T) {
 	if n := f.mailsTo("plum@example.org"); n != 1 {
 		t.Errorf("mails to plum from a known client = %d, want 1", n)
 	}
-	if n := countLines(f.logs.String(), "recovery limit table full"); n != 1 {
-		t.Errorf("full table reported %d times, want once", n)
+	// The ten clients past the full table and pear's client are reported
+	// with their number (C39).
+	total := 0
+	for _, e := range fullEntries(t, f.logs.String()) {
+		total += e.Count
+	}
+	if total != 11 {
+		t.Errorf("new clients on the full table counted %d, want 11", total)
 	}
 	// After the hour the ended windows make room again.
 	f.now = f.now.Add(time.Hour)

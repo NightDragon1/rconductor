@@ -111,9 +111,9 @@ type secondFactorState struct {
 	// overflow is the one window that all new clients share while the
 	// client table is full; it has the limit of one client (D-077).
 	overflow recoveryWindow
-	// full is set while the client table is full; the warning goes out
-	// once per such spell.
-	full bool
+	// full reports the new clients that share the overflow window, at
+	// most one entry per window.
+	full *windowReport
 
 	// The pool for the background part of recovery requests (D-077).
 	poolMu  sync.Mutex
@@ -124,12 +124,8 @@ type secondFactorState struct {
 	// send counts the jobs queued or running; tests and the shutdown wait
 	// on it.
 	send sync.WaitGroup
-	// dropped counts the jobs dropped since the last report; report is
-	// the timer of the running report window, nil without one.
-	dropped int
-	report  *time.Timer
-	// reportGen tells a timer of an ended window from the running one.
-	reportGen int
+	// dropped reports the dropped jobs, at most one entry per window.
+	dropped *windowReport
 }
 
 // dropReportGap is the window of the reports of dropped recovery jobs:
@@ -145,6 +141,14 @@ type recoveryJob struct {
 // SetSecondFactor enables the second factor (AUTH-008).
 func (s *Service) SetSecondFactor(cfg SecondFactor) {
 	s.sf = &secondFactorState{cfg: cfg, clients: map[netip.Addr]*recoveryWindow{}, users: map[string]*recoveryWindow{}}
+	s.sf.full = newWindowReport(fullReportGap, func(n int) {
+		s.log.Warn("recovery limit table full, new clients share one limit",
+			slog.Int("limit", maxRecoveryKeys), slog.Int("count", n), slog.Duration("window", fullReportGap))
+	})
+	s.sf.dropped = newWindowReport(dropReportGap, func(n int) {
+		s.log.Warn("recovery requests dropped, queue full", logging.Event(logging.AuthRecoveryDropped),
+			slog.Int("dropped", n), slog.Duration("window", dropReportGap))
+	})
 }
 
 // WaitMail waits for recovery mail sent in the background, for tests and
@@ -154,14 +158,9 @@ func (s *Service) WaitMail() {
 		return
 	}
 	s.sf.send.Wait()
-	// Drops not yet reported go out now, so that the count stays exact.
-	s.sf.poolMu.Lock()
-	defer s.sf.poolMu.Unlock()
-	if s.sf.report != nil {
-		s.sf.report.Stop()
-		s.sf.report = nil
-	}
-	s.reportDropped()
+	// Reports not yet logged go out now, so that the counts stay exact.
+	s.sf.dropped.flush()
+	s.sf.full.flush()
 }
 
 // EnsureSecondFactorDefaults stores the defaults of the settings.
@@ -667,13 +666,9 @@ func (s *Service) takeRecoveryClient(ctx context.Context, ip netip.Addr) bool {
 			}
 		}
 		if len(s.sf.clients) >= maxRecoveryKeys {
-			if !s.sf.full {
-				s.sf.full = true
-				s.log.Warn("recovery limit table full, new clients share one limit", slog.Int("limit", maxRecoveryKeys))
-			}
+			s.sf.full.add()
 			return takeWindow(&s.sf.overflow, now, limit)
 		}
-		s.sf.full = false
 		w = &recoveryWindow{start: now}
 		s.sf.clients[key] = w
 	}
@@ -746,16 +741,10 @@ func (s *Service) enqueueRecovery(ctx context.Context, j recoveryJob) {
 	sf := s.sf
 	sf.poolMu.Lock()
 	if len(sf.queue) >= queue {
-		sf.dropped++
-		if sf.report == nil {
-			// The first drop is reported at once and opens a window; the
-			// drops within it are reported when it ends.
-			s.reportDropped()
-			sf.reportGen++
-			gen := sf.reportGen
-			sf.report = time.AfterFunc(dropReportGap, func() { s.dropWindowEnded(gen) })
-		}
 		sf.poolMu.Unlock()
+		// The first drop is reported at once and opens a window; the drops
+		// within it are reported when it ends.
+		sf.dropped.add()
 		return
 	}
 	sf.queue = append(sf.queue, j)
@@ -768,33 +757,6 @@ func (s *Service) enqueueRecovery(ctx context.Context, j recoveryJob) {
 	if start {
 		go s.recoveryWorker()
 	}
-}
-
-// reportDropped logs the drops counted so far; s.sf.poolMu is held.
-func (s *Service) reportDropped() {
-	if s.sf.dropped == 0 {
-		return
-	}
-	s.log.Warn("recovery requests dropped, queue full", logging.Event(logging.AuthRecoveryDropped),
-		slog.Int("dropped", s.sf.dropped), slog.Duration("window", dropReportGap))
-	s.sf.dropped = 0
-}
-
-// dropWindowEnded reports the drops of the ended window; with any, the
-// next window opens, without any the next drop is reported at once.
-func (s *Service) dropWindowEnded(gen int) {
-	sf := s.sf
-	sf.poolMu.Lock()
-	defer sf.poolMu.Unlock()
-	if sf.report == nil || gen != sf.reportGen {
-		return
-	}
-	if sf.dropped == 0 {
-		sf.report = nil
-		return
-	}
-	s.reportDropped()
-	sf.report.Reset(dropReportGap)
 }
 
 func (s *Service) recoveryWorker() {
