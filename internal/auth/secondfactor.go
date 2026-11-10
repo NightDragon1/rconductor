@@ -273,14 +273,15 @@ func (s *Service) LoginCode(ctx context.Context, pending, code string, c Client)
 	if err != nil {
 		return "", Principal{}, fmt.Errorf("open second factor: %w", err)
 	}
+	gone := false
 	err = s.guarded(ctx, row.UserID, row.Pseudonym, c, "wrong_code", func() (bool, error) {
 		step, ok := totp.Verify([]byte(key), code, s.now())
 		if !ok {
 			return false, nil
 		}
-		// A code holds once (replay).
-		n, err := s.st.Queries.UseTOTPStep(ctx, sqlitedb.UseTOTPStepParams{Step: step, ID: row.UserID})
-		return n == 1, err
+		won, missing, err := s.takeCode(ctx, row.UserID, step, hash)
+		gone = missing
+		return won || missing, err
 	})
 	var locked *LockedError
 	switch {
@@ -295,10 +296,11 @@ func (s *Service) LoginCode(ctx context.Context, pending, code string, c Client)
 		return "", Principal{}, err
 	case err != nil:
 		return "", Principal{}, err
-	}
-	// One use: whoever deletes it goes on.
-	if n, err := s.st.Queries.DeleteLoginPending(ctx, hash); err != nil || n != 1 {
+	case gone:
 		return "", Principal{}, ErrNoPending
+	}
+	if s.codeTaken != nil {
+		s.codeTaken()
 	}
 	u := sqlitedb.GetLoginUserRow{ID: row.UserID, Pseudonym: row.Pseudonym, Role: row.Role, PasswordHash: row.PasswordHash,
 		IsEmergency: row.IsEmergency, DisabledAt: row.DisabledAt, MustChangePassword: row.MustChangePassword, TotpEnabled: true}
@@ -310,6 +312,31 @@ func (s *Service) LoginCode(ctx context.Context, pending, code string, c Client)
 		slog.String(logging.KeyRequestID, c.RequestID), slog.String(logging.KeySession, p.SessionRef()),
 		slog.String(logging.KeyUser, p.Pseudonym), slog.String(logging.KeyRole, p.Role), slog.String("factor", "totp"))
 	return token, p, nil
+}
+
+// takeCode uses a TOTP step and takes the open login in one transaction
+// (D-075): a code holds once, and whoever uses it has the login. won is
+// false when the step was used before; missing is true when the open
+// login is gone, the step then stays unused.
+func (s *Service) takeCode(ctx context.Context, userID string, step int64, hash string) (won, missing bool, err error) {
+	tx, err := s.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return false, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := sqlitedb.New(tx)
+	n, err := q.UseTOTPStep(ctx, sqlitedb.UseTOTPStepParams{Step: step, ID: userID})
+	if err != nil || n != 1 {
+		return false, false, err
+	}
+	d, err := q.DeleteLoginPending(ctx, hash)
+	if err != nil {
+		return false, false, err
+	}
+	if d != 1 {
+		return false, true, nil
+	}
+	return true, false, tx.Commit()
 }
 
 // SecondFactorView is the own state of the second factor.
