@@ -190,14 +190,13 @@ func (s *Service) syntax(ctx context.Context, serverID string) (Syntax, error) {
 	if !r.ProfileID.Valid {
 		return syn, nil
 	}
-	gp, err := s.st.Queries.GetGameProfile(ctx, r.ProfileID.String)
-	if err != nil {
+	// The effective rules of all profiles of the server, field by field;
+	// wrappers of all profiles hold (SRV-008, D-074).
+	eff, _, err := profiles.ForServer(ctx, s.st.Queries, serverID)
+	if err != nil || eff == nil {
 		return syn, nil //nolint:nilerr // a missing profile falls back to the defaults
 	}
-	var rules profiles.Profile
-	if err := json.Unmarshal([]byte(gp.Rules), &rules); err != nil {
-		return syn, nil //nolint:nilerr // see above
-	}
+	rules := *eff
 	if rules.Syntax.CaseSensitive != nil {
 		syn.CaseSensitive = *rules.Syntax.CaseSensitive
 	}

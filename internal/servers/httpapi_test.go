@@ -111,7 +111,7 @@ func TestPinnedConnectionTest(t *testing.T) {
 		t.Cleanup(s.Close)
 		host, port := hostPort(t, s.Addr())
 		profile := h.profile(t, d)
-		in := ConnectionData{ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken)}
+		in := ConnectionData{ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken)}
 
 		got, err := h.svc.TestConnection(ctx, h.f.as("admin"), in)
 		if err != nil || got.Result != ConnectionUnpinned || got.Fingerprint != s.Fingerprint {
@@ -152,7 +152,7 @@ func TestHTTPServerPinning(t *testing.T) {
 		host, port := hostPort(t, s.Addr())
 		profile := h.profile(t, d)
 		name := "srv-" + d
-		in := Input{Name: &name, ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken)}
+		in := Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken)}
 		if _, err := h.svc.Create(ctx, h.f.as("admin"), in); err == nil {
 			t.Fatalf("%s: created without a trusted certificate", d)
 		}
@@ -257,7 +257,7 @@ func TestCertificateNotAfter(t *testing.T) {
 
 		// The connection test gives the end of validity with the
 		// fingerprint.
-		res, err := h.svc.TestConnection(ctx, h.f.as("admin"), ConnectionData{ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken)})
+		res, err := h.svc.TestConnection(ctx, h.f.as("admin"), ConnectionData{ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken)})
 		if err != nil || res.Fingerprint != s.Fingerprint || !res.NotAfter.Truncate(time.Second).Equal(want) {
 			t.Fatalf("%s connection test: %+v %v", d, res, err)
 		}
@@ -271,7 +271,7 @@ func TestCertificateNotAfter(t *testing.T) {
 		}
 
 		name := "na-" + d
-		sv, err := h.svc.Create(ctx, h.f.as("admin"), Input{Name: &name, ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken), TLSFingerprint: &s.Fingerprint})
+		sv, err := h.svc.Create(ctx, h.f.as("admin"), Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken), TLSFingerprint: &s.Fingerprint})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -342,7 +342,7 @@ func TestCertificateNotAfterExpired(t *testing.T) {
 		host, port := hostPort(t, s.Addr())
 		profile := h.profile(t, d)
 		name := "expired-" + d
-		sv, err := h.svc.Create(ctx, h.f.as("admin"), Input{Name: &name, ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken), TLSFingerprint: &s.Fingerprint})
+		sv, err := h.svc.Create(ctx, h.f.as("admin"), Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken), TLSFingerprint: &s.Fingerprint})
 		if err != nil {
 			t.Fatal(err)
 		}

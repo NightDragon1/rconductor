@@ -1,22 +1,26 @@
 -- Servers and server groups (SRV-001, SRV-003, SRV-005).
 
 -- name: ListServers :many
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint, tls_not_after
-FROM servers WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE;
+-- profile_id is the top profile of the server (SRV-008); the whole list
+-- comes from ListServerProfiles.
+SELECT s.id, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
+FROM servers s LEFT JOIN server_profiles sp ON sp.server_id = s.id AND sp.position = 0
+WHERE s.deleted_at IS NULL ORDER BY s.name COLLATE NOCASE;
 
 -- name: GetServer :one
-SELECT id, name, profile_id, protocol, host, port, secret, agent_id, container_name, game_ports, tls_fingerprint, tls_not_after
-FROM servers WHERE id = ? AND deleted_at IS NULL;
+SELECT s.id, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
+FROM servers s LEFT JOIN server_profiles sp ON sp.server_id = s.id AND sp.position = 0
+WHERE s.id = ? AND s.deleted_at IS NULL;
 
 -- name: ListServersByContainer :many
 SELECT id FROM servers WHERE agent_id = ? AND container_name = ? AND deleted_at IS NULL;
 
 -- name: InsertServer :exec
-INSERT INTO servers (id, name, profile_id, protocol, host, port, secret, game_ports, agent_id, container_name, tls_fingerprint, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO servers (id, name, protocol, host, port, secret, game_ports, agent_id, container_name, tls_fingerprint, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateServer :exec
-UPDATE servers SET name = ?, profile_id = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, tls_fingerprint = ?, tls_not_after = ?, updated_at = ?
+UPDATE servers SET name = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, tls_fingerprint = ?, tls_not_after = ?, updated_at = ?
 WHERE id = ?;
 
 -- name: SetServerNotAfter :execrows
@@ -27,6 +31,18 @@ UPDATE servers SET tls_not_after = ? WHERE id = ? AND tls_fingerprint = ? AND tl
 -- name: FillServerNotAfter :execrows
 -- Fills in the end of validity at the first connection with the pin (D-073).
 UPDATE servers SET tls_not_after = ? WHERE id = ? AND tls_fingerprint = ? AND tls_fingerprint <> '' AND tls_not_after IS NULL AND deleted_at IS NULL;
+
+-- name: ListServerProfiles :many
+SELECT server_id, profile_id, position FROM server_profiles ORDER BY server_id, position;
+
+-- name: GetServerProfiles :many
+SELECT profile_id FROM server_profiles WHERE server_id = ? ORDER BY position;
+
+-- name: ClearServerProfiles :exec
+DELETE FROM server_profiles WHERE server_id = ?;
+
+-- name: AddServerProfile :exec
+INSERT INTO server_profiles (server_id, profile_id, position) VALUES (?, ?, ?);
 
 -- name: SetServerSecret :exec
 UPDATE servers SET secret = ?, updated_at = ? WHERE id = ?;

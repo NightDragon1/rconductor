@@ -75,8 +75,12 @@ type candidate struct {
 	overridden bool
 }
 
+// rulesFormat is part of the hash: a new format of the stored rules
+// imports every profile once again (D-074: the fields a profile sets).
+const rulesFormat = "rules-2\n"
+
 func hashOf(b []byte) string {
-	sum := sha256.Sum256(b)
+	sum := sha256.Sum256(append([]byte(rulesFormat), b...))
 	return hex.EncodeToString(sum[:])
 }
 
