@@ -5,15 +5,25 @@
 # Go with gofmt, the web interface with prettier. Generated code
 # (internal/api/, web/src/api/) stays as the generators wrote it. Without
 # web/node_modules prettier is skipped; the hooks and the CI check anyway.
+# The path is resolved first; files outside the repository are left alone,
+# and prettier only formats files that resolve to a place under web/.
 set -uo pipefail
 root=${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}
+[ -n "$root" ] || exit 0
+root=$(realpath -e -- "$root" 2>/dev/null) || exit 0
 file=$(jq -r '.tool_input.file_path // empty' 2>/dev/null) || exit 0
-[ -n "$file" ] && [ -f "$file" ] || exit 0
+[ -n "$file" ] || exit 0
+file=$(realpath -e -- "$file" 2>/dev/null) || exit 0
+[ -f "$file" ] || exit 0
+case "$file" in
+  "$root"/*) ;;
+  *) exit 0 ;;
+esac
 case "$file" in
   "$root"/internal/api/* | "$root"/web/src/api/*) exit 0 ;;
-  *.go) gofmt -w "$file" ;;
+  *.go) gofmt -w -- "$file" ;;
   "$root"/web/*.ts | "$root"/web/*.tsx | "$root"/web/*.json | "$root"/web/*.css | "$root"/web/*.md)
     [ -x "$root/web/node_modules/.bin/prettier" ] &&
-      (cd "$root/web" && node_modules/.bin/prettier --write --log-level warn "$file") ;;
+      (cd "$root/web" && node_modules/.bin/prettier --write --log-level warn -- "$file") ;;
 esac
 exit 0
