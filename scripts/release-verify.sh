@@ -3,7 +3,8 @@
 #
 # Checks a published release from the outside, so that T13 holds for every
 # release (SEC-013, D-047): in both registries each image has its tags and no
-# other moving tag (a release candidate neither its minor nor its major tag); index and each platform digest are signed and attested,
+# other moving tag (a release candidate creates no minor tag and does not
+# move the major tag); index and each platform digest are signed and attested,
 # and the SBOM of a platform lists only packages of that platform. Reports
 # every fault and fails at the end. Needs GHCR, HUB, cosign, docker and jq.
 set -eu
@@ -66,9 +67,13 @@ for registry in "$GHCR" "$HUB"; do
     done
     absent "$image:latest"
     if [ "$rc" = true ]; then
-      # A release candidate never moves a tag of a release.
+      # A release candidate never moves a tag of a release: its minor tag
+      # does not exist yet, and the major tag, which an earlier release
+      # holds, is not the candidate.
       absent "$image:$base"
-      absent "$image:${base%%.*}"
+      if [ -n "$index" ] && major_digest=$(digest_of "$image:${base%%.*}" 2>/dev/null); then
+        [ "$major_digest" != "$index" ] || fault "$image:${base%%.*} points to the release candidate"
+      fi
     elif [ "$prerelease" = true ]; then
       absent "$image:0"
       absent "$image:1"
