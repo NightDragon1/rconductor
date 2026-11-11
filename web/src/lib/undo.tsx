@@ -11,7 +11,9 @@ import {
 } from 'react';
 import { useBlocker } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import type { Outcome } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { reasonText } from '@/lib/admin';
 
 // UNDO_MS is how long Undo stays offered after a save (UI-008, D-048).
 export const UNDO_MS = 5000;
@@ -32,15 +34,17 @@ interface Undo {
   // guard runs leave at once, or after a question while something is
   // unsaved; for what leaves a panel without leaving the page.
   guard: (leave: () => void) => void;
+  // saving marks a save in flight until its outcome is there: leaving
+  // waits for it instead of asking (UI-008).
+  saving: (p: Promise<Outcome>) => Promise<Outcome>;
   dirty?: RefObject<Set<symbol>>;
-  // released tells that an unsaved change is gone, saved or dropped.
-  released?: () => void;
 }
 
 const UndoContext = createContext<Undo>({
   saved: () => undefined,
   undoLast: () => undefined,
   guard: (leave) => leave(),
+  saving: (p) => p,
 });
 
 // UndoProvider shows "Saved" with Undo after a change (Design 6.1) and asks
@@ -55,32 +59,69 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   const [now, setNow] = useState(() => Date.now());
   const seq = useRef(0);
   const dirty = useRef(new Set<symbol>());
-  const [leaving, setLeavingState] = useState<(() => void) | null>(null);
-  const leavingRef = useRef<(() => void) | null>(null);
-  const setLeaving = useCallback((leave: (() => void) | null) => {
-    leavingRef.current = leave;
-    setLeavingState(() => leave);
-  }, []);
+  const [leaving, setLeaving] = useState<(() => void) | null>(null);
+  const inFlight = useRef(new Set<Promise<Outcome>>());
+  // waiting hides the question while a leave waits for a save; error is
+  // the refusal of that save, shown in the question.
+  const [waiting, setWaiting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const turn = useRef(0);
   const blocker = useBlocker({
-    shouldBlockFn: () => dirty.current.size > 0,
-    enableBeforeUnload: () => dirty.current.size > 0,
+    shouldBlockFn: () => {
+      if (inFlight.current.size > 0) {
+        setWaiting(true);
+        return true;
+      }
+      return dirty.current.size > 0;
+    },
+    enableBeforeUnload: () => dirty.current.size > 0 || inFlight.current.size > 0,
     withResolver: true,
   });
-  const blockerRef = useRef(blocker);
-  useEffect(() => {
-    blockerRef.current = blocker;
-  }, [blocker]);
-  // Once nothing is unsaved any more, an open question has no ground:
-  // the leave that waits for it goes ahead.
-  const released = useCallback(() => {
-    if (dirty.current.size > 0) return;
-    const leave = leavingRef.current;
-    if (leave) {
-      setLeaving(null);
-      leave();
+
+  const saving = useCallback((p: Promise<Outcome>) => {
+    const tracked = p.catch((): Outcome => ({ id: '', ok: false, reason: 'error' }));
+    inFlight.current.add(tracked);
+    void tracked.then(() => inFlight.current.delete(tracked));
+    return tracked;
+  }, []);
+  // settle waits for every save in flight, also those started meanwhile;
+  // the first refusal is the result.
+  const settle = useCallback(async () => {
+    let failed: Outcome | undefined;
+    while (inFlight.current.size > 0) {
+      const batch = [...inFlight.current];
+      const results = await Promise.all(batch);
+      batch.forEach((b) => inFlight.current.delete(b));
+      failed ??= results.find((r) => !r.ok);
     }
-    if (blockerRef.current.status === 'blocked') blockerRef.current.proceed();
-  }, [setLeaving]);
+    return failed;
+  }, []);
+  // after runs go once the saves are done, or asks with the refusal. go
+  // runs after the render that shows what the save changed.
+  const next = useRef<(() => void) | null>(null);
+  const [settled, setSettled] = useState(0);
+  useEffect(() => {
+    const go = next.current;
+    next.current = null;
+    go?.();
+  }, [settled]);
+  const after = useCallback(
+    (go: () => void, ask: () => void) => {
+      const mine = ++turn.current;
+      void settle().then((failed) => {
+        if (mine !== turn.current) return;
+        setWaiting(false);
+        if (failed) {
+          setError(reasonText(t, failed));
+          ask();
+          return;
+        }
+        next.current = go;
+        setSettled((n) => n + 1);
+      });
+    },
+    [settle, t],
+  );
 
   const drop = useCallback((id: number) => setNotes((n) => n.filter((x) => x.id !== id)), []);
   const saved = useCallback(
@@ -108,11 +149,23 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   }, [undo]);
   const guard = useCallback(
     (leave: () => void) => {
-      if (dirty.current.size > 0) setLeaving(leave);
+      if (inFlight.current.size > 0) {
+        setWaiting(true);
+        after(leave, () => setLeaving(() => leave));
+      } else if (dirty.current.size > 0) setLeaving(() => leave);
       else leave();
     },
-    [setLeaving],
+    [after],
   );
+  // A navigation held while a save runs goes on once it is saved.
+  const { status, proceed } = blocker;
+  useEffect(() => {
+    if (status !== 'blocked' || !waiting) return;
+    after(
+      () => proceed?.(),
+      () => undefined,
+    );
+  }, [status, waiting, proceed, after]);
 
   useEffect(() => {
     if (notes.length === 0) return;
@@ -121,24 +174,32 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   }, [notes.length]);
 
   return (
-    <UndoContext.Provider value={{ saved, undoLast, guard, dirty, released }}>
+    <UndoContext.Provider value={{ saved, undoLast, guard, saving, dirty }}>
       {children}
       <ConfirmDialog
-        open={leaving !== null || blocker.status === 'blocked'}
+        open={!waiting && (leaving !== null || blocker.status === 'blocked')}
         title={t('undo.leaveTitle')}
         text={t('undo.leaveText')}
         action={t('undo.leave')}
         onClose={() => {
           setLeaving(null);
+          setError(null);
           blocker.reset?.();
         }}
         onConfirm={() => {
           dirty.current.clear();
           leaving?.();
           setLeaving(null);
+          setError(null);
           blocker.proceed?.();
         }}
-      />
+      >
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+      </ConfirmDialog>
       {notes.length > 0 && (
         <div className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 flex-col gap-2">
           {notes.map((n) => (
@@ -174,7 +235,7 @@ export const useUndo = () => useContext(UndoContext);
 
 // useUnsaved marks unsaved changes while on is true (UI-008).
 export function useUnsaved(on: boolean) {
-  const { dirty, released } = useUndo();
+  const { dirty } = useUndo();
   useEffect(() => {
     if (!on || !dirty) return;
     const set = dirty.current;
@@ -182,7 +243,6 @@ export function useUnsaved(on: boolean) {
     set.add(key);
     return () => {
       set.delete(key);
-      released?.();
     };
-  }, [on, dirty, released]);
+  }, [on, dirty]);
 }

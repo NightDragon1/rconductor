@@ -244,41 +244,50 @@ test('a refused input shows the reason of the backend (UI-016)', async ({ page, 
   await expect(row).toHaveCount(0);
 });
 
-test('a question about unsaved changes ends once they are saved (UI-008)', async ({
-  page,
-  state,
-}) => {
-  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
-  // The create request is held until the next panel has been asked for.
+// hold keeps every create request of a server back until release.
+async function hold(page: Page) {
   let release!: () => void;
   const held = new Promise<void>((r) => (release = r));
   await page.route('**/api/v1/servers', async (route) => {
     if (route.request().method() === 'POST') await held;
     await route.continue();
   });
+  const answered = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/servers'),
+  );
+  return { release, answered };
+}
+
+async function fillNewServer(page: Page, name: string) {
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
-  await panel.getByLabel('Name').fill('e2e-saving');
+  await panel.getByLabel('Name').fill(name);
   await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
   await panel.getByLabel('Host').fill('saving.example');
   await panel.getByLabel('RCON port').fill('25575');
   await panel.getByLabel('RCON password').fill('a secret rcon password');
+  return panel;
+}
+
+test('leaving waits for a running save and goes on once saved (UI-008)', async ({
+  page,
+  state,
+}) => {
+  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  const { release, answered } = await hold(page);
+  const panel = await fillNewServer(page, 'e2e-saving');
   await panel.getByRole('button', { name: 'Create server' }).click();
+  // The next panel is asked for before the create is answered.
   await page.getByRole('button', { name: 'New server' }).click();
   const question = page.getByRole('dialog', { name: 'Leave without saving?' });
-  await expect(question).toBeVisible();
-
-  // Saved, nothing is lost any more: the question goes and the new
-  // panel opens empty.
-  const created = page.waitForResponse(
-    (r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/servers'),
-  );
-  release();
-  expect((await created).status()).toBe(201);
   await expect(question).toHaveCount(0);
+
+  release();
+  expect((await answered).status()).toBe(201);
   const row = page.getByRole('row').filter({ hasText: 'e2e-saving' });
   await expect(row).toHaveCount(1);
   await expect(panel.getByLabel('Name')).toHaveValue('');
+  await expect(question).toHaveCount(0);
   await panel.getByRole('button', { name: 'Close the details' }).click();
   await expect(panel).toHaveCount(0);
 
@@ -287,4 +296,28 @@ test('a question about unsaved changes ends once they are saved (UI-008)', async
   await opened.getByRole('button', { name: 'Delete server …' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
   await expect(row).toHaveCount(0);
+});
+
+test('a navigation during a save that fails asks with the reason (UI-008)', async ({
+  page,
+  state,
+}) => {
+  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  const { release, answered } = await hold(page);
+  const panel = await fillNewServer(page, 'survival');
+  await panel.getByRole('button', { name: 'Create server' }).click();
+  // Another page is asked for before the create is answered.
+  await page.getByRole('link', { name: 'Agents' }).click();
+  const question = page.getByRole('dialog', { name: 'Leave without saving?' });
+  await expect(question).toHaveCount(0);
+
+  release();
+  expect((await answered).ok()).toBe(false);
+  await expect(question).toBeVisible();
+  await expect(question.getByRole('alert')).toHaveText('a server with this name exists');
+  await question.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+  await panel.getByRole('button', { name: 'Close the details' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes' }).click();
+  await expect(panel).toHaveCount(0);
 });
