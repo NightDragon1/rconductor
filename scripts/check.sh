@@ -39,6 +39,7 @@ scripts/deny-rules-test.sh
 scripts/format-hook-test.sh
 scripts/claude-guard-test.sh
 scripts/hook-scope-test.sh
+scripts/check-secrets-test.sh
 go -C tools tool golangci-lint run ./claudeguard
 if $tests; then
   CGO_ENABLED=1 go -C tools test -race ./claudeguard

@@ -19,7 +19,7 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OB
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 repo=$tmp/repo log=$tmp/calls
 mkdir -p "$repo/scripts" "$repo/.githooks" "$repo/web/node_modules/.bin" "$repo/internal/a" "$tmp/bin"
-cp "$src/scripts/hook-scope.sh" "$src/scripts/check-format.sh" "$src/scripts/check-changed.sh" "$repo/scripts/"
+cp "$src/scripts/hook-scope.sh" "$src/scripts/check-format.sh" "$src/scripts/check-changed.sh" "$src/scripts/check-secrets.sh" "$repo/scripts/"
 cp "$src/.githooks/pre-push" "$repo/.githooks/"
 printf '#!/bin/sh\necho "check.sh $*" >>"%s"\n' "$log" > "$repo/scripts/check.sh"
 for tool in go gofmt; do
@@ -62,6 +62,18 @@ expect "push of a feature branch" full "$(printf 'refs/heads/f a refs/heads/f b\
 expect "push to a wip name from another branch" wip "$(printf 'refs/heads/f a refs/heads/wip/f b\n' | scope push)"
 expect "push of a tag" full "$(printf 'refs/tags/v1 a refs/tags/v1 b\n' | scope push)"
 expect "push with no refs" full "$(printf '' | scope push)"
+
+# A secret blocks the commit on every branch, wip/* too.
+for b in wip/2026-01-02 feat/y; do
+  git -C "$repo" checkout -q -B "$b"
+  printf 'RCD_SMTP_PASSWORD=%s\n' "hunter2hunter2" > "$repo/deploy.env"
+  git -C "$repo" add deploy.env
+  if (cd "$repo" && scripts/check-changed.sh >/dev/null 2>&1); then
+    echo "a staged secret passed on $b" >&2
+    fails=$((fails + 1))
+  fi
+  git -C "$repo" rm -q --cached deploy.env && rm "$repo/deploy.env"
+done
 
 commit_hook wip/2026-01-01
 expect "wip commit: gofmt runs" 1 "$(grep -c '^gofmt -l' "$log")"

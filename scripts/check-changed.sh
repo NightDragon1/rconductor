@@ -8,6 +8,9 @@ cd "$(dirname "$0")/.."
 
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
 
+# The secret check runs on every branch.
+scripts/check-secrets.sh
+
 # On a wip/* branch only formatting and the secret check run; the tests of
 # work in progress come with the pull request that finishes it.
 if [[ "$(scripts/hook-scope.sh commit)" == wip ]]; then
