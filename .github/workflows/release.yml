@@ -3,7 +3,9 @@
 # A tag v1.0 publishes signed multi-arch images to ghcr.io and Docker Hub
 # (D-040, D-047, PRJ-004) and then the GitHub release with notes from
 # CHANGELOG.md and the SBOMs (PRJ-003). A tag v0.9 is a test version: only the
-# image tag 0.9, a pre-release and a fixed text. Publishing waits for the
+# image tag 0.9, a pre-release and a fixed text. A tag v1.1-rc1 is a release
+# candidate: only the image tag 1.1-rc1, signed like a release, a pre-release
+# with a fixed text, and the Docker Hub description stays. Publishing waits for the
 # reviewer of the environment release, which also holds the Docker Hub login.
 # Signatures are keyless (cosign with GitHub OIDC) and land in the public
 # Rekor log for good. Each platform gets its own SBOM and signature at its
@@ -40,6 +42,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tags: ${{ steps.version.outputs.tags }}
       prerelease: ${{ steps.version.outputs.prerelease }}
+      rc: ${{ steps.version.outputs.rc }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -175,7 +178,8 @@ jobs:
 
   describe:
     name: Docker Hub description
-    if: github.event_name == 'push'
+    # A release candidate leaves the description of the released version.
+    if: github.event_name == 'push' && needs.version.outputs.rc != 'true'
     # Next to publish, so that one approval of the environment covers both;
     # release does not wait for it.
     needs: [version, ci]
