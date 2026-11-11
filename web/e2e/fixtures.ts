@@ -13,6 +13,7 @@ export interface StackState {
   legacy_agent_id: string;
   locked_user_id: string;
   expired_invite: string;
+  control_url: string;
 }
 
 interface Fixtures {
