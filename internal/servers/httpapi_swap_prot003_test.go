@@ -29,7 +29,8 @@ import (
 
 // swapServer is the fake game server of a dialect whose certificate can be
 // replaced while it keeps its address. It counts every request that
-// reaches the handler, with or without a token.
+// reaches the handler, with or without a token. It closes each connection
+// after its answer, so that every request starts with a handshake.
 type swapServer struct {
 	*httptest.Server
 	cert     atomic.Pointer[tls.Certificate]
@@ -78,6 +79,7 @@ func startSwapServer(t *testing.T, f httpapitest.Fixture, first tls.Certificate)
 			return &tls.Config{Certificates: []tls.Certificate{*s.cert.Load()}, NextProtos: []string{"http/1.1"}}, nil
 		},
 	}
+	s.Config.SetKeepAlivesEnabled(false)
 	s.StartTLS()
 	t.Cleanup(s.Close)
 	return s
