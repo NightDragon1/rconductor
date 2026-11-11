@@ -3,7 +3,7 @@
 #
 # Checks a published release from the outside, so that T13 holds for every
 # release (SEC-013, D-047): in both registries each image has its tags and no
-# other moving tag; index and each platform digest are signed and attested,
+# other moving tag (a release candidate neither its minor nor its major tag); index and each platform digest are signed and attested,
 # and the SBOM of a platform lists only packages of that platform. Reports
 # every fault and fails at the end. Needs GHCR, HUB, cosign, docker and jq.
 set -eu
@@ -11,6 +11,9 @@ set -eu
 out=$(scripts/release-version.sh "$1")
 tags=$(printf '%s\n' "$out" | sed -n 's/^tags=//p')
 prerelease=$(printf '%s\n' "$out" | sed -n 's/^prerelease=//p')
+rc=$(printf '%s\n' "$out" | sed -n 's/^rc=//p')
+version=$(printf '%s\n' "$out" | sed -n 's/^version=//p')
+base=${version%-rc*}
 identity='^https://github\.com/NightDragon1/rconductor/\.github/workflows/release\.yml@refs/tags/'
 issuer=https://token.actions.githubusercontent.com
 fails=0
@@ -62,7 +65,11 @@ for registry in "$GHCR" "$HUB"; do
       index=$digest
     done
     absent "$image:latest"
-    if [ "$prerelease" = true ]; then
+    if [ "$rc" = true ]; then
+      # A release candidate never moves a tag of a release.
+      absent "$image:$base"
+      absent "$image:${base%%.*}"
+    elif [ "$prerelease" = true ]; then
       absent "$image:0"
       absent "$image:1"
     fi
