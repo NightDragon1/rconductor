@@ -3,4 +3,4 @@
 // internal/webui/dist and is embedded from there.
 module github.com/NightDragon1/rconductor/web
 
-go 1.27.3
+go 1.27.4
