@@ -243,3 +243,48 @@ test('a refused input shows the reason of the backend (UI-016)', async ({ page, 
   await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
   await expect(row).toHaveCount(0);
 });
+
+test('a question about unsaved changes ends once they are saved (UI-008)', async ({
+  page,
+  state,
+}) => {
+  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  // The create request is held until the next panel has been asked for.
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route('**/api/v1/servers', async (route) => {
+    if (route.request().method() === 'POST') await held;
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'New server' }).click();
+  const panel = page.getByRole('complementary', { name: 'Details of New server' });
+  await panel.getByLabel('Name').fill('e2e-saving');
+  await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Host').fill('saving.example');
+  await panel.getByLabel('RCON port').fill('25575');
+  await panel.getByLabel('RCON password').fill('a secret rcon password');
+  await panel.getByRole('button', { name: 'Create server' }).click();
+  await page.getByRole('button', { name: 'New server' }).click();
+  const question = page.getByRole('dialog', { name: 'Leave without saving?' });
+  await expect(question).toBeVisible();
+
+  // Saved, nothing is lost any more: the question goes and the new
+  // panel opens empty.
+  const created = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/servers'),
+  );
+  release();
+  expect((await created).status()).toBe(201);
+  await expect(question).toHaveCount(0);
+  const row = page.getByRole('row').filter({ hasText: 'e2e-saving' });
+  await expect(row).toHaveCount(1);
+  await expect(panel.getByLabel('Name')).toHaveValue('');
+  await panel.getByRole('button', { name: 'Close the details' }).click();
+  await expect(panel).toHaveCount(0);
+
+  await row.getByRole('button', { name: 'e2e-saving' }).click();
+  const opened = page.getByRole('complementary', { name: 'Details of e2e-saving' });
+  await opened.getByRole('button', { name: 'Delete server …' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
+  await expect(row).toHaveCount(0);
+});

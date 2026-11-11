@@ -33,6 +33,8 @@ interface Undo {
   // unsaved; for what leaves a panel without leaving the page.
   guard: (leave: () => void) => void;
   dirty?: RefObject<Set<symbol>>;
+  // released tells that an unsaved change is gone, saved or dropped.
+  released?: () => void;
 }
 
 const UndoContext = createContext<Undo>({
@@ -53,12 +55,32 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   const [now, setNow] = useState(() => Date.now());
   const seq = useRef(0);
   const dirty = useRef(new Set<symbol>());
-  const [leaving, setLeaving] = useState<(() => void) | null>(null);
+  const [leaving, setLeavingState] = useState<(() => void) | null>(null);
+  const leavingRef = useRef<(() => void) | null>(null);
+  const setLeaving = useCallback((leave: (() => void) | null) => {
+    leavingRef.current = leave;
+    setLeavingState(() => leave);
+  }, []);
   const blocker = useBlocker({
     shouldBlockFn: () => dirty.current.size > 0,
     enableBeforeUnload: () => dirty.current.size > 0,
     withResolver: true,
   });
+  const blockerRef = useRef(blocker);
+  useEffect(() => {
+    blockerRef.current = blocker;
+  }, [blocker]);
+  // Once nothing is unsaved any more, an open question has no ground:
+  // the leave that waits for it goes ahead.
+  const released = useCallback(() => {
+    if (dirty.current.size > 0) return;
+    const leave = leavingRef.current;
+    if (leave) {
+      setLeaving(null);
+      leave();
+    }
+    if (blockerRef.current.status === 'blocked') blockerRef.current.proceed();
+  }, [setLeaving]);
 
   const drop = useCallback((id: number) => setNotes((n) => n.filter((x) => x.id !== id)), []);
   const saved = useCallback(
@@ -84,10 +106,13 @@ export function UndoProvider({ children }: { children: ReactNode }) {
     const last = ref.current.findLast((x) => x.revert);
     if (last) undo(last.id);
   }, [undo]);
-  const guard = useCallback((leave: () => void) => {
-    if (dirty.current.size > 0) setLeaving(() => leave);
-    else leave();
-  }, []);
+  const guard = useCallback(
+    (leave: () => void) => {
+      if (dirty.current.size > 0) setLeaving(leave);
+      else leave();
+    },
+    [setLeaving],
+  );
 
   useEffect(() => {
     if (notes.length === 0) return;
@@ -96,7 +121,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   }, [notes.length]);
 
   return (
-    <UndoContext.Provider value={{ saved, undoLast, guard, dirty }}>
+    <UndoContext.Provider value={{ saved, undoLast, guard, dirty, released }}>
       {children}
       <ConfirmDialog
         open={leaving !== null || blocker.status === 'blocked'}
@@ -149,7 +174,7 @@ export const useUndo = () => useContext(UndoContext);
 
 // useUnsaved marks unsaved changes while on is true (UI-008).
 export function useUnsaved(on: boolean) {
-  const { dirty } = useUndo();
+  const { dirty, released } = useUndo();
   useEffect(() => {
     if (!on || !dirty) return;
     const set = dirty.current;
@@ -157,6 +182,7 @@ export function useUnsaved(on: boolean) {
     set.add(key);
     return () => {
       set.delete(key);
+      released?.();
     };
-  }, [on, dirty]);
+  }, [on, dirty, released]);
 }
