@@ -22,6 +22,8 @@ fi
 
 step go vet
 go vet ./...
+# the control listener of the e2e stack exists only with the tag e2e
+go vet -tags e2e ./internal/e2e/stack
 
 step golangci-lint
 go tool -modfile=tools/go.mod golangci-lint run ./...

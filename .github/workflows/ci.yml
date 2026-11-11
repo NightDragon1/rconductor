@@ -109,6 +109,8 @@ jobs:
         if: needs.scope.outputs.sqlc == 'true'
         run: docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff
       - run: go vet ./...
+      # the control listener of the e2e stack exists only with the tag e2e
+      - run: go vet -tags e2e ./internal/e2e/stack
       - run: make lint
 
   # scripts/go-test-shard.sh splits the packages and checks that its shard
