@@ -215,10 +215,11 @@ test('test connection reports the state without saving (SRV-007)', async ({ page
 
 test('a refused input shows the reason of the backend (UI-016)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
-  for (const name of ['e2e-twice', 'e2e-twice']) {
+  const panel = page.getByRole('complementary', { name: 'Details of New server' });
+  const row = page.getByRole('row').filter({ hasText: 'e2e-twice' });
+  for (const first of [true, false]) {
     await page.getByRole('button', { name: 'New server' }).click();
-    const panel = page.getByRole('complementary', { name: 'Details of New server' });
-    await panel.getByLabel('Name').fill(name);
+    await panel.getByLabel('Name').fill('e2e-twice');
     await panel
       .getByLabel('Add a game profile')
       .selectOption({ label: 'Minecraft (Java Edition)' });
@@ -226,13 +227,16 @@ test('a refused input shows the reason of the backend (UI-016)', async ({ page, 
     await panel.getByLabel('RCON port').fill('25575');
     await panel.getByLabel('RCON password').fill('a secret rcon password');
     await panel.getByRole('button', { name: 'Create server' }).click();
+    if (first) {
+      // The second server is made only once the first one exists.
+      await expect(row).toHaveCount(1);
+      await expect(panel).toHaveCount(0);
+    }
   }
-  const panel = page.getByRole('complementary', { name: 'Details of New server' });
   await expect(panel.getByText('a server with this name exists')).toBeVisible();
   await expect(panel.getByText('Not possible this way')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Close the details' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Discard changes' }).click();
-  const row = page.getByRole('row').filter({ hasText: 'e2e-twice' });
   await row.getByRole('button', { name: 'e2e-twice' }).click();
   const opened = page.getByRole('complementary', { name: 'Details of e2e-twice' });
   await opened.getByRole('button', { name: 'Delete server …' }).click();
