@@ -58,8 +58,9 @@ if a check fails.
 
 ## Secrets and clean-up
 
-Every password and token is generated at run time and kept in a private
-temporary directory (`TMPDIR`), never in the repository. Output is masked; the
-initial password is read from the log and never printed. On exit, also after a
-failure or Ctrl-C, the script removes its Compose project with its volumes and
-the temporary directory, and nothing else. Images are left alone.
+Every password and token is generated at run time and kept in a private work
+directory under `.cache/upgrade/` of the clone (ignored by git), never in a
+committed file or a shared temporary directory. Output is masked; the initial
+password is read from the log and never printed. On exit, also after a failure,
+Ctrl-C, a hang-up or a termination signal, the script removes its Compose project
+with its volumes and the work directory, and nothing else. Images are left alone.

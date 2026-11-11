@@ -49,7 +49,10 @@ fi
 [ -n "$PORT" ] && port_free "$PORT" || { echo "no free port" >&2; exit 2; }
 B=http://127.0.0.1:$PORT
 
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/rcd-upgrade.XXXXXX")
+# The work directory lives in the ignored scratch directory of the clone
+# (.cache/upgrade), not in a shared temporary directory.
+mkdir -p "$REPO/.cache/upgrade"
+WORK=$(mktemp -d "$REPO/.cache/upgrade/run.XXXXXX")
 chmod 700 "$WORK"
 mkdir -p "$WORK/sec" "$WORK/jar" "$WORK/out" "$WORK/snap" "$WORK/bin"
 
@@ -66,7 +69,9 @@ cleanup() {
   exit $status
 }
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # --- output -----------------------------------------------------------------
 
