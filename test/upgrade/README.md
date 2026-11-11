@@ -54,6 +54,9 @@ if a check fails.
 | `RCD_UPGRADE_SCHEMA` | highest migration number in this checkout | schema version the new panel must reach |
 | `RCD_UPGRADE_DOCKER_GID` | group of `/var/run/docker.sock` | group for the agent |
 | `RCD_UPGRADE_WAIT` | `90` | seconds to wait for panel, agent and RCON |
+| `RCD_UPGRADE_STEP_TIMEOUT` | `300` | seconds for one docker or go command |
+| `RCD_UPGRADE_PULL_TIMEOUT` | `600` | seconds for one image pull |
+| `RCD_UPGRADE_DEADLINE` | `1800` | seconds for the whole run; then it stops and cleans up |
 | `RCD_UPGRADE_KEEP` | `0` | `1` keeps containers, volumes and the work directory for debugging |
 
 ## Secrets and clean-up

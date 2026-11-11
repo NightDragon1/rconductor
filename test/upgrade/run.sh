@@ -24,6 +24,16 @@ PROJECT=${RCD_UPGRADE_PROJECT:-rcdupgrade$$}
 KEEP=${RCD_UPGRADE_KEEP:-0}
 DOCKER_GID=${RCD_UPGRADE_DOCKER_GID:-$(stat -c %g /var/run/docker.sock)}
 WAIT=${RCD_UPGRADE_WAIT:-90}
+# Every step is bounded: STEP for one docker or go command, PULL for an
+# image pull, DEADLINE for the whole run (then it stops and cleans up).
+STEP=${RCD_UPGRADE_STEP_TIMEOUT:-300}
+PULL=${RCD_UPGRADE_PULL_TIMEOUT:-600}
+DEADLINE=${RCD_UPGRADE_DEADLINE:-1800}
+# The whole run ends after DEADLINE seconds: timeout sends TERM, the trap
+# below cleans up.
+if [ -z "${RCD_UPGRADE_BOUNDED:-}" ]; then
+  RCD_UPGRADE_BOUNDED=1 exec timeout --signal=TERM --kill-after=60 "$DEADLINE" "$0" "$@"
+fi
 
 for tool in docker curl jq go; do
   command -v "$tool" >/dev/null || { echo "missing tool: $tool" >&2; exit 2; }
@@ -56,7 +66,7 @@ WORK=$(mktemp -d "$REPO/.cache/upgrade/run.XXXXXX")
 chmod 700 "$WORK"
 mkdir -p "$WORK/sec" "$WORK/jar" "$WORK/out" "$WORK/snap" "$WORK/bin"
 
-dc() { docker compose -p "$PROJECT" -f "$WORK/compose.yaml" --env-file "$WORK/sec/env" "$@"; }
+dc() { timeout "$STEP" docker compose -p "$PROJECT" -f "$WORK/compose.yaml" --env-file "$WORK/sec/env" "$@"; }
 
 cleanup() {
   status=$?
@@ -183,8 +193,8 @@ invite() { # invite JAR ROLE USER -> prints user id
 
 go_arch=$(docker version --format '{{.Server.Arch}}')
 log "building helpers for linux/$go_arch"
-(cd "$REPO" && CGO_ENABLED=0 GOOS=linux GOARCH=$go_arch go build -trimpath -o "$WORK/bin/rconsrv" ./test/upgrade/rconsrv &&
-  CGO_ENABLED=0 GOOS=linux GOARCH=$go_arch go build -trimpath -o "$WORK/bin/dbstat" ./test/upgrade/dbstat) || die "go build"
+(cd "$REPO" && CGO_ENABLED=0 GOOS=linux GOARCH=$go_arch timeout "$STEP" go build -trimpath -o "$WORK/bin/rconsrv" ./test/upgrade/rconsrv &&
+  CGO_ENABLED=0 GOOS=linux GOARCH=$go_arch timeout "$STEP" go build -trimpath -o "$WORK/bin/dbstat" ./test/upgrade/dbstat) || die "go build"
 chmod 755 "$WORK" "$WORK/bin" "$WORK/bin/"*
 
 head -c 18 /dev/urandom | base64 | tr -d '/+=\n' >"$WORK/sec/rcon.pw"
@@ -239,13 +249,13 @@ EOF
 
 # dbstat ARGS...: the helper in a container on the data volumes (panel stopped)
 dbstat() {
-  docker run --rm --network none --label "com.docker.compose.project=$PROJECT" \
+  timeout "$STEP" docker run --rm --network none --label "com.docker.compose.project=$PROJECT" \
     -v "${PROJECT}_data:/data" -v "${PROJECT}_backups:/backups:ro" \
     -v "$WORK/bin/dbstat:/dbstat:ro" --entrypoint /dbstat "$OLD_PANEL" "$@"
 }
 
 for img in "$OLD_PANEL" "$OLD_AGENT" "$NEW_PANEL" "$NEW_AGENT"; do
-  docker image inspect "$img" >/dev/null 2>&1 || docker pull -q "$img" >/dev/null || die "image $img"
+  docker image inspect "$img" >/dev/null 2>&1 || timeout "$PULL" docker pull -q "$img" >/dev/null || die "image $img"
   log "image $img: $(docker image inspect "$img" --format '{{.Id}} version={{index .Config.Labels "org.opencontainers.image.version"}}')"
 done
 
@@ -416,9 +426,12 @@ log "commands: sup1 $(cmd sup "$SA" list); sup1 whitelist $(cmd sup "$SA" 'white
 # --- snapshots --------------------------------------------------------------
 
 pages() { # pages JAR PATH: all items of a paged list
-  local cursor= sep
+  local cursor= sep n=0
   : >"$WORK/out/pages"
   while :; do
+    n=$((n + 1))
+    # A list with a cursor that never ends stops after 100 pages.
+    [ "$n" -le 100 ] || { echo "more than 100 pages" >>"$WORK/out/pages"; break; }
     sep='?'
     case $2 in *\?*) sep='&' ;; esac
     call "$1" GET "$2${sep}limit=200${cursor:+&cursor=$cursor}"
