@@ -7,6 +7,15 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+# On a wip/* branch only formatting and the secret check run; the tests of
+# work in progress come with the pull request that finishes it.
+if [[ "$(scripts/hook-scope.sh commit)" == wip ]]; then
+  mapfile -t files <<<"$staged"
+  scripts/check-format.sh "${files[@]}"
+  echo "wip branch: tests left out"
+  exit 0
+fi
 go_dirs=$(printf '%s\n' "$staged" | grep -E '\.go$' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' || true)
 web_files=$(printf '%s\n' "$staged" | grep -E '^web/.*\.(ts|tsx)$' | sed 's|^web/||' || true)
 

@@ -3,6 +3,15 @@
 #
 # The check before every push, without the tests: the pre-commit hook ran
 # those of the changed packages, the CI runs all; make check is the full
-# run by hand.
+# run by hand. A push of wip/* branches only checks formatting.
 set -euo pipefail
-exec "$(git rev-parse --show-toplevel)/scripts/check.sh" --no-tests
+root=$(git rev-parse --show-toplevel)
+refs=$(cat)
+# Pushing only wip/* branches: formatting and the secret check of what the
+# push adds, no lint or script tests.
+if [[ "$(printf '%s\n' "$refs" | "$root/scripts/hook-scope.sh" push)" == wip ]]; then
+  base=$(git -C "$root" merge-base HEAD origin/main 2>/dev/null || git -C "$root" rev-list --max-parents=0 HEAD | tail -n 1)
+  mapfile -t files < <(git -C "$root" diff --name-only --diff-filter=ACMR "$base" HEAD)
+  exec "$root/scripts/check-format.sh" "${files[@]}"
+fi
+exec "$root/scripts/check.sh" --no-tests

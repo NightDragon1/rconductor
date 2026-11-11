@@ -77,6 +77,7 @@ jobs:
       - run: scripts/deny-rules-test.sh
       - run: scripts/format-hook-test.sh
       - run: scripts/claude-guard-test.sh
+      - run: scripts/hook-scope-test.sh
       - run: go -C tools tool golangci-lint run ./claudeguard
       - run: go -C tools test -race ./claudeguard
         env:
