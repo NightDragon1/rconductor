@@ -5,9 +5,9 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/netip"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -78,8 +78,13 @@ func TestRecoveryAnswerAloneC9(t *testing.T) {
 
 // TestRecoveryPoolDropsWhenFullC9: the background part of recovery
 // requests runs in a pool of fixed size with a bounded queue. With the
-// queue full a request is dropped: the answer is the same, the drop is
-// logged with its event, and no goroutine is left for it (D-077).
+// queue full a request is dropped: the answer is the same and comes at
+// once, the drop is logged with its event and counted exactly, and the
+// dropped request does no recovery work: it is neither queued nor starts a
+// worker, and no stored link, audit entry, log line or mail exists for it
+// (D-077). The test checks the pool and the results of the work rather
+// than the number of goroutines in the process, which also counts
+// goroutines outside the test.
 func TestRecoveryPoolDropsWhenFullC9(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		f := newSFFixture(t)
@@ -97,7 +102,7 @@ func TestRecoveryPoolDropsWhenFullC9(t *testing.T) {
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
-				f.svc.RequestRecovery(ctx, "kiwi", Client{IP: netip.AddrFrom4([4]byte{198, 51, 100, byte(n)}), RequestID: "r"})
+				f.svc.RequestRecovery(ctx, "kiwi", Client{IP: netip.AddrFrom4([4]byte{198, 51, 100, byte(n)}), RequestID: fmt.Sprintf("r%d", n)})
 			}()
 			synctest.Wait()
 			select {
@@ -107,26 +112,74 @@ func TestRecoveryPoolDropsWhenFullC9(t *testing.T) {
 				return false
 			}
 		}
+		pool := func() (queued, running int) {
+			f.svc.sf.poolMu.Lock()
+			defer f.svc.sf.poolMu.Unlock()
+			return len(f.svc.sf.queue), f.svc.sf.running
+		}
 		// The first job holds the one worker, the second waits in the queue.
 		for n := range 2 {
 			if !ask(n + 1) {
 				t.Fatalf("answer %d waits for the background", n+1)
 			}
 		}
-		before := runtime.NumGoroutine()
-		if !ask(3) {
-			t.Error("answer with the queue full waits")
+		if q, r := pool(); q != 1 || r != 1 {
+			t.Fatalf("pool before the drops: %d queued, %d running, want 1 and 1", q, r)
 		}
-		if after := runtime.NumGoroutine(); after != before {
-			t.Errorf("goroutines %d after a dropped request, %d before", after, before)
+		const drops = 3
+		for n := 3; n < 3+drops; n++ {
+			if !ask(n) {
+				t.Errorf("answer %d with the queue full waits", n)
+			}
 		}
+		if q, r := pool(); q != 1 || r != 1 {
+			t.Errorf("pool after the drops: %d queued, %d running, want 1 and 1", q, r)
+		}
+		// The first drop is reported at once.
 		if n := countLines(f.logs.String(), `"event":"auth.recovery.dropped"`); n != 1 {
-			t.Errorf("drop logged %d times, want once", n)
+			t.Errorf("drop entries before the window ends = %d, want 1", n)
 		}
 		unhold()
 		f.svc.WaitMail()
+		logs := f.logs.String()
+		dropped := 0
+		for line := range strings.SplitSeq(logs, "\n") {
+			if !strings.Contains(line, `"event":"auth.recovery.dropped"`) {
+				continue
+			}
+			var e struct {
+				Dropped int `json:"dropped"`
+			}
+			if err := json.Unmarshal([]byte(line), &e); err != nil {
+				t.Fatal(err)
+			}
+			dropped += e.Dropped
+		}
+		if dropped != drops {
+			t.Errorf("drops counted %d, want %d", dropped, drops)
+		}
 		if n := f.mailsTo("kiwi@example.org"); n != 2 {
 			t.Errorf("mails = %d, want 2 of the queued jobs", n)
+		}
+		// The stored link is the one of the last mail, so no dropped request
+		// stored one after the queued jobs.
+		if sent := f.mail.all(); len(sent) > 0 {
+			_, token, _ := strings.Cut(sent[len(sent)-1].link, "#")
+			if n := f.count(t, `SELECT count(*) FROM totp_recovery WHERE token_hash = ?`, HashToken(token)); n != 1 {
+				t.Error("stored link is not the one of the last queued job")
+			}
+		}
+		if n := f.count(t, `SELECT count(*) FROM audit_log WHERE action = 'totp.recovery_request'`); n != 2 {
+			t.Errorf("audit entries = %d, want 2 of the queued jobs", n)
+		}
+		if n := countLines(logs, `"event":"auth.recovery.requested"`); n != 2 {
+			t.Errorf("recovery log lines = %d, want 2 of the queued jobs", n)
+		}
+		for n := 3; n < 3+drops; n++ {
+			id := fmt.Sprintf(`"r%d"`, n)
+			if strings.Contains(logs, id) || f.count(t, `SELECT count(*) FROM audit_log WHERE payload LIKE ?`, "%"+id+"%") != 0 {
+				t.Errorf("work done for the dropped request %s", id)
+			}
 		}
 	})
 }
