@@ -142,8 +142,14 @@ test('the server admin changes only the profile list (Design 6.2, SRV-008)', asy
 
 test('pairing dialog with token and Compose; approval by fingerprint (AGT-005)', async ({
   page,
+  request,
   state,
 }) => {
+  // Each run approves a pairing of its own: an approved agent stays
+  // paired, so the one seeded at the start of the stack serves only once.
+  const started = await request.post(`${state.control_url}/pending-agent`);
+  expect(started.ok()).toBe(true);
+  const { name } = (await started.json()) as { name: string };
   await as(page, state, 'admin', 'admin/agents', 'Agents');
   // Pairing by fingerprint is off by default.
   await expect(page.getByLabel('Pairing by fingerprint')).not.toBeChecked();
@@ -155,11 +161,13 @@ test('pairing dialog with token and Compose; approval by fingerprint (AGT-005)',
   await expect(compose).toContainText(/rcd1\./);
   await dialog.getByRole('button', { name: 'Close' }).click();
 
-  // A pairing that waits since the stack started is approved here.
-  const waiting = page.getByRole('row').filter({ hasText: 'host-3' });
+  // The waiting pairing is approved here.
+  const waiting = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name, exact: true }) });
   await expect(waiting).toContainText('waiting for approval');
   await waiting.getByRole('button', { name: 'Approve' }).click();
-  await expect(page.getByRole('status')).toHaveText('host-3 approved.');
+  await expect(page.getByRole('status')).toHaveText(`${name} approved.`);
   await expect(waiting).not.toContainText('waiting for approval');
 });
 
