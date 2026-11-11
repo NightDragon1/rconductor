@@ -68,8 +68,12 @@ type State struct {
 	// LegacyAgentID is host-legacy, an agent with fewer capabilities and the
 	// container mc-legacy (AGT-013).
 	LegacyAgentID string `json:"legacy_agent_id"`
-	profile       string
-	moderators    string // the moderator group
+	// ControlURL is a listener of the stack for the tests only: POST
+	// /pending-agent starts a new agent with a name of its own that waits
+	// for approval by fingerprint, so a test does not use up the seed.
+	ControlURL string `json:"control_url"`
+	profile    string
+	moderators string // the moderator group
 }
 
 type buffer struct {
@@ -123,6 +127,10 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 			"RCD_HTTP_ADDR": "127.0.0.1:0", "RCD_AGENT_ADDR": "127.0.0.1:0", "RCD_PUBLIC_URL": public, "RCD_BASE_PATH": base,
 			"RCD_DATA_DIR": filepath.Join(root, "data"), "RCD_SECRETS_DIR": filepath.Join(root, "secrets"),
 			"RCD_BACKUP_DIR": filepath.Join(root, "backups"), "RCD_LOG_FORMAT": "json", "RCD_TRUSTED_PROXIES": trusted,
+			// Every agent of the stack connects from 127.0.0.1, and the ones
+			// waiting for approval try again and again: with the default of
+			// 10 per minute they would hold each other off (SEC-007).
+			"RCD_AGENT_CONNECTS_PER_MINUTE": "600", "RCD_AGENT_CONNECT_BURST": "100",
 		}[k]
 		return v, ok
 	}, os.ReadFile)
@@ -201,12 +209,21 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 	if err := admin.call(http.MethodPost, "/auth/login", map[string]string{"pseudonym": "admin", "password": adminPassword}, nil); err != nil {
 		return err
 	}
-	if err := seedHosts(ctx, admin, panelURL, origin(public), (<-agentReady).String(), root, game.Addr, hostile.Addr, st.profile, &st); err != nil {
+	agentAddr := (<-agentReady).String()
+	if err := seedHosts(ctx, admin, panelURL, origin(public), agentAddr, root, game.Addr, hostile.Addr, st.profile, &st); err != nil {
 		return fmt.Errorf("seed hosts: %w\n%s", err, logs.String())
 	}
 	if st.ExpiredInvite, err = expiredInvite(ctx, admin, filepath.Join(root, "data", "rconductor.db")); err != nil {
 		return fmt.Errorf("expired invite: %w", err)
 	}
+	ctl, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	ctlSrv := &http.Server{Handler: control(ctx, panelURL, origin(public), agentAddr, root), ReadHeaderTimeout: 10 * time.Second}
+	go func() { _ = ctlSrv.Serve(ctl) }()
+	defer func() { _ = ctlSrv.Close() }()
+	st.ControlURL = "http://" + ctl.Addr().String()
 	st.BaseURL = public + "/"
 	if statePath != "" {
 		b, _ := json.MarshalIndent(st, "", "  ")
@@ -221,6 +238,34 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 		return err
 	}
 	return <-done
+}
+
+// control serves the stack's own requests of the tests. Each POST
+// /pending-agent starts one more agent pairing-N that waits for approval;
+// the calls run one after another, as each switches pairing by
+// fingerprint on and off again.
+func control(ctx context.Context, panel, o, agentAddr, root string) http.Handler {
+	var mu sync.Mutex
+	n := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /pending-agent", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		n++
+		name := fmt.Sprintf("pairing-%d", n)
+		admin := &client{base: panel, origin: o}
+		err := admin.call(http.MethodPost, "/auth/login", map[string]string{"pseudonym": "admin", "password": adminPassword}, nil)
+		if err == nil {
+			err = pendingAgent(ctx, admin, agentAddr, root, name)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"name": name})
+	})
+	return mux
 }
 
 // client calls the panel API directly, with the public origin.
