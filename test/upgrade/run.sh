@@ -493,7 +493,11 @@ dbstat counts /data/rconductor.db >"$WORK/snap/before/tables" || die "dbstat cou
 OLD_SCHEMA=$(dbstat query /data/rconductor.db 'SELECT MAX(version_id) FROM goose_db_version')
 # A server without profile, as older databases can hold it (the API of 1.0
 # requires one).
+# Only a schema before the profile lists (1.0) can hold a server without
+# profile; newer old versions keep srv-c with its profile.
+LEGACY_NO_PROFILE=0
 if dbstat query /data/rconductor.db "SELECT name FROM pragma_table_info('servers') WHERE name='profile_id'" | grep -q profile_id; then
+  LEGACY_NO_PROFILE=1
   dbstat exec /data/rconductor.db "UPDATE servers SET profile_id = NULL WHERE id = '$SC'" >/dev/null || die "null profile"
   # Expected from that UPDATE: no profile, so no game ports from one, and the
   # version trigger of the old schema raises the version once.
@@ -560,7 +564,7 @@ expect "audit: every old entry" "0 missing of $B_AUDIT" "$lost_audit missing of 
 prof=$(jq -c --arg a "$SA" --arg b "$SB" --arg c "$SC" --arg d "$SD" \
   '[.[] | select(.id==$a or .id==$b or .id==$c or .id==$d) | {name, n:(.profiles|length)}] | sort_by(.name) | map("\(.name)=\(.n)") | join(" ")' \
   "$WORK/snap/after/servers")
-expect "profile lists after migration" '"srv-a=1 srv-b=1 srv-c=0 srv-dead=1"' "$prof"
+expect "profile lists after migration" "\"srv-a=1 srv-b=1 srv-c=$((1 - LEGACY_NO_PROFILE)) srv-dead=1\"" "$prof"
 
 # Behaviour on the new panel with the old agent.
 expect "command admin srv-a" "200 ok" "$(cmd admin "$SA" list)"
@@ -578,7 +582,11 @@ call admin GET "/servers/$SA"
 expect "container state of srv-a via the old agent" "running true" "$(out | jq -r '"\(.runtime.container.state) \(.runtime.container.agent_connected)"')"
 caps=$(out | jq -r '.runtime.container.capabilities // [] | join(",")')
 nv=$(out | jq -r '[.runtime.game_version // empty, (.runtime.container.volumes // [] | .[] | .size_bytes // .size // empty)] | length')
-expect "features the old agent lacks are absent (game version, volume size)" "0" "$nv"
+# Only an agent without version detection and volume sizes (1.0) lacks them.
+case ",$caps," in
+  *,version.detect,* | *,volumes.size,*) log "the old agent reports version or volume size: $nv value(s)" ;;
+  *) expect "features the old agent lacks are absent (game version, volume size)" "0" "$nv" ;;
+esac
 log "capabilities of the old agent: ${caps:-none}"
 call admin GET "/servers/$SA/logs"
 expect "container logs through the old agent" 200 "$CODE"
@@ -612,7 +620,7 @@ expect "command admin srv-a with new agent" "200 ok" "$(cmd admin "$SA" list)"
 dc stop panel >/dev/null 2>&1
 dbstat counts /data/rconductor.db >"$WORK/snap/after/tables" || die "dbstat counts after"
 expect "schema version in goose_db_version" "$EXPECT_SCHEMA" "$(dbstat query /data/rconductor.db 'SELECT MAX(version_id) FROM goose_db_version')"
-expect "server_profiles rows" "3" "$(dbstat query /data/rconductor.db 'SELECT COUNT(*) FROM server_profiles')"
+expect "server_profiles rows" "$((4 - LEGACY_NO_PROFILE))" "$(dbstat query /data/rconductor.db 'SELECT COUNT(*) FROM server_profiles')"
 shrunk=$(join -t "$(printf '\t')" <(sort "$WORK/snap/before/tables") <(sort "$WORK/snap/after/tables") |
   awk -F '\t' '$3 < $2 && $1 != "sessions" {printf "%s %s->%s ", $1, $2, $3}')
 expect "no table lost rows (sessions aside)" "" "$shrunk"
