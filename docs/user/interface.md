@@ -74,7 +74,9 @@ restart mechanism is in place, such as Docker `restart: unless-stopped`.
 | History | all | past commands by role (see [roles](roles.md#who-sees-what)); a switch shows only your own |
 
 In the console, Tab takes the first suggestion and the arrow keys walk through your
-own commands.
+own commands. When every command of the server starts with `/`, as in Factorio, input
+without the `/` shows a hint before you send it: such games may take it as chat and
+not answer. The console leaves the text as you typed it.
 
 ### Several servers
 
