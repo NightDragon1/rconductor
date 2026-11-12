@@ -280,7 +280,8 @@ func (s *Service) UpdateGroup(ctx context.Context, req users.Request, id string,
 	return s.Group(ctx, req, id)
 }
 
-// DeleteGroup soft-deletes a server group; scopes and grants on it end.
+// DeleteGroup soft-deletes a server group; scopes and grants on it end in
+// the same transaction, each with an audit entry (ROLE-003, ROLE-004).
 func (s *Service) DeleteGroup(ctx context.Context, req users.Request, id string) error {
 	if err := s.mustBeAdmin(ctx, req, "server_group.delete", "server_group", id); err != nil {
 		return err
@@ -304,9 +305,38 @@ func (s *Service) DeleteGroup(ctx context.Context, req users.Request, id string)
 	if err := s.auditOK(ctx, tx, req, "server_group.delete", "server_group", id, "", map[string]string{"name": r.Name}); err != nil {
 		return err
 	}
+	if err := endServerGroupAssignments(ctx, tx, req, id); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 	s.perm.Invalidate()
 	return nil
+}
+
+// endServerGroupAssignments removes the assignments on server group id
+// inside tx.
+func endServerGroupAssignments(ctx context.Context, tx *sql.Tx, req users.Request, id string) error {
+	q := sqlitedb.New(tx)
+	key := sql.NullString{String: id, Valid: true}
+	scopes, err := q.DeleteServerGroupScopes(ctx, key)
+	if err != nil {
+		return err
+	}
+	grants, err := q.DeleteServerGroupGrants(ctx, key)
+	if err != nil {
+		return err
+	}
+	var list []users.Removed
+	for _, r := range scopes {
+		list = append(list, users.Removed{Section: "admin_scopes", ID: r.ID, TargetType: "user", Target: r.UserID,
+			Entry: map[string]string{"server_group_id": id}})
+	}
+	for _, r := range grants {
+		tt, t := users.GrantHolder(r.UserGroupID, r.UserID)
+		list = append(list, users.Removed{Section: "grants", ID: r.ID, TargetType: tt, Target: t,
+			Entry: map[string]string{"group_id": r.UserGroupID, "server_group_id": id}})
+	}
+	return users.WriteRemoved(ctx, tx, req, "server_group.delete", list)
 }

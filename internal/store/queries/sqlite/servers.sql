@@ -80,4 +80,23 @@ DELETE FROM server_group_members WHERE server_group_id = ?;
 -- name: InsertServerGroupMember :exec
 INSERT INTO server_group_members (server_group_id, server_id) VALUES (?, ?);
 
+-- Assignments end with the server or server group they name (ROLE-003,
+-- ROLE-004, ROLE-007): the soft delete keeps the row, so ON DELETE CASCADE
+-- never fires. The rows come back for the audit.
+
+-- name: DeleteServerScopes :many
+DELETE FROM admin_scopes WHERE server_id = ? RETURNING id, user_id;
+
+-- name: DeleteServerGrants :many
+DELETE FROM grants WHERE server_id = ? RETURNING id, user_group_id, user_id;
+
+-- name: DeleteServerSupporterGrants :many
+DELETE FROM supporter_grants WHERE server_id = ? RETURNING id, supporter_id, moderator_id;
+
+-- name: DeleteServerGroupScopes :many
+DELETE FROM admin_scopes WHERE server_group_id = ? RETURNING id, user_id;
+
+-- name: DeleteServerGroupGrants :many
+DELETE FROM grants WHERE server_group_id = ? RETURNING id, user_group_id, user_id;
+
 -- SPDX-License-Identifier: AGPL-3.0-or-later
