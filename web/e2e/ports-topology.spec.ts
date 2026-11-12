@@ -88,3 +88,52 @@ test('topology per role, live without reload (UI-010)', async ({ page, state, br
   await expect(page.getByRole('main')).toContainText('Agent');
   await expect(page.getByRole('main')).not.toContainText('host-1');
 });
+
+// O5: the cards on the server list carry the game ports for the roles that
+// may see them (D-056): the RCON admin on every server, the server admin on
+// those in his scope, the moderator and the supporter none. These pass on
+// the code before them as well: in this stack the cards showed the game
+// ports already.
+for (const [user, servers] of [
+  ['admin', ['survival', 'outpost', 'lobby']],
+  ['sadmin', ['survival']],
+] as const) {
+  test(`O5: the server cards show the game ports to ${user} (UI-004, UI-005)`, async ({
+    page,
+    state,
+  }) => {
+    await login(page, user, secret(state, user));
+    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    await page.getByRole('navigation').getByRole('link', { name: 'Servers', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Servers', level: 1 })).toBeVisible();
+    for (const name of servers) {
+      const chips = page
+        .getByRole('article', { name, exact: true })
+        .getByRole('list', { name: 'Ports' })
+        .getByRole('listitem');
+      // Game ports only: no RCON port and no other port on a card.
+      await expect(chips).toHaveCount(1);
+      await expect(chips.first()).toContainText('game25565/tcp');
+    }
+    // survival publishes its game port: no "not published" mark.
+    await expect(
+      page.getByRole('article', { name: 'survival', exact: true }).getByRole('listitem'),
+    ).not.toContainText('not published');
+  });
+}
+
+for (const user of ['mod', 'sup']) {
+  test(`O5: the server cards show no ports to ${user} (UI-004, UI-005)`, async ({
+    page,
+    state,
+  }) => {
+    await login(page, user, secret(state, user));
+    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    await page.getByRole('navigation').getByRole('link', { name: 'Servers', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Servers', level: 1 })).toBeVisible();
+    const card = page.getByRole('article', { name: 'survival', exact: true });
+    await expect(card).toBeVisible();
+    await expect(card.getByRole('list', { name: 'Ports' })).toHaveCount(0);
+    await expect(card).not.toContainText('25565');
+  });
+}
