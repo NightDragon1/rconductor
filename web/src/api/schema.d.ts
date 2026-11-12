@@ -1412,7 +1412,7 @@ export interface components {
             public?: number;
             /** @description Foreign data from the agent for other ports (SEC-006). */
             proto: string;
-            /** @description steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host. */
+            /** @description steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host, so the RCON admin only (D-056). */
             steam_url?: string;
         };
         VolumeRuntime: {

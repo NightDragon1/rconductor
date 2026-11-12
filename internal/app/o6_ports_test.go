@@ -5,7 +5,10 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -246,6 +249,104 @@ func TestO6HostAndPortsByRole(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("O6 %s audit: no server.update entry with the change", role)
+		}
+	}
+}
+
+// steamURLs returns the Steam links among the container ports of a
+// server or a runtime event.
+func steamURLs(t *testing.T, runtime json.RawMessage) []string {
+	t.Helper()
+	var rt struct {
+		Container *struct {
+			Ports []struct {
+				SteamURL string `json:"steam_url"`
+			}
+		}
+	}
+	if err := json.Unmarshal(runtime, &rt); err != nil {
+		t.Fatalf("runtime %s: %v", runtime, err)
+	}
+	var out []string
+	if rt.Container != nil {
+		for _, p := range rt.Container.Ports {
+			if p.SteamURL != "" {
+				out = append(out, p.SteamURL)
+			}
+		}
+	}
+	return out
+}
+
+// TestO6SteamLinkByRole checks the Steam connect link (UI-005, ROLE-003):
+// it carries the server's host, so only the RCON admin gets it, over REST
+// and in servers.overview; the server admin gets the game port without it
+// (D-056), moderator and supporter no ports at all.
+func TestO6SteamLinkByRole(t *testing.T) {
+	f := newRightsFixture(t)
+	pairAgent(t, f.as(rA), f.agentAddr, f.server, &hostBackend{ports: []agentproto.Port{
+		{Private: 25565, Public: 30000, Proto: "tcp"},
+	}})
+	// A custom profile above the Minecraft one switches the link on.
+	dir := filepath.Join(f.data, "profiles")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	profile := "schema: 1\nid: o6-steam\nname: O6 Steam\nkind: specific\nprotocol: { type: source-rcon, default_port: 25575 }\nports:\n  steam_connect: true\n"
+	if err := os.WriteFile(filepath.Join(dir, "o6-steam.yaml"), []byte(profile), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	steam := ""
+	for deadline := time.Now().Add(10 * time.Second); steam == ""; time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("custom profile not imported")
+		}
+		var p struct{ Items []struct{ ID, Slug string } }
+		f.as(rA).must(http.MethodGet, "/profiles", nil, &p, http.StatusOK)
+		for _, x := range p.Items {
+			if x.Slug == "o6-steam" {
+				steam = x.ID
+			}
+		}
+	}
+	f.as(rA).must(http.MethodPatch, "/servers/"+f.server, map[string]any{"profile_ids": []string{steam, f.profile()}}, nil, http.StatusOK)
+	var conn struct{ Host string }
+	f.as(rA).must(http.MethodGet, "/servers/"+f.server, nil, &conn, http.StatusOK)
+	want := "steam://connect/" + net.JoinHostPort(conn.Host, "30000")
+
+	for _, role := range []string{rA, rSI, rMR, rMN, rSU} {
+		var one struct{ Runtime json.RawMessage }
+		f.as(role).must(http.MethodGet, "/servers/"+f.server, nil, &one, http.StatusOK)
+		var list struct {
+			Items []struct {
+				ID      string
+				Runtime json.RawMessage
+			}
+		}
+		f.as(role).must(http.MethodGet, "/servers", nil, &list, http.StatusOK)
+		views := map[string]json.RawMessage{"server": one.Runtime, "overview": overviewRuntime(t, f, role, f.server)}
+		for _, it := range list.Items {
+			if it.ID == f.server {
+				views["list"] = it.Runtime
+			}
+		}
+		for where, rt := range views {
+			got := steamURLs(t, rt)
+			kinds, _ := portKinds(t, rt)
+			switch role {
+			case rA:
+				if len(got) != 1 || got[0] != want {
+					t.Errorf("O6 %s %s: Steam links %v, want [%s]", role, where, got, want)
+				}
+			case rSI:
+				if len(got) != 0 || len(kinds) == 0 {
+					t.Errorf("O6 %s %s: Steam links %v, ports %v, want the game port without link", role, where, got, kinds)
+				}
+			default:
+				if len(got) != 0 || kinds != nil {
+					t.Errorf("O6 %s %s: Steam links %v, ports %v, want none", role, where, got, kinds)
+				}
+			}
 		}
 	}
 }

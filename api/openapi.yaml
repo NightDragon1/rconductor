@@ -2717,7 +2717,8 @@ components:
           type: string
           description: >-
             steam://connect link to the published game port, when the
-            profile sets ports.steam_connect; host is the server's host.
+            profile sets ports.steam_connect; host is the server's host, so
+            the RCON admin only (D-056).
 
     VolumeRuntime:
       type: object

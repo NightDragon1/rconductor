@@ -42,7 +42,8 @@ type PortView struct {
 	Public  int    `json:"public,omitempty"`
 	Proto   string `json:"proto"`
 	// SteamURL connects a Steam client to a published game port, when the
-	// profile switches it on (ports.steam_connect).
+	// profile switches it on (ports.steam_connect); for the RCON admin
+	// only, as it carries the host.
 	SteamURL string `json:"steam_url,omitempty"`
 }
 
@@ -67,7 +68,8 @@ func (v *View) portsOf(ctx context.Context, r sqlitedb.GetServerRow, snapshot []
 			used[i] = true
 		}
 		pv := PortView{Kind: PortGame, Name: g.Name, Private: g.Port, Public: pub, Proto: g.Proto}
-		if steam && pub > 0 && r.Host != "" {
+		// The link carries the server's host: the RCON admin only (D-056).
+		if steam && level >= LevelRCONAdmin && pub > 0 && r.Host != "" {
 			pv.SteamURL = "steam://connect/" + net.JoinHostPort(r.Host, strconv.Itoa(pub))
 		}
 		out = append(out, pv)

@@ -1095,7 +1095,7 @@ type PortRuntime struct {
 	// Public Port on the host; missing when the port is not published.
 	Public *int `json:"public,omitempty"`
 
-	// SteamUrl steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host.
+	// SteamUrl steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host, so the RCON admin only (D-056).
 	SteamUrl *string `json:"steam_url,omitempty"`
 }
 
