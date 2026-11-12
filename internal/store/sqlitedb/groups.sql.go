@@ -10,6 +10,46 @@ import (
 	"database/sql"
 )
 
+const deleteGroupGrants = `-- name: DeleteGroupGrants :many
+DELETE FROM grants WHERE user_group_id = ? RETURNING id, user_id, server_group_id, server_id
+`
+
+type DeleteGroupGrantsRow struct {
+	ID            string
+	UserID        sql.NullString
+	ServerGroupID sql.NullString
+	ServerID      sql.NullString
+}
+
+// Grants end with their user group (ROLE-004); see DeleteServerGrants.
+func (q *Queries) DeleteGroupGrants(ctx context.Context, userGroupID string) ([]DeleteGroupGrantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteGroupGrants, userGroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeleteGroupGrantsRow{}
+	for rows.Next() {
+		var i DeleteGroupGrantsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ServerGroupID,
+			&i.ServerID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteUserGrantsInGroup = `-- name: DeleteUserGrantsInGroup :exec
 DELETE FROM grants WHERE user_group_id = ? AND user_id = ?
 `

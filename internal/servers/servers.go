@@ -202,6 +202,39 @@ func (s *Service) auditOK(ctx context.Context, tx *sql.Tx, req users.Request, ac
 	return err
 }
 
+// endServerAssignments removes the assignments on server id inside tx.
+func endServerAssignments(ctx context.Context, tx *sql.Tx, req users.Request, id string) error {
+	q := sqlitedb.New(tx)
+	key := sql.NullString{String: id, Valid: true}
+	scopes, err := q.DeleteServerScopes(ctx, key)
+	if err != nil {
+		return err
+	}
+	grants, err := q.DeleteServerGrants(ctx, key)
+	if err != nil {
+		return err
+	}
+	supporters, err := q.DeleteServerSupporterGrants(ctx, id)
+	if err != nil {
+		return err
+	}
+	var list []users.Removed
+	for _, r := range scopes {
+		list = append(list, users.Removed{Section: "admin_scopes", ID: r.ID, TargetType: "user", Target: r.UserID,
+			ServerID: id, Entry: map[string]string{"server_id": id}})
+	}
+	for _, r := range grants {
+		tt, t := users.GrantHolder(r.UserGroupID, r.UserID)
+		list = append(list, users.Removed{Section: "grants", ID: r.ID, TargetType: tt, Target: t,
+			ServerID: id, Entry: map[string]string{"group_id": r.UserGroupID, "server_id": id}})
+	}
+	for _, r := range supporters {
+		list = append(list, users.Removed{Section: "supporter_grants", ID: r.ID, TargetType: "user", Target: r.SupporterID,
+			ServerID: id, Entry: map[string]string{"moderator_id": r.ModeratorID, "server_id": id}})
+	}
+	return users.WriteRemoved(ctx, tx, req, "server.delete", list)
+}
+
 // mustBeAdmin allows changes only to the RCON admin (Design 2.2).
 func (s *Service) mustBeAdmin(ctx context.Context, req users.Request, action, targetType, target string) error {
 	if req.Actor.Role == perm.RCONAdmin {
@@ -961,7 +994,9 @@ func onlyProfiles(in Input) bool {
 		in.GamePorts == nil && in.AgentID == nil && in.ContainerName == nil && in.TLSFingerprint == nil
 }
 
-// Delete soft-deletes a server (D-028); nobody reaches it any more.
+// Delete soft-deletes a server (D-028); nobody reaches it any more. Its
+// scopes, grants and supporter grants end in the same transaction, each
+// with an audit entry (ROLE-003, ROLE-004, ROLE-007).
 func (s *Service) Delete(ctx context.Context, req users.Request, id string) error {
 	if err := s.mustBeAdmin(ctx, req, "server.delete", "server", id); err != nil {
 		return err
@@ -987,6 +1022,9 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 		return err
 	}
 	if err := s.auditOK(ctx, tx, req, "server.delete", "server", id, id, map[string]string{"name": r.Name}); err != nil {
+		return err
+	}
+	if err := endServerAssignments(ctx, tx, req, id); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
