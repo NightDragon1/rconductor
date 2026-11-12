@@ -2435,10 +2435,12 @@ components:
           description: Admins only.
         host:
           type: string
-          description: Admins only.
+          description: >-
+            RCON admin only; the server admin sees of the ports only the
+            game ports (D-056).
         port:
           type: integer
-          description: Admins only.
+          description: RCON port; RCON admin only (D-056).
         credentials:
           type: string
           enum: [ok, missing, reenter]
@@ -3011,6 +3013,9 @@ components:
         payload:
           type: object
           additionalProperties: true
+          description: >-
+            Details of the action; host and RCON port of a server only for
+            the RCON admin (D-056).
         result:
           type: string
           enum: [ok, denied, error, timeout]
