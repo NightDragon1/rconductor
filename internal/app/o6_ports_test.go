@@ -80,10 +80,10 @@ func overviewRuntime(t *testing.T, f *rightsFixture, role, server string) json.R
 
 // TestO6HostAndPortsByRole checks host, RCON port and game ports per role
 // in every answer with server data (UI-005, UI-006, D-056): the RCON admin
-// gets host, RCON port and all ports; the server admin in scope the game
-// ports and no RCON port among the container ports; moderator and
-// supporter neither host nor any port, in the server list, the server, the
-// server groups and servers.overview alike.
+// gets host, RCON port and all ports; the server admin in scope only the
+// game ports, neither host nor RCON port; moderator and supporter neither
+// host nor any port, in the server list, the server, the server groups,
+// servers.overview and the audit log alike.
 func TestO6HostAndPortsByRole(t *testing.T) {
 	f := newRightsFixture(t)
 	pairAgent(t, f.as(rA), f.agentAddr, f.server, &hostBackend{ports: []agentproto.Port{
@@ -136,6 +136,14 @@ func TestO6HostAndPortsByRole(t *testing.T) {
 						role, where, host, port, len(game), kinds, rcon)
 				}
 			case rSI:
+				for _, k := range []string{"host", "port"} {
+					if _, ok := s[k]; ok {
+						t.Errorf("O6 %s %s: field %s present", role, where, k)
+					}
+				}
+				if b, _ := json.Marshal(s); strings.Contains(string(b), conn.Host) || rcon != 0 {
+					t.Errorf("O6 %s %s: host or RCON port in %s", role, where, b)
+				}
 				if len(game) == 0 || len(kinds) == 0 {
 					t.Errorf("O6 %s %s: game ports %d container ports %v, want the game ports", role, where, len(game), kinds)
 				}
@@ -190,7 +198,7 @@ func TestO6HostAndPortsByRole(t *testing.T) {
 				t.Errorf("O6 %s overview: ports %v rcon %d, want all", role, kinds, rcon)
 			}
 		case rSI:
-			if len(kinds) == 0 || rcon != 0 {
+			if len(kinds) == 0 || rcon != 0 || strings.Contains(string(d), conn.Host) {
 				t.Errorf("O6 %s overview: ports %v, want the game ports only", role, kinds)
 			}
 			for _, k := range kinds {
@@ -202,6 +210,42 @@ func TestO6HostAndPortsByRole(t *testing.T) {
 			if kinds != nil || strings.Contains(string(d), conn.Host) {
 				t.Errorf("O6 %s overview: %s, want no container part and no host", role, d)
 			}
+		}
+	}
+
+	// The audit log: a change of host and port shows old and new value to
+	// the RCON admin only; the server admin reads the entry without them.
+	f.as(rA).must(http.MethodPatch, "/servers/"+f.server, map[string]any{"host": "localhost", "port": conn.Port + 1}, nil, http.StatusOK)
+	t.Cleanup(func() {
+		f.as(rA).must(http.MethodPatch, "/servers/"+f.server, map[string]any{"host": conn.Host, "port": conn.Port}, nil, http.StatusOK)
+	})
+	for _, role := range []string{rA, rSI} {
+		var page struct {
+			Items []struct {
+				Action  string
+				Payload map[string]json.RawMessage
+			}
+		}
+		f.as(role).must(http.MethodGet, "/audit?server_id="+f.server+"&kind=admin", nil, &page, http.StatusOK)
+		found := false
+		for _, e := range page.Items {
+			if e.Action != "server.update" {
+				continue
+			}
+			_, host := e.Payload["host"]
+			_, port := e.Payload["port"]
+			if host || port {
+				found = true
+			}
+			if role == rSI && (host || port) {
+				t.Errorf("O6 %s audit: %s with host or port: %v", role, e.Action, e.Payload)
+			}
+			if role == rSI {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("O6 %s audit: no server.update entry with the change", role)
 		}
 	}
 }

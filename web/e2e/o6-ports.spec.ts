@@ -55,8 +55,8 @@ test('O6 host and ports per role on the server pages (UI-005, UI-006)', async ({
   await expect(adminPorts.filter({ hasText: 'game' })).not.toHaveCount(0);
   await expect(adminPorts.filter({ hasText: 'RCON' })).toHaveCount(1);
 
-  // Server admin: the game ports; no RCON port on the page or in what it
-  // receives.
+  // Server admin: the game ports; neither host nor RCON port on the pages
+  // or in what they receive (D-056).
   {
     const seen = record(page);
     await signIn(page, state, 'sadmin');
@@ -66,9 +66,25 @@ test('O6 host and ports per role on the server pages (UI-005, UI-006)', async ({
     await expect(ports.filter({ hasText: 'RCON' })).toHaveCount(0);
     await page.goto('');
     await expect(page.getByRole('article', { name: 'survival', exact: true })).toBeVisible();
+    await page.goto('admin/servers');
+    await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Address' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'survival', exact: true }).click();
+    const panel = page.getByRole('complementary', { name: 'Details of survival' });
+    await expect(panel.getByLabel('Name')).toBeVisible();
+    await expect(panel.getByLabel('Host')).toHaveCount(0);
+    await expect(page.getByRole('main')).not.toContainText(conn.host);
     await page.waitForLoadState('networkidle');
     expect(seen.length).toBeGreaterThan(0);
-    for (const body of seen) expect(body, 'server admin').not.toMatch(/"kind":"(rcon|other)"/);
+    for (const body of seen) {
+      expect(body, 'server admin').not.toMatch(/"kind":"(rcon|other)"/);
+      // Game ports carry a port too; the RCON port must not appear.
+      expect(body, 'server admin').not.toMatch(/"host":/);
+      expect(body, 'server admin').not.toMatch(
+        new RegExp(`"(port|private|public)":${conn.port}\\b`),
+      );
+      expect(body, 'server admin').not.toContain(conn.host);
+    }
     page.removeAllListeners('response');
     page.removeAllListeners('websocket');
   }
