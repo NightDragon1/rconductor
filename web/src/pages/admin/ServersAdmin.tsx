@@ -285,32 +285,35 @@ function ServerPanel({
             set({ profile_ids });
           }}
         />
-        <div className="grid grid-cols-[1fr_7rem] gap-2">
-          <Row label={t('servers.host')}>
-            {(id) => (
-              <Input
-                id={id}
-                disabled={off}
-                value={d.host}
-                onChange={(e) => set({ host: e.target.value })}
-                required
-              />
-            )}
-          </Row>
-          <Row label={httpApi ? t('servers.apiPort') : t('servers.port')}>
-            {(id) => (
-              <Input
-                id={id}
-                type="number"
-                min={1}
-                max={65535}
-                disabled={off}
-                value={d.port}
-                onChange={(e) => set({ port: e.target.value })}
-              />
-            )}
-          </Row>
-        </div>
+        {/* Host and RCON port come for the RCON admin only (D-056). */}
+        {(canEdit || server?.host !== undefined) && (
+          <div className="grid grid-cols-[1fr_7rem] gap-2">
+            <Row label={t('servers.host')}>
+              {(id) => (
+                <Input
+                  id={id}
+                  disabled={off}
+                  value={d.host}
+                  onChange={(e) => set({ host: e.target.value })}
+                  required
+                />
+              )}
+            </Row>
+            <Row label={httpApi ? t('servers.apiPort') : t('servers.port')}>
+              {(id) => (
+                <Input
+                  id={id}
+                  type="number"
+                  min={1}
+                  max={65535}
+                  disabled={off}
+                  value={d.port}
+                  onChange={(e) => set({ port: e.target.value })}
+                />
+              )}
+            </Row>
+          </div>
+        )}
         {canEdit && (
           <Row
             label={
@@ -744,6 +747,7 @@ export function ServersAdminPage() {
   const qc = useQueryClient();
   const { data: session } = useSession();
   const phone = usePhone();
+  // Agents, host and RCON port: the RCON admin only (D-056).
   const canSeeAgents = session?.user.role === 'rcon_admin';
   const canEdit = canSeeAgents && !phone;
   // A server admin changes the profile list of the servers in his scope;
@@ -853,7 +857,7 @@ export function ServersAdminPage() {
                 <tr>
                   <th className="p-3 font-medium">{t('servers.name')}</th>
                   <th className="p-3 font-medium">{t('servers.profile')}</th>
-                  <th className="p-3 font-medium">{t('servers.address')}</th>
+                  {canSeeAgents && <th className="p-3 font-medium">{t('servers.address')}</th>}
                   <th className="p-3 font-medium">{t('servers.container')}</th>
                   <th className="p-3 font-medium">{t('servers.groups')}</th>
                 </tr>
@@ -884,9 +888,11 @@ export function ServersAdminPage() {
                     <td className="p-3">
                       <bdi>{profileName(s.profile_ids)}</bdi>
                     </td>
-                    <td className="p-3 font-mono">
-                      <bdi>{s.host ? `${s.host}:${s.port ?? ''}` : ''}</bdi>
-                    </td>
+                    {canSeeAgents && (
+                      <td className="p-3 font-mono">
+                        <bdi>{s.host ? `${s.host}:${s.port ?? ''}` : ''}</bdi>
+                      </td>
+                    )}
                     <td className="p-3 font-mono">
                       <bdi>{s.container_name ?? ''}</bdi>
                     </td>
