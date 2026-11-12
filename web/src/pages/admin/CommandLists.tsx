@@ -29,7 +29,7 @@ function ListPanel({
   const { t } = useTranslation();
   const panel = useReveal<HTMLElement>();
   const qc = useQueryClient();
-  const { saved } = useUndo();
+  const { saved, saving } = useUndo();
   const profiles = useProfiles();
   const lists = useCommandLists(true);
   const [draft, setDraft] = useState<CommandList>(list);
@@ -50,14 +50,16 @@ function ListPanel({
   // version goes along as If-Match (revision 2.4 candidate 24).
   const write = async (from: CommandList, to: CommandList) => {
     let done = null as CommandList | null;
-    const r = await outcome(list.id, async () => {
-      done = must(
-        await patchVersioned('/command-lists/{id}', from.version, {
-          path: { id: list.id },
-          body: { name: to.name, entries: to.entries },
-        }),
-      );
-    });
+    const r = await saving(
+      outcome(list.id, async () => {
+        done = must(
+          await patchVersioned('/command-lists/{id}', from.version, {
+            path: { id: list.id },
+            body: { name: to.name, entries: to.entries },
+          }),
+        );
+      }),
+    );
     if (r.reason === 'conflict') {
       setConflict(true);
       setMessage({ ok: false, text: t('admin.conflict') });
