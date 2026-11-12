@@ -4,6 +4,7 @@ package connmgr
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -95,5 +96,49 @@ func TestO8FactorioThroughManager(t *testing.T) {
 func TestO8EndpointCarriesEndMarker(t *testing.T) {
 	if e := (Target{EndMarker: source.EndMarkerNone}).endpoint(); e.EndMarker != source.EndMarkerNone {
 		t.Errorf("endpoint end marker %q", e.EndMarker)
+	}
+}
+
+// factorioManager runs a manager with one Factorio-like server and the end
+// marker none.
+func factorioManager(t *testing.T, h func(string) string) (*rcontest.Server, *Manager) {
+	t.Helper()
+	srv, err := rcontest.Start("secret", rcontest.Factorio, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	src := &fakeSource{targets: map[string]Target{
+		"s1": {ID: "s1", Name: "factorio", Protocol: "source-rcon", Addr: srv.Addr, Password: "secret", Usable: true, EndMarker: source.EndMarkerNone},
+	}}
+	m := New(rcon.Registry{"source-rcon": source.Adapter{}}, src, logging.New(&lockedBuf{}, "panel", config.Log{Format: "json"}).Module("rcon"), Options{
+		ProbeInterval: 50 * time.Millisecond, MaxBackoff: 200 * time.Millisecond,
+		IdleProbe: 100 * time.Millisecond, ProbeTimeout: 300 * time.Millisecond,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() { cancel(); m.Wait() })
+	if err := m.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	(&fixture{srv: srv, m: m}).waitStatus(t, Connected)
+	return srv, m
+}
+
+// TestO8ChatInputThroughManager: input that Factorio takes as chat gets
+// no answer; the command ends with context.DeadlineExceeded at its
+// deadline and the connection stays (no reconnect), so a hint in the
+// console can tell this case from a lost server.
+func TestO8ChatInputThroughManager(t *testing.T) {
+	srv, m := factorioManager(t, func(cmd string) string { return "answer to " + cmd })
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	if got, err := m.Execute(ctx, "s1", "hello"); got != "" || !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("chat input = %q, %v, want context.DeadlineExceeded", got, err)
+	}
+	if got, err := m.Execute(context.Background(), "s1", "/time"); err != nil || got != "answer to /time" {
+		t.Errorf("next command = %q, %v", got, err)
+	}
+	if s, _ := m.Status("s1"); s != Connected || srv.Connections() != 1 {
+		t.Errorf("status %s, %d connections, want connected on one", s, srv.Connections())
 	}
 }

@@ -316,3 +316,66 @@ func TestO8UnknownEndMarker(t *testing.T) {
 		}
 	}
 }
+
+// TestO8EndOfAnswerWithoutMarker covers PROT-001 with end marker none
+// (D-079): the end of an answer is the first packet with the command's
+// id, so a normal, a long single-packet and an empty answer return at
+// once, far below the deadline, without waiting for anything else.
+func TestO8EndOfAnswerWithoutMarker(t *testing.T) {
+	long := strings.Repeat("0123456789abcdef", 4000) // 64 000 bytes, one packet
+	s := start(t, rcontest.Factorio, func(cmd string) string {
+		switch cmd {
+		case "/dump":
+			return long
+		case "/silent-command x=1":
+			return ""
+		}
+		return "Version: 2.1.24"
+	})
+	c := dialMarker(t, s, EndMarkerNone)
+	const deadline = 5 * time.Second
+	for cmd, want := range map[string]string{"/version": "Version: 2.1.24", "/dump": long, "/silent-command x=1": ""} {
+		ctx, cancel := context.WithTimeout(context.Background(), deadline)
+		begin := time.Now()
+		got, err := c.Execute(ctx, cmd)
+		took := time.Since(begin)
+		cancel()
+		if err != nil || got != want {
+			t.Errorf("%s: %d bytes, %v", cmd, len(got), err)
+		}
+		if took > deadline/5 {
+			t.Errorf("%s took %v, want far below the deadline %v", cmd, took, deadline)
+		}
+	}
+	if s.Invalid() != 0 || s.Connections() != 1 {
+		t.Errorf("%d refused packets, %d connections", s.Invalid(), s.Connections())
+	}
+}
+
+// TestO8ChatInputNoAnswer: input without a leading "/" is chat for
+// Factorio and gets no packet at all, so the protocol gives nothing to end
+// on: the command ends with a timeout error at its deadline, never later,
+// and the connection stays for the next command.
+func TestO8ChatInputNoAnswer(t *testing.T) {
+	s := start(t, rcontest.Factorio, func(string) string { return "ok" })
+	c := dialMarker(t, s, EndMarkerNone)
+	const deadline = 300 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	defer cancel()
+	begin := time.Now()
+	got, err := c.Execute(ctx, "hello")
+	took := time.Since(begin)
+	var ne net.Error
+	if got != "" || !errors.As(err, &ne) || !ne.Timeout() {
+		t.Errorf("chat input = %q, %v, want a timeout", got, err)
+	}
+	if took > deadline+time.Second {
+		t.Errorf("took %v, deadline %v", took, deadline)
+	}
+	if got, err := c.Execute(context.Background(), "/players"); err != nil || got != "ok" {
+		t.Errorf("next command = %q, %v", got, err)
+	}
+	if s.Chat() != 1 || s.Connections() != 1 || s.Invalid() != 0 {
+		t.Errorf("chat %d, connections %d, refused %d", s.Chat(), s.Connections(), s.Invalid())
+	}
+}
