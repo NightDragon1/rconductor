@@ -4,7 +4,12 @@ package users
 
 import (
 	"context"
+	"slices"
 	"testing"
+
+	"github.com/pressly/goose/v3"
+
+	"github.com/NightDragon1/rconductor/migrations"
 )
 
 // TestO1DeleteGroupEndsGrants covers ROLE-004: deleting a moderator group
@@ -52,5 +57,52 @@ func TestO1DeleteGroupEndsGrants(t *testing.T) {
 		if g.GroupID == "mg" {
 			t.Errorf("assignments still name the deleted group: %+v", a.Grants)
 		}
+	}
+}
+
+// TestO1MigrationEntriesInScopedAudit covers AUD-004 for the entries of
+// migration 00018: a server admin sees those about users he manages, like
+// any entry about them, and not those about others; the RCON admin sees
+// all.
+func TestO1MigrationEntriesInScopedAudit(t *testing.T) {
+	f := withMore(t)
+	ctx := context.Background()
+	f.exec(`INSERT INTO servers (id, name, created_at, updated_at, deleted_at) VALUES ('gone', 'gone', 't', 't', 't')`)
+	f.exec(`INSERT INTO grants (id, user_group_id, user_id, server_id, granted_by, created_at) VALUES ('o-m', 'mg', ?, 'gone', ?, 't')`, f.ids["m"], f.ids["sa"])
+	f.exec(`INSERT INTO admin_scopes (id, user_id, server_id, assigned_by, created_at) VALUES ('o-sa2', ?, 'gone', ?, 't')`, f.ids["sa2"], f.ids["admin"])
+	p, err := goose.NewProvider(goose.DialectSQLite3, f.st.DB, migrations.SQLite(), goose.WithGoMigrations(migrations.SQLiteGo()...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.DownTo(ctx, 17); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	seen := func(actor string) []string {
+		t.Helper()
+		es, _, err := f.svc.Audit(ctx, f.as(actor), AuditQuery{Kind: "admin", Limit: MaxAuditLimit})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, e := range es {
+			if e.Action == ActionAssignmentRemoved {
+				if e.ActorID != "" || e.ActorRole != "" || e.SessionRef != "" {
+					t.Errorf("entry %s has an actor: %+v", e.ID, e)
+				}
+				id, _ := e.Payload["id"].(string)
+				out = append(out, id)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	if got := seen("sa"); !slices.Equal(got, []string{"o-m"}) {
+		t.Errorf("server admin sees %v", got)
+	}
+	if got := seen("admin"); !slices.Equal(got, []string{"o-m", "o-sa2"}) {
+		t.Errorf("RCON admin sees %v", got)
 	}
 }
