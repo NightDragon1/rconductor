@@ -53,6 +53,7 @@ type Server struct {
 	commands atomic.Int64
 	invalid  atomic.Int64
 	chat     atomic.Int64
+	single   atomic.Bool
 	frozen   atomic.Bool
 }
 
@@ -83,6 +84,10 @@ func (s *Server) Commands() int64 { return s.commands.Load() }
 // Invalid counts packets the Factorio style refused as invalid message
 // type.
 func (s *Server) Invalid() int64 { return s.invalid.Load() }
+
+// SinglePackets makes every style send each answer in one packet of any
+// length, as Factorio does, instead of 4096-byte pieces.
+func (s *Server) SinglePackets() { s.single.Store(true) }
 
 // Chat counts input the Factorio style took as chat and left unanswered.
 func (s *Server) Chat() int64 { return s.chat.Load() }
@@ -202,7 +207,7 @@ func (s *Server) serve(c net.Conn) {
 			if s.Handler != nil {
 				answer = s.Handler(body)
 			}
-			for len(answer) > 4096 && s.Style != Factorio {
+			for len(answer) > 4096 && s.Style != Factorio && !s.single.Load() {
 				_ = write(c, id, 0, answer[:4096])
 				answer = answer[4096:]
 			}
