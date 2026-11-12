@@ -26,6 +26,15 @@
 - Fixed: Factorio servers answered no command, because Factorio refuses the empty packet that marks the end of an answer; the panel ran into its timeout and reconnected. Game profiles now choose the end of an answer with `source_rcon.end_marker` (`empty_response`, the default, or `none`); the Factorio profile sets `none`. Panel 1.0 had the same problem with own Factorio profiles. With `none` the panel sends neither the end packet nor the idle packet. Profiles with `source_rcon` fail the profile check of panel 1.0 (PROT-001).
 - Fixed: an RCON answer over the packet limit of 64 KiB no longer shifts later answers on the same connection, as it could since 1.0; the panel refuses that answer and connects again, and each later command gets its own answer (PROT-001, PROT-002).
 - The console shows a hint when every command of the server starts with `/`, as in Factorio, and the input does not; Factorio takes such input as chat and does not answer. The input stays as typed (CMD-015, CAT-005).
+- Built with Go 1.27.4, which includes a security fix in net/http (SEC-013).
+- Rate limits count IPv6 clients per /64; when a limit's client table is full, new clients share an overflow limit instead of being refused or resetting the table (AUTH-008, CMD-019, NFR-017, AGT-003).
+- A recovery request is answered at once and handled in the background by a bounded pool; new settings `auth.recovery_workers` (default 4) and `auth.recovery_queue` (default 100). Requests beyond the queue get the same answer and are logged as `auth.recovery.dropped`, counted per minute (AUTH-008).
+- The game profile list of a server never changes its protocol, dialect or port; only the RCON admin changes the protocol, together with a new password, and the trusted certificate is then dropped (SRV-008).
+- Stricter game profile check: a field counts as set by its key in every YAML form; `null` values, keys that are not strings, and control characters in `players.command` and `stop.command` are refused; command separators of all profiles of a server hold like wrappers; a later import cannot change the protocol or dialect of a profile in use (SRV-008, CAT-005, CAT-007).
+- The player count of servers with an HTTPS API shows on the cards, without names (PROT-003).
+- Fixed: the theme switch shows whether light, dark or auto is active; servers no longer show as stopped after the agent restarts; leaving a page during a running save waits for the save; a certificate change on an open HTTPS-API connection sets the server status at once (UI-001, AGT-003, UI-008, PROT-003).
+- Fixed: using a second-factor code and taking the open sign-in happen in one step, so a repeated code can no longer end a valid sign-in (AUTH-008).
+- Fixed: a sign-in ends the own session that was sent along (AUTH-006).
 
 ## 1.0
 
