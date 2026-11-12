@@ -55,7 +55,8 @@ The server admin sees the game ports of his servers, the RCON admin also the RCO
 port and every other published port of the container. A port that is not
 published on the host is marked so. If the game profile sets `ports.steam_connect:
 true`, a published game port gets a Connect link (`steam://connect/<host>:<port>`,
-with the server's host). Volumes show with name and, once the agent has measured
+with the server's host); as it shows the host, only the RCON admin sees it.
+Volumes show with name and, once the agent has measured
 it, their size and when it was measured.
 
 ## Server page
