@@ -54,10 +54,14 @@ type Target struct {
 	// once.
 	Fingerprint, Dialect string
 	Parallel             int
+	// EndMarker is the Source RCON end marker of the game profile
+	// (PROT-001); empty is the default.
+	EndMarker string
 }
 
 func (t Target) endpoint() rcon.Endpoint {
-	return rcon.Endpoint{Addr: t.Addr, Secret: t.Password, Fingerprint: t.Fingerprint, Dialect: t.Dialect, Parallel: t.Parallel}
+	return rcon.Endpoint{Addr: t.Addr, Secret: t.Password, Fingerprint: t.Fingerprint, Dialect: t.Dialect, Parallel: t.Parallel,
+		EndMarker: t.EndMarker}
 }
 
 // dial uses the endpoint when the adapter takes one.
