@@ -11,6 +11,7 @@ import (
 // which takes input without a leading "/" as chat: the profile keeps the
 // slash (strip_prefix ""), so every catalog path, the stop command and
 // every wrapper carry it, also in the effective rules of the server.
+// The shipped profile had these properties before; the test guards them.
 func TestO9FactorioSlashCommands(t *testing.T) {
 	f := shipped(t, "factorio.yaml")
 	if !f.Sets(FieldStripPrefix) || f.Syntax.StripPrefix == nil || *f.Syntax.StripPrefix != "" {

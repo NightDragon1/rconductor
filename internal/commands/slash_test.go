@@ -17,6 +17,7 @@ import (
 // the command reaches the game with its slash, list entries and catalog
 // paths match with the slash, a list entry without it does not permit the
 // slash command, and the wrappers stay refused for moderators.
+// The shipped profile had these properties before; the test guards them.
 func TestO9FactorioSlashPipeline(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
