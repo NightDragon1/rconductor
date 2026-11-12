@@ -127,6 +127,11 @@ func (s *Service) Audit(ctx context.Context, req Request, q AuditQuery) ([]Audit
 		}
 		e.TS, _ = time.Parse(store.TimeLayout, r.Ts)
 		_ = json.Unmarshal([]byte(r.Payload), &e.Payload)
+		if req.Actor.Role != perm.RCONAdmin && e.TargetType == "server" {
+			// Host and RCON port of a server: the RCON admin only (D-056).
+			delete(e.Payload, "host")
+			delete(e.Payload, "port")
+		}
 		out = append(out, e)
 	}
 	return out, next, nil

@@ -163,3 +163,22 @@ the panel starts, but RCON passwords have to be entered again.
 
 Secrets never appear in logs. The one exception is the initial password of the emergency
 admin, printed once at the first start.
+
+## Removed assignments in the audit
+
+A server scope, a moderator grant or a supporter grant ends with the server, server group
+or user group it names. Each removed assignment gets its own audit entry, kind
+Administration, action `assignment.remove`. The entry names the user who held it (or the
+user group, for a grant to the whole group) and the server, if there is one. The details
+show the section (`admin_scopes`, `grants`, `supporter_grants`), the ID of the
+assignment, what it named, and the cause:
+
+| Cause | When | Actor |
+| --- | --- | --- |
+| `server.delete` | a server was deleted | the RCON admin who deleted it |
+| `server_group.delete` | a server group was deleted | the RCON admin who deleted it |
+| `group.delete` | a user group was deleted | the admin who deleted it |
+| `target_deleted` | the update to 1.1 removes assignments left behind by deletions in 1.0 | none |
+
+Entries without actor are filtered, paged and shown like any other; a server admin sees
+those about users he manages.

@@ -209,3 +209,90 @@ describe('undo after a change of someone else (B2)', () => {
     expect(put).toHaveBeenCalledOnce();
   });
 });
+
+// The scope of a server admin shows exactly the stored state: no cached
+// list while it is read again, and no ID of an unknown server (O1).
+describe('server scope in the panel (O1)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+  const dead = '01a1b140-97ff-7839-a109-32e7e13cc60d';
+  const admin = { ...users[0], id: 'u3', pseudonym: 'sadm', role: 'server_admin' };
+  const scoped = (...ids: string[]) => ({
+    role: 'server_admin',
+    admin_scopes: ids.map((id) => ({ server_id: id })),
+    groups: [],
+    grants: [],
+    supporter_grants: [],
+  });
+  const open = async (stored: unknown) => {
+    vi.stubGlobal('matchMedia', () => ({
+      matches: false,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    Element.prototype.scrollIntoView = () => undefined;
+    setLanguage('en');
+    const r = await renderPage(
+      () => (
+        <UndoProvider>
+          <UsersPage />
+        </UndoProvider>
+      ),
+      [
+        [sessionKey, session],
+        [managedUsersKey, [admin]],
+        [invitesKey, []],
+        [userGroupsKey, []],
+        [
+          serversKey,
+          [
+            { id: 's1', name: 'Alpha' },
+            { id: 's3', name: 'MC GTNH 2.9.0' },
+          ],
+        ],
+        [serverGroupsKey, []],
+        [assignmentsKey('u3'), stored],
+      ],
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'sadm' }));
+    return r;
+  };
+  const scope = () =>
+    within(screen.getByRole('complementary', { name: 'Details of sadm' })).queryByRole('region', {
+      name: 'Server scope',
+    });
+
+  it('O1: shows no ID of an unknown server, in the panel and the list', async () => {
+    await open(scoped('s1', dead, 's3'));
+    const chips = within(scope() as HTMLElement)
+      .getAllByRole('listitem')
+      .map((li) => li.textContent);
+    expect(chips).toEqual(['Alpha', 'unknown server', 'MC GTNH 2.9.0']);
+    expect(document.body.textContent).not.toContain(dead);
+  });
+
+  it('O1: hides a cached list while it is read again; editing starts from the stored one', async () => {
+    let answer: (v: unknown) => void = () => undefined;
+    const get = vi.spyOn(api, 'GET').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = (data) => resolve({ data, response: new Response(null, { status: 200 }) });
+        }) as never,
+    );
+    const { qc } = await open(scoped('s1'));
+    void qc.invalidateQueries({ queryKey: assignmentsKey('u3') });
+    await waitFor(() => expect(get).toHaveBeenCalled());
+    expect(scope()).toBeNull();
+    answer(scoped('s1', 's3'));
+    await waitFor(() => expect(scope()).not.toBeNull());
+    const region = scope() as HTMLElement;
+    fireEvent.click(within(region).getByRole('button', { name: 'Remove Alpha' }));
+    expect(
+      within(scope() as HTMLElement)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['MC GTNH 2.9.0']);
+  });
+});

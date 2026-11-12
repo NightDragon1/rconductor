@@ -1282,9 +1282,9 @@ export interface components {
             groups: string[];
             /** @description Admins only. */
             protocol?: string;
-            /** @description Admins only. */
+            /** @description RCON admin only; the server admin sees of the ports only the game ports (D-056). */
             host?: string;
-            /** @description Admins only. */
+            /** @description RCON port; RCON admin only (D-056). */
             port?: number;
             /**
              * @description Admins only. reenter: the credentials were encrypted with another master key and must be entered again (SRV-002).
@@ -1557,6 +1557,7 @@ export interface components {
             target_type?: string;
             target_id?: string;
             action: string;
+            /** @description Details of the action; host and RCON port of a server only for the RCON admin (D-056). */
             payload: {
                 [key: string]: unknown;
             };

@@ -6,7 +6,8 @@
 // game servers created over the API. With -base
 // it stands behind a small proxy that strips the base path, as a reverse
 // proxy does (NFR-003). The addresses and passwords go to -state as JSON.
-// It is a test tool only and never part of a release.
+// It is a test tool only and never part of a release. The control listener
+// for the tests (control_e2e.go) is compiled only with the build tag e2e.
 package main
 
 import (
@@ -71,6 +72,7 @@ type State struct {
 	// ControlURL is a listener of the stack for the tests only: POST
 	// /pending-agent starts a new agent with a name of its own that waits
 	// for approval by fingerprint, so a test does not use up the seed.
+	// It exists only in a build with the tag e2e and is empty otherwise.
 	ControlURL string `json:"control_url"`
 	profile    string
 	moderators string // the moderator group
@@ -122,18 +124,7 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 		hostport = net.JoinHostPort(host, port)
 	}
 	public := "http://" + hostport + strings.TrimSuffix(base, "/")
-	cfg, err := config.LoadPanel(func(k string) (string, bool) {
-		v, ok := map[string]string{
-			"RCD_HTTP_ADDR": "127.0.0.1:0", "RCD_AGENT_ADDR": "127.0.0.1:0", "RCD_PUBLIC_URL": public, "RCD_BASE_PATH": base,
-			"RCD_DATA_DIR": filepath.Join(root, "data"), "RCD_SECRETS_DIR": filepath.Join(root, "secrets"),
-			"RCD_BACKUP_DIR": filepath.Join(root, "backups"), "RCD_LOG_FORMAT": "json", "RCD_TRUSTED_PROXIES": trusted,
-			// Every agent of the stack connects from 127.0.0.1, and the ones
-			// waiting for approval try again and again: with the default of
-			// 10 per minute they would hold each other off (SEC-007).
-			"RCD_AGENT_CONNECTS_PER_MINUTE": "600", "RCD_AGENT_CONNECT_BURST": "100",
-		}[k]
-		return v, ok
-	}, os.ReadFile)
+	cfg, err := panelConfig(root, public, base, trusted)
 	if err != nil {
 		return err
 	}
@@ -187,16 +178,12 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 		return fmt.Errorf("panel: %w\n%s", err, logs.String())
 	}
 
-	// The browser talks to the proxy; it strips the base path like a
-	// reverse proxy and forwards to the panel, WebSocket included.
-	target, _ := url.Parse("http://" + panelAddr.String())
-	proxy := httputil.NewSingleHostReverseProxy(target)
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: http.StripPrefix(strings.TrimSuffix(base, "/"), proxy), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: front(base, panelAddr.String()), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = srv.Serve(ln) }()
 	defer func() { _ = srv.Close() }()
 
@@ -216,14 +203,12 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 	if st.ExpiredInvite, err = expiredInvite(ctx, admin, filepath.Join(root, "data", "rconductor.db")); err != nil {
 		return fmt.Errorf("expired invite: %w", err)
 	}
-	ctl, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
+	ctlURL, stopCtl, err := startControl(ctx, panelURL, origin(public), agentAddr, root)
 	if err != nil {
 		return err
 	}
-	ctlSrv := &http.Server{Handler: control(ctx, panelURL, origin(public), agentAddr, root), ReadHeaderTimeout: 10 * time.Second}
-	go func() { _ = ctlSrv.Serve(ctl) }()
-	defer func() { _ = ctlSrv.Close() }()
-	st.ControlURL = "http://" + ctl.Addr().String()
+	defer stopCtl()
+	st.ControlURL = ctlURL
 	st.BaseURL = public + "/"
 	if statePath != "" {
 		b, _ := json.MarshalIndent(st, "", "  ")
@@ -240,32 +225,27 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 	return <-done
 }
 
-// control serves the stack's own requests of the tests. Each POST
-// /pending-agent starts one more agent pairing-N that waits for approval;
-// the calls run one after another, as each switches pairing by
-// fingerprint on and off again.
-func control(ctx context.Context, panel, o, agentAddr, root string) http.Handler {
-	var mu sync.Mutex
-	n := 0
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /pending-agent", func(w http.ResponseWriter, _ *http.Request) {
-		mu.Lock()
-		defer mu.Unlock()
-		n++
-		name := fmt.Sprintf("pairing-%d", n)
-		admin := &client{base: panel, origin: o}
-		err := admin.call(http.MethodPost, "/auth/login", map[string]string{"pseudonym": "admin", "password": adminPassword}, nil)
-		if err == nil {
-			err = pendingAgent(ctx, admin, agentAddr, root, name)
-		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"name": name})
-	})
-	return mux
+// panelConfig is the configuration of the stack's panel below root.
+func panelConfig(root, public, base, trusted string) (config.Panel, error) {
+	return config.LoadPanel(func(k string) (string, bool) {
+		v, ok := map[string]string{
+			"RCD_HTTP_ADDR": "127.0.0.1:0", "RCD_AGENT_ADDR": "127.0.0.1:0", "RCD_PUBLIC_URL": public, "RCD_BASE_PATH": base,
+			"RCD_DATA_DIR": filepath.Join(root, "data"), "RCD_SECRETS_DIR": filepath.Join(root, "secrets"),
+			"RCD_BACKUP_DIR": filepath.Join(root, "backups"), "RCD_LOG_FORMAT": "json", "RCD_TRUSTED_PROXIES": trusted,
+			// Every agent of the stack connects from 127.0.0.1, and the ones
+			// waiting for approval try again and again: with the default of
+			// 10 per minute they would hold each other off (SEC-007).
+			"RCD_AGENT_CONNECTS_PER_MINUTE": "600", "RCD_AGENT_CONNECT_BURST": "100",
+		}[k]
+		return v, ok
+	}, os.ReadFile)
+}
+
+// front is what the browser talks to: it strips the base path like a
+// reverse proxy and forwards to the panel, WebSocket included.
+func front(base, panelAddr string) http.Handler {
+	target, _ := url.Parse("http://" + panelAddr)
+	return http.StripPrefix(strings.TrimSuffix(base, "/"), httputil.NewSingleHostReverseProxy(target))
 }
 
 // client calls the panel API directly, with the public origin.

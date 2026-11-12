@@ -6,6 +6,8 @@ import { defineConfig, devices } from '@playwright/test';
 // one under the name rcon.lan over plain http, which is no secure context
 // as on a LAN address (D-011): there the clipboard API is missing. The
 // last one serves a build with a test language, every text marked (NFR-007).
+// The tag e2e builds the stack with its control listener for the tests
+// (AGT-005).
 const language = 'web/.dist-language';
 const stacks = [
   { name: 'root', port: 4380, base: '/', host: '', dist: '', trusted: '' },
@@ -27,7 +29,7 @@ export default defineConfig<{ stack: string }>({
   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   webServer: stacks.map((s) => ({
     // From the repository root: web/ has its own go.mod as a barrier.
-    command: `${s.dist ? `(cd web && npx vite build --mode language --outDir ${s.dist.replace('web/', '')}) && ` : ''}go run ./internal/e2e/stack -addr 127.0.0.1:${s.port} -base ${s.base}${s.host ? ` -host ${s.host}` : ''}${s.trusted ? ` -trusted ${s.trusted}` : ''} -dist ${s.dist || 'internal/webui/dist'} -state web/e2e/.state-${s.name}.json -log web/e2e/.panel-${s.name}.log`,
+    command: `${s.dist ? `(cd web && npx vite build --mode language --outDir ${s.dist.replace('web/', '')}) && ` : ''}go run -tags e2e ./internal/e2e/stack -addr 127.0.0.1:${s.port} -base ${s.base}${s.host ? ` -host ${s.host}` : ''}${s.trusted ? ` -trusted ${s.trusted}` : ''} -dist ${s.dist || 'internal/webui/dist'} -state web/e2e/.state-${s.name}.json -log web/e2e/.panel-${s.name}.log`,
     cwd: '..',
     url: `http://127.0.0.1:${s.port}${s.base === '/' ? '' : s.base}/`,
     reuseExistingServer: false,

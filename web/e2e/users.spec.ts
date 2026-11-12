@@ -240,3 +240,91 @@ test('locking ends the session at once, socket included (AUTH-006)', async ({
   await panel.getByRole('switch', { name: 'Locked' }).click();
   await expect(row(page, 'sup')).toContainText('active', afterUndo);
 });
+
+// O1: the server scope of a server admin shows exactly what is stored, also
+// after one of its servers was deleted; a removal keeps the rest, and the
+// saved state comes back on reopening (ROLE-003, UI-007).
+test('O1: the server scope shows the stored assignments (ROLE-003)', async ({
+  page,
+  browser,
+  state,
+}) => {
+  await openUsers(page, state);
+  const headers = { Origin: new URL(state.base_url).origin };
+  const req = page.request;
+  const tag = Date.now() % 100000;
+  const outpost = await (await req.get(`api/v1/servers/${state.servers.outpost}`)).json();
+  const ids: Record<string, string> = {};
+  for (const n of ['a', 'b', 'c']) {
+    const created = await req.post('api/v1/servers', {
+      data: {
+        name: `o1-${n}-${tag}`,
+        profile_ids: outpost.profile_ids,
+        host: outpost.host,
+        port: outpost.port,
+        password: 'e2e-rcon',
+      },
+      headers,
+    });
+    expect(created.status()).toBe(201);
+    ids[n] = (await created.json()).id as string;
+  }
+
+  // A server admin of his own, so that no other test sees the scope.
+  const invite = await req.post('api/v1/invites', { data: { role: 'server_admin' }, headers });
+  const url = ((await invite.json()) as { url: string }).url;
+  const name = `o1-${tag}`;
+  const guest = await browser.newContext();
+  const invitee = await guest.newPage();
+  await invitee.goto(url);
+  await invitee.getByLabel('Pseudonym').fill(name);
+  await invitee.getByLabel('Password', { exact: true }).fill('a fine invited password');
+  await invitee.getByLabel('Repeat the new password').fill('a fine invited password');
+  await invitee.getByRole('button', { name: 'Create my account' }).click();
+  await expect(invitee.getByRole('status')).toContainText('Your account is ready');
+  await guest.close();
+  const list = (await (await req.get('api/v1/users')).json()) as {
+    items: { id: string; pseudonym: string }[];
+  };
+  const user = list.items.find((u) => u.pseudonym === name)?.id ?? '';
+  expect(user).not.toBe('');
+
+  try {
+    const put = await req.put(`api/v1/users/${user}/assignments`, {
+      data: { admin_scopes: ['a', 'b', 'c'].map((n) => ({ server_id: ids[n] })) },
+      headers,
+    });
+    expect(put.status()).toBe(200);
+    expect((await req.delete(`api/v1/servers/${ids.c}`, { headers })).status()).toBe(204);
+
+    const panel = page.getByRole('complementary', { name: `Details of ${name}` });
+    const chips = panel.getByRole('region', { name: 'Server scope' }).getByRole('listitem');
+    const open = async () => {
+      await page.reload();
+      await row(page, name).getByRole('button', { name }).click();
+    };
+    await open();
+    // The order is that of the stored IDs, which one save writes at random.
+    await expect(chips).toHaveCount(2);
+    for (const n of ['a', 'b'])
+      await expect(chips.filter({ hasText: `o1-${n}-${tag}` })).toHaveCount(1);
+    await expect(panel).not.toContainText(ids.c);
+    await expect(row(page, name)).not.toContainText(ids.c);
+
+    await panel.getByRole('button', { name: `Remove o1-a-${tag}` }).click();
+    await expect(chips).toHaveText([`o1-b-${tag}`]);
+    await panel.getByRole('button', { name: 'Save' }).click();
+    await expect(panel.getByRole('status')).toHaveText('Saved.');
+    await expect(chips).toHaveText([`o1-b-${tag}`]);
+
+    await open();
+    await expect(chips).toHaveText([`o1-b-${tag}`]);
+    const stored = (await (await req.get(`api/v1/users/${user}/assignments`)).json()) as {
+      admin_scopes: { server_id?: string }[];
+    };
+    expect(stored.admin_scopes).toEqual([{ server_id: ids.b }]);
+  } finally {
+    for (const n of ['a', 'b']) await req.delete(`api/v1/servers/${ids[n]}`, { headers });
+    await req.delete(`api/v1/users/${user}`, { headers });
+  }
+});

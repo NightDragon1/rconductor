@@ -141,6 +141,46 @@ test('the design follows the system, light and dark can be chosen (UI-001)', asy
   expect(await theme()).toBe('dark');
 });
 
+test('O7: the design switch shows its state by icon, tooltip and name (UI-001)', async ({
+  page,
+  state,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await login(page, 'admin', secret(state, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  const button = page.getByRole('button', { name: /^Design:/ });
+  const shown = async (design: string, name: string, applied: string) => {
+    await expect(button).toHaveAccessibleName(`Design: ${name}. Change it`);
+    await expect(button).toHaveAttribute('title', `Design: ${name}. Change it`);
+    await expect(button.locator('svg')).toHaveCount(1);
+    await expect(button.locator('svg')).toHaveAttribute('data-design', design);
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
+      .toBe(applied);
+  };
+  // The cycle keeps its order auto, light, dark; each step survives a reload.
+  const cycle: [string, string, string][] = [
+    ['light', 'light', 'light'],
+    ['dark', 'dark', 'dark'],
+    ['auto', 'auto, like the system', 'dark'],
+  ];
+  await shown('auto', 'auto, like the system', 'dark');
+  const icons = new Set([await button.locator('svg').getAttribute('class')]);
+  for (const [design, name, applied] of cycle) {
+    await button.click();
+    await shown(design, name, applied);
+    icons.add(await button.locator('svg').getAttribute('class'));
+    expect(await page.evaluate(() => localStorage.getItem('rcd.design'))).toBe(design);
+    await page.reload();
+    await shown(design, name, applied);
+  }
+  // Each state has its own icon.
+  expect(icons.size).toBe(3);
+  // Auto follows the system again.
+  await page.emulateMedia({ colorScheme: 'light' });
+  await shown('auto', 'auto, like the system', 'light');
+});
+
 test('a whole card opens its server and shows the pointer (UI-004, UI-001)', async ({
   page,
   state,

@@ -125,8 +125,11 @@ function GroupPanel({
   const listId = useId();
 
   const userName = (id: string) => users.data?.find((u) => u.id === id)?.pseudonym ?? id;
-  const serverName = (id?: string) => servers.data?.find((s) => s.id === id)?.name ?? id ?? '';
-  const sgName = (id?: string) => serverGroups.data?.find((g) => g.id === id)?.name ?? id ?? '';
+  // An ID the caller's lists do not know never shows as a name.
+  const serverName = (id?: string) =>
+    servers.data?.find((s) => s.id === id)?.name ?? t('admin.unknownServer');
+  const sgName = (id?: string) =>
+    serverGroups.data?.find((g) => g.id === id)?.name ?? t('admin.unknownServerGroup');
   // A moderator group takes only moderators (Design 2.2).
   const candidates = (users.data ?? []).filter(
     (u) => !draft.members.includes(u.id) && (draft.kind !== 'moderator' || u.role === 'moderator'),

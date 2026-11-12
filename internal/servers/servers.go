@@ -51,8 +51,9 @@ const (
 	CredentialsReenter = "reenter"
 )
 
-// Server is a game server. Connection fields are filled only for callers
-// who may see them (RCON admin and server admin).
+// Server is a game server. The details are filled only for callers who
+// may see them (RCON admin and server admin); host and RCON port only
+// for the RCON admin (D-056).
 type Server struct {
 	ID   string
 	Name string
@@ -62,9 +63,12 @@ type Server struct {
 	ProfileID   string
 	// ProfileIDs are the game profiles of the server, top first (SRV-008);
 	// ProfileID is the top one.
-	ProfileIDs  []string
-	GroupIDs    []string
-	Detailed    bool
+	ProfileIDs []string
+	GroupIDs   []string
+	Detailed   bool
+	// Connection marks that Host and Port are filled: for the RCON admin
+	// only (D-056).
+	Connection  bool
 	Protocol    string
 	Host        string
 	Port        int
@@ -198,6 +202,39 @@ func (s *Service) auditOK(ctx context.Context, tx *sql.Tx, req users.Request, ac
 	return err
 }
 
+// endServerAssignments removes the assignments on server id inside tx.
+func endServerAssignments(ctx context.Context, tx *sql.Tx, req users.Request, id string) error {
+	q := sqlitedb.New(tx)
+	key := sql.NullString{String: id, Valid: true}
+	scopes, err := q.DeleteServerScopes(ctx, key)
+	if err != nil {
+		return err
+	}
+	grants, err := q.DeleteServerGrants(ctx, key)
+	if err != nil {
+		return err
+	}
+	supporters, err := q.DeleteServerSupporterGrants(ctx, id)
+	if err != nil {
+		return err
+	}
+	var list []users.Removed
+	for _, r := range scopes {
+		list = append(list, users.Removed{Section: "admin_scopes", ID: r.ID, TargetType: "user", Target: r.UserID,
+			ServerID: id, Entry: map[string]string{"server_id": id}})
+	}
+	for _, r := range grants {
+		tt, t := users.GrantHolder(r.UserGroupID, r.UserID)
+		list = append(list, users.Removed{Section: "grants", ID: r.ID, TargetType: tt, Target: t,
+			ServerID: id, Entry: map[string]string{"group_id": r.UserGroupID, "server_id": id}})
+	}
+	for _, r := range supporters {
+		list = append(list, users.Removed{Section: "supporter_grants", ID: r.ID, TargetType: "user", Target: r.SupporterID,
+			ServerID: id, Entry: map[string]string{"moderator_id": r.ModeratorID, "server_id": id}})
+	}
+	return users.WriteRemoved(ctx, tx, req, "server.delete", list)
+}
+
 // mustBeAdmin allows changes only to the RCON admin (Design 2.2).
 func (s *Service) mustBeAdmin(ctx context.Context, req users.Request, action, targetType, target string) error {
 	if req.Actor.Role == perm.RCONAdmin {
@@ -219,7 +256,8 @@ func (s *Service) memberships(ctx context.Context) (map[string][]string, error) 
 	return out, nil
 }
 
-func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, groups []string, detailed bool) (Server, error) {
+func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, groups []string, role perm.Role) (Server, error) {
+	detailed := detailedFor(role)
 	srv := Server{ID: r.ID, Name: r.Name, ProfileID: r.ProfileID.String, ProfileIDs: []string{}, GroupIDs: groups, Detailed: detailed, Status: connmgr.Offline}
 	if list, err := s.st.Queries.GetServerProfiles(ctx, r.ID); err == nil {
 		srv.ProfileIDs = list
@@ -233,7 +271,7 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 	if !detailed {
 		return srv, nil
 	}
-	srv.Protocol, srv.Host, srv.Port = r.Protocol, r.Host, int(r.Port)
+	srv.Protocol = r.Protocol
 	srv.Credentials = s.credentialState(r.Secret)
 	srv.AgentID, srv.ContainerName = r.AgentID.String, r.ContainerName.String
 	srv.TLSFingerprint = r.TlsFingerprint
@@ -241,6 +279,12 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 		if t, err := time.Parse(time.RFC3339, r.TlsNotAfter.String); err == nil {
 			srv.TLSNotAfter = &t
 		}
+	}
+	// Host and RCON port: the RCON admin only; the server admin sees of
+	// the ports only the game ports (D-056).
+	if role == perm.RCONAdmin {
+		srv.Connection = true
+		srv.Host, srv.Port = r.Host, int(r.Port)
 	}
 	srv.GamePorts = []profiles.GamePort{}
 	if r.GamePorts.Valid {
@@ -278,7 +322,7 @@ func (s *Service) List(ctx context.Context, req users.Request) ([]Server, error)
 		if _, ok := rights.Server(r.ID); !ok {
 			continue
 		}
-		srv, err := s.toServer(ctx, r, s.visibleGroups(ctx, req, groups[r.ID]), detailedFor(rights.Role))
+		srv, err := s.toServer(ctx, r, s.visibleGroups(ctx, req, groups[r.ID]), rights.Role)
 		if err != nil {
 			return nil, err
 		}
@@ -324,7 +368,7 @@ func (s *Service) Get(ctx context.Context, req users.Request, id string) (Server
 	if err != nil {
 		return Server{}, err
 	}
-	return s.toServer(ctx, sqlitedb.ListServersRow(r), s.visibleGroups(ctx, req, groups[id]), detailedFor(rights.Role))
+	return s.toServer(ctx, sqlitedb.ListServersRow(r), s.visibleGroups(ctx, req, groups[id]), rights.Role)
 }
 
 func plainName(v string) (string, error) {
@@ -950,7 +994,9 @@ func onlyProfiles(in Input) bool {
 		in.GamePorts == nil && in.AgentID == nil && in.ContainerName == nil && in.TLSFingerprint == nil
 }
 
-// Delete soft-deletes a server (D-028); nobody reaches it any more.
+// Delete soft-deletes a server (D-028); nobody reaches it any more. Its
+// scopes, grants and supporter grants end in the same transaction, each
+// with an audit entry (ROLE-003, ROLE-004, ROLE-007).
 func (s *Service) Delete(ctx context.Context, req users.Request, id string) error {
 	if err := s.mustBeAdmin(ctx, req, "server.delete", "server", id); err != nil {
 		return err
@@ -976,6 +1022,9 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 		return err
 	}
 	if err := s.auditOK(ctx, tx, req, "server.delete", "server", id, id, map[string]string{"name": r.Name}); err != nil {
+		return err
+	}
+	if err := endServerAssignments(ctx, tx, req, id); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
