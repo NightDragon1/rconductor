@@ -25,6 +25,7 @@
 - Deleting a server, server group or user group now also removes the server scopes, moderator grants and supporter grants that name it, each with an audit entry `assignment.remove`. The update removes those left behind by earlier deletions the same way, without actor. The user panel shows only the stored scope, never the ID of an unknown server (ROLE-003, ROLE-004, ROLE-007).
 - Fixed: Factorio servers answered no command, because Factorio refuses the empty packet that marks the end of an answer; the panel ran into its timeout and reconnected. Game profiles now choose the end of an answer with `source_rcon.end_marker` (`empty_response`, the default, or `none`); the Factorio profile sets `none`. Panel 1.0 had the same problem with own Factorio profiles. With `none` the panel sends neither the end packet nor the idle packet. Profiles with `source_rcon` fail the profile check of panel 1.0 (PROT-001).
 - Fixed: an RCON answer over the packet limit of 64 KiB no longer shifts later answers on the same connection, as it could since 1.0; the panel refuses that answer and connects again, and each later command gets its own answer (PROT-001, PROT-002).
+- The console shows a hint when every command of the server starts with `/`, as in Factorio, and the input does not; Factorio takes such input as chat and does not answer. The input stays as typed (CMD-015, CAT-005).
 
 ## 1.0
 

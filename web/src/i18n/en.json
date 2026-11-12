@@ -368,6 +368,7 @@
     "suggestions": "Suggestions",
     "tab": "Tab",
     "hint": "Tab takes the first suggestion · arrow keys walk your own commands",
+    "slashHint": "Commands on this server start with /. Without it, the game may take the input as chat (Factorio does).",
     "favorites": "Favorites"
   },
   "commands": {
