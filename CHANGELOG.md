@@ -7,6 +7,7 @@
 - The game version from the container logs shows on the cards and the server page, for every role that sees the server (AGT-006).
 - The used size of each volume is measured in the background; the API gives it with its age (AGT-007).
 - Ports and volumes on the cards and the server page, with a Steam connect link where the game profile sets `ports.steam_connect` (UI-005). Game profiles with `ports.steam_connect` fail the profile check of panel 1.0.
+- The Steam connect link shows the server's host, so only the RCON admin gets it; the server admin sees the game ports without it, and no longer host and RCON port either (UI-005, ROLE-003).
 - Topology page: host → agent → game server by server group, for RCON admin and server admin (UI-010).
 - Mail over SMTP: the RCON admin sets up host, port, encryption (STARTTLS, SSL/TLS or none), user, password and sender and sends a test mail from the settings (NFR-017).
 - Two-factor sign-in with an authenticator app (TOTP), optional for everyone or required by the RCON admin; recovery by mail to the address in the profile, or a reset by whoever manages the user (AUTH-008).

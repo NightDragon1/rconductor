@@ -10,9 +10,10 @@ import (
 )
 
 // TestPortsByLevel covers UI-005: the server admin gets the game ports,
-// published or not, with the Steam link when the profile offers it; the
-// RCON admin also the RCON port and every other published port; the other
-// roles no container part. A port that is not published has no link.
+// published or not, without the Steam link, which carries the host
+// (D-056); the RCON admin also the link when the profile offers it, the
+// RCON port and every other published port; the other roles no container
+// part. A port that is not published has no link.
 func TestPortsByLevel(t *testing.T) {
 	f := newInsightFixture(t)
 	ctx := context.Background()
@@ -32,12 +33,13 @@ func TestPortsByLevel(t *testing.T) {
 
 	admin := f.view.RuntimeFor(ctx, "s1", LevelServerAdmin).Container.Ports
 	want := []PortView{
-		{Kind: PortGame, Name: "game", Private: 25565, Public: 30000, Proto: "tcp", SteamURL: "steam://connect/mc.example:30000"},
+		{Kind: PortGame, Name: "game", Private: 25565, Public: 30000, Proto: "tcp"},
 		{Kind: PortGame, Name: "voice", Private: 24454, Proto: "udp"},
 	}
 	if len(admin) != len(want) || admin[0] != want[0] || admin[1] != want[1] {
 		t.Errorf("server admin ports = %+v, want %+v", admin, want)
 	}
+	want[0].SteamURL = "steam://connect/mc.example:30000"
 	rcon := f.view.RuntimeFor(ctx, "s1", LevelRCONAdmin).Container.Ports
 	want = append(want,
 		PortView{Kind: PortRCON, Private: 25575, Public: 25575, Proto: "tcp"},
@@ -59,13 +61,13 @@ func TestPortsByLevel(t *testing.T) {
 	if _, err := f.st.DB.ExecContext(ctx, `UPDATE servers SET host = '2001:db8::1' WHERE id = 's1'`); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.view.RuntimeFor(ctx, "s1", LevelServerAdmin).Container.Ports[0].SteamURL; got != "steam://connect/[2001:db8::1]:30000" {
+	if got := f.view.RuntimeFor(ctx, "s1", LevelRCONAdmin).Container.Ports[0].SteamURL; got != "steam://connect/[2001:db8::1]:30000" {
 		t.Errorf("IPv6 link = %q", got)
 	}
 	if _, err := f.st.DB.ExecContext(ctx, `UPDATE game_profiles SET rules = '{"ports":{"game":[{"port":25565,"proto":"tcp","name":"game"}]}}' WHERE id = 'p1'`); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.view.RuntimeFor(ctx, "s1", LevelServerAdmin).Container.Ports[0].SteamURL; got != "" {
+	if got := f.view.RuntimeFor(ctx, "s1", LevelRCONAdmin).Container.Ports[0].SteamURL; got != "" {
 		t.Errorf("link without steam_connect = %q", got)
 	}
 }
