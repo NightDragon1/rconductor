@@ -3,7 +3,17 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { LiveProvider } from '@/lib/live-context';
 import { UndoProvider } from '@/lib/undo';
-import { ChevronsLeft, ChevronsRight, LogOut, Menu, SunMoon, Terminal } from 'lucide-react';
+import {
+  ChevronsLeft,
+  ChevronsRight,
+  LogOut,
+  Menu,
+  Monitor,
+  Moon,
+  Sun,
+  Terminal,
+  type LucideIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/client';
@@ -12,10 +22,13 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { bufferOwner } from '@/lib/console';
 import { cn } from '@/lib/utils';
-import { applyTheme, storedTheme, themes } from '@/lib/theme';
+import { applyTheme, storedTheme, themes, type Theme } from '@/lib/theme';
 import { adminNav, mainNav, type NavEntry } from '@/nav';
 
 const collapsedKey = 'rcd.nav.collapsed';
+
+// themeIcon shows the chosen design on its switch (UI-001).
+const themeIcon: Record<Theme, LucideIcon> = { auto: Monitor, light: Sun, dark: Moon };
 
 function storedCollapsed(): boolean {
   try {
@@ -225,6 +238,9 @@ function UserBlock({ collapsed }: { collapsed: boolean }) {
   const [logoutFailed, setLogoutFailed] = useState(false);
   if (!session) return null;
   const name = session.user.pseudonym;
+  const nextTheme = themes[(themes.indexOf(theme) + 1) % themes.length] ?? 'auto';
+  const themeLabel = t('nav.theme', { design: t(`nav.design.${theme}`) });
+  const ThemeIcon = themeIcon[theme];
 
   async function logout() {
     const r = await api.POST('/auth/logout');
@@ -260,15 +276,14 @@ function UserBlock({ collapsed }: { collapsed: boolean }) {
       <Button
         variant="ghost"
         size="icon"
-        aria-label={t('nav.theme', { design: t(`nav.design.${theme}`) })}
-        title={t('nav.theme', { design: t(`nav.design.${theme}`) })}
+        aria-label={themeLabel}
+        title={themeLabel}
         onClick={() => {
-          const next = themes[(themes.indexOf(theme) + 1) % themes.length] ?? 'auto';
-          applyTheme(next);
-          setTheme(next);
+          applyTheme(nextTheme);
+          setTheme(nextTheme);
         }}
       >
-        <SunMoon aria-hidden />
+        <ThemeIcon aria-hidden data-design={theme} />
       </Button>
       {logoutFailed && (
         <p role="alert" className="text-xs text-danger">

@@ -39,7 +39,7 @@
     "theme": "Design: {{design}}. Change it",
     "logoutFailed": "Sign-out failed, you are still signed in.",
     "design": {
-      "auto": "like the system",
+      "auto": "auto, like the system",
       "light": "light",
       "dark": "dark"
     },
@@ -516,6 +516,9 @@
     "supporterGrants": "Servers",
     "addServer": "+ Server",
     "none": "none",
+    "unknownServer": "unknown server",
+    "unknownServerGroup": "unknown server group",
+    "unknownGroup": "unknown group",
     "removeItem": "Remove {{name}}",
     "useTemplate": "Use as template",
     "endSessions": "End sessions",

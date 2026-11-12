@@ -22,6 +22,8 @@ fi
 
 step go vet
 go vet ./...
+# the control listener of the e2e stack exists only with the tag e2e
+go vet -tags e2e ./internal/e2e/stack
 
 step golangci-lint
 go tool -modfile=tools/go.mod golangci-lint run ./...
@@ -38,6 +40,8 @@ scripts/go-test-shard-test.sh
 scripts/deny-rules-test.sh
 scripts/format-hook-test.sh
 scripts/claude-guard-test.sh
+scripts/hook-scope-test.sh
+scripts/check-secrets-test.sh
 scripts/script-isolation-test.sh
 go -C tools tool golangci-lint run ./claudeguard
 if $tests; then

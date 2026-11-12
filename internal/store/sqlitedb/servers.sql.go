@@ -34,6 +34,72 @@ func (q *Queries) ClearServerProfiles(ctx context.Context, serverID string) erro
 	return err
 }
 
+const deleteServerGrants = `-- name: DeleteServerGrants :many
+DELETE FROM grants WHERE server_id = ? RETURNING id, user_group_id, user_id
+`
+
+type DeleteServerGrantsRow struct {
+	ID          string
+	UserGroupID string
+	UserID      sql.NullString
+}
+
+func (q *Queries) DeleteServerGrants(ctx context.Context, serverID sql.NullString) ([]DeleteServerGrantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteServerGrants, serverID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeleteServerGrantsRow{}
+	for rows.Next() {
+		var i DeleteServerGrantsRow
+		if err := rows.Scan(&i.ID, &i.UserGroupID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteServerGroupGrants = `-- name: DeleteServerGroupGrants :many
+DELETE FROM grants WHERE server_group_id = ? RETURNING id, user_group_id, user_id
+`
+
+type DeleteServerGroupGrantsRow struct {
+	ID          string
+	UserGroupID string
+	UserID      sql.NullString
+}
+
+func (q *Queries) DeleteServerGroupGrants(ctx context.Context, serverGroupID sql.NullString) ([]DeleteServerGroupGrantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteServerGroupGrants, serverGroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeleteServerGroupGrantsRow{}
+	for rows.Next() {
+		var i DeleteServerGroupGrantsRow
+		if err := rows.Scan(&i.ID, &i.UserGroupID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteServerGroupMembers = `-- name: DeleteServerGroupMembers :exec
 DELETE FROM server_group_members WHERE server_group_id = ?
 `
@@ -41,6 +107,107 @@ DELETE FROM server_group_members WHERE server_group_id = ?
 func (q *Queries) DeleteServerGroupMembers(ctx context.Context, serverGroupID string) error {
 	_, err := q.db.ExecContext(ctx, deleteServerGroupMembers, serverGroupID)
 	return err
+}
+
+const deleteServerGroupScopes = `-- name: DeleteServerGroupScopes :many
+DELETE FROM admin_scopes WHERE server_group_id = ? RETURNING id, user_id
+`
+
+type DeleteServerGroupScopesRow struct {
+	ID     string
+	UserID string
+}
+
+func (q *Queries) DeleteServerGroupScopes(ctx context.Context, serverGroupID sql.NullString) ([]DeleteServerGroupScopesRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteServerGroupScopes, serverGroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeleteServerGroupScopesRow{}
+	for rows.Next() {
+		var i DeleteServerGroupScopesRow
+		if err := rows.Scan(&i.ID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteServerScopes = `-- name: DeleteServerScopes :many
+
+DELETE FROM admin_scopes WHERE server_id = ? RETURNING id, user_id
+`
+
+type DeleteServerScopesRow struct {
+	ID     string
+	UserID string
+}
+
+// Assignments end with the server or server group they name (ROLE-003,
+// ROLE-004, ROLE-007): the soft delete keeps the row, so ON DELETE CASCADE
+// never fires. The rows come back for the audit.
+func (q *Queries) DeleteServerScopes(ctx context.Context, serverID sql.NullString) ([]DeleteServerScopesRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteServerScopes, serverID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeleteServerScopesRow{}
+	for rows.Next() {
+		var i DeleteServerScopesRow
+		if err := rows.Scan(&i.ID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const deleteServerSupporterGrants = `-- name: DeleteServerSupporterGrants :many
+DELETE FROM supporter_grants WHERE server_id = ? RETURNING id, supporter_id, moderator_id
+`
+
+type DeleteServerSupporterGrantsRow struct {
+	ID          string
+	SupporterID string
+	ModeratorID string
+}
+
+func (q *Queries) DeleteServerSupporterGrants(ctx context.Context, serverID string) ([]DeleteServerSupporterGrantsRow, error) {
+	rows, err := q.db.QueryContext(ctx, deleteServerSupporterGrants, serverID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeleteServerSupporterGrantsRow{}
+	for rows.Next() {
+		var i DeleteServerSupporterGrantsRow
+		if err := rows.Scan(&i.ID, &i.SupporterID, &i.ModeratorID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const fillServerNotAfter = `-- name: FillServerNotAfter :execrows

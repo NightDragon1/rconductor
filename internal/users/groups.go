@@ -415,7 +415,8 @@ func (s *Service) UpdateGroup(ctx context.Context, req Request, id string, up Gr
 }
 
 // DeleteGroup soft-deletes a group; its members lose the rights that came
-// through it and their sessions (decision W2).
+// through it and their sessions (decision W2). Its grants end in the same
+// transaction, each with an audit entry (ROLE-004).
 func (s *Service) DeleteGroup(ctx context.Context, req Request, id string) error {
 	g, err := s.group(ctx, req, id, "group.delete")
 	if err != nil {
@@ -437,6 +438,9 @@ func (s *Service) DeleteGroup(ctx context.Context, req Request, id string) error
 	if err := s.auditOn(ctx, tx, req, "group.delete", "user_group", id, map[string]string{"name": g.Name}); err != nil {
 		return err
 	}
+	if err := endGroupGrants(ctx, tx, req, id); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
@@ -445,6 +449,27 @@ func (s *Service) DeleteGroup(ctx context.Context, req Request, id string) error
 		return nil
 	}
 	return s.rightsChanged(ctx, req, "group.delete", members...)
+}
+
+// endGroupGrants removes the grants of user group id inside tx.
+func endGroupGrants(ctx context.Context, tx *sql.Tx, req Request, id string) error {
+	rows, err := sqlitedb.New(tx).DeleteGroupGrants(ctx, id)
+	if err != nil {
+		return err
+	}
+	list := make([]Removed, 0, len(rows))
+	for _, r := range rows {
+		tt, t := GrantHolder(id, r.UserID)
+		entry := map[string]string{"group_id": id}
+		if r.ServerID.Valid {
+			entry["server_id"] = r.ServerID.String
+		} else {
+			entry["server_group_id"] = r.ServerGroupID.String
+		}
+		list = append(list, Removed{Section: "grants", ID: r.ID, TargetType: tt, Target: t,
+			ServerID: r.ServerID.String, Entry: entry})
+	}
+	return WriteRemoved(ctx, tx, req, "group.delete", list)
 }
 
 func keys(m map[string]bool) []string {

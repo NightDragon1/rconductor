@@ -5,8 +5,11 @@ package migrations
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
 )
 
@@ -24,6 +27,8 @@ func SQLiteGo() []*goose.Migration {
 		goose.NewGoMigration(13,
 			&goose.GoFunc{RunTx: execTx(secondFactorTriggersUp)},
 			&goose.GoFunc{RunTx: execTx(secondFactorTriggersDown)}),
+		// Removed data does not come back: down does nothing.
+		goose.NewGoMigration(18, &goose.GoFunc{RunTx: removeOrphanAssignments}, nil),
 	}
 }
 
@@ -248,3 +253,99 @@ DROP TRIGGER users_totp_off_ends_recovery;
 DROP TRIGGER users_lock_ends_pending;
 DROP TRIGGER users_password_ends_pending;
 `
+
+// 00018: assignments whose server, server group or user group was deleted
+// before 1.1 stayed behind, since the soft delete never fires ON DELETE
+// CASCADE (ROLE-003, ROLE-004, ROLE-007). They go, each with an audit entry
+// in the format the deletion writes now (users.WriteRemoved), without
+// actor. In Go, because the audit entry needs a UUIDv7 and the payload JSON.
+const orphanAssignments = `
+SELECT 'admin_scopes', a.id, 'user', a.user_id, a.server_id, a.server_group_id, NULL, NULL
+FROM admin_scopes a
+WHERE (a.server_id IS NOT NULL AND a.server_id NOT IN (SELECT id FROM servers WHERE deleted_at IS NULL))
+   OR (a.server_group_id IS NOT NULL AND a.server_group_id NOT IN (SELECT id FROM server_groups WHERE deleted_at IS NULL))
+UNION ALL
+SELECT 'grants', g.id, CASE WHEN g.user_id IS NULL THEN 'user_group' ELSE 'user' END,
+    coalesce(g.user_id, g.user_group_id), g.server_id, g.server_group_id, g.user_group_id, NULL
+FROM grants g
+WHERE (g.server_id IS NOT NULL AND g.server_id NOT IN (SELECT id FROM servers WHERE deleted_at IS NULL))
+   OR (g.server_group_id IS NOT NULL AND g.server_group_id NOT IN (SELECT id FROM server_groups WHERE deleted_at IS NULL))
+   OR g.user_group_id NOT IN (SELECT id FROM user_groups WHERE deleted_at IS NULL)
+UNION ALL
+SELECT 'supporter_grants', sg.id, 'user', sg.supporter_id, sg.server_id, NULL, NULL, sg.moderator_id
+FROM supporter_grants sg
+WHERE sg.server_id NOT IN (SELECT id FROM servers WHERE deleted_at IS NULL)
+ORDER BY 1, 2`
+
+// deleteOrphan removes one row of a section.
+var deleteOrphan = map[string]string{
+	"admin_scopes":     "DELETE FROM admin_scopes WHERE id = ?",
+	"grants":           "DELETE FROM grants WHERE id = ?",
+	"supporter_grants": "DELETE FROM supporter_grants WHERE id = ?",
+}
+
+// timeLayout is store.TimeLayout; the store imports this package.
+const timeLayout = "2006-01-02T15:04:05.000Z"
+
+type orphan struct {
+	section, id, targetType, target string
+	server, serverGroup, group, mod sql.NullString
+}
+
+func (o orphan) entry() map[string]string {
+	e := map[string]string{}
+	for k, v := range map[string]sql.NullString{
+		"server_id": o.server, "server_group_id": o.serverGroup, "group_id": o.group, "moderator_id": o.mod,
+	} {
+		if v.Valid {
+			e[k] = v.String
+		}
+	}
+	return e
+}
+
+func orphans(ctx context.Context, tx *sql.Tx) ([]orphan, error) {
+	rows, err := tx.QueryContext(ctx, orphanAssignments)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var list []orphan
+	for rows.Next() {
+		var o orphan
+		if err := rows.Scan(&o.section, &o.id, &o.targetType, &o.target, &o.server, &o.serverGroup, &o.group, &o.mod); err != nil {
+			return nil, err
+		}
+		list = append(list, o)
+	}
+	return list, rows.Err()
+}
+
+func removeOrphanAssignments(ctx context.Context, tx *sql.Tx) error {
+	list, err := orphans(ctx, tx)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(timeLayout)
+	for _, o := range list {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		payload, err := json.Marshal(map[string]any{
+			"section": o.section, "id": o.id, "entry": o.entry(), "cause": "target_deleted",
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO audit_log (id, ts, kind, server_id, target_type, target_id, action, payload, result)
+			VALUES (?, ?, 'admin', ?, ?, ?, 'assignment.remove', ?, 'ok')`,
+			id.String(), now, o.server, o.targetType, o.target, string(payload)); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, deleteOrphan[o.section], o.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}

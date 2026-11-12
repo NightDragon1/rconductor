@@ -21,6 +21,7 @@
 - Servers with an HTTPS API: the end of validity of the trusted certificate is stored and given with the server and the connection test; the trust holds regardless of it. The technical notes describe renewal and trusting again (PROT-003).
 - A server has an ordered list of game profiles, such as a modpack above its game: for each value the topmost profile that sets it wins, the command catalog is the union, wrappers of all profiles hold. All profiles need the same protocol. The server admin may change the list on servers in his scope. Servers of panel 1.0 keep their profile as the only entry (SRV-008, CAT-007).
 - API: the server field `profile_id` is replaced by the list `profile_ids`, top first; scripts that use `profile_id` must change (SRV-008).
+- Deleting a server, server group or user group now also removes the server scopes, moderator grants and supporter grants that name it, each with an audit entry `assignment.remove`. The update removes those left behind by earlier deletions the same way, without actor. The user panel shows only the stored scope, never the ID of an unknown server (ROLE-003, ROLE-004, ROLE-007).
 
 ## 1.0
 

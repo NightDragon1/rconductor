@@ -97,7 +97,9 @@ if [ "$4" = --raw ]; then
   printf '{"manifests":[{"platform":{"os":"linux","architecture":"amd64"},"digest":"sha256:a"},{"platform":{"os":"linux","architecture":"arm64"},"digest":"sha256:b"},{"platform":{"os":"unknown","architecture":"unknown"},"digest":"sha256:c"}]}'
   exit 0
 fi
-if grep -qx "${ref##*:}" "$WORLD/tags"; then echo sha256:i; exit 0; fi
+# A line "tag" holds the image sha256:i, a line "tag=digest" another one.
+d=$(awk -v t="${ref##*:}" '$0 == t { print "sha256:i"; exit } index($0, t "=") == 1 { print substr($0, length(t) + 2); exit }' "$WORLD/tags")
+if [ -n "$d" ]; then echo "$d"; exit 0; fi
 echo "$ref: not found" >&2
 exit 1
 STUB
@@ -119,7 +121,10 @@ verify() { # tag, tags in the registry, faults
 verify v0.10 0.10 "" || { echo "verify: a good test version failed" >&2; fails=$((fails + 1)); }
 verify v1.0 "1.0 1" "" || { echo "verify: a good release failed" >&2; fails=$((fails + 1)); }
 verify v1.1-rc1 1.1-rc1 "" || { echo "verify: a good release candidate failed" >&2; fails=$((fails + 1)); }
-for bad in "v1.1-rc1|1.1-rc1 1.1|" "v1.1-rc1|1.1-rc1 1|" "v1.1-rc1|1.1-rc1 latest|" "v1.1-rc1||" "v0.10|0.10 latest|" "v0.10|0.10 0|" "v0.10|0.10 1|" "v1.0|1.0|" "v0.10|0.10|bad-arm64" "v0.10|0.10|wrong-sbom"; do
+# The usual case: an earlier release holds the major tag, which stays.
+verify v1.1-rc2 "1.1-rc2 1=sha256:old 1.0=sha256:old" "" ||
+  { echo "verify: a release candidate next to an earlier release failed" >&2; fails=$((fails + 1)); }
+for bad in "v1.1-rc1|1.1-rc1 1.1|" "v1.1-rc1|1.1-rc1 1|" "v1.1-rc2|1.1-rc2 1=sha256:old 1.1=sha256:old|" "v1.1-rc1|1.1-rc1 latest|" "v1.1-rc1||" "v0.10|0.10 latest|" "v0.10|0.10 0|" "v0.10|0.10 1|" "v1.0|1.0|" "v0.10|0.10|bad-arm64" "v0.10|0.10|wrong-sbom"; do
   tag=${bad%%|*} rest=${bad#*|}
   if verify "$tag" "${rest%%|*}" "${rest#*|}"; then
     echo "verify: must fail: $bad" >&2

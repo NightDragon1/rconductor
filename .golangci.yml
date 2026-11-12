@@ -7,6 +7,8 @@ run:
   build-tags:
     - integration
     - minecraft
+    # the control listener of the e2e stack (internal/e2e/stack)
+    - e2e
 
 linters:
   default: standard
