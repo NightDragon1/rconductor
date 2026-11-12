@@ -18,6 +18,11 @@ match:
 protocol:
   type: source-rcon
   default_port: 27015
+# Factorio refuses the empty SERVERDATA_RESPONSE_VALUE packet that marks
+# the end of an answer ("RCON received an invalid message type 0") and
+# answers every command in a single packet.
+source_rcon:
+  end_marker: none
 ports:
   game:
     - { port: 34197, proto: udp, name: game }
