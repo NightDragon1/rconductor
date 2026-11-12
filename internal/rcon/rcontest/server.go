@@ -5,7 +5,9 @@
 // 4096-byte packets like real servers and answers the end marker either
 // like Minecraft or like Source engine servers. In the Minecraft style it
 // also drops connections that send several packets at once, as Minecraft
-// does.
+// does. The Factorio style answers each command in one packet and never
+// answers a packet of type 0; it counts such packets, as Factorio logs
+// "RCON received an invalid message type 0".
 package rcontest
 
 import (
@@ -25,6 +27,10 @@ const (
 	Minecraft MarkerStyle = iota
 	// SourceEngine mirrors the empty packet and sends a second one.
 	SourceEngine
+	// Factorio answers each command in a single packet of any length,
+	// sends no empty packet before the auth answer and ignores packets
+	// of type 0 (SERVERDATA_RESPONSE_VALUE) without an answer.
+	Factorio
 )
 
 // Server is a running test server.
@@ -41,6 +47,7 @@ type Server struct {
 	conns    map[net.Conn]bool
 	accepted atomic.Int64
 	commands atomic.Int64
+	invalid  atomic.Int64
 	frozen   atomic.Bool
 }
 
@@ -67,6 +74,10 @@ func (s *Server) Connections() int64 { return s.accepted.Load() }
 
 // Commands counts executed commands.
 func (s *Server) Commands() int64 { return s.commands.Load() }
+
+// Invalid counts packets the Factorio style refused as invalid message
+// type.
+func (s *Server) Invalid() int64 { return s.invalid.Load() }
 
 // Freeze makes the server go silent without closing anything: it still
 // reads, but answers nothing, like a host that crashed or lost its
@@ -169,7 +180,9 @@ func (s *Server) serve(c net.Conn) {
 				return
 			}
 			authed = true
-			_ = write(c, id, 0, "")
+			if s.Style != Factorio {
+				_ = write(c, id, 0, "")
+			}
 			_ = write(c, id, 2, "")
 		case !authed:
 			return
@@ -179,11 +192,13 @@ func (s *Server) serve(c net.Conn) {
 			if s.Handler != nil {
 				answer = s.Handler(body)
 			}
-			for len(answer) > 4096 {
+			for len(answer) > 4096 && s.Style != Factorio {
 				_ = write(c, id, 0, answer[:4096])
 				answer = answer[4096:]
 			}
 			_ = write(c, id, 0, answer)
+		case s.Style == Factorio: // refused, logged, never answered
+			s.invalid.Add(1)
 		default: // end marker
 			if s.Style == Minecraft {
 				_ = write(c, id, 0, "Unknown request 0")
