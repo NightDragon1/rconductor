@@ -34,6 +34,7 @@ jobs:
   scope:
     name: Scope
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 5
     outputs:
       stage2: ${{ steps.scope.outputs.stage2 }}
       stage3: ${{ steps.scope.outputs.stage3 }}
@@ -55,6 +56,7 @@ jobs:
   spdx:
     name: SPDX headers
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,6 +66,7 @@ jobs:
   scripts:
     name: Script tests
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,6 +91,7 @@ jobs:
     name: Go lint
     needs: scope
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -121,6 +125,7 @@ jobs:
   go-test-shard:
     name: Go test shard ${{ matrix.shard }}
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -154,6 +159,7 @@ jobs:
     needs: go-test-shard
     if: ${{ !cancelled() }}
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 5
     steps:
       - env:
           RESULT: ${{ needs.go-test-shard.result }}
@@ -164,6 +170,7 @@ jobs:
   govulncheck:
     name: govulncheck
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -179,6 +186,7 @@ jobs:
   web:
     name: Web lint, test and build
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: web
@@ -215,6 +223,7 @@ jobs:
     needs: scope
     if: needs.scope.outputs.stage2 == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -251,6 +260,7 @@ jobs:
     needs: [scope, image]
     if: needs.scope.outputs.stage2 == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -273,6 +283,7 @@ jobs:
     needs: [scope, web]
     if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 30
     # Browser and its libraries come with the image; its version follows
     # @playwright/test (renovate.json). The stack needs no Docker.
     container: mcr.microsoft.com/playwright:v1.65.0-noble@sha256:6e3fb709361521eb27161606e6da6d2674e5e89fa16516cb37d6fdd91372273d
@@ -319,6 +330,7 @@ jobs:
     needs: [scope, e2e-shard]
     if: ${{ !cancelled() }}
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 5
     steps:
       - env:
           DUE: ${{ needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true' }}
@@ -332,6 +344,7 @@ jobs:
     needs: scope
     if: needs.scope.outputs.stage3 == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 45
     strategy:
       matrix:
         target: [panel, agent]
@@ -355,6 +368,7 @@ jobs:
     needs: scope
     if: needs.scope.outputs.stage3 == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -371,6 +385,7 @@ jobs:
       needs.scope.outputs.stage3 == 'true' ||
       (needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.minecraft == 'true')
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
