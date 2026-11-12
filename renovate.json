@@ -22,6 +22,12 @@
       "groupName": "Go toolchain"
     },
     {
+      "description": "Patch releases of the Go toolchain (go.mod go and toolchain, the golang build image) carry security fixes: no waiting time",
+      "matchDepNames": ["go", "golang"],
+      "matchUpdateTypes": ["patch"],
+      "minimumReleaseAge": null
+    },
+    {
       "description": "Web UI dependencies",
       "matchManagers": ["npm"],
       "groupName": "web dependencies"
@@ -35,7 +41,7 @@
     {
       "description": "Docker base images",
       "matchManagers": ["dockerfile"],
-      "excludeDepNames": ["golang"],
+      "matchDepNames": ["!golang"],
       "groupName": "base images"
     },
     {
