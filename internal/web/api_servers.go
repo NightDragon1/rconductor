@@ -41,11 +41,15 @@ func toAPIServer(s servers.Server) api.Server {
 	for _, p := range s.GamePorts {
 		ports = append(ports, api.GamePort{Port: p.Port, Proto: api.GamePortProto(p.Proto), Name: p.Name})
 	}
-	out.Protocol, out.Host, out.Port, out.Credentials = &s.Protocol, &s.Host, &s.Port, &cred
+	out.Protocol, out.Credentials = &s.Protocol, &cred
 	out.AgentId, out.ContainerName = strPtr(s.AgentID), strPtr(s.ContainerName)
 	out.GamePorts, out.GamePortsOverride = &ports, &s.GamePortsOverride
 	out.TlsFingerprint = strPtr(s.TLSFingerprint)
 	out.TlsNotAfter = s.TLSNotAfter
+	if s.Connection {
+		// Host and RCON port: the RCON admin only (D-056).
+		out.Host, out.Port = &s.Host, &s.Port
+	}
 	return out
 }
 
