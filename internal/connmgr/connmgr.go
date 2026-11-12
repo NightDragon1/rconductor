@@ -54,10 +54,14 @@ type Target struct {
 	// once.
 	Fingerprint, Dialect string
 	Parallel             int
+	// EndMarker is the Source RCON end marker of the game profile
+	// (PROT-001); empty is the default.
+	EndMarker string
 }
 
 func (t Target) endpoint() rcon.Endpoint {
-	return rcon.Endpoint{Addr: t.Addr, Secret: t.Password, Fingerprint: t.Fingerprint, Dialect: t.Dialect, Parallel: t.Parallel}
+	return rcon.Endpoint{Addr: t.Addr, Secret: t.Password, Fingerprint: t.Fingerprint, Dialect: t.Dialect, Parallel: t.Parallel,
+		EndMarker: t.EndMarker}
 }
 
 // dial uses the endpoint when the adapter takes one.
@@ -248,39 +252,58 @@ func (m *Manager) Certificate(ctx context.Context, protocol, addr string) (rcon.
 // ctx to end. Commands of all users go through the same connection one
 // after the other.
 func (m *Manager) Execute(ctx context.Context, id, command string) (string, error) {
+	r, err := m.submit(ctx, id, job{ctx: ctx, command: command, reply: make(chan result, 1)})
+	return r.answer, err
+}
+
+// Players asks a server's connection for its players without a console
+// command (protocol http-api, PROT-003); ErrNoPlayerCounter for one that
+// cannot. It goes through the same queue as commands.
+func (m *Manager) Players(ctx context.Context, id string) (rcon.Players, error) {
+	r, err := m.submit(ctx, id, job{ctx: ctx, players: true, reply: make(chan result, 1)})
+	return r.players, err
+}
+
+func (m *Manager) submit(ctx context.Context, id string, j job) (result, error) {
 	m.mu.Lock()
 	w := m.workers[id]
 	m.mu.Unlock()
 	if w == nil {
-		return "", ErrUnknownServer
+		return result{}, ErrUnknownServer
 	}
 	if s, _ := w.state(); s != Connected {
-		return "", ErrUnavailable
+		return result{}, ErrUnavailable
 	}
-	j := job{ctx: ctx, command: command, reply: make(chan result, 1)}
 	select {
 	case w.jobs <- j:
 	default:
-		return "", ErrQueueFull
+		return result{}, ErrQueueFull
 	}
 	select {
 	case r := <-j.reply:
-		return r.answer, r.err
+		return r, r.err
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return result{}, ctx.Err()
 	}
 }
 
 type job struct {
 	ctx     context.Context
 	command string
+	// players asks the connection for its players instead of a command.
+	players bool
 	reply   chan result
 }
 
 type result struct {
-	answer string
-	err    error
+	answer  string
+	players rcon.Players
+	err     error
 }
+
+// ErrNoPlayerCounter means the connection cannot tell its players without
+// a console command (RCON); the profile's players block is the way then.
+var ErrNoPlayerCounter = errors.New("the connection gives no player count")
 
 type worker struct {
 	m      *Manager
@@ -338,6 +361,31 @@ func (w *worker) setStatus(s Status) {
 		w.m.opts.OnStatus(id, s)
 	}
 }
+
+// certMismatch sets the status cert_mismatch and logs server.cert.mismatch
+// when the status changes to it, so once per mismatch and not per refused
+// request (PROT-003).
+func (w *worker) certMismatch() {
+	w.mu.Lock()
+	changed := w.status != CertMismatch
+	if changed {
+		w.status, w.since = CertMismatch, time.Now()
+	}
+	t := w.target
+	w.mu.Unlock()
+	if !changed {
+		return
+	}
+	w.m.log.Warn("the game server shows another certificate than the trusted one",
+		append(w.attrs(t), logging.Event(logging.ServerCertMismatch))...)
+	if w.m.opts.OnStatus != nil {
+		w.m.opts.OnStatus(t.ID, CertMismatch)
+	}
+}
+
+// reasonCertMismatch ends serve when a request on the open connection met
+// another certificate than the trusted one.
+const reasonCertMismatch = "cert_mismatch"
 
 func (w *worker) attrs(t Target) []any {
 	return []any{slog.String(logging.KeyServer, t.ID), slog.String("server_name", t.Name)}
@@ -427,11 +475,7 @@ func (w *worker) run(ctx context.Context) {
 		cancel()
 		switch {
 		case errors.Is(err, rcon.ErrCertMismatch), errors.Is(err, rcon.ErrUnpinned):
-			if s, _ := w.state(); s != CertMismatch {
-				log.Warn("the game server shows another certificate than the trusted one",
-					append(w.attrs(t), logging.Event(logging.ServerCertMismatch))...)
-			}
-			w.setStatus(CertMismatch)
+			w.certMismatch()
 		case errors.Is(err, rcon.ErrAuth):
 			if s, _ := w.state(); s != AuthFailed {
 				log.Warn("game server refused the rcon credentials",
@@ -456,6 +500,15 @@ func (w *worker) run(ctx context.Context) {
 			}
 			reason := w.serve(ctx, conn)
 			_ = conn.Close()
+			if reason == reasonCertMismatch {
+				// The status is cert_mismatch already; the next attempt
+				// dials again after the backoff.
+				if !w.wait(ctx, w.backoff(attempt)) {
+					return
+				}
+				attempt++
+				continue
+			}
 			w.setStatus(Offline)
 			if reason == "" {
 				return // shut down
@@ -485,8 +538,22 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 	_, concurrent := conn.(rcon.Concurrent)
 	var running sync.WaitGroup
 	defer running.Wait()
+	// A request refused for the certificate sets the status before its
+	// answer goes out and ends the connection.
+	mismatch := make(chan struct{}, 1)
+	refused := func(err error) {
+		if errors.Is(err, rcon.ErrCertMismatch) {
+			w.certMismatch()
+			select {
+			case mismatch <- struct{}{}:
+			default:
+			}
+		}
+	}
 	for {
 		select {
+		case <-mismatch:
+			return reasonCertMismatch
 		case <-ctx.Done():
 			w.failPending()
 			return ""
@@ -500,9 +567,27 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				j.reply <- result{err: err}
 				continue
 			}
+			if j.players {
+				pc, ok := conn.(rcon.PlayerCounter)
+				if !ok {
+					j.reply <- result{err: ErrNoPlayerCounter}
+					continue
+				}
+				running.Go(func() {
+					p, err := pc.Players(j.ctx)
+					refused(err)
+					if err != nil && j.ctx.Err() != nil {
+						err = j.ctx.Err()
+					}
+					j.reply <- result{players: p, err: err}
+				})
+				used = time.Now()
+				continue
+			}
 			if concurrent {
 				running.Go(func() {
 					answer, err := conn.Execute(j.ctx, j.command)
+					refused(err)
 					if err != nil && j.ctx.Err() != nil {
 						err = j.ctx.Err()
 					}
@@ -525,7 +610,7 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				continue
 			}
 			j.reply <- result{answer: answer, err: err}
-			if err != nil && !errors.Is(err, rcon.ErrTooLarge) && !errors.Is(err, rcon.ErrCommandFailed) {
+			if err != nil && (errors.Is(err, rcon.ErrBroken) || (!errors.Is(err, rcon.ErrTooLarge) && !errors.Is(err, rcon.ErrCommandFailed))) {
 				return "connection_error"
 			}
 			used = time.Now()
@@ -539,6 +624,10 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				pctx, cancel := context.WithTimeout(ctx, w.m.opts.ProbeTimeout)
 				err := p.Ping(pctx)
 				cancel()
+				if errors.Is(err, rcon.ErrCertMismatch) {
+					refused(err)
+					return reasonCertMismatch
+				}
 				if err != nil {
 					return "no_answer"
 				}

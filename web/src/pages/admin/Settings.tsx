@@ -40,6 +40,8 @@ function storeHelp(on: boolean) {
 const keyTexts = [
   'auth_recovery_lifetime',
   'auth_recovery_per_hour',
+  'auth_recovery_queue',
+  'auth_recovery_workers',
   'auth_second_factor_window',
   'auth_totp_required',
   'agent_version_retry',
@@ -133,7 +135,7 @@ function SettingsForm() {
   const phone = usePhone();
   const [showHelp, setShowHelp] = useState(storedHelp);
   const qc = useQueryClient();
-  const { saved } = useUndo();
+  const { saved, saving } = useUndo();
   const settings = useQuery({
     queryKey: settingsKey,
     queryFn: async () => {
@@ -166,11 +168,13 @@ function SettingsForm() {
   // A change goes out at once; Undo sends the old values (D-048).
   const write = async (body: Values, etag: string) => {
     let next = '';
-    const r = await outcome('settings', async () => {
-      const res = await patchVersioned('/settings', etag, { body });
-      must(res);
-      next = res.response.headers.get('ETag') ?? '';
-    });
+    const r = await saving(
+      outcome('settings', async () => {
+        const res = await patchVersioned('/settings', etag, { body });
+        must(res);
+        next = res.response.headers.get('ETag') ?? '';
+      }),
+    );
     if (r.reason === 'conflict') {
       setConflict(true);
       setMessage({ ok: false, text: t('admin.conflict') });

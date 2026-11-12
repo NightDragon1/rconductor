@@ -50,11 +50,12 @@ var ErrTestRateLimited = errors.New("too many connection tests")
 // ConnectionData is what a connection test looks at; ServerID is empty for
 // a server not created yet, nil fields keep the values of the server.
 type ConnectionData struct {
-	ServerID  string
-	ProfileID *string
-	Host      *string
-	Port      *int
-	Password  *logging.Secret
+	ServerID string
+	// ProfileIDs are the profiles to test with, top first (SRV-008).
+	ProfileIDs *[]string
+	Host       *string
+	Port       *int
+	Password   *logging.Secret
 	// TLSFingerprint is the certificate to trust for the test of a server
 	// with an HTTPS API; without it the stored one counts.
 	TLSFingerprint *string
@@ -70,21 +71,39 @@ type testWindow struct {
 }
 
 // testLimiter limits connection tests per user and minute (Design 5.6).
+// A full table is never cleared: windows of a past minute go, and while it
+// stays full, new users share one overflow window with the same limit
+// (D-077); known users keep their counts.
 type testLimiter struct {
-	mu    sync.Mutex
-	users map[string]*testWindow
+	mu       sync.Mutex
+	users    map[string]*testWindow
+	overflow testWindow
 }
 
 func (l *testLimiter) take(user string, limit int, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.users == nil || len(l.users) >= maxTestUsers {
+	if l.users == nil {
 		l.users = map[string]*testWindow{}
 	}
 	w := l.users[user]
-	if w == nil || now.Sub(w.start) >= time.Minute {
+	if w == nil && len(l.users) >= maxTestUsers {
+		for k, old := range l.users {
+			if now.Sub(old.start) >= time.Minute {
+				delete(l.users, k)
+			}
+		}
+	}
+	switch {
+	case w != nil:
+	case len(l.users) < maxTestUsers:
 		w = &testWindow{start: now}
 		l.users[user] = w
+	default:
+		w = &l.overflow
+	}
+	if now.Sub(w.start) >= time.Minute {
+		w.start, w.count = now, 0
 	}
 	if w.count >= limit {
 		return false
@@ -130,7 +149,9 @@ func (s *Service) TestConnection(ctx context.Context, req users.Request, in Conn
 		base = fields{profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port), fingerprint: r.TlsFingerprint}
 		sealed = r.Secret
 	}
-	f, err := s.check(ctx, s.st.Queries, base, Input{ProfileID: in.ProfileID, Host: in.Host, Port: in.Port})
+	// A test with profiles of another protocol needs a password given with
+	// it: the stored one belongs to the stored protocol (D-076).
+	f, err := s.check(ctx, s.st.Queries, base, Input{ProfileIDs: in.ProfileIDs, Host: in.Host, Port: in.Port}, in.Password != nil)
 	if err != nil {
 		return ConnectionResult{}, err
 	}

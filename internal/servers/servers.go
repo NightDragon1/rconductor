@@ -51,8 +51,9 @@ const (
 	CredentialsReenter = "reenter"
 )
 
-// Server is a game server. Connection fields are filled only for callers
-// who may see them (RCON admin and server admin).
+// Server is a game server. The details are filled only for callers who
+// may see them (RCON admin and server admin); host and RCON port only
+// for the RCON admin (D-056).
 type Server struct {
 	ID   string
 	Name string
@@ -60,8 +61,14 @@ type Server struct {
 	Status      connmgr.Status
 	StatusSince time.Time
 	ProfileID   string
-	GroupIDs    []string
-	Detailed    bool
+	// ProfileIDs are the game profiles of the server, top first (SRV-008);
+	// ProfileID is the top one.
+	ProfileIDs []string
+	GroupIDs   []string
+	Detailed   bool
+	// Connection marks that Host and Port are filled: for the RCON admin
+	// only (D-056).
+	Connection  bool
 	Protocol    string
 	Host        string
 	Port        int
@@ -86,11 +93,13 @@ type Server struct {
 // Input is the writable part of a server; nil fields keep their value on
 // update. Password is write-only.
 type Input struct {
-	Name      *string
-	ProfileID *string
-	Host      *string
-	Port      *int
-	Password  *logging.Secret
+	Name *string
+	// ProfileIDs replace the game profiles of the server, top first
+	// (SRV-008, D-074); new ones are sorted in, specific above generic.
+	ProfileIDs *[]string
+	Host       *string
+	Port       *int
+	Password   *logging.Secret
 	// GamePorts overrides the profile's game ports; an empty slice
 	// returns to the profile's.
 	GamePorts *[]profiles.GamePort
@@ -193,6 +202,39 @@ func (s *Service) auditOK(ctx context.Context, tx *sql.Tx, req users.Request, ac
 	return err
 }
 
+// endServerAssignments removes the assignments on server id inside tx.
+func endServerAssignments(ctx context.Context, tx *sql.Tx, req users.Request, id string) error {
+	q := sqlitedb.New(tx)
+	key := sql.NullString{String: id, Valid: true}
+	scopes, err := q.DeleteServerScopes(ctx, key)
+	if err != nil {
+		return err
+	}
+	grants, err := q.DeleteServerGrants(ctx, key)
+	if err != nil {
+		return err
+	}
+	supporters, err := q.DeleteServerSupporterGrants(ctx, id)
+	if err != nil {
+		return err
+	}
+	var list []users.Removed
+	for _, r := range scopes {
+		list = append(list, users.Removed{Section: "admin_scopes", ID: r.ID, TargetType: "user", Target: r.UserID,
+			ServerID: id, Entry: map[string]string{"server_id": id}})
+	}
+	for _, r := range grants {
+		tt, t := users.GrantHolder(r.UserGroupID, r.UserID)
+		list = append(list, users.Removed{Section: "grants", ID: r.ID, TargetType: tt, Target: t,
+			ServerID: id, Entry: map[string]string{"group_id": r.UserGroupID, "server_id": id}})
+	}
+	for _, r := range supporters {
+		list = append(list, users.Removed{Section: "supporter_grants", ID: r.ID, TargetType: "user", Target: r.SupporterID,
+			ServerID: id, Entry: map[string]string{"moderator_id": r.ModeratorID, "server_id": id}})
+	}
+	return users.WriteRemoved(ctx, tx, req, "server.delete", list)
+}
+
 // mustBeAdmin allows changes only to the RCON admin (Design 2.2).
 func (s *Service) mustBeAdmin(ctx context.Context, req users.Request, action, targetType, target string) error {
 	if req.Actor.Role == perm.RCONAdmin {
@@ -214,8 +256,12 @@ func (s *Service) memberships(ctx context.Context) (map[string][]string, error) 
 	return out, nil
 }
 
-func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, groups []string, detailed bool) (Server, error) {
-	srv := Server{ID: r.ID, Name: r.Name, ProfileID: r.ProfileID.String, GroupIDs: groups, Detailed: detailed, Status: connmgr.Offline}
+func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, groups []string, role perm.Role) (Server, error) {
+	detailed := detailedFor(role)
+	srv := Server{ID: r.ID, Name: r.Name, ProfileID: r.ProfileID.String, ProfileIDs: []string{}, GroupIDs: groups, Detailed: detailed, Status: connmgr.Offline}
+	if list, err := s.st.Queries.GetServerProfiles(ctx, r.ID); err == nil {
+		srv.ProfileIDs = list
+	}
 	if s.conns != nil {
 		srv.Status, srv.StatusSince = s.conns.Status(r.ID)
 	}
@@ -225,7 +271,7 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 	if !detailed {
 		return srv, nil
 	}
-	srv.Protocol, srv.Host, srv.Port = r.Protocol, r.Host, int(r.Port)
+	srv.Protocol = r.Protocol
 	srv.Credentials = s.credentialState(r.Secret)
 	srv.AgentID, srv.ContainerName = r.AgentID.String, r.ContainerName.String
 	srv.TLSFingerprint = r.TlsFingerprint
@@ -234,6 +280,12 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 			srv.TLSNotAfter = &t
 		}
 	}
+	// Host and RCON port: the RCON admin only; the server admin sees of
+	// the ports only the game ports (D-056).
+	if role == perm.RCONAdmin {
+		srv.Connection = true
+		srv.Host, srv.Port = r.Host, int(r.Port)
+	}
 	srv.GamePorts = []profiles.GamePort{}
 	if r.GamePorts.Valid {
 		srv.GamePortsOverride = true
@@ -241,12 +293,9 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 			return Server{}, err
 		}
 	} else if r.ProfileID.Valid {
-		p, err := s.st.Queries.GetGameProfile(ctx, r.ProfileID.String)
-		if err == nil {
-			var rules profiles.Profile
-			if json.Unmarshal([]byte(p.Rules), &rules) == nil && rules.Ports.Game != nil {
-				srv.GamePorts = rules.Ports.Game
-			}
+		// The game ports of the topmost profile that sets them (D-074).
+		if eff, _, err := profiles.ForServer(ctx, s.st.Queries, r.ID); err == nil && eff != nil && eff.Ports.Game != nil {
+			srv.GamePorts = eff.Ports.Game
 		}
 	}
 	return srv, nil
@@ -273,7 +322,7 @@ func (s *Service) List(ctx context.Context, req users.Request) ([]Server, error)
 		if _, ok := rights.Server(r.ID); !ok {
 			continue
 		}
-		srv, err := s.toServer(ctx, r, s.visibleGroups(ctx, req, groups[r.ID]), detailedFor(rights.Role))
+		srv, err := s.toServer(ctx, r, s.visibleGroups(ctx, req, groups[r.ID]), rights.Role)
 		if err != nil {
 			return nil, err
 		}
@@ -319,7 +368,7 @@ func (s *Service) Get(ctx context.Context, req users.Request, id string) (Server
 	if err != nil {
 		return Server{}, err
 	}
-	return s.toServer(ctx, sqlitedb.ListServersRow(r), s.visibleGroups(ctx, req, groups[id]), detailedFor(rights.Role))
+	return s.toServer(ctx, sqlitedb.ListServersRow(r), s.visibleGroups(ctx, req, groups[id]), rights.Role)
 }
 
 func plainName(v string) (string, error) {
@@ -371,33 +420,50 @@ func validPorts(ports []profiles.GamePort) error {
 // fields is the checked state of a server before writing.
 type fields struct {
 	name, profileID, protocol, host string
-	fingerprint                     string
-	port                            int
-	gamePorts                       sql.NullString
-	agentID, container              sql.NullString
+	// profileIDs is the profile list, top first; profileID its top.
+	profileIDs         []string
+	fingerprint        string
+	port               int
+	gamePorts          sql.NullString
+	agentID, container sql.NullString
 }
 
 // check applies an input to the checked state f; q reads profile and agent,
 // inside the transaction of an update.
-func (s *Service) check(ctx context.Context, q *sqlitedb.Queries, f fields, in Input) (fields, error) {
+// check applies an input to the checked state f; protocolChange allows the
+// profiles to bring another protocol (an update by the RCON admin with new
+// credentials, D-076).
+func (s *Service) check(ctx context.Context, q *sqlitedb.Queries, f fields, in Input, protocolChange bool) (fields, error) {
 	var err error
 	if in.Name != nil {
 		if f.name, err = plainName(*in.Name); err != nil {
 			return f, err
 		}
 	}
-	if in.ProfileID != nil {
-		p, err := q.GetGameProfile(ctx, *in.ProfileID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return f, &users.InvalidError{Detail: "unknown profile"}
-		}
+	if in.ProfileIDs != nil {
+		list, err := checkProfiles(ctx, q, f.profileIDs, *in.ProfileIDs)
 		if err != nil {
 			return f, err
 		}
-		if f.profileID != p.ID && in.Port == nil {
-			f.port = int(p.DefaultPort)
+		top := list[0]
+		switch {
+		case f.protocol == "":
+			// A new server: the protocol comes from its profiles, the
+			// default port only as the starting value (D-076).
+			if in.Port == nil {
+				f.port = top.Rules.Protocol.DefaultPort
+			}
+			f.protocol = top.Protocol
+		case top.Protocol != f.protocol || !sameDialect(ctx, q, f.profileIDs, list):
+			// The profile list never changes the protocol or the port of
+			// a server; a change of protocol comes only with new
+			// credentials in the same request, and drops the pin (D-076).
+			if !protocolChange {
+				return f, &users.InvalidError{Detail: "the profiles need the protocol of the server (" + f.protocol + "); change the protocol together with new credentials"}
+			}
+			f.protocol, f.fingerprint = top.Protocol, ""
 		}
-		f.profileID, f.protocol = p.ID, p.Protocol
+		f.profileIDs, f.profileID = ids(list), top.ID
 	}
 	if in.Host != nil {
 		h := strings.TrimSpace(*in.Host)
@@ -502,7 +568,7 @@ func checkPassword(pw logging.Secret) error {
 func changedFields(in Input) []string {
 	var out []string
 	for name, set := range map[string]bool{
-		"name": in.Name != nil, "profile_id": in.ProfileID != nil, "host": in.Host != nil,
+		"name": in.Name != nil, "profile_ids": in.ProfileIDs != nil, "host": in.Host != nil,
 		"port": in.Port != nil, "password": in.Password != nil, "game_ports": in.GamePorts != nil,
 		"agent_id": in.AgentID != nil, "container_name": in.ContainerName != nil,
 	} {
@@ -519,12 +585,13 @@ func changedFields(in Input) []string {
 // and the new value, so that the audit shows where the stored password goes,
 // also when a new profile moves the port. The
 // password appears only as "password", never its value.
-func updateAudit(r sqlitedb.GetServerRow, f fields, password bool) map[string]any {
+func updateAudit(r sqlitedb.GetServerRow, old []string, f fields, password bool) map[string]any {
 	changed := map[string]bool{
-		"name": f.name != r.Name, "profile_id": f.profileID != r.ProfileID.String, "host": f.host != r.Host,
+		"name": f.name != r.Name, "profile_ids": !slices.Equal(f.profileIDs, old), "host": f.host != r.Host,
 		"port": f.port != int(r.Port), "password": password, "game_ports": f.gamePorts != r.GamePorts,
 		"agent_id": f.agentID != r.AgentID, "container_name": f.container != r.ContainerName,
 		"tls_fingerprint": f.fingerprint != r.TlsFingerprint,
+		"protocol":        f.protocol != r.Protocol,
 	}
 	var names []string
 	for name, c := range changed {
@@ -543,6 +610,12 @@ func updateAudit(r sqlitedb.GetServerRow, f fields, password bool) map[string]an
 	if changed["port"] {
 		out["port"] = map[string]int{"from": int(r.Port), "to": f.port}
 	}
+	if changed["protocol"] {
+		out["protocol"] = map[string]string{"from": r.Protocol, "to": f.protocol}
+	}
+	if changed["profile_ids"] {
+		out["profile_ids"] = map[string][]string{"from": old, "to": f.profileIDs}
+	}
 	if changed["tls_fingerprint"] {
 		out["tls_fingerprint"] = map[string]string{"from": r.TlsFingerprint, "to": f.fingerprint}
 	}
@@ -557,6 +630,124 @@ func (s *Service) pinned(req users.Request, id, fingerprint string) {
 	s.log.Info("certificate of the game server trusted", logging.Event(logging.ServerCertPinned),
 		slog.String(logging.KeyRequestID, req.RequestID), slog.String(logging.KeyUser, req.Pseudonym),
 		slog.String(logging.KeyServer, id), slog.String("fingerprint", fingerprint))
+}
+
+// setProfiles stores the profile list of a server, top first (SRV-008,
+// D-074).
+func setProfiles(ctx context.Context, q *sqlitedb.Queries, id string, profileIDs []string) error {
+	if err := q.ClearServerProfiles(ctx, id); err != nil {
+		return err
+	}
+	for i, p := range profileIDs {
+		if err := q.AddServerProfile(ctx, sqlitedb.AddServerProfileParams{ServerID: id, ProfileID: p, Position: int64(i)}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// maxProfiles bounds the profile list of a server, like maxItems in the
+// API.
+const maxProfiles = 16
+
+// checkProfiles checks a new profile list against the old one (SRV-008,
+// CAT-007, D-074): known profiles, each once, all with the same protocol
+// and, for http-api, the same dialect. Profiles of the old list keep the
+// order given; a new specific profile is sorted in above the topmost
+// generic one, a new generic one goes to the end.
+func checkProfiles(ctx context.Context, q *sqlitedb.Queries, old, given []string) ([]profiles.Loaded, error) {
+	if len(given) == 0 {
+		return nil, &users.InvalidError{Detail: "profile_ids needs at least one profile"}
+	}
+	if len(given) > maxProfiles {
+		return nil, &users.InvalidError{Detail: fmt.Sprintf("profile_ids takes at most %d profiles", maxProfiles)}
+	}
+	seen := map[string]bool{}
+	for _, id := range given {
+		if seen[id] {
+			return nil, &users.InvalidError{Detail: "a profile is in profile_ids twice"}
+		}
+		seen[id] = true
+	}
+	loaded, err := profiles.Load(ctx, q, given)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, &users.InvalidError{Detail: "unknown profile"}
+	}
+	if err != nil {
+		return nil, err
+	}
+	dialect := func(l profiles.Loaded) string {
+		if l.Rules.HTTPAPI == nil {
+			return ""
+		}
+		return l.Rules.HTTPAPI.Dialect
+	}
+	for _, l := range loaded[1:] {
+		if l.Protocol != loaded[0].Protocol {
+			return nil, &users.InvalidError{Detail: "all profiles of a server need the same protocol"}
+		}
+		if dialect(l) != dialect(loaded[0]) {
+			return nil, &users.InvalidError{Detail: "all profiles of a server need the same http_api dialect"}
+		}
+	}
+	return sortIn(old, loaded), nil
+}
+
+// sameDialect reports whether the new list keeps the http-api dialect of
+// the server's current top profile (D-076); without a current list it
+// does.
+func sameDialect(ctx context.Context, q *sqlitedb.Queries, old []string, list []profiles.Loaded) bool {
+	if len(old) == 0 {
+		return true
+	}
+	cur, err := profiles.Load(ctx, q, old[:1])
+	if err != nil || len(cur) == 0 {
+		return false
+	}
+	return dialectOf(cur[0]) == dialectOf(list[0])
+}
+
+func dialectOf(l profiles.Loaded) string {
+	if l.Rules.HTTPAPI == nil {
+		return ""
+	}
+	return l.Rules.HTTPAPI.Dialect
+}
+
+// sortIn keeps the given order of profiles that were on the list and
+// places each new one: specific above the topmost generic, generic at the
+// end (CAT-007).
+func sortIn(old []string, given []profiles.Loaded) []profiles.Loaded {
+	var out []profiles.Loaded
+	for _, l := range given {
+		if slices.Contains(old, l.ID) {
+			out = append(out, l)
+		}
+	}
+	for _, l := range given {
+		if slices.Contains(old, l.ID) {
+			continue
+		}
+		at := len(out)
+		if profiles.KindOf(l.Rules) == profiles.KindSpecific {
+			for i, o := range out {
+				if profiles.KindOf(o.Rules) == profiles.KindGeneric {
+					at = i
+					break
+				}
+			}
+		}
+		out = slices.Insert(out, at, l)
+	}
+	return out
+}
+
+func ids(list []profiles.Loaded) []string {
+	out := make([]string, len(list))
+	for i, l := range list {
+		out[i] = l.ID
+	}
+	return out
 }
 
 // keepNotAfter keeps the end of validity while the pin stays; a new pin
@@ -612,10 +803,10 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	if err := s.mustBeAdmin(ctx, req, "server.create", "server", ""); err != nil {
 		return Server{}, err
 	}
-	if in.Name == nil || in.ProfileID == nil || in.Host == nil || in.Password == nil {
-		return Server{}, &users.InvalidError{Detail: "name, profile_id, host and password are required"}
+	if in.Name == nil || in.ProfileIDs == nil || in.Host == nil || in.Password == nil {
+		return Server{}, &users.InvalidError{Detail: "name, profile_ids, host and password are required"}
 	}
-	f, err := s.check(ctx, s.st.Queries, fields{}, in)
+	f, err := s.check(ctx, s.st.Queries, fields{}, in, false)
 	if err != nil {
 		return Server{}, err
 	}
@@ -639,14 +830,18 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	}
 	defer func() { _ = tx.Rollback() }()
 	now := store.Now()
-	if err := sqlitedb.New(tx).InsertServer(ctx, sqlitedb.InsertServerParams{
-		ID: id, Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: true}, Protocol: f.protocol,
+	q := sqlitedb.New(tx)
+	if err := q.InsertServer(ctx, sqlitedb.InsertServerParams{
+		ID: id, Name: f.name, Protocol: f.protocol,
 		Host: f.host, Port: int64(f.port), Secret: sealed, GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
 		TlsFingerprint: f.fingerprint, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
 		}
+		return Server{}, err
+	}
+	if err := setProfiles(ctx, q, id, f.profileIDs); err != nil {
 		return Server{}, err
 	}
 	created := map[string]any{"name": f.name, "fields": changedFields(in)}
@@ -672,7 +867,7 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 // check and audit work on it. A stale or predicted version is a
 // conflict before anything is read.
 func (s *Service) Update(ctx context.Context, req users.Request, id string, in Input) (Server, error) {
-	if err := s.mustBeAdmin(ctx, req, "server.update", "server", id); err != nil {
+	if err := s.mayUpdate(ctx, req, id, in); err != nil {
 		return Server{}, err
 	}
 	// The version is required, checked after role and scope.
@@ -710,10 +905,14 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	if err != nil {
 		return Server{}, err
 	}
+	oldProfiles, err := q.GetServerProfiles(ctx, id)
+	if err != nil {
+		return Server{}, err
+	}
 	f, err := s.check(ctx, q, fields{
-		name: r.Name, profileID: r.ProfileID.String, protocol: r.Protocol, host: r.Host, port: int(r.Port), gamePorts: r.GamePorts,
+		name: r.Name, profileID: r.ProfileID.String, profileIDs: oldProfiles, protocol: r.Protocol, host: r.Host, port: int(r.Port), gamePorts: r.GamePorts,
 		agentID: r.AgentID, container: r.ContainerName, fingerprint: r.TlsFingerprint,
-	}, in)
+	}, in, req.Actor.Role == perm.RCONAdmin && in.Password != nil)
 	if err != nil {
 		return Server{}, err
 	}
@@ -721,7 +920,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 		return Server{}, err
 	}
 	// A new host or port keeps the stored password (D-050).
-	payload := updateAudit(r, f, in.Password != nil)
+	payload := updateAudit(r, oldProfiles, f, in.Password != nil)
 	if payload == nil {
 		// Nothing changes: the rollback takes the new version back; no
 		// audit entry, no reconnect.
@@ -730,7 +929,7 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	}
 	now := store.Now()
 	if err := q.UpdateServer(ctx, sqlitedb.UpdateServerParams{
-		Name: f.name, ProfileID: sql.NullString{String: f.profileID, Valid: f.profileID != ""}, Protocol: f.protocol,
+		Name: f.name, Protocol: f.protocol,
 		Host: f.host, Port: int64(f.port), GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
 		TlsFingerprint: f.fingerprint, TlsNotAfter: keepNotAfter(r, f.fingerprint), UpdatedAt: now, ID: id,
 	}); err != nil {
@@ -738,6 +937,11 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
 		}
 		return Server{}, err
+	}
+	if !slices.Equal(f.profileIDs, oldProfiles) {
+		if err := setProfiles(ctx, q, id, f.profileIDs); err != nil {
+			return Server{}, err
+		}
 	}
 	if sealed != nil {
 		if err := q.SetServerSecret(ctx, sqlitedb.SetServerSecretParams{Secret: sealed, UpdatedAt: now, ID: id}); err != nil {
@@ -758,7 +962,41 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 	return s.Get(ctx, req, id)
 }
 
-// Delete soft-deletes a server (D-028); nobody reaches it any more.
+// mayUpdate: the RCON admin changes every field; a server admin only the
+// profile list of a server in its scope (SRV-008, D-074). A server admin
+// sending any other field gets 403 before the scope is looked at, so the
+// answer is the same for every server, existing or not, and nothing is
+// changed; with the profile list alone a server outside its scope does not
+// exist for it (404). Other roles get 403.
+func (s *Service) mayUpdate(ctx context.Context, req users.Request, id string, in Input) error {
+	if req.Actor.Role != perm.ServerAdmin {
+		return s.mustBeAdmin(ctx, req, "server.update", "server", id)
+	}
+	if !onlyProfiles(in) {
+		s.denied(ctx, req, "server.update", "server", id, "forbidden")
+		return users.ErrForbidden
+	}
+	rights, err := s.perm.For(ctx, req.Actor.ID)
+	if err != nil {
+		return err
+	}
+	if _, ok := rights.Server(id); !ok {
+		s.denied(ctx, req, "server.update", "server", id, "not_found")
+		return users.ErrNotFound
+	}
+	return nil
+}
+
+// onlyProfiles reports whether an input changes the profile list and
+// nothing else.
+func onlyProfiles(in Input) bool {
+	return in.ProfileIDs != nil && in.Name == nil && in.Host == nil && in.Port == nil && in.Password == nil &&
+		in.GamePorts == nil && in.AgentID == nil && in.ContainerName == nil && in.TLSFingerprint == nil
+}
+
+// Delete soft-deletes a server (D-028); nobody reaches it any more. Its
+// scopes, grants and supporter grants end in the same transaction, each
+// with an audit entry (ROLE-003, ROLE-004, ROLE-007).
 func (s *Service) Delete(ctx context.Context, req users.Request, id string) error {
 	if err := s.mustBeAdmin(ctx, req, "server.delete", "server", id); err != nil {
 		return err
@@ -784,6 +1022,9 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 		return err
 	}
 	if err := s.auditOK(ctx, tx, req, "server.delete", "server", id, id, map[string]string{"name": r.Name}); err != nil {
+		return err
+	}
+	if err := endServerAssignments(ctx, tx, req, id); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {

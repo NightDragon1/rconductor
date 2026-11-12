@@ -19,8 +19,19 @@ async function check(page: Page, theme: string, what: string) {
     v.nodes.map((n) => `${n.target.join(' ')}: ${n.any[0]?.message ?? n.failureSummary}`),
   );
   expect.soft(found, what).toEqual([]);
-  // UI-001: nothing on a page can be dragged around.
-  await expect.soft(page.locator('[draggable="true"]'), what).toHaveCount(0);
+  // UI-001: no area or tile can be dragged around; only entries of a
+  // sortable list may, marked with data-sortable-list inside a list, and
+  // each has the arrow buttons for keyboard and touch (D-075).
+  await expect
+    .soft(
+      page.locator('[draggable="true"]:not(ol > [data-sortable-list], ul > [data-sortable-list])'),
+      what,
+    )
+    .toHaveCount(0);
+  for (const item of await page.locator('[data-sortable-list][draggable="true"]').all()) {
+    await expect.soft(item.getByRole('button', { name: /^Move .* up$/ }), what).toHaveCount(1);
+    await expect.soft(item.getByRole('button', { name: /^Move .* down$/ }), what).toHaveCount(1);
+  }
 }
 
 // The focus ring of a card's link against the card, with the opacity of a

@@ -153,7 +153,7 @@ func (f *rightsFixture) freshServer() string {
 	f.t.Helper()
 	var s struct{ ID string }
 	f.as(rA).must(http.MethodPost, "/servers", map[string]any{
-		"name": f.unique("srv"), "profile_id": f.profile(), "host": "127.0.0.1", "port": 1, "password": "x",
+		"name": f.unique("srv"), "profile_ids": []string{f.profile()}, "host": "127.0.0.1", "port": 1, "password": "x",
 	}, &s, http.StatusCreated)
 	return s.ID
 }
@@ -238,7 +238,7 @@ func newRightsFixture(t *testing.T) *rightsFixture {
 	host, port, _ := net.SplitHostPort(game.Addr)
 	p, _ := strconv.Atoi(port)
 	var s struct{ ID string }
-	admin.must(http.MethodPost, "/servers", map[string]any{"name": "main", "profile_id": f.profile(), "host": host, "port": p, "password": "rconpw"}, &s, http.StatusCreated)
+	admin.must(http.MethodPost, "/servers", map[string]any{"name": "main", "profile_ids": []string{f.profile()}, "host": host, "port": p, "password": "rconpw"}, &s, http.StatusCreated)
 	f.server = s.ID
 	f.server2 = f.freshServer()
 	var sg struct{ ID string }
@@ -392,10 +392,10 @@ func matrix() []matrixOp {
 
 		{"GET", "/servers", "OOOOOOUP", at("/servers"), false},
 		{"POST", "/servers", "OFFFFFUP", func(f *rightsFixture, _ string) request {
-			return request{path: "/servers", body: map[string]any{"name": f.unique("new"), "profile_id": f.profile(), "host": "127.0.0.1", "port": 2, "password": "x"}}
+			return request{path: "/servers", body: map[string]any{"name": f.unique("new"), "profile_ids": []string{f.profile()}, "host": "127.0.0.1", "port": 2, "password": "x"}}
 		}, false},
 		{"POST", "/servers/test-connection", "OFFFFFUP", func(f *rightsFixture, _ string) request {
-			return request{path: "/servers/test-connection", body: map[string]any{"profile_id": f.profile(), "host": "127.0.0.1", "port": 1, "password": "x"}}
+			return request{path: "/servers/test-connection", body: map[string]any{"profile_ids": []string{f.profile()}, "host": "127.0.0.1", "port": 1, "password": "x"}}
 		}, false},
 		{"GET", "/servers/{id}", "OONOOOUP", serverPath(""), false},
 		{"PATCH", "/servers/{id}", "OFFFFFUP", func(f *rightsFixture, _ string) request {

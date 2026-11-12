@@ -8,7 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	shipped "github.com/NightDragon1/rconductor/profiles"
+	shippedprofiles "github.com/NightDragon1/rconductor/profiles"
 )
 
 // rowOf is the table row of the profile with the given id, or "".
@@ -27,11 +27,11 @@ func rowOf(page, id string) string {
 // name, kind, protocol, researched version, status and each source, and
 // the page has no row more.
 func TestSupportedGamesPageCoversShippedProfiles(t *testing.T) {
-	page, err := SupportedGamesPage(shipped.FS())
+	page, err := SupportedGamesPage(shippedprofiles.FS())
 	if err != nil {
 		t.Fatal(err)
 	}
-	names, _ := fs.Glob(shipped.FS(), "*.yaml")
+	names, _ := fs.Glob(shippedprofiles.FS(), "*.yaml")
 	if len(names) == 0 {
 		t.Fatal("no shipped profiles")
 	}
@@ -45,7 +45,7 @@ func TestSupportedGamesPageCoversShippedProfiles(t *testing.T) {
 		t.Errorf("page has %d rows, profiles/ has %d files", rows, len(names))
 	}
 	for _, name := range names {
-		data, _ := fs.ReadFile(shipped.FS(), name)
+		data, _ := fs.ReadFile(shippedprofiles.FS(), name)
 		p, err := Parse(data)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
@@ -77,7 +77,7 @@ func TestSupportedGamesPageCoversShippedProfiles(t *testing.T) {
 
 // TestSupportedGamesPageSortedByName keeps the table in name order.
 func TestSupportedGamesPageSortedByName(t *testing.T) {
-	page, err := SupportedGamesPage(shipped.FS())
+	page, err := SupportedGamesPage(shippedprofiles.FS())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
 	"github.com/NightDragon1/rconductor/internal/rcon/httpapi/httpapitest"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
 const apiToken = "token-of-the-api"
@@ -111,7 +113,7 @@ func TestPinnedConnectionTest(t *testing.T) {
 		t.Cleanup(s.Close)
 		host, port := hostPort(t, s.Addr())
 		profile := h.profile(t, d)
-		in := ConnectionData{ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken)}
+		in := ConnectionData{ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken)}
 
 		got, err := h.svc.TestConnection(ctx, h.f.as("admin"), in)
 		if err != nil || got.Result != ConnectionUnpinned || got.Fingerprint != s.Fingerprint {
@@ -152,7 +154,7 @@ func TestHTTPServerPinning(t *testing.T) {
 		host, port := hostPort(t, s.Addr())
 		profile := h.profile(t, d)
 		name := "srv-" + d
-		in := Input{Name: &name, ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken)}
+		in := Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken)}
 		if _, err := h.svc.Create(ctx, h.f.as("admin"), in); err == nil {
 			t.Fatalf("%s: created without a trusted certificate", d)
 		}
@@ -257,7 +259,7 @@ func TestCertificateNotAfter(t *testing.T) {
 
 		// The connection test gives the end of validity with the
 		// fingerprint.
-		res, err := h.svc.TestConnection(ctx, h.f.as("admin"), ConnectionData{ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken)})
+		res, err := h.svc.TestConnection(ctx, h.f.as("admin"), ConnectionData{ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken)})
 		if err != nil || res.Fingerprint != s.Fingerprint || !res.NotAfter.Truncate(time.Second).Equal(want) {
 			t.Fatalf("%s connection test: %+v %v", d, res, err)
 		}
@@ -271,7 +273,7 @@ func TestCertificateNotAfter(t *testing.T) {
 		}
 
 		name := "na-" + d
-		sv, err := h.svc.Create(ctx, h.f.as("admin"), Input{Name: &name, ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken), TLSFingerprint: &s.Fingerprint})
+		sv, err := h.svc.Create(ctx, h.f.as("admin"), Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken), TLSFingerprint: &s.Fingerprint})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -342,7 +344,7 @@ func TestCertificateNotAfterExpired(t *testing.T) {
 		host, port := hostPort(t, s.Addr())
 		profile := h.profile(t, d)
 		name := "expired-" + d
-		sv, err := h.svc.Create(ctx, h.f.as("admin"), Input{Name: &name, ProfileID: &profile, Host: &host, Port: &port, Password: secretOf(apiToken), TLSFingerprint: &s.Fingerprint})
+		sv, err := h.svc.Create(ctx, h.f.as("admin"), Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken), TLSFingerprint: &s.Fingerprint})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -350,5 +352,62 @@ func TestCertificateNotAfterExpired(t *testing.T) {
 			t.Errorf("%s: end of validity %v, want one in the past", d, sv.TLSNotAfter)
 		}
 		waitStatus(t, h.svc, sv.ID, connmgr.Connected)
+	}
+}
+
+// TestProfileListKeepsProtocolC11 covers D-076 and PROT-003: a profile list
+// with another protocol is refused for every role and leaves protocol,
+// port and pin alone; only the RCON admin changes the protocol, with new
+// credentials in the same request, and the pin is dropped then. The audit
+// names the protocol change (C12).
+func TestProfileListKeepsProtocolC11(t *testing.T) {
+	h := newHTTPFixture(t)
+	ctx := context.Background()
+	d := httpapi.Names()[0]
+	s := httpapitest.Start(httpapitest.Fixtures[d], apiToken, 0, func(string) string { return "ok" })
+	t.Cleanup(s.Close)
+	host, port := hostPort(t, s.Addr())
+	profile := h.profile(t, d)
+	name := "pinned"
+	sv, err := h.svc.Create(ctx, h.f.as("admin"), Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port, Password: secretOf(apiToken), TLSFingerprint: &s.Fingerprint})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := h.svc.CreateGroup(ctx, h.f.as("admin"), "scope", []string{sv.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.f.exec(`INSERT INTO admin_scopes (id, user_id, server_group_id, assigned_by, created_at) VALUES ('c11', ?, ?, ?, 't')`, h.f.ids["sa"], g.ID, h.f.ids["admin"])
+	h.f.c.Invalidate()
+	var rcon string
+	if err := h.f.st.DB.QueryRow(`SELECT id FROM game_profiles WHERE slug = 'minecraft-java'`).Scan(&rcon); err != nil {
+		t.Fatal(err)
+	}
+	unchanged := func(label string) {
+		t.Helper()
+		r, err := h.f.st.Queries.GetServer(ctx, sv.ID)
+		if err != nil || r.Protocol != httpapi.Protocol || r.TlsFingerprint != s.Fingerprint || int(r.Port) != port {
+			t.Errorf("%s: protocol %q pin %q port %d", label, r.Protocol, r.TlsFingerprint, r.Port)
+		}
+	}
+	var inv *users.InvalidError
+	if _, err := h.svc.Update(ctx, h.f.as("sa"), sv.ID, Input{ProfileIDs: &[]string{rcon}, Version: h.f.version(sv.ID)}); !errors.As(err, &inv) {
+		t.Errorf("server admin, other protocol: %v, want 422", err)
+	}
+	unchanged("server admin")
+	if _, err := h.svc.Update(ctx, h.f.as("admin"), sv.ID, Input{ProfileIDs: &[]string{rcon}, Version: h.f.version(sv.ID)}); !errors.As(err, &inv) {
+		t.Errorf("RCON admin without credentials: %v, want 422", err)
+	}
+	unchanged("RCON admin without credentials")
+	got, err := h.svc.Update(ctx, h.f.as("admin"), sv.ID, Input{ProfileIDs: &[]string{rcon}, Password: secretOf("a new rcon password"), Version: h.f.version(sv.ID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Protocol != "source-rcon" || got.TLSFingerprint != "" || got.Port != port {
+		t.Errorf("after the change: protocol %q pin %q port %d", got.Protocol, got.TLSFingerprint, got.Port)
+	}
+	var payload string
+	if err := h.f.st.DB.QueryRow(`SELECT payload FROM audit_log WHERE action = 'server.update' AND target_id = ? ORDER BY rowid DESC LIMIT 1`, sv.ID).Scan(&payload); err != nil || !strings.Contains(payload, `"protocol"`) {
+		t.Errorf("audit %q %v, want the protocol change", payload, err)
 	}
 }

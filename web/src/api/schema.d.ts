@@ -309,7 +309,7 @@ export interface paths {
         delete: operations["deleteServer"];
         options?: never;
         head?: never;
-        /** Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only. */
+        /** Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076). */
         patch: operations["updateServer"];
         trace?: never;
     };
@@ -1186,8 +1186,12 @@ export interface components {
         PlayerList: {
             /** @description The game profile defines a player list. */
             available: boolean;
-            /** @description Player names; foreign data (SEC-006). */
+            /** @description Player names; foreign data (SEC-006). Empty when the game gives no names (protocol http-api, such as Satisfactory); count then tells how many are online. */
             players: string[];
+            /** @description Players online; for a game without names the only value. Missing while unknown (PROT-003). */
+            count?: number;
+            /** @description Player limit of the server, if the game tells it; missing otherwise. */
+            max?: number;
             /** Format: date-time */
             updated_at?: string;
             stale: boolean;
@@ -1273,14 +1277,14 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
-            /** Format: uuid */
-            profile_id?: string;
+            /** @description Game profiles of the server, top first (SRV-008, D-074): for each value the topmost profile that sets it wins; the catalog is the union, wrappers of all profiles hold. */
+            profile_ids?: string[];
             groups: string[];
             /** @description Admins only. */
             protocol?: string;
-            /** @description Admins only. */
+            /** @description RCON admin only; the server admin sees of the ports only the game ports (D-056). */
             host?: string;
-            /** @description Admins only. */
+            /** @description RCON port; RCON admin only (D-056). */
             port?: number;
             /**
              * @description Admins only. reenter: the credentials were encrypted with another master key and must be entered again (SRV-002).
@@ -1308,8 +1312,8 @@ export interface components {
         };
         ServerInput: {
             name?: string;
-            /** Format: uuid */
-            profile_id?: string;
+            /** @description Game profiles of the server, top first (SRV-008, D-074); all with the same protocol, for http-api the same dialect. Replaces the list as a whole. */
+            profile_ids?: string[];
             host?: string;
             port?: number;
             /**
@@ -1332,8 +1336,8 @@ export interface components {
              * @description The server being edited; missing when a new one is created.
              */
             server_id?: string;
-            /** Format: uuid */
-            profile_id?: string;
+            /** @description Game profiles to test with, top first (SRV-008); the protocol, dialect and default port come from them. */
+            profile_ids?: string[];
             host?: string;
             port?: number;
             /** Format: password */
@@ -1408,7 +1412,7 @@ export interface components {
             public?: number;
             /** @description Foreign data from the agent for other ports (SEC-006). */
             proto: string;
-            /** @description steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host. */
+            /** @description steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host, so the RCON admin only (D-056). */
             steam_url?: string;
         };
         VolumeRuntime: {
@@ -1553,6 +1557,7 @@ export interface components {
             target_type?: string;
             target_id?: string;
             action: string;
+            /** @description Details of the action; host and RCON port of a server only for the RCON admin (D-056). */
             payload: {
                 [key: string]: unknown;
             };

@@ -1,12 +1,14 @@
 module github.com/NightDragon1/rconductor/tools
 
-go 1.27.3
+go 1.27.4
 
 tool (
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 	golang.org/x/vuln/cmd/govulncheck
 )
+
+require mvdan.cc/sh/v3 v3.14.1
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.4.0 // indirect

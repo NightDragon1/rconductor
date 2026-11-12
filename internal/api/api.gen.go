@@ -690,8 +690,10 @@ type AuditEntry struct {
 	ActorRole *string             `json:"actor_role,omitempty"`
 
 	// Id For commands also the request ID (Design 4.1).
-	Id       openapi_types.UUID     `json:"id"`
-	Kind     AuditEntryKind         `json:"kind"`
+	Id   openapi_types.UUID `json:"id"`
+	Kind AuditEntryKind     `json:"kind"`
+
+	// Payload Details of the action; host and RCON port of a server only for the RCON admin (D-056).
 	Payload  map[string]interface{} `json:"payload"`
 	Reason   *string                `json:"reason,omitempty"`
 	Result   AuditEntryResult       `json:"result"`
@@ -796,10 +798,12 @@ type CommandResultResult string
 
 // ConnectionTest defines model for ConnectionTest.
 type ConnectionTest struct {
-	Host      *string             `json:"host,omitempty"`
-	Password  *string             `json:"password,omitempty"`
-	Port      *int                `json:"port,omitempty"`
-	ProfileId *openapi_types.UUID `json:"profile_id,omitempty"`
+	Host     *string `json:"host,omitempty"`
+	Password *string `json:"password,omitempty"`
+	Port     *int    `json:"port,omitempty"`
+
+	// ProfileIds Game profiles to test with, top first (SRV-008); the protocol, dialect and default port come from them.
+	ProfileIds *[]openapi_types.UUID `json:"profile_ids,omitempty"`
 
 	// ServerId The server being edited; missing when a new one is created.
 	ServerId *openapi_types.UUID `json:"server_id,omitempty"`
@@ -1063,7 +1067,13 @@ type PlayerList struct {
 	// Available The game profile defines a player list.
 	Available bool `json:"available"`
 
-	// Players Player names; foreign data (SEC-006).
+	// Count Players online; for a game without names the only value. Missing while unknown (PROT-003).
+	Count *int `json:"count,omitempty"`
+
+	// Max Player limit of the server, if the game tells it; missing otherwise.
+	Max *int `json:"max,omitempty"`
+
+	// Players Player names; foreign data (SEC-006). Empty when the game gives no names (protocol http-api, such as Satisfactory); count then tells how many are online.
 	Players   []string   `json:"players"`
 	Stale     bool       `json:"stale"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
@@ -1085,7 +1095,7 @@ type PortRuntime struct {
 	// Public Port on the host; missing when the port is not published.
 	Public *int `json:"public,omitempty"`
 
-	// SteamUrl steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host.
+	// SteamUrl steam://connect link to the published game port, when the profile sets ports.steam_connect; host is the server's host, so the RCON admin only (D-056).
 	SteamUrl *string `json:"steam_url,omitempty"`
 }
 
@@ -1253,14 +1263,16 @@ type Server struct {
 	GamePortsOverride *bool                `json:"game_ports_override,omitempty"`
 	Groups            []openapi_types.UUID `json:"groups"`
 
-	// Host Admins only.
+	// Host RCON admin only; the server admin sees of the ports only the game ports (D-056).
 	Host *string            `json:"host,omitempty"`
 	Id   openapi_types.UUID `json:"id"`
 	Name string             `json:"name"`
 
-	// Port Admins only.
-	Port      *int                `json:"port,omitempty"`
-	ProfileId *openapi_types.UUID `json:"profile_id,omitempty"`
+	// Port RCON port; RCON admin only (D-056).
+	Port *int `json:"port,omitempty"`
+
+	// ProfileIds Game profiles of the server, top first (SRV-008, D-074): for each value the topmost profile that sets it wins; the catalog is the union, wrappers of all profiles hold.
+	ProfileIds *[]openapi_types.UUID `json:"profile_ids,omitempty"`
 
 	// Protocol Admins only.
 	Protocol *string `json:"protocol,omitempty"`
@@ -1345,9 +1357,11 @@ type ServerInput struct {
 	Name      *string     `json:"name,omitempty"`
 
 	// Password RCON password, or the API token of a server with an HTTPS API; stored encrypted, never returned.
-	Password  *string             `json:"password,omitempty"`
-	Port      *int                `json:"port,omitempty"`
-	ProfileId *openapi_types.UUID `json:"profile_id,omitempty"`
+	Password *string `json:"password,omitempty"`
+	Port     *int    `json:"port,omitempty"`
+
+	// ProfileIds Game profiles of the server, top first (SRV-008, D-074); all with the same protocol, for http-api the same dialect. Replaces the list as a whole.
+	ProfileIds *[]openapi_types.UUID `json:"profile_ids,omitempty"`
 
 	// TlsFingerprint Trusts the certificate of a server with an HTTPS API, as the connection test showed it; required for protocol http-api (PROT-003, D-071). Colons and upper case are accepted.
 	TlsFingerprint *string `json:"tls_fingerprint,omitempty"`
@@ -1916,7 +1930,7 @@ type ServerInterface interface {
 	// GetServer A server in the caller's scope; others answer 404 (Design 3.1).
 	// (GET /servers/{id})
 	GetServer(w http.ResponseWriter, r *http.Request, id ServerID)
-	// UpdateServer Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only.
+	// UpdateServer Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076).
 	// (PATCH /servers/{id})
 	UpdateServer(w http.ResponseWriter, r *http.Request, id ServerID, params UpdateServerParams)
 	// ServerAction Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).
@@ -10336,7 +10350,7 @@ type StrictServerInterface interface {
 	// GetServer A server in the caller's scope; others answer 404 (Design 3.1).
 	// (GET /servers/{id})
 	GetServer(ctx context.Context, request GetServerRequestObject) (GetServerResponseObject, error)
-	// UpdateServer Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only.
+	// UpdateServer Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076).
 	// (PATCH /servers/{id})
 	UpdateServer(ctx context.Context, request UpdateServerRequestObject) (UpdateServerResponseObject, error)
 	// ServerAction Start, stop or restart the server's container (AGT-003, AGT-008, AGT-009).

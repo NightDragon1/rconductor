@@ -42,7 +42,8 @@ type PortView struct {
 	Public  int    `json:"public,omitempty"`
 	Proto   string `json:"proto"`
 	// SteamURL connects a Steam client to a published game port, when the
-	// profile switches it on (ports.steam_connect).
+	// profile switches it on (ports.steam_connect); for the RCON admin
+	// only, as it carries the host.
 	SteamURL string `json:"steam_url,omitempty"`
 }
 
@@ -67,7 +68,8 @@ func (v *View) portsOf(ctx context.Context, r sqlitedb.GetServerRow, snapshot []
 			used[i] = true
 		}
 		pv := PortView{Kind: PortGame, Name: g.Name, Private: g.Port, Public: pub, Proto: g.Proto}
-		if steam && pub > 0 && r.Host != "" {
+		// The link carries the server's host: the RCON admin only (D-056).
+		if steam && level >= LevelRCONAdmin && pub > 0 && r.Host != "" {
 			pv.SteamURL = "steam://connect/" + net.JoinHostPort(r.Host, strconv.Itoa(pub))
 		}
 		out = append(out, pv)
@@ -95,10 +97,8 @@ func (v *View) portsOf(ctx context.Context, r sqlitedb.GetServerRow, snapshot []
 // whether its profile offers the Steam link.
 func (v *View) gamePorts(ctx context.Context, r sqlitedb.GetServerRow) ([]profiles.GamePort, bool) {
 	var rules profiles.Profile
-	if r.ProfileID.Valid {
-		if gp, err := v.st.Queries.GetGameProfile(ctx, r.ProfileID.String); err == nil {
-			_ = json.Unmarshal([]byte(gp.Rules), &rules)
-		}
+	if eff, _, err := profiles.ForServer(ctx, v.st.Queries, r.ID); err == nil && eff != nil {
+		rules = *eff
 	}
 	game := rules.Ports.Game
 	if r.GamePorts.Valid {

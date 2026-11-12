@@ -183,15 +183,28 @@ func (d *Docker) resolve(ctx context.Context, name string) (container.Summary, e
 
 var errForbidden = errors.New("container not allowed")
 
-// Run implements Backend: snapshot, then events and metrics.
+// Run implements Backend: snapshot, then events and metrics. The events
+// are subscribed before each snapshot, so that a change during the
+// snapshot follows it as an event instead of getting lost.
 func (d *Docker) Run(ctx context.Context, out Sender) error {
-	if err := d.snapshot(ctx, out); err != nil {
-		return err
-	}
-	go d.metricsLoop(ctx, out)
 	defer d.stopFollows()
+	first := true
 	for {
-		err := d.events(ctx, out)
+		ectx, cancel := context.WithCancel(ctx)
+		res := d.api.Events(ectx, client.EventsListOptions{Filters: d.labelFilter().Add("type", "container")})
+		if err := d.snapshot(ctx, out); err != nil {
+			if first {
+				cancel()
+				return err
+			}
+			d.log.Warn("snapshot failed", slog.Any("err", err))
+		}
+		if first {
+			first = false
+			go d.metricsLoop(ctx, out)
+		}
+		err := d.events(ctx, res, out)
+		cancel()
 		if ctx.Err() != nil {
 			return nil //nolint:nilerr // shutting down is no error
 		}
@@ -200,9 +213,6 @@ func (d *Docker) Run(ctx context.Context, out Sender) error {
 		case <-ctx.Done():
 			return nil
 		case <-time.After(2 * time.Second):
-		}
-		if err := d.snapshot(ctx, out); err != nil {
-			d.log.Warn("snapshot failed", slog.Any("err", err))
 		}
 	}
 }
@@ -224,10 +234,7 @@ func (d *Docker) snapshot(ctx context.Context, out Sender) error {
 
 // events forwards status changes of allowed containers until the stream
 // ends.
-func (d *Docker) events(ctx context.Context, out Sender) error {
-	ectx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	res := d.api.Events(ectx, client.EventsListOptions{Filters: d.labelFilter().Add("type", "container")})
+func (d *Docker) events(ctx context.Context, res client.EventsResult, out Sender) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -729,12 +736,18 @@ type orderLimiter struct {
 
 	mu      sync.Mutex
 	buckets map[string]*tokens
+	// overflow is the one bucket that all new containers share while
+	// buckets is full; it has the limit of one container (D-077).
+	overflow *tokens
 }
 
 type tokens struct {
 	n    float64
 	last time.Time
 }
+
+// maxOrderBuckets bounds the containers an orderLimiter counts.
+const maxOrderBuckets = 10000
 
 func newOrderLimiter(perMinute, burst int) *orderLimiter {
 	return &orderLimiter{perMinute: float64(perMinute), burst: float64(burst), now: time.Now, buckets: map[string]*tokens{}}
@@ -746,11 +759,26 @@ func (l *orderLimiter) allow(name string) bool {
 	now := l.now()
 	b := l.buckets[name]
 	if b == nil {
-		if len(l.buckets) >= 10000 {
-			clear(l.buckets)
+		// A full table drops only buckets that are full again; if it stays
+		// full, new containers share the overflow bucket, and no count
+		// already held is lost (D-076, D-077).
+		if len(l.buckets) >= maxOrderBuckets {
+			for k, old := range l.buckets {
+				if old.n+now.Sub(old.last).Minutes()*l.perMinute >= l.burst {
+					delete(l.buckets, k)
+				}
+			}
 		}
-		b = &tokens{n: l.burst, last: now}
-		l.buckets[name] = b
+		switch {
+		case len(l.buckets) < maxOrderBuckets:
+			b = &tokens{n: l.burst, last: now}
+			l.buckets[name] = b
+		case l.overflow == nil:
+			l.overflow = &tokens{n: l.burst, last: now}
+			b = l.overflow
+		default:
+			b = l.overflow
+		}
 	}
 	b.n = min(l.burst, b.n+now.Sub(b.last).Minutes()*l.perMinute)
 	b.last = now

@@ -20,8 +20,15 @@ expect "v1.0 prerelease" false "$(field v1.0 prerelease)"
 expect "v0.9 tags" 0.9 "$(field v0.9 tags)"
 expect "v0.9 prerelease" true "$(field v0.9 prerelease)"
 expect "v0.10 tags" 0.10 "$(field v0.10 tags)"
+expect "v1.1 tags" "1.1 1" "$(field v1.1 tags)"
+expect "v1.1 rc" false "$(field v1.1 rc)"
+expect "v1.1-rc1 tags" 1.1-rc1 "$(field v1.1-rc1 tags)"
+expect "v1.1-rc1 prerelease" true "$(field v1.1-rc1 prerelease)"
+expect "v1.1-rc1 rc" true "$(field v1.1-rc1 rc)"
+expect "v1.10-rc12 tags" 1.10-rc12 "$(field v1.10-rc12 tags)"
+expect "v1.10-rc12 version" 1.10-rc12 "$(field v1.10-rc12 version)"
 
-for tag in v1.0.0 1.0 v1 v1.0-rc1 latest v0; do
+for tag in v1.0.0 1.0 v1 latest v0 v1.1-rc v1.1rc1 v1.1-rc1a v1.1-rc0 v1.1-RC1 v1.1-rc01 1.1-rc1; do
   if scripts/release-version.sh "$tag" >/dev/null 2>&1; then
     echo "$tag: must be refused" >&2
     fails=$((fails + 1))
@@ -37,6 +44,12 @@ expect "notes of a test version" "Testversion vor 1.0" "$(scripts/release-notes.
 expect "known issues of a test version" "## Known issues" "$(scripts/release-notes.sh 0.9 true | sed -n 3p)"
 if scripts/release-notes.sh 1.0 false | grep -q -e "Testversion vor 1.0" -e "To be settled before 1.0"; then
   echo "a real release must not carry the known issues of a test version" >&2
+  fails=$((fails + 1))
+fi
+expect "notes of a release candidate" "Release candidate, not for production" "$(scripts/release-notes.sh 1.1-rc1 true | head -n 1)"
+expect "a release candidate names its image tag" 2 "$(scripts/release-notes.sh 1.1-rc1 true | grep -c ':1.1-rc1`')"
+if scripts/release-notes.sh 1.1-rc1 true | grep -q -e "Testversion vor 1.0" -e "^## 1"; then
+  echo "a release candidate must carry neither test version notes nor a changelog section" >&2
   fails=$((fails + 1))
 fi
 expect "notes of 1.0" "First release." "$(scripts/release-notes.sh 1.0 false | sed -n 2p)"
@@ -95,7 +108,9 @@ if [ "$4" = --raw ]; then
   printf '{"manifests":[{"platform":{"os":"linux","architecture":"amd64"},"digest":"sha256:a"},{"platform":{"os":"linux","architecture":"arm64"},"digest":"sha256:b"},{"platform":{"os":"unknown","architecture":"unknown"},"digest":"sha256:c"}]}'
   exit 0
 fi
-if grep -qx "${ref##*:}" "$WORLD/tags"; then echo sha256:i; exit 0; fi
+# A line "tag" holds the image sha256:i, a line "tag=digest" another one.
+d=$(awk -v t="${ref##*:}" '$0 == t { print "sha256:i"; exit } index($0, t "=") == 1 { print substr($0, length(t) + 2); exit }' "$WORLD/tags")
+if [ -n "$d" ]; then echo "$d"; exit 0; fi
 echo "$ref: not found" >&2
 exit 1
 STUB
@@ -116,13 +131,20 @@ verify() { # tag, tags in the registry, faults
 }
 verify v0.10 0.10 "" || { echo "verify: a good test version failed" >&2; fails=$((fails + 1)); }
 verify v1.0 "1.0 1" "" || { echo "verify: a good release failed" >&2; fails=$((fails + 1)); }
-for bad in "v0.10|0.10 latest|" "v0.10|0.10 0|" "v0.10|0.10 1|" "v1.0|1.0|" "v0.10|0.10|bad-arm64" "v0.10|0.10|wrong-sbom"; do
+verify v1.1-rc1 1.1-rc1 "" || { echo "verify: a good release candidate failed" >&2; fails=$((fails + 1)); }
+# The usual case: an earlier release holds the major tag, which stays.
+verify v1.1-rc2 "1.1-rc2 1=sha256:old 1.0=sha256:old" "" ||
+  { echo "verify: a release candidate next to an earlier release failed" >&2; fails=$((fails + 1)); }
+for bad in "v1.1-rc1|1.1-rc1 1.1|" "v1.1-rc1|1.1-rc1 1|" "v1.1-rc2|1.1-rc2 1=sha256:old 1.1=sha256:old|" "v1.1-rc1|1.1-rc1 latest|" "v1.1-rc1||" "v0.10|0.10 latest|" "v0.10|0.10 0|" "v0.10|0.10 1|" "v1.0|1.0|" "v0.10|0.10|bad-arm64" "v0.10|0.10|wrong-sbom"; do
   tag=${bad%%|*} rest=${bad#*|}
   if verify "$tag" "${rest%%|*}" "${rest#*|}"; then
     echo "verify: must fail: $bad" >&2
     fails=$((fails + 1))
   fi
 done
+
+# The Docker Hub step is skipped for a release candidate.
+expect "describe skips a release candidate" 1 "$(grep -c "if: github.event_name == 'push' && needs.version.outputs.rc != 'true'" .github/workflows/release.yml)"
 
 # C4 (regression test): the Docker Hub step of release.yml stops before
 # the API when the overview script fails or prints nothing. The step runs

@@ -1,6 +1,6 @@
 module github.com/NightDragon1/rconductor
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/coder/websocket v1.8.15
@@ -14,7 +14,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.45.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/sync v0.25.0
-	golang.org/x/sys v0.49.0
+	golang.org/x/sys v0.50.0
 	modernc.org/sqlite v1.62.0
 )
 

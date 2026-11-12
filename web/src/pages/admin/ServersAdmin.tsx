@@ -22,6 +22,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
+import { topProfile } from '@/lib/profiles';
 import { stripCodes } from '@/lib/serverpage';
 import { cardStatus } from '@/lib/status';
 import { usePhone, useReveal } from '@/lib/phone';
@@ -30,6 +31,7 @@ import { useUndo, useUnsaved } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
+import { ProfileList } from './ProfileList';
 
 type GamePort = components['schemas']['GamePort'];
 type Message = { ok: boolean; text: string } | null;
@@ -62,7 +64,8 @@ function Note({ message }: { message: Message }) {
 
 interface Draft {
   name: string;
-  profile_id: string;
+  // Ordered, top first (SRV-008, CAT-007).
+  profile_ids: string[];
   host: string;
   port: string;
   password: string;
@@ -86,7 +89,7 @@ const groupFingerprint = (fp: string) => fp.match(/.{1,2}/g)?.join(':') ?? fp;
 
 const draftOf = (s?: Server): Draft => ({
   name: s?.name ?? '',
-  profile_id: s?.profile_id ?? '',
+  profile_ids: s?.profile_ids ?? [],
   host: s?.host ?? '',
   port: s?.port ? String(s.port) : '',
   password: '',
@@ -98,25 +101,28 @@ const draftOf = (s?: Server): Draft => ({
 });
 
 // ServerPanel creates or changes a server (SRV-001, SRV-005): only the
-// RCON admin; a server admin and a phone see it read-only. The password is only
-// set, never shown. Agent and container come from the agent's list
+// RCON admin; a server admin may change only the profile list of a server
+// in his scope (SRV-008), the backend checks it; a phone sees it read-only.
+// The password is only set, never shown. Agent and container come from the agent's list
 // (revision 2.4 candidate 22).
 function ServerPanel({
   server,
   canEdit,
+  canEditProfiles,
   canSeeAgents,
   onClose,
   onCreated,
 }: {
   server?: Server;
   canEdit: boolean;
+  canEditProfiles: boolean;
   canSeeAgents: boolean;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
-  const { saved } = useUndo();
+  const { saved, saving } = useUndo();
   const profiles = useProfiles();
   const agents = useAgents(canSeeAgents);
   const panel = useReveal<HTMLElement>();
@@ -135,9 +141,12 @@ function ServerPanel({
     enabled: canSeeAgents && !!d.agent_id,
   });
   const set = (p: Partial<Draft>) => setD((x) => ({ ...x, ...p }));
-  const bodyOf = (x: Draft) => ({
+  const profileIds = (x: Draft) => (x.profile_ids.length ? x.profile_ids : undefined);
+  // A server admin sends the profile list alone (SRV-008).
+  const bodyOf = (x: Draft) => (canEdit ? fullBody(x) : { profile_ids: profileIds(x) });
+  const fullBody = (x: Draft) => ({
     name: x.name.trim(),
-    profile_id: x.profile_id || undefined,
+    profile_ids: profileIds(x),
     host: x.host.trim(),
     port: x.port ? Number(x.port) : undefined,
     password: x.password || undefined,
@@ -146,8 +155,10 @@ function ServerPanel({
     game_ports: x.ownPorts ? x.game_ports : [],
     tls_fingerprint: x.tls_fingerprint || undefined,
   });
-  const body = () => bodyOf(d);
-  const httpApi = (profiles.data ?? []).find((p) => p.id === d.profile_id)?.protocol === 'http-api';
+  const body = () => fullBody(d);
+  // The protocol of the top profile decides the form (D-074).
+  const httpApi =
+    (profiles.data ?? []).find((p) => p.id === d.profile_ids[0])?.protocol === 'http-api';
   const lng = i18n.language;
   const day = (iso: string) => new Date(iso).toLocaleDateString(lng);
 
@@ -158,10 +169,10 @@ function ServerPanel({
     setSeen(null);
     let result = '';
     const r = await outcome(server?.id ?? 'new', async () => {
-      const { host, port, profile_id, password, tls_fingerprint } = body();
+      const { host, port, profile_ids, password, tls_fingerprint } = body();
       const res = must(
         await api.POST('/servers/test-connection', {
-          body: { server_id: server?.id, host, port, profile_id, password, tls_fingerprint },
+          body: { server_id: server?.id, host, port, profile_ids, password, tls_fingerprint },
         }),
       );
       result = res.result;
@@ -182,10 +193,12 @@ function ServerPanel({
     e.preventDefault();
     if (!server) {
       void (async () => {
-        const r = await outcome('new', async () => {
-          must(await api.POST('/servers', { body: body() }));
-          onCreated();
-        });
+        const r = await saving(
+          outcome('new', async () => {
+            must(await api.POST('/servers', { body: body() }));
+            onCreated();
+          }),
+        );
         void qc.invalidateQueries({ queryKey: serversKey });
         if (!r.ok) setMessage({ ok: false, text: reasonText(t, r) });
       })();
@@ -198,14 +211,16 @@ function ServerPanel({
   // keep the stored password, so they can be undone (D-050).
   const write = async (id: string, from: Server, next: Draft) => {
     let done = null as Server | null;
-    const r = await outcome(id, async () => {
-      done = must(
-        await patchVersioned('/servers/{id}', from.version, {
-          path: { id },
-          body: bodyOf(next),
-        }),
-      );
-    });
+    const r = await saving(
+      outcome(id, async () => {
+        done = must(
+          await patchVersioned('/servers/{id}', from.version, {
+            path: { id },
+            body: bodyOf(next),
+          }),
+        );
+      }),
+    );
     if (r.reason === 'conflict') {
       setConflict(true);
       setMessage({ ok: false, text: t('admin.conflict') });
@@ -231,6 +246,7 @@ function ServerPanel({
   };
 
   const off = !canEdit || conflict;
+  const mayProfiles = canEdit || (canEditProfiles && !!server);
   return (
     <aside
       ref={panel}
@@ -260,50 +276,44 @@ function ServerPanel({
             />
           )}
         </Row>
-        <Row label={t('servers.profile')}>
-          {(id) => (
-            <select
-              id={id}
-              className={field}
-              disabled={off}
-              value={d.profile_id}
-              onChange={(e) => set({ profile_id: e.target.value })}
-            >
-              <option value="">{t('servers.choose')}</option>
-              {(profiles.data ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.kind === 'specific' ? t('servers.specificProfile', { name: p.name }) : p.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </Row>
-        <div className="grid grid-cols-[1fr_7rem] gap-2">
-          <Row label={t('servers.host')}>
-            {(id) => (
-              <Input
-                id={id}
-                disabled={off}
-                value={d.host}
-                onChange={(e) => set({ host: e.target.value })}
-                required
-              />
-            )}
-          </Row>
-          <Row label={httpApi ? t('servers.apiPort') : t('servers.port')}>
-            {(id) => (
-              <Input
-                id={id}
-                type="number"
-                min={1}
-                max={65535}
-                disabled={off}
-                value={d.port}
-                onChange={(e) => set({ port: e.target.value })}
-              />
-            )}
-          </Row>
-        </div>
+        <ProfileList
+          ids={d.profile_ids}
+          profiles={profiles.data ?? []}
+          disabled={!mayProfiles || conflict}
+          onChange={(profile_ids) => {
+            setMessage(null);
+            set({ profile_ids });
+          }}
+        />
+        {/* Host and RCON port come for the RCON admin only (D-056). */}
+        {(canEdit || server?.host !== undefined) && (
+          <div className="grid grid-cols-[1fr_7rem] gap-2">
+            <Row label={t('servers.host')}>
+              {(id) => (
+                <Input
+                  id={id}
+                  disabled={off}
+                  value={d.host}
+                  onChange={(e) => set({ host: e.target.value })}
+                  required
+                />
+              )}
+            </Row>
+            <Row label={httpApi ? t('servers.apiPort') : t('servers.port')}>
+              {(id) => (
+                <Input
+                  id={id}
+                  type="number"
+                  min={1}
+                  max={65535}
+                  disabled={off}
+                  value={d.port}
+                  onChange={(e) => set({ port: e.target.value })}
+                />
+              )}
+            </Row>
+          </div>
+        )}
         {canEdit && (
           <Row
             label={
@@ -477,12 +487,12 @@ function ServerPanel({
           </div>
         )}
         <Note message={message} />
-        {canEdit && (
+        {mayProfiles && (
           <div className="flex flex-wrap gap-2">
             {!conflict && (
               <Button type="submit">{server ? t('servers.save') : t('servers.create')}</Button>
             )}
-            {!conflict && (
+            {canEdit && !conflict && (
               <Button
                 type="button"
                 variant="outline"
@@ -513,7 +523,7 @@ function ServerPanel({
                 {t('admin.reload')}
               </Button>
             )}
-            {server && (
+            {canEdit && server && (
               <Button
                 type="button"
                 variant="outline"
@@ -563,7 +573,7 @@ function GroupPanel({
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { saved } = useUndo();
+  const { saved, saving } = useUndo();
   const panel = useReveal<HTMLElement>();
   const [draft, setDraft] = useState(group);
   const [message, setMessage] = useState<Message>(null);
@@ -578,14 +588,16 @@ function GroupPanel({
   // Edits change the draft; Save sends it at once (D-048).
   const write = async (from: ServerGroup, to: ServerGroup) => {
     let done = null as ServerGroup | null;
-    const r = await outcome(group.id, async () => {
-      done = must(
-        await patchVersioned('/server-groups/{id}', from.version, {
-          path: { id: group.id },
-          body: { name: to.name, server_ids: to.server_ids },
-        }),
-      );
-    });
+    const r = await saving(
+      outcome(group.id, async () => {
+        done = must(
+          await patchVersioned('/server-groups/{id}', from.version, {
+            path: { id: group.id },
+            body: { name: to.name, server_ids: to.server_ids },
+          }),
+        );
+      }),
+    );
     if (r.reason === 'conflict') {
       setConflict(true);
       setMessage({ ok: false, text: t('admin.conflict') });
@@ -735,8 +747,12 @@ export function ServersAdminPage() {
   const qc = useQueryClient();
   const { data: session } = useSession();
   const phone = usePhone();
+  // Agents, host and RCON port: the RCON admin only (D-056).
   const canSeeAgents = session?.user.role === 'rcon_admin';
   const canEdit = canSeeAgents && !phone;
+  // A server admin changes the profile list of the servers in his scope;
+  // the list shows only those (SRV-008, Design 6.2).
+  const canEditProfiles = session?.user.role === 'server_admin' && !phone;
   const servers = useServers();
   const groups = useServerGroups(true);
   const profiles = useProfiles();
@@ -756,7 +772,7 @@ export function ServersAdminPage() {
   const shownGroups = (groups.data ?? []).filter(
     (g) => !needle || g.name.toLowerCase().includes(needle),
   );
-  const profileName = (id?: string) => profiles.data?.find((p) => p.id === id)?.name ?? '';
+  const profileName = (ids?: string[]) => topProfile(t, ids, profiles.data ?? []);
   const groupNames = (s: Server) =>
     (groups.data ?? [])
       .filter((g) => g.server_ids.includes(s.id))
@@ -788,7 +804,13 @@ export function ServersAdminPage() {
           <div>
             <h1 className="text-2xl font-semibold">{t('nav.serverAdmin')}</h1>
             <p className="text-sm text-muted">
-              {t(canEdit ? 'servers.explainAdmin' : 'servers.explainRead')}
+              {t(
+                canEdit
+                  ? 'servers.explainAdmin'
+                  : canEditProfiles
+                    ? 'servers.explainProfiles'
+                    : 'servers.explainRead',
+              )}
             </p>
           </div>
           {canEdit && (
@@ -820,7 +842,7 @@ export function ServersAdminPage() {
                 onOpen={() => guard(() => setOpen({ kind: 'server', id: s.id }))}
                 facts={[
                   { label: t('admin.statusLabel'), value: t(`status.${cardStatus(s)}`) },
-                  { label: t('servers.profile'), value: profileName(s.profile_id) },
+                  { label: t('servers.profile'), value: profileName(s.profile_ids) },
                 ]}
               />
             ))}
@@ -835,7 +857,7 @@ export function ServersAdminPage() {
                 <tr>
                   <th className="p-3 font-medium">{t('servers.name')}</th>
                   <th className="p-3 font-medium">{t('servers.profile')}</th>
-                  <th className="p-3 font-medium">{t('servers.address')}</th>
+                  {canSeeAgents && <th className="p-3 font-medium">{t('servers.address')}</th>}
                   <th className="p-3 font-medium">{t('servers.container')}</th>
                   <th className="p-3 font-medium">{t('servers.groups')}</th>
                 </tr>
@@ -863,10 +885,14 @@ export function ServersAdminPage() {
                         </span>
                       )}
                     </td>
-                    <td className="p-3">{profileName(s.profile_id)}</td>
-                    <td className="p-3 font-mono">
-                      <bdi>{s.host ? `${s.host}:${s.port ?? ''}` : ''}</bdi>
+                    <td className="p-3">
+                      <bdi>{profileName(s.profile_ids)}</bdi>
                     </td>
+                    {canSeeAgents && (
+                      <td className="p-3 font-mono">
+                        <bdi>{s.host ? `${s.host}:${s.port ?? ''}` : ''}</bdi>
+                      </td>
+                    )}
                     <td className="p-3 font-mono">
                       <bdi>{s.container_name ?? ''}</bdi>
                     </td>
@@ -980,6 +1006,7 @@ export function ServersAdminPage() {
           key={open.id}
           server={current}
           canEdit={canEdit}
+          canEditProfiles={canEditProfiles}
           canSeeAgents={canSeeAgents}
           onClose={() => guard(() => setOpen(null))}
           onCreated={() => setOpen(null)}

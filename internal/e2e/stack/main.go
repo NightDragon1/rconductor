@@ -6,7 +6,8 @@
 // game servers created over the API. With -base
 // it stands behind a small proxy that strips the base path, as a reverse
 // proxy does (NFR-003). The addresses and passwords go to -state as JSON.
-// It is a test tool only and never part of a release.
+// It is a test tool only and never part of a release. The control listener
+// for the tests (control_e2e.go) is compiled only with the build tag e2e.
 package main
 
 import (
@@ -68,8 +69,13 @@ type State struct {
 	// LegacyAgentID is host-legacy, an agent with fewer capabilities and the
 	// container mc-legacy (AGT-013).
 	LegacyAgentID string `json:"legacy_agent_id"`
-	profile       string
-	moderators    string // the moderator group
+	// ControlURL is a listener of the stack for the tests only: POST
+	// /pending-agent starts a new agent with a name of its own that waits
+	// for approval by fingerprint, so a test does not use up the seed.
+	// It exists only in a build with the tag e2e and is empty otherwise.
+	ControlURL string `json:"control_url"`
+	profile    string
+	moderators string // the moderator group
 }
 
 type buffer struct {
@@ -118,14 +124,7 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 		hostport = net.JoinHostPort(host, port)
 	}
 	public := "http://" + hostport + strings.TrimSuffix(base, "/")
-	cfg, err := config.LoadPanel(func(k string) (string, bool) {
-		v, ok := map[string]string{
-			"RCD_HTTP_ADDR": "127.0.0.1:0", "RCD_AGENT_ADDR": "127.0.0.1:0", "RCD_PUBLIC_URL": public, "RCD_BASE_PATH": base,
-			"RCD_DATA_DIR": filepath.Join(root, "data"), "RCD_SECRETS_DIR": filepath.Join(root, "secrets"),
-			"RCD_BACKUP_DIR": filepath.Join(root, "backups"), "RCD_LOG_FORMAT": "json", "RCD_TRUSTED_PROXIES": trusted,
-		}[k]
-		return v, ok
-	}, os.ReadFile)
+	cfg, err := panelConfig(root, public, base, trusted)
 	if err != nil {
 		return err
 	}
@@ -179,16 +178,12 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 		return fmt.Errorf("panel: %w\n%s", err, logs.String())
 	}
 
-	// The browser talks to the proxy; it strips the base path like a
-	// reverse proxy and forwards to the panel, WebSocket included.
-	target, _ := url.Parse("http://" + panelAddr.String())
-	proxy := httputil.NewSingleHostReverseProxy(target)
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return err
 	}
-	srv := &http.Server{Handler: http.StripPrefix(strings.TrimSuffix(base, "/"), proxy), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: front(base, panelAddr.String()), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = srv.Serve(ln) }()
 	defer func() { _ = srv.Close() }()
 
@@ -201,12 +196,19 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 	if err := admin.call(http.MethodPost, "/auth/login", map[string]string{"pseudonym": "admin", "password": adminPassword}, nil); err != nil {
 		return err
 	}
-	if err := seedHosts(ctx, admin, panelURL, origin(public), (<-agentReady).String(), root, game.Addr, hostile.Addr, st.profile, &st); err != nil {
+	agentAddr := (<-agentReady).String()
+	if err := seedHosts(ctx, admin, panelURL, origin(public), agentAddr, root, game.Addr, hostile.Addr, st.profile, &st); err != nil {
 		return fmt.Errorf("seed hosts: %w\n%s", err, logs.String())
 	}
 	if st.ExpiredInvite, err = expiredInvite(ctx, admin, filepath.Join(root, "data", "rconductor.db")); err != nil {
 		return fmt.Errorf("expired invite: %w", err)
 	}
+	ctlURL, stopCtl, err := startControl(ctx, panelURL, origin(public), agentAddr, root)
+	if err != nil {
+		return err
+	}
+	defer stopCtl()
+	st.ControlURL = ctlURL
 	st.BaseURL = public + "/"
 	if statePath != "" {
 		b, _ := json.MarshalIndent(st, "", "  ")
@@ -221,6 +223,29 @@ func run(addr, host, dist, base, trusted, statePath, logPath string) error {
 		return err
 	}
 	return <-done
+}
+
+// panelConfig is the configuration of the stack's panel below root.
+func panelConfig(root, public, base, trusted string) (config.Panel, error) {
+	return config.LoadPanel(func(k string) (string, bool) {
+		v, ok := map[string]string{
+			"RCD_HTTP_ADDR": "127.0.0.1:0", "RCD_AGENT_ADDR": "127.0.0.1:0", "RCD_PUBLIC_URL": public, "RCD_BASE_PATH": base,
+			"RCD_DATA_DIR": filepath.Join(root, "data"), "RCD_SECRETS_DIR": filepath.Join(root, "secrets"),
+			"RCD_BACKUP_DIR": filepath.Join(root, "backups"), "RCD_LOG_FORMAT": "json", "RCD_TRUSTED_PROXIES": trusted,
+			// Every agent of the stack connects from 127.0.0.1, and the ones
+			// waiting for approval try again and again: with the default of
+			// 10 per minute they would hold each other off (SEC-007).
+			"RCD_AGENT_CONNECTS_PER_MINUTE": "600", "RCD_AGENT_CONNECT_BURST": "100",
+		}[k]
+		return v, ok
+	}, os.ReadFile)
+}
+
+// front is what the browser talks to: it strips the base path like a
+// reverse proxy and forwards to the panel, WebSocket included.
+func front(base, panelAddr string) http.Handler {
+	target, _ := url.Parse("http://" + panelAddr)
+	return http.StripPrefix(strings.TrimSuffix(base, "/"), httputil.NewSingleHostReverseProxy(target))
 }
 
 // client calls the panel API directly, with the public origin.
@@ -335,7 +360,7 @@ func seed(panel, public, console, gameAddr string) (State, error) {
 	p, _ := strconv.Atoi(port)
 	var srv struct{ ID string }
 	if err := admin.call(http.MethodPost, "/servers", map[string]any{
-		"name": st.ServerName, "profile_id": profile, "host": host, "port": p, "password": rconPassword,
+		"name": st.ServerName, "profile_ids": []string{profile}, "host": host, "port": p, "password": rconPassword,
 	}, &srv); err != nil {
 		return st, err
 	}

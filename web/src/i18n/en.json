@@ -39,7 +39,7 @@
     "theme": "Design: {{design}}. Change it",
     "logoutFailed": "Sign-out failed, you are still signed in.",
     "design": {
-      "auto": "like the system",
+      "auto": "auto, like the system",
       "light": "light",
       "dark": "dark"
     },
@@ -269,6 +269,11 @@
     "players": "Players online",
     "noPlayers": "Nobody is online.",
     "noPlayerList": "The game profile has no player list.",
+    "playerCount_one": "{{count}} player",
+    "playerCount_other": "{{count}} players",
+    "playerCountOf_one": "{{count}} / {{max}} players",
+    "playerCountOf_other": "{{count}} / {{max}} players",
+    "noNames": "Player names not available for this game",
     "playersAt": "updated {{ago}}",
     "stale": "stale",
     "load": "Load",
@@ -363,6 +368,7 @@
     "suggestions": "Suggestions",
     "tab": "Tab",
     "hint": "Tab takes the first suggestion · arrow keys walk your own commands",
+    "slashHint": "Commands on this server start with /. Without it, the game may take the input as chat (Factorio does).",
     "favorites": "Favorites"
   },
   "commands": {
@@ -511,6 +517,9 @@
     "supporterGrants": "Servers",
     "addServer": "+ Server",
     "none": "none",
+    "unknownServer": "unknown server",
+    "unknownServerGroup": "unknown server group",
+    "unknownGroup": "unknown group",
     "removeItem": "Remove {{name}}",
     "useTemplate": "Use as template",
     "endSessions": "End sessions",
@@ -648,6 +657,15 @@
     "name": "Name",
     "profile": "Game profile",
     "specificProfile": "{{name}} (specific)",
+    "profiles": "Game profiles, top first",
+    "noProfile": "No game profile yet.",
+    "addProfile": "Add a game profile",
+    "addProfileOption": "+ Profile",
+    "moveUp": "Move {{name}} up",
+    "moveDown": "Move {{name}} down",
+    "profilesHint": "Drag a profile or use the arrows to change the order.",
+    "profileOrder": "A generic profile stands above a specific one; the specific one should be on top.",
+    "topProfile": "{{name}}, +{{count}}",
     "choose": "Choose …",
     "host": "Host",
     "port": "RCON port",
@@ -678,6 +696,7 @@
     "deleteGroupText": "Grants and scopes on this group end at once; the servers stay. This cannot be undone.",
     "explainAdmin": "Create servers, set agent and container, form server groups.",
     "explainRead": "The servers and server groups of your scope, read only.",
+    "explainProfiles": "The servers and server groups of your scope; you may change the game profiles of a server.",
     "credentials": {
       "missing": "No RCON password stored. Enter one.",
       "reenter": "The RCON password was stored with another master key. Enter it again."
@@ -897,7 +916,15 @@
       },
       "auth_recovery_per_hour": {
         "label": "Recovery requests per hour",
-        "help": "Per user and per client address."
+        "help": "Per user and per client address (IPv6 per /64)."
+      },
+      "auth_recovery_workers": {
+        "label": "Recovery workers",
+        "help": "Recovery requests worked on at the same time in the background."
+      },
+      "auth_recovery_queue": {
+        "label": "Recovery queue",
+        "help": "Recovery requests waiting in the background; further ones are dropped with the same answer."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."

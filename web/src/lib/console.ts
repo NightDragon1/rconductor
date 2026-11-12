@@ -199,6 +199,17 @@ export function suggest(paths: string[], input: string, max = 8): string[] {
   return paths.filter((p) => p.toLowerCase().startsWith(q) && p.toLowerCase() !== q).slice(0, max);
 }
 
+// missingSlash reports whether the input lacks the leading "/" that every
+// command of the server carries, as in games that take input without it
+// as chat (CAT-005). The command text stays as typed; the console only
+// shows a hint (CMD-015).
+export function missingSlash(paths: string[], input: string): boolean {
+  const q = input.trimStart();
+  return (
+    q !== '' && !q.startsWith('/') && paths.length > 0 && paths.every((p) => p.startsWith('/'))
+  );
+}
+
 // ownCommands lists the caller's commands, newest first, without repeats
 // in a row, for the arrow keys (CMD-015).
 export function ownCommands(buf: ConsoleBuffer, me: string | undefined): string[] {

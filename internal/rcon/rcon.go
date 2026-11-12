@@ -21,6 +21,10 @@ var (
 	// ErrTooLarge means a packet or response exceeded the limits for
 	// foreign data (SEC-006).
 	ErrTooLarge = errors.New("rcon response too large")
+	// ErrBroken means the connection lost its place in the packet stream,
+	// for example after a packet over the limit that was not read; the
+	// adapter closed it and the next command needs a new one.
+	ErrBroken = errors.New("rcon connection out of step, closed")
 	// ErrCertMismatch means the certificate of the game server is not the
 	// pinned one; nothing was sent (PROT-003, D-071).
 	ErrCertMismatch = errors.New("the certificate of the game server is not the trusted one")
@@ -33,13 +37,16 @@ var (
 )
 
 // Endpoint is what an adapter needs beyond address and password: the
-// pinned certificate, the dialect of the game and the parallel requests.
+// pinned certificate, the dialect of the game and the parallel requests;
+// for Source RCON the end marker of the game profile (PROT-001), empty
+// for the default.
 type Endpoint struct {
 	Addr        string
 	Secret      logging.Secret
 	Fingerprint string
 	Dialect     string
 	Parallel    int
+	EndMarker   string
 }
 
 // EndpointDialer is implemented by adapters that need an Endpoint; the
@@ -61,6 +68,19 @@ type Certificate struct {
 // else, for the connection test before anything is trusted.
 type FingerprintReader interface {
 	Certificate(ctx context.Context, addr string) (Certificate, error)
+}
+
+// Players are the players online as a game reports them: the count, the
+// limit (0 if unknown) and the names, empty if the game gives none.
+type Players struct {
+	Count, Max int
+	Names      []string
+}
+
+// PlayerCounter is implemented by connections that ask the game for its
+// players without a console command (protocol http-api, PROT-003).
+type PlayerCounter interface {
+	Players(ctx context.Context) (Players, error)
 }
 
 // PinnedConn is implemented by connections with a pinned certificate: the

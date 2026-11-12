@@ -10,6 +10,19 @@ import (
 	"database/sql"
 )
 
+const countProfileServers = `-- name: CountProfileServers :one
+SELECT count(*) FROM server_profiles sp JOIN servers s ON s.id = sp.server_id
+WHERE sp.profile_id = ? AND s.deleted_at IS NULL
+`
+
+// Servers that have the profile on their list (SRV-008).
+func (q *Queries) CountProfileServers(ctx context.Context, profileID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countProfileServers, profileID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteCatalog = `-- name: DeleteCatalog :exec
 DELETE FROM catalog_commands WHERE profile_id = ?
 `

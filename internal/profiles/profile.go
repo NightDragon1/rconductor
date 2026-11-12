@@ -21,6 +21,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/pattern"
 	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
+	"github.com/NightDragon1/rconductor/internal/rcon/source"
 )
 
 // SchemaVersion is the profile schema this release reads.
@@ -48,7 +49,10 @@ const (
 
 // Protocols are the adapters of this release (PROT-001); others follow
 // later.
-var Protocols = []string{"source-rcon", httpapi.Protocol}
+var Protocols = []string{sourceRCON, httpapi.Protocol}
+
+// sourceRCON is the protocol name of the Source RCON adapter.
+const sourceRCON = "source-rcon"
 
 var slugRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
@@ -71,27 +75,74 @@ func KindOf(p *Profile) string {
 
 // Profile is a checked game profile.
 type Profile struct {
-	Schema     int       `yaml:"schema" json:"-"`
-	ID         string    `yaml:"id" json:"-"`
-	Name       string    `yaml:"name" json:"-"`
-	Kind       string    `yaml:"kind" json:"kind,omitempty"`
-	Match      Match     `yaml:"match" json:"match"`
-	Protocol   Protocol  `yaml:"protocol" json:"-"`
-	HTTPAPI    *HTTPAPI  `yaml:"http_api" json:"http_api,omitempty"`
-	Ports      Ports     `yaml:"ports" json:"ports"`
-	Syntax     Syntax    `yaml:"syntax" json:"syntax"`
-	Players    *Players  `yaml:"players" json:"players,omitempty"`
-	Stop       *Stop     `yaml:"stop" json:"stop,omitempty"`
-	Version    *Version  `yaml:"version" json:"version,omitempty"`
-	Formatting string    `yaml:"formatting" json:"formatting,omitempty"`
-	Catalog    []Command `yaml:"catalog" json:"-"`
+	Schema     int         `yaml:"schema" json:"-"`
+	ID         string      `yaml:"id" json:"-"`
+	Name       string      `yaml:"name" json:"-"`
+	Kind       string      `yaml:"kind" json:"kind,omitempty"`
+	Match      Match       `yaml:"match" json:"match"`
+	Protocol   Protocol    `yaml:"protocol" json:"-"`
+	HTTPAPI    *HTTPAPI    `yaml:"http_api" json:"http_api,omitempty"`
+	SourceRCON *SourceRCON `yaml:"source_rcon" json:"source_rcon,omitempty"`
+	Ports      Ports       `yaml:"ports" json:"ports"`
+	Syntax     Syntax      `yaml:"syntax" json:"syntax"`
+	Players    *Players    `yaml:"players" json:"players,omitempty"`
+	Stop       *Stop       `yaml:"stop" json:"stop,omitempty"`
+	Version    *Version    `yaml:"version" json:"version,omitempty"`
+	Formatting string      `yaml:"formatting" json:"formatting,omitempty"`
+	Catalog    []Command   `yaml:"catalog" json:"-"`
 	// ResearchedVersion, Sources and Status describe where the profile
 	// comes from (D-072): the game version the commands were researched
 	// for, the sources, and whether a run with a real server confirmed it.
 	ResearchedVersion string   `yaml:"researched_version" json:"-"`
 	Sources           []string `yaml:"sources" json:"-"`
 	Status            string   `yaml:"status" json:"-"`
+	// Set lists the fields the file sets itself, before the defaults are
+	// filled in (D-074): with several profiles on a server the topmost
+	// profile that sets a field wins.
+	// Stored always, also empty: a missing list marks rules stored before
+	// the fields were recorded.
+	Set []string `yaml:"-" json:"set"`
 }
+
+// Fields a profile can set; Effective merges them one by one (D-074).
+const (
+	FieldCaseSensitive = "syntax.case_sensitive"
+	FieldStripPrefix   = "syntax.strip_prefix"
+	FieldMaxLength     = "syntax.max_length"
+	FieldPlayerPattern = "syntax.player_pattern"
+	FieldSeparators    = "syntax.separators"
+	FieldGamePorts     = "ports.game"
+	FieldSteamConnect  = "ports.steam_connect"
+	FieldPlayers       = "players"
+	FieldStop          = "stop"
+	FieldVersion       = "version"
+	FieldFormatting    = "formatting"
+	FieldEndMarker     = "source_rcon.end_marker"
+)
+
+// mergedFields are the fields Effective merges one by one (D-074); each is
+// also its YAML path.
+var mergedFields = []string{
+	FieldCaseSensitive, FieldStripPrefix, FieldMaxLength, FieldPlayerPattern, FieldSeparators,
+	FieldGamePorts, FieldSteamConnect, FieldPlayers, FieldStop, FieldVersion, FieldFormatting,
+	FieldEndMarker,
+}
+
+// setFields lists the fields the file writes itself, by the keys in the
+// YAML, so false, 0, "" and [] count as set (D-074).
+func setFields(file *ast.File) []string {
+	present := presentKeys(file)
+	out := []string{}
+	for _, f := range mergedFields {
+		if present[f] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// Sets reports whether the profile sets field itself.
+func (p *Profile) Sets(field string) bool { return slices.Contains(p.Set, field) }
 
 // Statuses of a profile (D-072): tested after a run with a real server,
 // untested otherwise; a profile without status is untested.
@@ -109,6 +160,13 @@ type Match struct {
 // D-071); the dialects are in the code, a profile describes no requests.
 type HTTPAPI struct {
 	Dialect string `yaml:"dialect" json:"dialect"`
+}
+
+// SourceRCON chooses how the end of a Source RCON response is found
+// (PROT-001): empty_response, the default, or none for servers that refuse
+// the empty marker packet and answer every command in one packet.
+type SourceRCON struct {
+	EndMarker string `yaml:"end_marker" json:"end_marker"`
 }
 
 // Protocol names the adapter and its default port.
@@ -217,6 +275,12 @@ func parse(data []byte) (*Profile, *ast.File, error) {
 	if prob := checkAliases(file); prob != "" {
 		return nil, file, &Error{Problems: []string{prob}}
 	}
+	if probs := checkNulls(file); len(probs) > 0 {
+		return nil, file, &Error{Problems: probs}
+	}
+	if probs := checkKeys(file); len(probs) > 0 {
+		return nil, file, &Error{Problems: probs}
+	}
 	var p Profile
 	if len(file.Docs) > 0 && file.Docs[0].Body != nil {
 		if err := yaml.NodeToValue(file.Docs[0].Body, &p, yaml.DisallowUnknownField()); err != nil {
@@ -226,6 +290,7 @@ func parse(data []byte) (*Profile, *ast.File, error) {
 	if probs := p.check(); len(probs) > 0 {
 		return nil, file, &Error{Problems: probs}
 	}
+	p.Set = setFields(file)
 	p.defaults()
 	return &p, file, nil
 }
@@ -262,6 +327,22 @@ func checkShape(tokens token.Tokens) string {
 		}
 	}
 	return ""
+}
+
+// checkNulls refuses null values, also a key without a value: a field is
+// either written with a value or left out; an empty value is written as
+// [] or "" (D-074).
+func checkNulls(file *ast.File) []string {
+	var probs []string
+	for _, doc := range file.Docs {
+		if doc == nil || doc.Body == nil {
+			continue
+		}
+		for _, n := range ast.Filter(ast.NullType, doc.Body) {
+			probs = append(probs, fmt.Sprintf("%s null not allowed; write [] or \"\" for an empty value", at(n.GetToken())))
+		}
+	}
+	return probs
 }
 
 // checkAliases refuses an alias inside an anchored value: anchors that
@@ -360,6 +441,13 @@ func (p *Profile) check() []string {
 	case p.Protocol.Type != httpapi.Protocol && p.HTTPAPI != nil:
 		bad("http_api is only for protocol.type %s", httpapi.Protocol)
 	}
+	switch {
+	case p.SourceRCON == nil:
+	case p.Protocol.Type != sourceRCON:
+		bad("source_rcon is only for protocol.type %s", sourceRCON)
+	case !source.KnownEndMarker(p.SourceRCON.EndMarker):
+		bad("source_rcon.end_marker must be one of %s", strings.Join(source.EndMarkers(), ", "))
+	}
 	if p.Protocol.DefaultPort < 1 || p.Protocol.DefaultPort > 65535 {
 		bad("protocol.default_port is required, 1 to 65535")
 	}
@@ -382,15 +470,15 @@ func (p *Profile) check() []string {
 		}
 	}
 	if pl := p.Players; pl != nil {
-		if strings.TrimSpace(pl.Command) == "" {
-			bad("players.command is required with players")
+		if strings.TrimSpace(pl.Command) == "" || hasControl(pl.Command) || len(pl.Command) > maxPathLen {
+			bad("players.command is required with players, printable, at most %d characters", maxPathLen)
 		}
 		if _, err := pattern.Compile(pl.Pattern, 1); err != nil {
 			bad("players.pattern: %v", err)
 		}
 	}
-	if p.Stop != nil && strings.TrimSpace(p.Stop.Command) == "" {
-		bad("stop.command is required with stop")
+	if p.Stop != nil && (strings.TrimSpace(p.Stop.Command) == "" || hasControl(p.Stop.Command) || len(p.Stop.Command) > maxPathLen) {
+		bad("stop.command is required with stop, printable, at most %d characters", maxPathLen)
 	}
 	if p.Version != nil {
 		if _, err := pattern.Compile(p.Version.Pattern, 1); err != nil {

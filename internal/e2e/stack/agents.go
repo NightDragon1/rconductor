@@ -297,7 +297,7 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 		return err
 	}
 
-	if err := pendingAgent(ctx, admin, agentAddr, root); err != nil {
+	if err := pendingAgent(ctx, admin, agentAddr, root, "host-3"); err != nil {
 		return err
 	}
 	// host-legacy is older; a test ties a server of its own to it (AGT-013).
@@ -326,7 +326,7 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 	} {
 		var srv struct{ ID string }
 		if err := admin.call(http.MethodPost, "/servers", map[string]any{
-			"name": s.name, "profile_id": profile, "host": host, "port": s.port, "password": s.password,
+			"name": s.name, "profile_ids": []string{profile}, "host": host, "port": s.port, "password": s.password,
 			"agent_id": hostID, "container_name": "mc-" + s.name,
 		}, &srv); err != nil {
 			return err
@@ -337,7 +337,7 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 	// candidate 16).
 	var outpost struct{ ID string }
 	if err := admin.call(http.MethodPost, "/servers", map[string]any{
-		"name": "outpost", "profile_id": profile, "host": host, "port": p, "password": rconPassword,
+		"name": "outpost", "profile_ids": []string{profile}, "host": host, "port": p, "password": rconPassword,
 	}, &outpost); err != nil {
 		return err
 	}
@@ -347,7 +347,7 @@ func seedHosts(ctx context.Context, admin *client, panel, o, agentAddr, root, ga
 	hp, _ := strconv.Atoi(hostilePort)
 	var hostile struct{ ID string }
 	if err := admin.call(http.MethodPost, "/servers", map[string]any{
-		"name": "hostile", "profile_id": profile, "host": hostileHost, "port": hp, "password": rconPassword,
+		"name": "hostile", "profile_ids": []string{profile}, "host": hostileHost, "port": hp, "password": rconPassword,
 		"agent_id": hostID, "container_name": hostileContainer,
 	}, &hostile); err != nil {
 		return err
@@ -424,7 +424,7 @@ func waitConnected(admin *client, id string) error {
 // pendingAgent leaves an agent waiting for approval by fingerprint (way
 // B, AGT-005): pairing by fingerprint is on only until it waits, then off
 // again, as by default. The agent keeps trying and connects once approved.
-func pendingAgent(ctx context.Context, admin *client, agentAddr, root string) error {
+func pendingAgent(ctx context.Context, admin *client, agentAddr, root, name string) error {
 	if err := admin.call(http.MethodPatch, "/settings", map[string]bool{"agents.fingerprint_pairing": true}, nil); err != nil {
 		return err
 	}
@@ -432,7 +432,7 @@ func pendingAgent(ctx context.Context, admin *client, agentAddr, root string) er
 	if err != nil {
 		return err
 	}
-	cfg := config.Agent{PanelAddr: agentAddr, SecretsDir: dir, Name: "host-3",
+	cfg := config.Agent{PanelAddr: agentAddr, SecretsDir: dir, Name: name,
 		LabelKey: "rconductor.manage", LabelValue: "true", Log: config.Log{Format: "json"}}
 	a, err := agent.New(cfg, slog.New(slog.NewJSONHandler(io.Discard, nil)), idleHost{&fakeHost{}})
 	if err != nil {
@@ -448,11 +448,11 @@ func pendingAgent(ctx context.Context, admin *client, agentAddr, root string) er
 			return err
 		}
 		for _, it := range list.Items {
-			if it.Name == "host-3" && it.Status == "pending" {
+			if it.Name == name && it.Status == "pending" {
 				return admin.call(http.MethodPatch, "/settings", map[string]bool{"agents.fingerprint_pairing": false}, nil)
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return errors.New("agent host-3 not pending")
+	return fmt.Errorf("agent %s not pending", name)
 }

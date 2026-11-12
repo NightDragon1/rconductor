@@ -433,7 +433,7 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateServer
-      summary: Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin only.
+      summary: Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076).
       tags: [servers]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
@@ -2236,9 +2236,22 @@ components:
           description: The game profile defines a player list.
         players:
           type: array
-          description: Player names; foreign data (SEC-006).
+          description: >-
+            Player names; foreign data (SEC-006). Empty when the game gives
+            no names (protocol http-api, such as Satisfactory); count then
+            tells how many are online.
           items:
             type: string
+        count:
+          type: integer
+          minimum: 0
+          description: >-
+            Players online; for a game without names the only value. Missing
+            while unknown (PROT-003).
+        max:
+          type: integer
+          minimum: 1
+          description: Player limit of the server, if the game tells it; missing otherwise.
         updated_at:
           type: string
           format: date-time
@@ -2404,9 +2417,14 @@ components:
           format: uuid
         name:
           type: string
-        profile_id:
-          type: string
-          format: uuid
+        profile_ids:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+            format: uuid
+          description: >-
+            Game profiles of the server, top first (SRV-008, D-074): for each value the topmost profile that sets it wins; the catalog is the union, wrappers of all profiles hold.
         groups:
           type: array
           items:
@@ -2417,10 +2435,12 @@ components:
           description: Admins only.
         host:
           type: string
-          description: Admins only.
+          description: >-
+            RCON admin only; the server admin sees of the ports only the
+            game ports (D-056).
         port:
           type: integer
-          description: Admins only.
+          description: RCON port; RCON admin only (D-056).
         credentials:
           type: string
           enum: [ok, missing, reenter]
@@ -2474,9 +2494,14 @@ components:
           type: string
           minLength: 1
           maxLength: 64
-        profile_id:
-          type: string
-          format: uuid
+        profile_ids:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+            format: uuid
+          description: >-
+            Game profiles of the server, top first (SRV-008, D-074); all with the same protocol, for http-api the same dialect. Replaces the list as a whole.
         host:
           type: string
           minLength: 1
@@ -2522,9 +2547,14 @@ components:
           type: string
           format: uuid
           description: The server being edited; missing when a new one is created.
-        profile_id:
-          type: string
-          format: uuid
+        profile_ids:
+          type: array
+          maxItems: 16
+          items:
+            type: string
+            format: uuid
+          description: >-
+            Game profiles to test with, top first (SRV-008); the protocol, dialect and default port come from them.
         host:
           type: string
           minLength: 1
@@ -2687,7 +2717,8 @@ components:
           type: string
           description: >-
             steam://connect link to the published game port, when the
-            profile sets ports.steam_connect; host is the server's host.
+            profile sets ports.steam_connect; host is the server's host, so
+            the RCON admin only (D-056).
 
     VolumeRuntime:
       type: object
@@ -2983,6 +3014,9 @@ components:
         payload:
           type: object
           additionalProperties: true
+          description: >-
+            Details of the action; host and RCON port of a server only for
+            the RCON admin (D-056).
         result:
           type: string
           enum: [ok, denied, error, timeout]

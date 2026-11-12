@@ -106,7 +106,7 @@ function GroupPanel({
   const { t } = useTranslation();
   const panel = useReveal<HTMLElement>();
   const qc = useQueryClient();
-  const { saved } = useUndo();
+  const { saved, saving } = useUndo();
   const users = useManagedUsers();
   const lists = useCommandLists(true);
   const servers = useServers();
@@ -125,8 +125,11 @@ function GroupPanel({
   const listId = useId();
 
   const userName = (id: string) => users.data?.find((u) => u.id === id)?.pseudonym ?? id;
-  const serverName = (id?: string) => servers.data?.find((s) => s.id === id)?.name ?? id ?? '';
-  const sgName = (id?: string) => serverGroups.data?.find((g) => g.id === id)?.name ?? id ?? '';
+  // An ID the caller's lists do not know never shows as a name.
+  const serverName = (id?: string) =>
+    servers.data?.find((s) => s.id === id)?.name ?? t('admin.unknownServer');
+  const sgName = (id?: string) =>
+    serverGroups.data?.find((g) => g.id === id)?.name ?? t('admin.unknownServerGroup');
   // A moderator group takes only moderators (Design 2.2).
   const candidates = (users.data ?? []).filter(
     (u) => !draft.members.includes(u.id) && (draft.kind !== 'moderator' || u.role === 'moderator'),
@@ -135,19 +138,21 @@ function GroupPanel({
   // Edits change the draft; Save sends it at once (D-048).
   const write = async (from: UserGroup, to: UserGroup) => {
     let done = null as UserGroup | null;
-    const r = await outcome(group.id, async () => {
-      done = must(
-        await patchVersioned('/user-groups/{id}', from.version, {
-          path: { id: group.id },
-          body: {
-            name: to.name,
-            command_list_id: to.command_list_id ?? '',
-            members: to.members,
-            grants: to.grants,
-          },
-        }),
-      );
-    });
+    const r = await saving(
+      outcome(group.id, async () => {
+        done = must(
+          await patchVersioned('/user-groups/{id}', from.version, {
+            path: { id: group.id },
+            body: {
+              name: to.name,
+              command_list_id: to.command_list_id ?? '',
+              members: to.members,
+              grants: to.grants,
+            },
+          }),
+        );
+      }),
+    );
     if (r.reason === 'conflict') {
       setConflict(true);
       setMessage({ ok: false, text: t('admin.conflict') });

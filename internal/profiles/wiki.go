@@ -68,7 +68,7 @@ This page is generated from ` + "`profiles/`" + ` by ` + "`scripts/wiki-supporte
 		}
 		sources := make([]string, 0, len(p.Sources))
 		for _, s := range p.Sources {
-			sources = append(sources, source(s))
+			sources = append(sources, sourceLink(s))
 		}
 		src := strings.Join(sources, ", ")
 		if src == "" {
@@ -87,10 +87,10 @@ func cell(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// source is one source as a link: the first word, if it is an http(s)
+// sourceLink is one source as a link: the first word, if it is an http(s)
 // URL, becomes the link and the rest stays as a note behind it; any other
 // source stays text.
-func source(s string) string {
+func sourceLink(s string) string {
 	link, note, _ := strings.Cut(strings.TrimSpace(s), " ")
 	u, err := url.Parse(link)
 	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {

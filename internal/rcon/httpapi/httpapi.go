@@ -80,10 +80,7 @@ type Dialect interface {
 
 // Players are the players online: the count, the limit (0 if unknown) and
 // the names, if the game gives them.
-type Players struct {
-	Count, Max int
-	Names      []string
-}
+type Players = rcon.Players
 
 // dialects are the games, fixed in the code; a profile only names one.
 var dialects = map[string]Dialect{}
@@ -278,10 +275,11 @@ type Conn struct {
 }
 
 var (
-	_ rcon.Conn       = (*Conn)(nil)
-	_ rcon.Pinger     = (*Conn)(nil)
-	_ rcon.Concurrent = (*Conn)(nil)
-	_ rcon.PinnedConn = (*Conn)(nil)
+	_ rcon.Conn          = (*Conn)(nil)
+	_ rcon.Pinger        = (*Conn)(nil)
+	_ rcon.Concurrent    = (*Conn)(nil)
+	_ rcon.PinnedConn    = (*Conn)(nil)
+	_ rcon.PlayerCounter = (*Conn)(nil)
 )
 
 func (c *Conn) seen(cert rcon.Certificate) { c.cert.Store(&cert) }

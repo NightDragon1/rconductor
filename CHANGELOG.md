@@ -7,6 +7,7 @@
 - The game version from the container logs shows on the cards and the server page, for every role that sees the server (AGT-006).
 - The used size of each volume is measured in the background; the API gives it with its age (AGT-007).
 - Ports and volumes on the cards and the server page, with a Steam connect link where the game profile sets `ports.steam_connect` (UI-005). Game profiles with `ports.steam_connect` fail the profile check of panel 1.0.
+- The Steam connect link shows the server's host, so only the RCON admin gets it; the server admin sees the game ports without it, and no longer host and RCON port either (UI-005, ROLE-003).
 - Topology page: host → agent → game server by server group, for RCON admin and server admin (UI-010).
 - Mail over SMTP: the RCON admin sets up host, port, encryption (STARTTLS, SSL/TLS or none), user, password and sender and sends a test mail from the settings (NFR-017).
 - Two-factor sign-in with an authenticator app (TOTP), optional for everyone or required by the RCON admin; recovery by mail to the address in the profile, or a reset by whoever manages the user (AUTH-008).
@@ -19,6 +20,21 @@
 - Game profiles name their origin: `researched_version`, `sources` and `status` (`tested` or `untested`, default `untested`); the shipped profiles use them instead of source comments. Profiles with these fields fail the profile check of panel 1.0 (CAT-001, CAT-007, DOC-005).
 - A command that the game runs and reports as failed (Satisfactory) shows as error with the game's text; the single-command API gives `result` and `reason` (`command_failed`) like history and multi-command (PROT-003).
 - Servers with an HTTPS API: the end of validity of the trusted certificate is stored and given with the server and the connection test; the trust holds regardless of it. The technical notes describe renewal and trusting again (PROT-003).
+- A server has an ordered list of game profiles, such as a modpack above its game: for each value the topmost profile that sets it wins, the command catalog is the union, wrappers of all profiles hold. All profiles need the same protocol. The server admin may change the list on servers in his scope. Servers of panel 1.0 keep their profile as the only entry (SRV-008, CAT-007).
+- API: the server field `profile_id` is replaced by the list `profile_ids`, top first; scripts that use `profile_id` must change (SRV-008).
+- Deleting a server, server group or user group now also removes the server scopes, moderator grants and supporter grants that name it, each with an audit entry `assignment.remove`. The update removes those left behind by earlier deletions the same way, without actor. The user panel shows only the stored scope, never the ID of an unknown server (ROLE-003, ROLE-004, ROLE-007).
+- Fixed: Factorio servers answered no command, because Factorio refuses the empty packet that marks the end of an answer; the panel ran into its timeout and reconnected. Game profiles now choose the end of an answer with `source_rcon.end_marker` (`empty_response`, the default, or `none`); the Factorio profile sets `none`. Panel 1.0 had the same problem with own Factorio profiles. With `none` the panel sends neither the end packet nor the idle packet. Profiles with `source_rcon` fail the profile check of panel 1.0 (PROT-001).
+- Fixed: an RCON answer over the packet limit of 64 KiB no longer shifts later answers on the same connection, as it could since 1.0; the panel refuses that answer and connects again, and each later command gets its own answer (PROT-001, PROT-002).
+- The console shows a hint when every command of the server starts with `/`, as in Factorio, and the input does not; Factorio takes such input as chat and does not answer. The input stays as typed (CMD-015, CAT-005).
+- Built with Go 1.27.4, which includes a security fix in net/http (SEC-013).
+- Rate limits count IPv6 clients per /64; when a limit's client table is full, new clients share an overflow limit instead of being refused or resetting the table (AUTH-008, CMD-019, NFR-017, AGT-003).
+- A recovery request is answered at once and handled in the background by a bounded pool; new settings `auth.recovery_workers` (default 4) and `auth.recovery_queue` (default 100). Requests beyond the queue get the same answer and are logged as `auth.recovery.dropped`, counted per minute (AUTH-008).
+- The game profile list of a server never changes its protocol, dialect or port; only the RCON admin changes the protocol, together with a new password, and the trusted certificate is then dropped (SRV-008).
+- Stricter game profile check: a field counts as set by its key in every YAML form; `null` values, keys that are not strings, and control characters in `players.command` and `stop.command` are refused; command separators of all profiles of a server hold like wrappers; a later import cannot change the protocol or dialect of a profile in use (SRV-008, CAT-005, CAT-007).
+- The player count of servers with an HTTPS API shows on the cards, without names (PROT-003).
+- Fixed: the theme switch shows whether light, dark or auto is active; servers no longer show as stopped after the agent restarts; leaving a page during a running save waits for the save; a certificate change on an open HTTPS-API connection sets the server status at once (UI-001, AGT-003, UI-008, PROT-003).
+- Fixed: using a second-factor code and taking the open sign-in happen in one step, so a repeated code can no longer end a valid sign-in (AUTH-008).
+- Fixed: a sign-in ends the own session that was sent along (AUTH-006).
 
 ## 1.0
 

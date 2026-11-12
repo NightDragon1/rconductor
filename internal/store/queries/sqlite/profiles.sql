@@ -3,6 +3,11 @@
 -- name: GetProfileBySlug :one
 SELECT id, slug, content_hash, overridden FROM game_profiles WHERE slug = ?;
 
+-- name: CountProfileServers :one
+-- Servers that have the profile on their list (SRV-008).
+SELECT count(*) FROM server_profiles sp JOIN servers s ON s.id = sp.server_id
+WHERE sp.profile_id = ? AND s.deleted_at IS NULL;
+
 -- name: InsertGameProfile :exec
 INSERT INTO game_profiles (id, slug, name, protocol, default_port, rules, source_file, content_hash, overridden, imported_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

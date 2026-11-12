@@ -30,7 +30,7 @@ func uuids(ids []string) []uuid.UUID {
 func toAPIServer(s servers.Server) api.Server {
 	id, _ := uuid.Parse(s.ID)
 	out := api.Server{
-		Id: id, Name: s.Name, ProfileId: uuidPtr(s.ProfileID), Groups: uuids(s.GroupIDs),
+		Id: id, Name: s.Name, ProfileIds: profileIDs(s.ProfileIDs), Groups: uuids(s.GroupIDs),
 		Status: api.ServerStatus(s.Status), StatusSince: s.StatusSince,
 	}
 	if !s.Detailed {
@@ -41,20 +41,24 @@ func toAPIServer(s servers.Server) api.Server {
 	for _, p := range s.GamePorts {
 		ports = append(ports, api.GamePort{Port: p.Port, Proto: api.GamePortProto(p.Proto), Name: p.Name})
 	}
-	out.Protocol, out.Host, out.Port, out.Credentials = &s.Protocol, &s.Host, &s.Port, &cred
+	out.Protocol, out.Credentials = &s.Protocol, &cred
 	out.AgentId, out.ContainerName = strPtr(s.AgentID), strPtr(s.ContainerName)
 	out.GamePorts, out.GamePortsOverride = &ports, &s.GamePortsOverride
 	out.TlsFingerprint = strPtr(s.TLSFingerprint)
 	out.TlsNotAfter = s.TLSNotAfter
+	if s.Connection {
+		// Host and RCON port: the RCON admin only (D-056).
+		out.Host, out.Port = &s.Host, &s.Port
+	}
 	return out
 }
 
-func serverInput(b *api.ServerInput) servers.Input {
+func serverInput(b *api.ServerInput) (servers.Input, error) {
 	in := servers.Input{Name: b.Name, Host: b.Host, Port: b.Port, AgentID: b.AgentId, ContainerName: b.ContainerName,
 		TLSFingerprint: b.TlsFingerprint}
-	if b.ProfileId != nil {
-		p := b.ProfileId.String()
-		in.ProfileID = &p
+	if b.ProfileIds != nil {
+		list := strIDs(*b.ProfileIds)
+		in.ProfileIDs = &list
 	}
 	if b.Password != nil {
 		pw := logging.Secret(*b.Password)
@@ -67,7 +71,7 @@ func serverInput(b *api.ServerInput) servers.Input {
 		}
 		in.GamePorts = &ports
 	}
-	return in
+	return in, nil
 }
 
 func bodyRequired() error {
@@ -90,7 +94,11 @@ func (s *apiServer) CreateServer(ctx context.Context, req api.CreateServerReques
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	sv, err := s.servers.Create(ctx, adminRequest(ctx), serverInput(req.Body))
+	in, err := serverInput(req.Body)
+	if err != nil {
+		return nil, adminError(err)
+	}
+	sv, err := s.servers.Create(ctx, adminRequest(ctx), in)
 	if err != nil {
 		return nil, adminError(err)
 	}
@@ -105,9 +113,9 @@ func (s *apiServer) TestServerConnection(ctx context.Context, req api.TestServer
 	if id := req.Body.ServerId; id != nil {
 		in.ServerID = id.String()
 	}
-	if id := req.Body.ProfileId; id != nil {
-		v := id.String()
-		in.ProfileID = &v
+	if ids := req.Body.ProfileIds; ids != nil {
+		list := strIDs(*ids)
+		in.ProfileIDs = &list
 	}
 	if pw := req.Body.Password; pw != nil {
 		v := logging.Secret(*pw)
@@ -140,7 +148,10 @@ func (s *apiServer) UpdateServer(ctx context.Context, req api.UpdateServerReques
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	in := serverInput(req.Body)
+	in, err := serverInput(req.Body)
+	if err != nil {
+		return nil, adminError(err)
+	}
 	in.Version = ifMatch(req.Params.IfMatch)
 	sv, err := s.servers.Update(ctx, adminRequest(ctx), req.Id.String(), in)
 	if err != nil {
@@ -368,5 +379,24 @@ func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Serv
 func (s *apiServer) apiServerGroup(ctx context.Context, g servers.Group) api.ServerGroup {
 	out := toAPIServerGroup(g)
 	out.Version = s.serverGroupVersions(ctx)[g.ID]
+	return out
+}
+
+// profileIDs is the profile list of a server, top first (SRV-008).
+func profileIDs(list []string) *[]uuid.UUID {
+	out := make([]uuid.UUID, 0, len(list))
+	for _, id := range list {
+		if u, err := uuid.Parse(id); err == nil {
+			out = append(out, u)
+		}
+	}
+	return &out
+}
+
+func strIDs(list []uuid.UUID) []string {
+	out := make([]string, len(list))
+	for i, u := range list {
+		out[i] = u.String()
+	}
 	return out
 }

@@ -26,7 +26,13 @@ func (s *apiServer) GetPlayers(ctx context.Context, req api.GetPlayersRequestObj
 	if p.Unknown {
 		return api.GetPlayers200JSONResponse(api.PlayerList{Available: false, Players: []string{}}), nil
 	}
-	out := api.PlayerList{Available: true, Players: p.Names, Stale: p.Stale}
+	// count always; max only if the game tells it (PROT-003).
+	count := p.Count
+	out := api.PlayerList{Available: true, Players: p.Names, Stale: p.Stale, Count: &count}
+	if p.Max > 0 {
+		limit := p.Max
+		out.Max = &limit
+	}
 	if out.Players == nil {
 		out.Players = []string{}
 	}

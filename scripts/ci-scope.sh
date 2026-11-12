@@ -10,11 +10,17 @@
 #   sqlc       the sqlc diff is due, by the changed paths
 # Nightly, manual and tag runs do everything. Without a usable base commit
 # (first push of a branch, force push) all paths count as changed.
+# Every changed path counts as it is: names come NUL-separated and
+# unquoted, a moved file with its old and its new path. A path outside the
+# known top-level entries, or a diff that fails, turns every stage on.
 # Needs EVENT, REF and BASE from the workflow.
 set -eu
+export LC_ALL=C
 E2E='^(web/|api/|internal/|cmd/|migrations/|profiles/|go\.(mod|sum)$|Makefile$|\.github/workflows/|scripts/ci-scope\.sh$)'
 MINECRAFT='^(internal/(rcon|connmgr)/|internal/app/minecraft_test\.go$|profiles/|scripts/minecraft|\.github/workflows/|scripts/ci-scope\.sh$)'
 SQLC='^(migrations/|internal/store/queries/|internal/store/sqlitedb/|sqlc\.yaml$)'
+# Paths that need none of these stages.
+NONE='^(\.claude/|\.github/|\.githooks/|deploy/|docs/|scripts/|tools/|\.dockerignore$|\.editorconfig$|\.gitattributes$|\.gitignore$|\.golangci\.yml$|CHANGELOG\.md$|CLAUDE\.md$|CONTRIBUTING\.md$|Dockerfile$|LICENSE$|README\.md$|SECURITY\.md$|THIRD_PARTY_NOTICES\.md$|renovate\.json$)'
 
 case "$EVENT:$REF" in
   schedule:* | workflow_dispatch:* | *:refs/tags/v*) stage2=true stage3=true ;;
@@ -24,10 +30,28 @@ esac
 
 e2e=true minecraft=true sqlc=true
 if [ "$stage3" = false ] && git cat-file -e "${BASE:-none}^{commit}" 2>/dev/null; then
-  changed=$(git diff --name-only "$BASE" HEAD)
-  printf '%s\n' "$changed" | grep -qE "$E2E" || e2e=false
-  printf '%s\n' "$changed" | grep -qE "$MINECRAFT" || minecraft=false
-  printf '%s\n' "$changed" | grep -qE "$SQLC" || sqlc=false
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  if git -c core.quotePath=false diff --no-renames --name-only -z "$BASE" HEAD >"$tmp/z"; then
+    # One path per line; a newline inside a name becomes \001, so the
+    # name stays one line and keeps its leading directories.
+    tr '\n\000' '\001\n' <"$tmp/z" >"$tmp/paths"
+    # Due unless grep finds no line; a grep error counts as due.
+    due() {
+      rc=0
+      grep -qE "$1" "$tmp/paths" || rc=$?
+      [ "$rc" -eq 1 ] && echo false || echo true
+    }
+    # Only when every path is known (grep -v finds no line) the stages
+    # follow the paths; otherwise all stay on.
+    rc=0
+    grep -vE "$E2E|$MINECRAFT|$SQLC|$NONE" "$tmp/paths" >/dev/null || rc=$?
+    if [ "$rc" -eq 1 ]; then
+      e2e=$(due "$E2E")
+      minecraft=$(due "$MINECRAFT")
+      sqlc=$(due "$SQLC")
+    fi
+  fi
 fi
 
 echo "stage2=$stage2"

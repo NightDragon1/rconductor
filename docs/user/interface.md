@@ -17,7 +17,7 @@ Entries you may not use are hidden, not greyed out.
 | Users | yes | moderators, supporters | supporters, if released | – |
 | Groups | yes | moderator groups | – | – |
 | Command lists | yes | own | – | – |
-| Servers and groups | yes | read-only, in scope | – | – |
+| Servers and groups | yes | read-only, in scope; game profiles of a server | – | – |
 | Agents | yes | – | – | – |
 | Settings | yes | – | – | – |
 
@@ -58,7 +58,8 @@ The server admin sees the game ports of his servers, the RCON admin also the RCO
 port and every other published port of the container. A port that is not
 published on the host is marked so. If the game profile sets `ports.steam_connect:
 true`, a published game port gets a Connect link (`steam://connect/<host>:<port>`,
-with the server's host). Volumes show with name and, once the agent has measured
+with the server's host); as it shows the host, only the RCON admin sees it.
+Volumes show with name and, once the agent has measured
 it, their size and when it was measured.
 
 ## Server page
@@ -76,7 +77,9 @@ restart mechanism is in place, such as Docker `restart: unless-stopped`.
 | History | all | past commands by role (see [roles](roles.md#who-sees-what)); (new in 1.1) moderators and supporters also see those of the others on their servers, a switch shows only your own |
 
 In the console, Tab takes the first suggestion and the arrow keys walk through your
-own commands.
+own commands. When every command of the server starts with `/`, as in Factorio, input
+without the `/` shows a hint before you send it: such games may take it as chat and
+not answer. The console leaves the text as you typed it.
 
 ### Several servers (new in 1.1)
 
@@ -111,6 +114,17 @@ someone else changed the object in the meantime, you see "Changed by someone els
 reload" and nothing is overwritten.
 
 Keyboard shortcuts are off unless the RCON admin switches them on.
+
+### Game profiles of a server
+
+In the server form, Game profiles is a list, top first. **+** adds a profile, **−**
+removes one. Drag a profile, or use its move buttons, to change the order. A new
+specific profile goes above the topmost generic one, a new generic one to the end.
+If a generic profile stands above a specific one, a hint says so; you can still
+save. All profiles need the same protocol, otherwise saving is refused. The server
+admin can change this list on the servers of his scope, but no other field of the
+server. How the profiles combine is in the [technical
+notes](technical.md#several-profiles-per-server).
 
 ## On a phone
 

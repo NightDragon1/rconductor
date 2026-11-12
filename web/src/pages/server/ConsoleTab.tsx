@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import {
   isRunning,
   MAX_COMMANDS,
+  missingSlash,
   ownCommands,
   suggest,
   visible,
@@ -136,6 +137,18 @@ function LogView({ b }: { b: Extract<Block, { kind: 'log' }> }) {
         <ForeignText text={b.lines.map((l) => stripCodes(l)).join('\n')} />
       </pre>
     </section>
+  );
+}
+
+// SlashHint warns before sending when every command of the server starts
+// with "/" and the input does not (CAT-005); it never changes the input.
+export function SlashHint({ paths, input }: { paths: string[]; input: string }) {
+  const { t } = useTranslation();
+  if (!missingSlash(paths, input)) return null;
+  return (
+    <p role="status" className="mt-1 text-xs text-warn">
+      {t('console.slashHint')}
+    </p>
   );
 }
 
@@ -457,6 +470,7 @@ export function ConsoleTab() {
               {t('console.send')}
             </Button>
           </div>
+          <SlashHint paths={paths} input={input} />
           <p className="mt-1 text-xs text-muted max-md:hidden">{t('console.hint')}</p>
         </form>
       </section>

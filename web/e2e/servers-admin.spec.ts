@@ -19,7 +19,7 @@ test('a server with profile, host, port, password and an agent container (SRV-00
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
   await panel.getByLabel('Name').fill('e2e-new');
-  await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
   await panel.getByLabel('Host').fill('mc.example');
   await panel.getByLabel('RCON port').fill('25575');
   await panel.getByLabel('RCON password').fill('a secret rcon password');
@@ -72,7 +72,7 @@ test('a server needs no agent (SRV-001)', async ({ page, state }) => {
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
   await panel.getByLabel('Name').fill('e2e-plain');
-  await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
   await panel.getByLabel('Host').fill('mc.example');
   await panel.getByLabel('RCON port').fill('25575');
   await panel.getByLabel('RCON password').fill('a secret rcon password');
@@ -125,20 +125,31 @@ test('a server can be in several server groups (SRV-003)', async ({ page, state 
   await expect(survival).not.toContainText('e2e-group');
 });
 
-test('the server admin reads servers and groups only (Design 6.2)', async ({ page, state }) => {
+test('the server admin changes only the profile list (Design 6.2, SRV-008)', async ({
+  page,
+  state,
+}) => {
   await as(page, state, 'sadmin', 'admin/servers', 'Servers and groups');
   await expect(page.getByRole('button', { name: 'New server' })).toHaveCount(0);
   await page.getByRole('button', { name: 'survival', exact: true }).click();
   const panel = page.getByRole('complementary', { name: 'Details of survival' });
   await expect(panel.getByLabel('Name')).toBeDisabled();
-  await expect(panel.getByRole('button', { name: 'Save' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Save' })).toHaveCount(1);
+  await expect(panel.getByRole('button', { name: 'Test connection' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Delete server …' })).toHaveCount(0);
   await expect(panel.getByLabel('RCON password')).toHaveCount(0);
 });
 
 test('pairing dialog with token and Compose; approval by fingerprint (AGT-005)', async ({
   page,
+  request,
   state,
 }) => {
+  // Each run approves a pairing of its own: an approved agent stays
+  // paired, so the one seeded at the start of the stack serves only once.
+  const started = await request.post(`${state.control_url}/pending-agent`);
+  expect(started.ok()).toBe(true);
+  const { name } = (await started.json()) as { name: string };
   await as(page, state, 'admin', 'admin/agents', 'Agents');
   // Pairing by fingerprint is off by default.
   await expect(page.getByLabel('Pairing by fingerprint')).not.toBeChecked();
@@ -150,11 +161,13 @@ test('pairing dialog with token and Compose; approval by fingerprint (AGT-005)',
   await expect(compose).toContainText(/rcd1\./);
   await dialog.getByRole('button', { name: 'Close' }).click();
 
-  // A pairing that waits since the stack started is approved here.
-  const waiting = page.getByRole('row').filter({ hasText: 'host-3' });
+  // The waiting pairing is approved here.
+  const waiting = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name, exact: true }) });
   await expect(waiting).toContainText('waiting for approval');
   await waiting.getByRole('button', { name: 'Approve' }).click();
-  await expect(page.getByRole('status')).toHaveText('host-3 approved.');
+  await expect(page.getByRole('status')).toHaveText(`${name} approved.`);
   await expect(waiting).not.toContainText('waiting for approval');
 });
 
@@ -183,7 +196,7 @@ test('test connection reports the state without saving (SRV-007)', async ({ page
   await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
-  await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
   await panel.getByLabel('Host').fill('127.0.0.1');
   await panel.getByLabel('RCON port').fill('1');
   await panel.getByLabel('RCON password').fill('some password');
@@ -202,25 +215,109 @@ test('test connection reports the state without saving (SRV-007)', async ({ page
 
 test('a refused input shows the reason of the backend (UI-016)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
-  for (const name of ['e2e-twice', 'e2e-twice']) {
+  const panel = page.getByRole('complementary', { name: 'Details of New server' });
+  const row = page.getByRole('row').filter({ hasText: 'e2e-twice' });
+  for (const first of [true, false]) {
     await page.getByRole('button', { name: 'New server' }).click();
-    const panel = page.getByRole('complementary', { name: 'Details of New server' });
-    await panel.getByLabel('Name').fill(name);
-    await panel.getByLabel('Game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+    await panel.getByLabel('Name').fill('e2e-twice');
+    await panel
+      .getByLabel('Add a game profile')
+      .selectOption({ label: 'Minecraft (Java Edition)' });
     await panel.getByLabel('Host').fill('twice.example');
     await panel.getByLabel('RCON port').fill('25575');
     await panel.getByLabel('RCON password').fill('a secret rcon password');
     await panel.getByRole('button', { name: 'Create server' }).click();
+    if (first) {
+      // The second server is made only once the first one exists.
+      await expect(row).toHaveCount(1);
+      await expect(panel).toHaveCount(0);
+    }
   }
-  const panel = page.getByRole('complementary', { name: 'Details of New server' });
   await expect(panel.getByText('a server with this name exists')).toBeVisible();
   await expect(panel.getByText('Not possible this way')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Close the details' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Discard changes' }).click();
-  const row = page.getByRole('row').filter({ hasText: 'e2e-twice' });
   await row.getByRole('button', { name: 'e2e-twice' }).click();
   const opened = page.getByRole('complementary', { name: 'Details of e2e-twice' });
   await opened.getByRole('button', { name: 'Delete server …' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
   await expect(row).toHaveCount(0);
+});
+
+// hold keeps every create request of a server back until release.
+async function hold(page: Page) {
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route('**/api/v1/servers', async (route) => {
+    if (route.request().method() === 'POST') await held;
+    await route.continue();
+  });
+  const answered = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/servers'),
+  );
+  return { release, answered };
+}
+
+async function fillNewServer(page: Page, name: string) {
+  await page.getByRole('button', { name: 'New server' }).click();
+  const panel = page.getByRole('complementary', { name: 'Details of New server' });
+  await panel.getByLabel('Name').fill(name);
+  await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
+  await panel.getByLabel('Host').fill('saving.example');
+  await panel.getByLabel('RCON port').fill('25575');
+  await panel.getByLabel('RCON password').fill('a secret rcon password');
+  return panel;
+}
+
+test('leaving waits for a running save and goes on once saved (UI-008)', async ({
+  page,
+  state,
+}) => {
+  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  const { release, answered } = await hold(page);
+  const panel = await fillNewServer(page, 'e2e-saving');
+  await panel.getByRole('button', { name: 'Create server' }).click();
+  // The next panel is asked for before the create is answered.
+  await page.getByRole('button', { name: 'New server' }).click();
+  const question = page.getByRole('dialog', { name: 'Leave without saving?' });
+  await expect(question).toHaveCount(0);
+
+  release();
+  expect((await answered).status()).toBe(201);
+  const row = page.getByRole('row').filter({ hasText: 'e2e-saving' });
+  await expect(row).toHaveCount(1);
+  await expect(panel.getByLabel('Name')).toHaveValue('');
+  await expect(question).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Close the details' }).click();
+  await expect(panel).toHaveCount(0);
+
+  await row.getByRole('button', { name: 'e2e-saving' }).click();
+  const opened = page.getByRole('complementary', { name: 'Details of e2e-saving' });
+  await opened.getByRole('button', { name: 'Delete server …' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
+  await expect(row).toHaveCount(0);
+});
+
+test('a navigation during a save that fails asks with the reason (UI-008)', async ({
+  page,
+  state,
+}) => {
+  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  const { release, answered } = await hold(page);
+  const panel = await fillNewServer(page, 'survival');
+  await panel.getByRole('button', { name: 'Create server' }).click();
+  // Another page is asked for before the create is answered.
+  await page.getByRole('link', { name: 'Agents' }).click();
+  const question = page.getByRole('dialog', { name: 'Leave without saving?' });
+  await expect(question).toHaveCount(0);
+
+  release();
+  expect((await answered).ok()).toBe(false);
+  await expect(question).toBeVisible();
+  await expect(question.getByRole('alert')).toHaveText('a server with this name exists');
+  await question.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+  await panel.getByRole('button', { name: 'Close the details' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes' }).click();
+  await expect(panel).toHaveCount(0);
 });

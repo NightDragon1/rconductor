@@ -15,6 +15,7 @@ import { useSession } from '@/api/session';
 import { useServer } from '@/api/live-servers';
 import { decimal, gib, span, useNow } from '@/lib/format';
 import { usePhone } from '@/lib/phone';
+import { topProfile } from '@/lib/profiles';
 import { agentCan, isAdmin, stripCodes, tabsFor } from '@/lib/serverpage';
 import { cardStatus, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
@@ -84,7 +85,7 @@ function Head({ server, role }: { server: Server; role?: string }) {
   const status = cardStatus(server);
   const tone = toneOf[status];
   const c = server.runtime?.container;
-  const profile = profiles.data?.find((p) => p.id === server.profile_id)?.name;
+  const profile = topProfile(t, server.profile_ids, profiles.data ?? []) || undefined;
   // Only the RCON admin may read the agents; the server admin sees the
   // state alone (F10).
   const agentName = agents.data?.find((a) => a.id === server.agent_id)?.name;

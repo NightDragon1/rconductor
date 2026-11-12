@@ -158,6 +158,8 @@ var settingRules = map[string]rule{
 	auth.SettingSecondFactorWindow: durationRule(auth.MinSecondFactorWindow, time.Hour),
 	auth.SettingRecoveryLifetime:   durationRule(auth.MinRecoveryLifetime, 24*time.Hour),
 	auth.SettingRecoveryPerHour:    intRule(auth.MinRecoveryPerHour, 100),
+	auth.SettingRecoveryWorkers:    intRule(auth.MinRecoveryWorkers, 64),
+	auth.SettingRecoveryQueue:      intRule(auth.MinRecoveryQueue, 10000),
 	SettingSMTPTimeout:             durationRule(MinSMTPTimeout, 5*time.Minute),
 	SettingSMTPTestPerMinute:       intRule(MinSMTPTestPerMinute, 60),
 	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),

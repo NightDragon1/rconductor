@@ -363,7 +363,7 @@ func TestChangesAreAudited(t *testing.T) {
 	f := newRightsFixture(t)
 	admin := f.as(rA)
 	var srv, sg, grp, list, inv struct{ ID string }
-	admin.must(http.MethodPost, "/servers", map[string]any{"name": "audited", "profile_id": f.profile(), "host": "127.0.0.1", "port": 1, "password": "x"}, &srv, http.StatusCreated)
+	admin.must(http.MethodPost, "/servers", map[string]any{"name": "audited", "profile_ids": []string{f.profile()}, "host": "127.0.0.1", "port": 1, "password": "x"}, &srv, http.StatusCreated)
 	admin.must(http.MethodPatch, "/servers/"+srv.ID, map[string]string{"name": "audited2"}, nil, http.StatusOK)
 	admin.must(http.MethodPost, "/server-groups", map[string]any{"name": "audited", "server_ids": []string{}}, &sg, http.StatusCreated)
 	admin.must(http.MethodPatch, "/server-groups/"+sg.ID, map[string]string{"name": "audited2"}, nil, http.StatusOK)
@@ -443,7 +443,7 @@ func newRestartable(t *testing.T, game *rcontest.Server, rconPassword string) *r
 	host, port, _ := net.SplitHostPort(game.Addr)
 	n, _ := strconv.Atoi(port)
 	var s struct{ ID string }
-	r.admin.must(http.MethodPost, "/servers", map[string]any{"name": "mc", "profile_id": profile, "host": host, "port": n, "password": rconPassword}, &s, http.StatusCreated)
+	r.admin.must(http.MethodPost, "/servers", map[string]any{"name": "mc", "profile_ids": []string{profile}, "host": host, "port": n, "password": rconPassword}, &s, http.StatusCreated)
 	r.server = s.ID
 	return r
 }
@@ -522,9 +522,13 @@ func TestPlayersAfterRestart(t *testing.T) {
 	r.waitServer("connected")
 	players := func() {
 		t.Helper()
-		var p struct{ Players []string }
+		var p struct {
+			Players []string
+			Count   *int
+		}
 		r.admin.must(http.MethodGet, "/servers/"+r.server+"/players", nil, &p, http.StatusOK)
-		if len(p.Players) != 1 || p.Players[0] != "Steve" {
+		// count comes with the names (PROT-003).
+		if len(p.Players) != 1 || p.Players[0] != "Steve" || p.Count == nil || *p.Count != 1 {
 			t.Errorf("players = %+v", p)
 		}
 	}
@@ -752,7 +756,7 @@ func TestLargestRequestsFit(t *testing.T) {
 		body               any
 	}{
 		{"login", http.MethodPost, "/auth/login", map[string]any{"pseudonym": text(64), "password": text(1024)}},
-		{"server", http.MethodPost, "/servers", map[string]any{"name": text(64), "host": text(253), "port": 65535, "password": text(512), "game_ports": ports, "agent_id": text(36), "container_name": text(255), "profile_id": uuid}},
+		{"server", http.MethodPost, "/servers", map[string]any{"name": text(64), "host": text(253), "port": 65535, "password": text(512), "game_ports": ports, "agent_id": text(36), "container_name": text(255), "profile_ids": []string{uuid}}},
 		{"command", http.MethodPost, "/servers/" + f.server + "/commands", map[string]any{"command": strings.Repeat("\u0001", 10000)}},
 		{"server group", http.MethodPost, "/server-groups", map[string]any{"name": text(64), "server_ids": ids}},
 		{"assignments", http.MethodPut, "/users/" + f.ids[rMN] + "/assignments", map[string]any{"admin_scopes": repeat(500, map[string]any{"server_id": uuid, "server_group_id": uuid}), "groups": repeat(500, uuid), "grants": repeat(500, grant), "supporter_grants": repeat(500, map[string]any{"moderator_id": uuid, "server_id": uuid})}},

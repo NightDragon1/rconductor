@@ -34,6 +34,8 @@ type hostBackend struct {
 	samples atomic.Int32
 	// ports are the ports of the container mc.
 	ports []agentproto.Port
+	// state is the state of mc in the snapshot; empty means running.
+	state string
 }
 
 func (b *hostBackend) Name() string { return "docker" }
@@ -45,7 +47,13 @@ func (b *hostBackend) Capabilities() []string {
 }
 
 func (b *hostBackend) Run(ctx context.Context, out agent.Sender) error {
-	snap := agentproto.Snapshot{Containers: []agentproto.Container{{ID: "c1", Name: "mc", State: "running", Image: "mc",
+	b.mu.Lock()
+	state := b.state
+	b.mu.Unlock()
+	if state == "" {
+		state = "running"
+	}
+	snap := agentproto.Snapshot{Containers: []agentproto.Container{{ID: "c1", Name: "mc", State: state, Image: "mc",
 		StartedAt: time.Now().UTC().Add(-time.Minute), Volumes: []string{"mc-data"}, Ports: b.ports}}}
 	if err := out.Send(ctx, agentproto.TypeSnapshot, "", snap); err != nil {
 		return err

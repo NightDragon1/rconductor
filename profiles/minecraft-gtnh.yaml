@@ -16,11 +16,15 @@ ports:
   game:
     - { port: 25565, proto: tcp, name: game }
 syntax:
+  # Set here although they equal the defaults: a specific profile sets every
+  # field that may differ from the generic one below it (D-074).
   case_sensitive: false
   strip_prefix: "/"
   max_length: 1000
   # 1.7.10 has no /execute.
   wrappers: []
+  # No command separators on 1.7.10; set so none come from below.
+  separators: []
   player_pattern: "^[A-Za-z0-9_]{1,16}$"
 players:
   command: list

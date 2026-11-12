@@ -50,7 +50,7 @@ func TestB10_1AuditNamesSentNotChangedFields(t *testing.T) {
 	name, host, port, profile := "beta", sv.Host, sv.Port, sv.ProfileID
 	agent, container := "", ""
 	if _, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{
-		Name: &name, ProfileID: &profile, Host: &host, Port: &port,
+		Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Port: &port,
 		AgentID: &agent, ContainerName: &container, Version: f.version(sv.ID),
 	}); err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestB10_1AuditNamesSentNotChangedFields(t *testing.T) {
 	}
 	newHost, newPort := "elsewhere.example", 27015
 	if _, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{
-		Name: &name, ProfileID: &profile, Host: &newHost, Port: &newPort,
+		Name: &name, ProfileIDs: &[]string{profile}, Host: &newHost, Port: &newPort,
 		AgentID: &agent, ContainerName: &container, Version: f.version(sv.ID),
 	}); err != nil {
 		t.Fatal(err)
@@ -79,10 +79,10 @@ func TestB10_1AuditNamesSentNotChangedFields(t *testing.T) {
 	}
 }
 
-// TestB10_2ProfileChangeMovesPortUnaudited: a profile change without port
-// moves the port to the profile's default; the audit must name the port with
-// both values.
-func TestB10_2ProfileChangeMovesPortUnaudited(t *testing.T) {
+// TestB10_2ProfileChangeKeepsPortC10: a new profile list keeps the port of
+// the server (the default port holds only when it is created, D-076); the
+// audit names only the profile list.
+func TestB10_2ProfileChangeKeepsPortC10(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	sv := f.create("alpha")
@@ -91,16 +91,15 @@ func TestB10_2ProfileChangeMovesPortUnaudited(t *testing.T) {
 	if err := f.st.DB.QueryRowContext(ctx, `SELECT id FROM game_profiles WHERE slug = 'minecraft-gtnh'`).Scan(&other); err != nil {
 		t.Fatal(err)
 	}
-	got, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{ProfileID: &other, Version: f.version(sv.ID)})
+	got, err := f.svc.Update(ctx, f.as("admin"), sv.ID, Input{ProfileIDs: &[]string{other}, Version: f.version(sv.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Port == sv.Port {
-		t.Fatalf("port did not move: %d", got.Port)
+	if got.Port != sv.Port {
+		t.Fatalf("port moved %d -> %d", sv.Port, got.Port)
 	}
-	p, _ := lastUpdate(t, f, sv.ID)
-	if !slices.Equal(p.Fields, []string{"port", "profile_id"}) || p.Port == nil || p.Port.From != sv.Port || p.Port.To != 4444 {
-		t.Errorf("port moved %d -> %d, audit = %+v", sv.Port, got.Port, p)
+	if p, _ := lastUpdate(t, f, sv.ID); !slices.Equal(p.Fields, []string{"profile_ids"}) || p.Port != nil {
+		t.Errorf("audit = %+v", p)
 	}
 }
 
