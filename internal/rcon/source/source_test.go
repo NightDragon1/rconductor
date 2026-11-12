@@ -379,3 +379,27 @@ func TestO8ChatInputNoAnswer(t *testing.T) {
 		t.Errorf("chat %d, connections %d, refused %d", s.Chat(), s.Connections(), s.Invalid())
 	}
 }
+
+// TestO8OversizedSinglePacket: an answer in one packet over MaxPacketBody
+// is refused unread; the connection is closed as out of step, so the next
+// command never takes the rest of that packet for an answer. Before the
+// connection was closed here, the next read took the unread body for a
+// header ("packet size 2") and every later command failed.
+func TestO8OversizedSinglePacket(t *testing.T) {
+	s := start(t, rcontest.Factorio, func(cmd string) string {
+		if cmd == "/huge" {
+			return strings.Repeat("z", MaxPacketBody+1)
+		}
+		return "echo " + cmd
+	})
+	c := dialMarker(t, s, EndMarkerNone)
+	if _, err := c.Execute(context.Background(), "/huge"); !errors.Is(err, rcon.ErrTooLarge) || !errors.Is(err, rcon.ErrBroken) {
+		t.Errorf("oversized packet: %v", err)
+	}
+	if got, err := c.Execute(context.Background(), "/a"); err == nil || got != "" {
+		t.Errorf("after the oversized packet = %q, %v, want an error on the closed connection", got, err)
+	}
+	if err := c.Alive(); err == nil {
+		t.Error("closed connection reported alive")
+	}
+}

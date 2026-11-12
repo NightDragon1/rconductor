@@ -288,7 +288,10 @@ func (c *Conn) read() (id, typ int32, body []byte, err error) {
 	}
 	size := int32(binary.LittleEndian.Uint32(head[:4])) //nolint:gosec // wire format
 	if size < 10 || size > MaxPacketBody+10 {
-		return 0, 0, nil, errors.Join(rcon.ErrTooLarge, fmt.Errorf("packet size %d", size))
+		// The packet stays unread, so the stream is out of step: the next
+		// read would take its body for a header. Close the connection.
+		_ = c.conn.Close()
+		return 0, 0, nil, errors.Join(rcon.ErrTooLarge, rcon.ErrBroken, fmt.Errorf("packet size %d", size))
 	}
 	rest := make([]byte, size)
 	if _, err = io.ReadFull(c.r, rest); err != nil {

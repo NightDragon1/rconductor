@@ -5,6 +5,7 @@ package connmgr
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -140,5 +141,37 @@ func TestO8ChatInputThroughManager(t *testing.T) {
 	}
 	if s, _ := m.Status("s1"); s != Connected || srv.Connections() != 1 {
 		t.Errorf("status %s, %d connections, want connected on one", s, srv.Connections())
+	}
+}
+
+// TestO8OversizedPacketThroughManager: after an answer over the packet
+// limit the manager connects again, and the next command gets its own
+// answer, never a piece of the refused packet.
+func TestO8OversizedPacketThroughManager(t *testing.T) {
+	srv, m := factorioManager(t, func(cmd string) string {
+		if cmd == "/huge" {
+			return strings.Repeat("z", source.MaxPacketBody+1)
+		}
+		return "answer to " + cmd
+	})
+	if _, err := m.Execute(context.Background(), "s1", "/huge"); !errors.Is(err, rcon.ErrTooLarge) {
+		t.Errorf("oversized answer: %v", err)
+	}
+	// The manager reconnects; meanwhile commands are refused at once.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if s, _ := m.Status("s1"); s == Connected && srv.Connections() == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no new connection within 10 s (%d)", srv.Connections())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got, err := m.Execute(context.Background(), "s1", "/a"); err != nil || got != "answer to /a" {
+		t.Errorf("next command = %q, %v", got, err)
+	}
+	if n := srv.Connections(); n != 2 {
+		t.Errorf("%d connections, want 2 (one new after the refused packet)", n)
 	}
 }
