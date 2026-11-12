@@ -21,6 +21,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/pattern"
 	"github.com/NightDragon1/rconductor/internal/rcon/httpapi"
+	"github.com/NightDragon1/rconductor/internal/rcon/source"
 )
 
 // SchemaVersion is the profile schema this release reads.
@@ -48,7 +49,10 @@ const (
 
 // Protocols are the adapters of this release (PROT-001); others follow
 // later.
-var Protocols = []string{"source-rcon", httpapi.Protocol}
+var Protocols = []string{sourceRCON, httpapi.Protocol}
+
+// sourceRCON is the protocol name of the Source RCON adapter.
+const sourceRCON = "source-rcon"
 
 var slugRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
@@ -71,20 +75,21 @@ func KindOf(p *Profile) string {
 
 // Profile is a checked game profile.
 type Profile struct {
-	Schema     int       `yaml:"schema" json:"-"`
-	ID         string    `yaml:"id" json:"-"`
-	Name       string    `yaml:"name" json:"-"`
-	Kind       string    `yaml:"kind" json:"kind,omitempty"`
-	Match      Match     `yaml:"match" json:"match"`
-	Protocol   Protocol  `yaml:"protocol" json:"-"`
-	HTTPAPI    *HTTPAPI  `yaml:"http_api" json:"http_api,omitempty"`
-	Ports      Ports     `yaml:"ports" json:"ports"`
-	Syntax     Syntax    `yaml:"syntax" json:"syntax"`
-	Players    *Players  `yaml:"players" json:"players,omitempty"`
-	Stop       *Stop     `yaml:"stop" json:"stop,omitempty"`
-	Version    *Version  `yaml:"version" json:"version,omitempty"`
-	Formatting string    `yaml:"formatting" json:"formatting,omitempty"`
-	Catalog    []Command `yaml:"catalog" json:"-"`
+	Schema     int         `yaml:"schema" json:"-"`
+	ID         string      `yaml:"id" json:"-"`
+	Name       string      `yaml:"name" json:"-"`
+	Kind       string      `yaml:"kind" json:"kind,omitempty"`
+	Match      Match       `yaml:"match" json:"match"`
+	Protocol   Protocol    `yaml:"protocol" json:"-"`
+	HTTPAPI    *HTTPAPI    `yaml:"http_api" json:"http_api,omitempty"`
+	SourceRCON *SourceRCON `yaml:"source_rcon" json:"source_rcon,omitempty"`
+	Ports      Ports       `yaml:"ports" json:"ports"`
+	Syntax     Syntax      `yaml:"syntax" json:"syntax"`
+	Players    *Players    `yaml:"players" json:"players,omitempty"`
+	Stop       *Stop       `yaml:"stop" json:"stop,omitempty"`
+	Version    *Version    `yaml:"version" json:"version,omitempty"`
+	Formatting string      `yaml:"formatting" json:"formatting,omitempty"`
+	Catalog    []Command   `yaml:"catalog" json:"-"`
 	// ResearchedVersion, Sources and Status describe where the profile
 	// comes from (D-072): the game version the commands were researched
 	// for, the sources, and whether a run with a real server confirmed it.
@@ -112,6 +117,7 @@ const (
 	FieldStop          = "stop"
 	FieldVersion       = "version"
 	FieldFormatting    = "formatting"
+	FieldEndMarker     = "source_rcon.end_marker"
 )
 
 // mergedFields are the fields Effective merges one by one (D-074); each is
@@ -119,6 +125,7 @@ const (
 var mergedFields = []string{
 	FieldCaseSensitive, FieldStripPrefix, FieldMaxLength, FieldPlayerPattern, FieldSeparators,
 	FieldGamePorts, FieldSteamConnect, FieldPlayers, FieldStop, FieldVersion, FieldFormatting,
+	FieldEndMarker,
 }
 
 // setFields lists the fields the file writes itself, by the keys in the
@@ -153,6 +160,13 @@ type Match struct {
 // D-071); the dialects are in the code, a profile describes no requests.
 type HTTPAPI struct {
 	Dialect string `yaml:"dialect" json:"dialect"`
+}
+
+// SourceRCON chooses how the end of a Source RCON response is found
+// (PROT-001): empty_response, the default, or none for servers that refuse
+// the empty marker packet and answer every command in one packet.
+type SourceRCON struct {
+	EndMarker string `yaml:"end_marker" json:"end_marker"`
 }
 
 // Protocol names the adapter and its default port.
@@ -426,6 +440,13 @@ func (p *Profile) check() []string {
 		bad("http_api.dialect must be one of %s", strings.Join(httpapi.Names(), ", "))
 	case p.Protocol.Type != httpapi.Protocol && p.HTTPAPI != nil:
 		bad("http_api is only for protocol.type %s", httpapi.Protocol)
+	}
+	switch {
+	case p.SourceRCON == nil:
+	case p.Protocol.Type != sourceRCON:
+		bad("source_rcon is only for protocol.type %s", sourceRCON)
+	case !source.KnownEndMarker(p.SourceRCON.EndMarker):
+		bad("source_rcon.end_marker must be one of %s", strings.Join(source.EndMarkers(), ", "))
 	}
 	if p.Protocol.DefaultPort < 1 || p.Protocol.DefaultPort > 65535 {
 		bad("protocol.default_port is required, 1 to 65535")

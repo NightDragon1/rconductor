@@ -13,6 +13,7 @@ fields of the command page.
 | Precedence | your profile with the id of a shipped one replaces it and is marked as adapted |
 | Kind | `kind: generic` for a game as such, `kind: specific` for a modpack or plugin that ranks above it; a profile without `kind` is generic. Profile files inherit nothing from each other; a server combines the profiles in its list (1.1) |
 | Origin | `researched_version` names the game version the commands were researched for, `sources` lists where they come from, `status` is `tested` after a run with a real server and `untested` otherwise; a profile without `status` is untested (1.1) |
+| End of an answer | with `protocol.type: source-rcon` the panel sends an empty packet after the first answer packet and collects the answer until the game answers it; the idle check sends the same packet. That is the default, `source_rcon: { end_marker: empty_response }`. Games that refuse that packet set `end_marker: none`, such as Factorio: no end packet and no idle packet are sent, the first answer packet is the whole answer, also an empty one, and the idle check relies on TCP keepalive. A game that splits long answers gives only their first part (about 4 KB) with `none`; Factorio sends long answers in one packet, up to 64 KiB. Input that the game does not answer at all ends at the command timeout and the connection stays; Factorio takes input without a leading `/` as chat and does not answer it. A packet over 64 KiB is refused and the panel connects again (1.1) |
 | Errors | an invalid file is not imported; the last valid state stays active, the error is in the log and the health overview |
 | Aliases | a file has at most 100 YAML aliases |
 | Anchors | an anchored value must not contain aliases |
@@ -70,7 +71,7 @@ prefix rule comes from Minecraft.
 
 | Topic | Behaviour |
 | --- | --- |
-| Values | field by field from the topmost profile that sets them: syntax (case sensitivity, prefix removal, maximum length, player pattern, separators), game ports, Steam connect, players block, stop command, version pattern, formatting |
+| Values | field by field from the topmost profile that sets them: syntax (case sensitivity, prefix removal, maximum length, player pattern, separators), game ports, Steam connect, players block, stop command, version pattern, formatting, end of an answer (`source_rcon.end_marker`) |
 | Command catalog | the union of all profiles; with the same path the entry of the upper profile wins |
 | Wrappers | the wrappers of all profiles hold together; no profile lifts one |
 | Protocol | all profiles of a server have the same protocol, for `http-api` also the same dialect; otherwise saving is refused (422) |

@@ -54,10 +54,14 @@ type Target struct {
 	// once.
 	Fingerprint, Dialect string
 	Parallel             int
+	// EndMarker is the Source RCON end marker of the game profile
+	// (PROT-001); empty is the default.
+	EndMarker string
 }
 
 func (t Target) endpoint() rcon.Endpoint {
-	return rcon.Endpoint{Addr: t.Addr, Secret: t.Password, Fingerprint: t.Fingerprint, Dialect: t.Dialect, Parallel: t.Parallel}
+	return rcon.Endpoint{Addr: t.Addr, Secret: t.Password, Fingerprint: t.Fingerprint, Dialect: t.Dialect, Parallel: t.Parallel,
+		EndMarker: t.EndMarker}
 }
 
 // dial uses the endpoint when the adapter takes one.
@@ -606,7 +610,7 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				continue
 			}
 			j.reply <- result{answer: answer, err: err}
-			if err != nil && !errors.Is(err, rcon.ErrTooLarge) && !errors.Is(err, rcon.ErrCommandFailed) {
+			if err != nil && (errors.Is(err, rcon.ErrBroken) || (!errors.Is(err, rcon.ErrTooLarge) && !errors.Is(err, rcon.ErrCommandFailed))) {
 				return "connection_error"
 			}
 			used = time.Now()

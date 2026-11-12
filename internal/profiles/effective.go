@@ -4,8 +4,9 @@ package profiles
 
 // Effective merges the profiles of a server, top first, into the rules
 // that hold for it (SRV-008, D-074): for each field the topmost profile
-// that sets it wins, a field no profile sets keeps its default; wrappers
-// are the union of all profiles, no profile lifts one. Protocol, dialect
+// that sets it wins, a field no profile sets keeps its default (also the
+// Source RCON end marker, so a specific profile keeps that of its game);
+// wrappers are the union of all profiles, no profile lifts one. Protocol, dialect
 // and default port come from the top profile; all profiles of a server
 // have the same protocol and dialect. The catalog is merged by
 // MergeCatalogs. An empty list gives nil.
@@ -56,6 +57,9 @@ func Effective(list []*Profile) *Profile {
 	}
 	if p := owner(FieldFormatting); p != nil {
 		out.Formatting = p.Formatting
+	}
+	if p := owner(FieldEndMarker); p != nil {
+		out.SourceRCON = p.SourceRCON
 	}
 	// Separators, like wrappers, hold from every profile; no profile lifts
 	// one (D-076).
@@ -125,6 +129,8 @@ func (p *Profile) legacySets(f string) bool {
 		return p.Version != nil
 	case FieldFormatting:
 		return p.Formatting != ""
+	case FieldEndMarker:
+		return p.SourceRCON != nil && p.SourceRCON.EndMarker != ""
 	}
 	return false
 }

@@ -58,6 +58,8 @@ func (s *Service) target(r sqlitedb.ListServersRow) connmgr.Target {
 	if r.Protocol == httpapi.Protocol {
 		t.Dialect = s.dialect(r.ProfileID.String)
 		t.Parallel = s.httpParallel()
+	} else {
+		t.EndMarker = s.endMarker(r.ID)
 	}
 	if s.credentialState(r.Secret) != CredentialsOK {
 		return t
@@ -108,6 +110,17 @@ func (s *Service) dialect(profileID string) string {
 		return ""
 	}
 	return rules.HTTPAPI.Dialect
+}
+
+// endMarker is the Source RCON end marker of a server: from the topmost
+// profile of its list that sets it, empty for the default (PROT-001,
+// D-074).
+func (s *Service) endMarker(serverID string) string {
+	eff, _, err := profiles.ForServer(context.Background(), s.st.Queries, serverID)
+	if err != nil || eff == nil || eff.SourceRCON == nil {
+		return ""
+	}
+	return eff.SourceRCON.EndMarker
 }
 
 // httpParallel is servers.http_parallel, the requests at once to one
