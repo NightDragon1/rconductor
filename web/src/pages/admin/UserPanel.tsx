@@ -124,7 +124,7 @@ export function UserPanel({
 }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
-  const { saved } = useUndo();
+  const { saved, saving } = useUndo();
   const a = useAssignments(user.id);
   const [edits, setEdits] = useState<AssignmentsUpdate>({});
   const saw = useRef<Assignments | null>(null);
@@ -170,10 +170,12 @@ export function UserPanel({
   const pick = (from: AssignmentsUpdate, keys: (keyof AssignmentsUpdate)[]) =>
     Object.fromEntries(keys.map((k) => [k, from[k]])) as AssignmentsUpdate;
   const send = async (sections: AssignmentsUpdate, supporters?: boolean) => {
-    const r = await outcome(user.id, async () => {
-      if (Object.keys(sections).length > 0) await put(sections)();
-      if (supporters !== undefined) await patch({ supporters_allowed: supporters })();
-    });
+    const r = await saving(
+      outcome(user.id, async () => {
+        if (Object.keys(sections).length > 0) await put(sections)();
+        if (supporters !== undefined) await patch({ supporters_allowed: supporters })();
+      }),
+    );
     setMessage(r.ok ? { ok: true, text: t('admin.saved') } : { ok: false, text: reasonText(t, r) });
     refresh();
     return r.ok;

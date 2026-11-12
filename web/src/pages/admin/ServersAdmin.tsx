@@ -122,7 +122,7 @@ function ServerPanel({
 }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
-  const { saved } = useUndo();
+  const { saved, saving } = useUndo();
   const profiles = useProfiles();
   const agents = useAgents(canSeeAgents);
   const panel = useReveal<HTMLElement>();
@@ -193,10 +193,12 @@ function ServerPanel({
     e.preventDefault();
     if (!server) {
       void (async () => {
-        const r = await outcome('new', async () => {
-          must(await api.POST('/servers', { body: body() }));
-          onCreated();
-        });
+        const r = await saving(
+          outcome('new', async () => {
+            must(await api.POST('/servers', { body: body() }));
+            onCreated();
+          }),
+        );
         void qc.invalidateQueries({ queryKey: serversKey });
         if (!r.ok) setMessage({ ok: false, text: reasonText(t, r) });
       })();
@@ -209,14 +211,16 @@ function ServerPanel({
   // keep the stored password, so they can be undone (D-050).
   const write = async (id: string, from: Server, next: Draft) => {
     let done = null as Server | null;
-    const r = await outcome(id, async () => {
-      done = must(
-        await patchVersioned('/servers/{id}', from.version, {
-          path: { id },
-          body: bodyOf(next),
-        }),
-      );
-    });
+    const r = await saving(
+      outcome(id, async () => {
+        done = must(
+          await patchVersioned('/servers/{id}', from.version, {
+            path: { id },
+            body: bodyOf(next),
+          }),
+        );
+      }),
+    );
     if (r.reason === 'conflict') {
       setConflict(true);
       setMessage({ ok: false, text: t('admin.conflict') });
@@ -566,7 +570,7 @@ function GroupPanel({
 }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { saved } = useUndo();
+  const { saved, saving } = useUndo();
   const panel = useReveal<HTMLElement>();
   const [draft, setDraft] = useState(group);
   const [message, setMessage] = useState<Message>(null);
@@ -581,14 +585,16 @@ function GroupPanel({
   // Edits change the draft; Save sends it at once (D-048).
   const write = async (from: ServerGroup, to: ServerGroup) => {
     let done = null as ServerGroup | null;
-    const r = await outcome(group.id, async () => {
-      done = must(
-        await patchVersioned('/server-groups/{id}', from.version, {
-          path: { id: group.id },
-          body: { name: to.name, server_ids: to.server_ids },
-        }),
-      );
-    });
+    const r = await saving(
+      outcome(group.id, async () => {
+        done = must(
+          await patchVersioned('/server-groups/{id}', from.version, {
+            path: { id: group.id },
+            body: { name: to.name, server_ids: to.server_ids },
+          }),
+        );
+      }),
+    );
     if (r.reason === 'conflict') {
       setConflict(true);
       setMessage({ ok: false, text: t('admin.conflict') });
