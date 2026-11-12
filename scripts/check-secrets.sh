@@ -23,10 +23,11 @@ prefix='(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}|dckr_pat_[A-Za-
 # password, secret or token at the end of a name, then = or :, then a
 # literal value of at least 8 characters. In code the value must be a quoted
 # string; elsewhere (env, YAML, docs) a bare value counts too. Variables,
-# placeholders (<…>, …, ...), masks (***) and well-known fillers do not.
+# placeholders (<…>, …, ...), masks (***), escaped variables (\$X), regular
+# expressions ([...]) and well-known fillers do not.
 name='[A-Za-z0-9_.-]*(password|passwd|secret|token)'
 quoted='["'"'"'`]([^"'"'"'`[:space:]$<{*][^"'"'"'`[:space:]]{7,})["'"'"'`]'
-bare='["'"'"']?([^[:space:]"'"'"'$<{(*][^[:space:]"'"'"']{7,})'
+bare='["'"'"']?([^][:space:]"'"'"'$<{(*\\[][^[:space:]"'"'"']{7,})'
 found=0
 file=
 line=0

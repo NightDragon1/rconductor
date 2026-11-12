@@ -82,6 +82,7 @@ jobs:
       - run: scripts/claude-guard-test.sh
       - run: scripts/hook-scope-test.sh
       - run: scripts/check-secrets-test.sh
+      - run: scripts/script-isolation-test.sh
       - run: go -C tools tool golangci-lint run ./claudeguard
       - run: go -C tools test -race ./claudeguard
         env:

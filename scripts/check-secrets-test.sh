@@ -48,6 +48,9 @@ clean internal/a/a.go "x := \"gh""p_short\""
 clean docs/x.md "BEGIN PUBLIC KEY"
 clean config.yaml 'password: changeme-later # secret-scan: allow'
 clean config.yaml 'password: example-password'
+clean test/upgrade/run.sh '      RCD_PAIRING_TOKEN: \\${RCD_PAIRING_TOKEN:-}'
+clean test/upgrade/run.sh '      RCON_PASSWORD: \\${RCON_PASSWORD}'
+clean test/upgrade/run.sh "dc logs panel | sed -n 's/.*|[[:space:]]*password:[[:space:]]*\\([^[:space:]]*\\).*/\\1/p'"
 clean internal/auth/session.go 'return "", Principal{}, &SecondStepError{Token: pending, ExpiresAt: expires}'
 clean internal/agenthub/throttle.go 'b = &bucket{tokens: float64(t.opts.Burst), last: now}'
 clean deploy/compose/agent.yaml '      - agent-secrets:/secrets'
