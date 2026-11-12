@@ -358,6 +358,31 @@ func (w *worker) setStatus(s Status) {
 	}
 }
 
+// certMismatch sets the status cert_mismatch and logs server.cert.mismatch
+// when the status changes to it, so once per mismatch and not per refused
+// request (PROT-003).
+func (w *worker) certMismatch() {
+	w.mu.Lock()
+	changed := w.status != CertMismatch
+	if changed {
+		w.status, w.since = CertMismatch, time.Now()
+	}
+	t := w.target
+	w.mu.Unlock()
+	if !changed {
+		return
+	}
+	w.m.log.Warn("the game server shows another certificate than the trusted one",
+		append(w.attrs(t), logging.Event(logging.ServerCertMismatch))...)
+	if w.m.opts.OnStatus != nil {
+		w.m.opts.OnStatus(t.ID, CertMismatch)
+	}
+}
+
+// reasonCertMismatch ends serve when a request on the open connection met
+// another certificate than the trusted one.
+const reasonCertMismatch = "cert_mismatch"
+
 func (w *worker) attrs(t Target) []any {
 	return []any{slog.String(logging.KeyServer, t.ID), slog.String("server_name", t.Name)}
 }
@@ -446,11 +471,7 @@ func (w *worker) run(ctx context.Context) {
 		cancel()
 		switch {
 		case errors.Is(err, rcon.ErrCertMismatch), errors.Is(err, rcon.ErrUnpinned):
-			if s, _ := w.state(); s != CertMismatch {
-				log.Warn("the game server shows another certificate than the trusted one",
-					append(w.attrs(t), logging.Event(logging.ServerCertMismatch))...)
-			}
-			w.setStatus(CertMismatch)
+			w.certMismatch()
 		case errors.Is(err, rcon.ErrAuth):
 			if s, _ := w.state(); s != AuthFailed {
 				log.Warn("game server refused the rcon credentials",
@@ -475,6 +496,15 @@ func (w *worker) run(ctx context.Context) {
 			}
 			reason := w.serve(ctx, conn)
 			_ = conn.Close()
+			if reason == reasonCertMismatch {
+				// The status is cert_mismatch already; the next attempt
+				// dials again after the backoff.
+				if !w.wait(ctx, w.backoff(attempt)) {
+					return
+				}
+				attempt++
+				continue
+			}
 			w.setStatus(Offline)
 			if reason == "" {
 				return // shut down
@@ -504,8 +534,22 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 	_, concurrent := conn.(rcon.Concurrent)
 	var running sync.WaitGroup
 	defer running.Wait()
+	// A request refused for the certificate sets the status before its
+	// answer goes out and ends the connection.
+	mismatch := make(chan struct{}, 1)
+	refused := func(err error) {
+		if errors.Is(err, rcon.ErrCertMismatch) {
+			w.certMismatch()
+			select {
+			case mismatch <- struct{}{}:
+			default:
+			}
+		}
+	}
 	for {
 		select {
+		case <-mismatch:
+			return reasonCertMismatch
 		case <-ctx.Done():
 			w.failPending()
 			return ""
@@ -527,6 +571,7 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				}
 				running.Go(func() {
 					p, err := pc.Players(j.ctx)
+					refused(err)
 					if err != nil && j.ctx.Err() != nil {
 						err = j.ctx.Err()
 					}
@@ -538,6 +583,7 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 			if concurrent {
 				running.Go(func() {
 					answer, err := conn.Execute(j.ctx, j.command)
+					refused(err)
 					if err != nil && j.ctx.Err() != nil {
 						err = j.ctx.Err()
 					}
@@ -574,6 +620,10 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				pctx, cancel := context.WithTimeout(ctx, w.m.opts.ProbeTimeout)
 				err := p.Ping(pctx)
 				cancel()
+				if errors.Is(err, rcon.ErrCertMismatch) {
+					refused(err)
+					return reasonCertMismatch
+				}
 				if err != nil {
 					return "no_answer"
 				}
