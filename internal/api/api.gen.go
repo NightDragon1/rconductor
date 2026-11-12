@@ -690,8 +690,10 @@ type AuditEntry struct {
 	ActorRole *string             `json:"actor_role,omitempty"`
 
 	// Id For commands also the request ID (Design 4.1).
-	Id       openapi_types.UUID     `json:"id"`
-	Kind     AuditEntryKind         `json:"kind"`
+	Id   openapi_types.UUID `json:"id"`
+	Kind AuditEntryKind     `json:"kind"`
+
+	// Payload Details of the action; host and RCON port of a server only for the RCON admin (D-056).
 	Payload  map[string]interface{} `json:"payload"`
 	Reason   *string                `json:"reason,omitempty"`
 	Result   AuditEntryResult       `json:"result"`
@@ -1261,12 +1263,12 @@ type Server struct {
 	GamePortsOverride *bool                `json:"game_ports_override,omitempty"`
 	Groups            []openapi_types.UUID `json:"groups"`
 
-	// Host Admins only.
+	// Host RCON admin only; the server admin sees of the ports only the game ports (D-056).
 	Host *string            `json:"host,omitempty"`
 	Id   openapi_types.UUID `json:"id"`
 	Name string             `json:"name"`
 
-	// Port Admins only.
+	// Port RCON port; RCON admin only (D-056).
 	Port *int `json:"port,omitempty"`
 
 	// ProfileIds Game profiles of the server, top first (SRV-008, D-074): for each value the topmost profile that sets it wins; the catalog is the union, wrappers of all profiles hold.

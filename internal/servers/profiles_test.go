@@ -178,7 +178,12 @@ func TestProfileListKeepsPortC10(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Port != 30000 {
-		t.Errorf("port %d, want 30000", got.Port)
+	// The server admin's view carries no RCON port (D-056); the stored one
+	// stays.
+	if got.Port != 0 || got.Host != "" {
+		t.Errorf("server admin's view: host %q port %d, want none", got.Host, got.Port)
+	}
+	if row, err := f.st.Queries.GetServer(ctx, sv.ID); err != nil || row.Port != 30000 {
+		t.Errorf("stored port %d (%v), want 30000", row.Port, err)
 	}
 }
