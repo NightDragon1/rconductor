@@ -33,13 +33,16 @@ var (
 )
 
 // Endpoint is what an adapter needs beyond address and password: the
-// pinned certificate, the dialect of the game and the parallel requests.
+// pinned certificate, the dialect of the game and the parallel requests;
+// for Source RCON the end marker of the game profile (PROT-001), empty
+// for the default.
 type Endpoint struct {
 	Addr        string
 	Secret      logging.Secret
 	Fingerprint string
 	Dialect     string
 	Parallel    int
+	EndMarker   string
 }
 
 // EndpointDialer is implemented by adapters that need an Endpoint; the

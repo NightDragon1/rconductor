@@ -4,7 +4,9 @@
 // used by Minecraft, ARK, Factorio and others. Long responses arrive in
 // several packets without end mark; after the first packet of a response
 // an empty packet is sent as marker, and the response is collected until
-// the server answers that marker.
+// the server answers that marker. Games that refuse that packet, such as
+// Factorio, use the end marker none from their game profile: the first
+// packet is the whole response.
 package source
 
 import (
@@ -42,13 +44,36 @@ const (
 	MaxCommand = 4000
 )
 
+// End markers a game profile chooses (source_rcon.end_marker, PROT-001).
+const (
+	// EndMarkerEmptyResponse sends an empty SERVERDATA_RESPONSE_VALUE
+	// after the first answer packet and collects until its answer; it is
+	// the default and the idle probe sends the same packet (Design 3.8).
+	EndMarkerEmptyResponse = "empty_response"
+	// EndMarkerNone sends no marker: the first answer packet is the whole
+	// response. For servers that answer every command in one packet and
+	// refuse packets of type 0 (Factorio). Further packets of a split
+	// answer are dropped as stale, they never mix into the next command.
+	// The idle probe sends nothing; TCP keepalive notices a dead peer.
+	EndMarkerNone = "none"
+)
+
+// EndMarkers lists the end markers a profile can name.
+func EndMarkers() []string { return []string{EndMarkerEmptyResponse, EndMarkerNone} }
+
+// KnownEndMarker reports whether a profile may name m.
+func KnownEndMarker(m string) bool { return m == EndMarkerEmptyResponse || m == EndMarkerNone }
+
 // DefaultTimeout applies when the context has no deadline.
 const DefaultTimeout = 10 * time.Second
 
 // Adapter dials Source RCON servers.
 type Adapter struct{}
 
-var _ rcon.Adapter = Adapter{}
+var (
+	_ rcon.Adapter        = Adapter{}
+	_ rcon.EndpointDialer = Adapter{}
+)
 
 var (
 	_ rcon.Prober = (*Conn)(nil)
@@ -61,20 +86,39 @@ type Conn struct {
 	conn   net.Conn
 	r      *bufio.Reader
 	nextID int32
+	// single is the end marker none: one packet is the whole response.
+	single bool
 }
 
 // KeepAlive is the TCP keepalive of every connection (Design 3.8): the
 // kernel notices a dead peer after about 19 s without traffic.
 var KeepAlive = net.KeepAliveConfig{Enable: true, Idle: 10 * time.Second, Interval: 3 * time.Second, Count: 3}
 
-// Dial connects and authenticates.
-func (Adapter) Dial(ctx context.Context, addr string, password logging.Secret) (rcon.Conn, error) {
+// Dial connects and authenticates, with the default end marker.
+func (a Adapter) Dial(ctx context.Context, addr string, password logging.Secret) (rcon.Conn, error) {
+	return a.dial(ctx, addr, password, EndMarkerEmptyResponse)
+}
+
+// DialEndpoint connects and authenticates with the end marker of the
+// endpoint; an empty one is the default.
+func (a Adapter) DialEndpoint(ctx context.Context, e rcon.Endpoint) (rcon.Conn, error) {
+	m := e.EndMarker
+	if m == "" {
+		m = EndMarkerEmptyResponse
+	}
+	if !KnownEndMarker(m) {
+		return nil, fmt.Errorf("rcon: unknown end marker %q", m)
+	}
+	return a.dial(ctx, e.Addr, e.Secret, m)
+}
+
+func (Adapter) dial(ctx context.Context, addr string, password logging.Secret, marker string) (rcon.Conn, error) {
 	d := net.Dialer{KeepAliveConfig: KeepAlive}
 	nc, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	c := &Conn{conn: nc, r: bufio.NewReader(nc), nextID: 1}
+	c := &Conn{conn: nc, r: bufio.NewReader(nc), nextID: 1, single: marker == EndMarkerNone}
 	if err := c.auth(ctx, password); err != nil {
 		_ = nc.Close()
 		return nil, err
@@ -149,6 +193,9 @@ func (c *Conn) Execute(ctx context.Context, command string) (string, error) {
 				return "", rcon.ErrTooLarge
 			}
 			out.Write(body)
+			if c.single {
+				return out.String(), nil
+			}
 			// The marker goes out only once the command is answered:
 			// Minecraft takes one packet per read and drops a connection
 			// whose command and marker arrive together. It answers in
@@ -169,10 +216,15 @@ func (c *Conn) Execute(ctx context.Context, command string) (string, error) {
 }
 
 // Ping sends an empty packet, as the end marker, and waits for its answer
-// until ctx ends; other packets are dropped (Design 3.8).
+// until ctx ends; other packets are dropped (Design 3.8). With the end
+// marker none it sends nothing, since such servers refuse the packet:
+// Alive and TCP keepalive watch the connection.
 func (c *Conn) Ping(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.single {
+		return nil
+	}
 	c.deadline(ctx)
 	id := c.id()
 	if err := c.write(id, typeResponseValue, ""); err != nil {

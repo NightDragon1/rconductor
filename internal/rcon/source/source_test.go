@@ -196,3 +196,123 @@ func TestKeepAlive(t *testing.T) {
 		t.Errorf("keepalive = %+v, want idle 10 s, interval 3 s, 3 probes (Design 3.8)", KeepAlive)
 	}
 }
+
+func dialMarker(t *testing.T, s *rcontest.Server, marker string) *Conn {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, err := Adapter{}.DialEndpoint(ctx, rcon.Endpoint{Addr: s.Addr, Secret: "secret", EndMarker: marker})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	return c.(*Conn)
+}
+
+// TestO8FactorioEndMarker covers PROT-001 for servers that refuse packets
+// of type 0 and never answer them, like Factorio: with the end marker
+// none every command is answered, long answers in one packet too, and
+// neither a command nor the idle probe sends a packet the server refuses.
+// It fails on the code before the end marker could be chosen: the command
+// waits for an answer to its marker until the timeout.
+func TestO8FactorioEndMarker(t *testing.T) {
+	long := strings.Repeat("0123456789abcdef", 1000) // 16 000 bytes in one packet
+	s := start(t, rcontest.Factorio, func(cmd string) string {
+		switch cmd {
+		case "/dump":
+			return long
+		case "/silent-command x=1":
+			return ""
+		}
+		return "echo " + cmd
+	})
+	c := dialMarker(t, s, EndMarkerNone)
+	for range 3 {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		got, err := c.Execute(ctx, "/version")
+		cancel()
+		if err != nil || got != "echo /version" {
+			t.Fatalf("command = %q, %v", got, err)
+		}
+	}
+	if got, err := c.Execute(context.Background(), "/dump"); err != nil || got != long {
+		t.Errorf("long answer: %d bytes, %v", len(got), err)
+	}
+	if got, err := c.Execute(context.Background(), "/silent-command x=1"); err != nil || got != "" {
+		t.Errorf("empty answer = %q, %v", got, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := c.Ping(ctx); err != nil {
+		t.Errorf("ping: %v", err)
+	}
+	if err := c.Alive(); err != nil {
+		t.Errorf("alive: %v", err)
+	}
+	if got, err := c.Execute(context.Background(), "/players"); err != nil || got != "echo /players" {
+		t.Errorf("after probe = %q, %v", got, err)
+	}
+	if n := s.Invalid(); n != 0 {
+		t.Errorf("server refused %d packets as invalid message type 0", n)
+	}
+	if n := s.Connections(); n != 1 {
+		t.Errorf("%d connections, want 1", n)
+	}
+}
+
+// TestO8DefaultEndMarker: without an end marker in the profile and with
+// empty_response the client keeps the marker, so a Factorio-like server
+// is not answered (the behavior profiles without the field keep), and a
+// split answer is complete.
+func TestO8DefaultEndMarker(t *testing.T) {
+	for _, m := range []string{"", EndMarkerEmptyResponse} {
+		c := dialMarker(t, start(t, rcontest.Factorio, nil), m)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		if _, err := c.Execute(ctx, "/version"); err == nil {
+			t.Errorf("%q: the marker was not sent", m)
+		}
+		cancel()
+		long := strings.Repeat("x", 9000)
+		c = dialMarker(t, start(t, rcontest.SourceEngine, func(string) string { return long }), m)
+		if got, err := c.Execute(context.Background(), "dump"); err != nil || got != long {
+			t.Errorf("%q: split answer %d bytes, %v", m, len(got), err)
+		}
+	}
+}
+
+// TestO8NoneSplitAnswer documents the limit of the end marker none: a
+// server that splits an answer gives only its first packet, and the rest,
+// with the old packet id, never mixes into the next command.
+func TestO8NoneSplitAnswer(t *testing.T) {
+	long := strings.Repeat("y", 9000) // 3 packets
+	s := start(t, rcontest.SourceEngine, func(cmd string) string {
+		if cmd == "dump" {
+			return long
+		}
+		return "echo " + cmd
+	})
+	c := dialMarker(t, s, EndMarkerNone)
+	if got, err := c.Execute(context.Background(), "dump"); err != nil || got != long[:4096] {
+		t.Fatalf("first packet: %d bytes, %v", len(got), err)
+	}
+	for _, cmd := range []string{"a", "b"} {
+		if got, err := c.Execute(context.Background(), cmd); err != nil || got != "echo "+cmd {
+			t.Errorf("%s = %q, %v", cmd, got, err)
+		}
+	}
+}
+
+// TestO8UnknownEndMarker: an end marker the adapter does not know is
+// refused before anything is sent.
+func TestO8UnknownEndMarker(t *testing.T) {
+	s := start(t, rcontest.Factorio, nil)
+	_, err := Adapter{}.DialEndpoint(context.Background(), rcon.Endpoint{Addr: s.Addr, Secret: "secret", EndMarker: "marker"})
+	if err == nil || s.Connections() != 0 {
+		t.Errorf("unknown end marker: %v, %d connections", err, s.Connections())
+	}
+	for _, m := range EndMarkers() {
+		if !KnownEndMarker(m) {
+			t.Errorf("%s not known", m)
+		}
+	}
+}
