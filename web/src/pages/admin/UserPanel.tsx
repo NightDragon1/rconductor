@@ -102,6 +102,7 @@ export function UserPanel({
   groups,
   servers,
   serverGroups,
+  namesReady = true,
   readOnly = false,
   onTemplate,
   onClose,
@@ -114,6 +115,9 @@ export function UserPanel({
   groups: UserGroup[];
   servers: Server[];
   serverGroups: ServerGroup[];
+  // namesReady tells that users, groups, servers and server groups are
+  // loaded, so that a name missing there means the object is unknown.
+  namesReady?: boolean;
   readOnly?: boolean;
   onTemplate: (u: User) => void;
   onClose: () => void;
@@ -229,16 +233,24 @@ export function UserPanel({
       t('admin.sessionsEnded'),
     );
 
-  const cur = a.data && { ...a.data, ...edits };
+  // The sections show and edit only the stored state: cached assignments
+  // that are being read again stay hidden until the answer is in, so an
+  // edit never starts from an older list (ROLE-003, UI-007).
+  const stored = a.data && !(a.isStale && a.isFetching) && namesReady ? a.data : undefined;
+  const cur = stored && { ...stored, ...edits };
   const same = (k: keyof AssignmentsUpdate) =>
     JSON.stringify(edits[k]) === JSON.stringify(a.data?.[k]);
   const dirty =
     (release !== null && release !== user.supporters_allowed) ||
     (Object.keys(edits) as (keyof AssignmentsUpdate)[]).some((k) => !same(k));
   useUnsaved(dirty);
-  const groupName = (id: string) => groups.find((g) => g.id === id)?.name ?? id;
-  const serverName = (id?: string) => servers.find((s) => s.id === id)?.name ?? id ?? '';
-  const sgName = (id?: string) => serverGroups.find((g) => g.id === id)?.name ?? id ?? '';
+  // An ID the caller's lists do not know never shows as a name.
+  const groupName = (id: string) =>
+    groups.find((g) => g.id === id)?.name ?? t('admin.unknownGroup');
+  const serverName = (id?: string) =>
+    servers.find((s) => s.id === id)?.name ?? t('admin.unknownServer');
+  const sgName = (id?: string) =>
+    serverGroups.find((g) => g.id === id)?.name ?? t('admin.unknownServerGroup');
   // The caller is not in his own list of managed users.
   const userName = (id: string) =>
     id === callerId ? (callerName ?? '') : (users.find((u) => u.id === id)?.pseudonym ?? '');
@@ -310,6 +322,8 @@ export function UserPanel({
           ))}
         </dl>
       )}
+
+      {!cur && <p className="text-sm text-muted">{t('app.loading')}</p>}
 
       {cur && admin && (user.role === 'moderator' || cur.groups.length > 0) && (
         <Chips

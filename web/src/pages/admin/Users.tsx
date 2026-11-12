@@ -97,17 +97,20 @@ export function UsersPage() {
   const groupNames = new Map((groups.data ?? []).map((g) => [g.id, g.name]));
   const serverNames = new Map((servers.data ?? []).map((s) => [s.id, s.name]));
   const sgNames = new Map((serverGroups.data ?? []).map((g) => [g.id, g.name]));
+  // Names come from the lists; an ID missing there is unknown, never shown.
+  const namesReady = servers.isSuccess && (!admin || (groups.isSuccess && serverGroups.isSuccess));
   const scopeText = (u: User): string => {
     const a = byId.get(u.id);
     if (u.role === 'rcon_admin') return t('admin.allServers');
-    if (!a) return '';
+    if (!a || !namesReady) return '';
     return [
-      ...a.admin_scopes.map(
-        (s) =>
-          (s.server_id ? serverNames.get(s.server_id) : sgNames.get(s.server_group_id ?? '')) ?? '',
+      ...a.admin_scopes.map((s) =>
+        s.server_id
+          ? (serverNames.get(s.server_id) ?? t('admin.unknownServer'))
+          : (sgNames.get(s.server_group_id ?? '') ?? t('admin.unknownServerGroup')),
       ),
-      ...a.groups.map((g) => groupNames.get(g) ?? ''),
-      ...a.supporter_grants.map((g) => serverNames.get(g.server_id) ?? ''),
+      ...a.groups.map((g) => groupNames.get(g) ?? t('admin.unknownGroup')),
+      ...a.supporter_grants.map((g) => serverNames.get(g.server_id) ?? t('admin.unknownServer')),
     ]
       .filter(Boolean)
       .join(', ');
@@ -545,6 +548,7 @@ export function UsersPage() {
           groups={groups.data ?? []}
           servers={servers.data ?? []}
           serverGroups={serverGroups.data ?? []}
+          namesReady={namesReady}
           readOnly={phone}
           onTemplate={(u) => setInvite({ key: Date.now(), template: u })}
           onClose={() => guard(() => setOpen(null))}

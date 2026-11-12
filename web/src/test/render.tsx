@@ -37,7 +37,8 @@ export async function renderPage(
     </QueryClientProvider>,
   );
   await router.load();
-  return r;
+  // The query client goes along for tests that change the cache later.
+  return Object.assign(r, { qc });
 }
 
 // unmarked lists visible texts and labels without the test-language mark.
