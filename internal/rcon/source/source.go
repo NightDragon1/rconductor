@@ -44,7 +44,9 @@ const (
 	MaxCommand = 4000
 )
 
-// End markers a game profile chooses (source_rcon.end_marker, PROT-001).
+// End markers a game profile chooses (source_rcon.end_marker, PROT-001,
+// D-079): the end marker and the idle probe hold only where the profile
+// keeps them.
 const (
 	// EndMarkerEmptyResponse sends an empty SERVERDATA_RESPONSE_VALUE
 	// after the first answer packet and collects until its answer; it is

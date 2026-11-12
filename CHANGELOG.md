@@ -21,7 +21,8 @@
 - Servers with an HTTPS API: the end of validity of the trusted certificate is stored and given with the server and the connection test; the trust holds regardless of it. The technical notes describe renewal and trusting again (PROT-003).
 - A server has an ordered list of game profiles, such as a modpack above its game: for each value the topmost profile that sets it wins, the command catalog is the union, wrappers of all profiles hold. All profiles need the same protocol. The server admin may change the list on servers in his scope. Servers of panel 1.0 keep their profile as the only entry (SRV-008, CAT-007).
 - API: the server field `profile_id` is replaced by the list `profile_ids`, top first; scripts that use `profile_id` must change (SRV-008).
-- Fixed: Factorio servers answered no command, because Factorio refuses the empty packet that marks the end of an answer; the panel ran into its timeout and reconnected. Game profiles now choose the end of an answer with `source_rcon.end_marker` (`empty_response`, the default, or `none`); the Factorio profile sets `none`. Panel 1.0 had the same problem with own Factorio profiles. Profiles with `source_rcon` fail the profile check of panel 1.0 (PROT-001).
+- Fixed: Factorio servers answered no command, because Factorio refuses the empty packet that marks the end of an answer; the panel ran into its timeout and reconnected. Game profiles now choose the end of an answer with `source_rcon.end_marker` (`empty_response`, the default, or `none`); the Factorio profile sets `none`. Panel 1.0 had the same problem with own Factorio profiles. With `none` the panel sends neither the end packet nor the idle packet. Profiles with `source_rcon` fail the profile check of panel 1.0 (PROT-001).
+- Fixed: after an RCON answer packet over 64 KiB the panel connects again; before, the following commands of that connection failed until the next idle check (PROT-001).
 
 ## 1.0
 
