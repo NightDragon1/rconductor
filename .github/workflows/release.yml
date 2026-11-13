@@ -38,6 +38,7 @@ jobs:
   version:
     name: Version
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
       tags: ${{ steps.version.outputs.tags }}
@@ -62,6 +63,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: version
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 45
     strategy:
       matrix:
         target: [panel, agent]
@@ -110,6 +112,7 @@ jobs:
     if: github.event_name == 'push'
     needs: [version, ci]
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 45
     environment: release
     permissions:
       contents: read
@@ -165,6 +168,7 @@ jobs:
     name: Verify the published images
     needs: [version, publish]
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -184,6 +188,7 @@ jobs:
     # release does not wait for it.
     needs: [version, ci]
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 10
     environment: release
     permissions:
       contents: read
@@ -202,6 +207,7 @@ jobs:
     name: GitHub release
     needs: [version, verify]
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
