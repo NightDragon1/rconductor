@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Updates only the Docker Hub descriptions of panel and agent for a released
+# version, with the texts of main (PRJ-003, PRJ-004). Builds no image and
+# moves no tag. Started by hand; waits for the reviewer of the environment
+# release, which holds the Docker Hub login. A release candidate is refused:
+# it never changes the description of the released version.
+name: Docker Hub description
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Released version whose texts to publish, such as 1.1
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  HUB: docker.io/nightdragon1
+
+jobs:
+  describe:
+    name: Docker Hub description
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Version is a release
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          out=$(scripts/release-version.sh "v$VERSION")
+          if printf '%s\n' "$out" | grep -qx 'rc=true'; then
+            echo "::error::$VERSION is a release candidate; its run leaves the description alone"
+            exit 1
+          fi
+      - name: Short description and overview of both repos
+        env:
+          VERSION: ${{ inputs.version }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: scripts/dockerhub-describe.sh "$VERSION"
