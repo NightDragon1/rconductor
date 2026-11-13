@@ -33,16 +33,19 @@ func lit(s string) arg { return arg{val: s, suffix: s} }
 func (a arg) is(s string) bool { return !a.dyn && a.val == s }
 
 // opaque reports whether a dynamic word starts with literal text that is
-// neither an option nor a refspec with a leading "+" or ":". Such a word is
-// accepted as an operand; the decision rests on the literal words.
+// neither an option nor a refspec with a leading "+" or ":" and that cannot
+// split into several words. Such a word is accepted as an operand; the
+// decision rests on the literal words.
 func (a arg) opaque() bool {
-	return a.dyn && a.val != "" && !strings.ContainsRune("-+:", rune(a.val[0]))
+	return a.dyn && !a.split && a.val != "" && !strings.ContainsRune("-+:", rune(a.val[0]))
 }
 
 type checker struct {
 	cwd    string
 	env    env
 	reason string
+	// ghRepoEnv is set when the command sets GH_REPO or GH_HOST.
+	ghRepoEnv bool
 }
 
 func (c *checker) deny(r string) {
@@ -75,7 +78,12 @@ func (c *checker) script(src string, depth int) {
 		switch n := n.(type) {
 		case *syntax.Stmt:
 			c.redirects(n.Redirs)
-			if call, ok := n.Cmd.(*syntax.CallExpr); ok && len(call.Args) > 0 {
+			if call, ok := n.Cmd.(*syntax.CallExpr); ok {
+				for _, as := range call.Assigns {
+					if as.Name != nil {
+						c.assignName(as.Name.Value)
+					}
+				}
 				args := make([]arg, len(call.Args))
 				for i, w := range call.Args {
 					args[i] = word(w)
@@ -91,10 +99,14 @@ func (c *checker) script(src string, depth int) {
 	})
 }
 
-// assignName denies variables that inject git configuration.
+// assignName denies variables that inject git configuration and records
+// variables that change which repository gh uses.
 func (c *checker) assignName(name string) {
 	if strings.HasPrefix(name, "GIT_CONFIG") {
 		c.deny("setting " + name + " is not allowed; it injects git configuration")
+	}
+	if name == "GH_REPO" || name == "GH_HOST" {
+		c.ghRepoEnv = true
 	}
 }
 
@@ -550,6 +562,10 @@ func (c *checker) unwrap(name string, args []arg) ([]arg, bool) {
 func (c *checker) find(args []arg, depth int) {
 	for i := 0; i < len(args); i++ {
 		if args[i].dyn {
+			if args[i].split {
+				c.deny("find with an argument that may split into several words cannot be checked")
+				return
+			}
 			continue
 		}
 		switch args[i].val {

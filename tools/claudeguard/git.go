@@ -49,7 +49,7 @@ func (c *checker) git(args []arg, depth int) {
 		a := args[i]
 		if a.dyn {
 			// A dynamic directory only selects the repository.
-			if hasAnyPrefix(a.val, gitDirOptsEq...) {
+			if hasAnyPrefix(a.val, gitDirOptsEq...) && !a.split {
 				continue
 			}
 			c.deny("git argument before the subcommand is not literal")
@@ -65,6 +65,10 @@ func (c *checker) git(args []arg, depth int) {
 			// The value only selects a directory or namespace; the
 			// decision follows the subcommand.
 			i++
+			if i < len(args) && args[i].split {
+				c.deny("git " + v + " with a value that may split into several words cannot be checked")
+				return
+			}
 		case v == "-c" || v == "--config-env":
 			i++
 			if i >= len(args) {
@@ -574,9 +578,14 @@ func (c *checker) gitRebase(args []arg, depth int) {
 	}
 }
 
-// gitGrep denies --open-files-in-pager, which runs a program.
+// gitGrep denies --open-files-in-pager, which runs a program, and words
+// that are not literal unless they are the value of -e.
 func (c *checker) gitGrep(args []arg) {
-	for _, a := range args {
+	for i, a := range args {
+		if a.dyn && (a.split || (!a.opaque() && (i == 0 || !args[i-1].is("-e")))) {
+			c.deny("git grep with an argument that is not literal cannot be checked")
+			return
+		}
 		v := a.val
 		if v == "--" {
 			return
