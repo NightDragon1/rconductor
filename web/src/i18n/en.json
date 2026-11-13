@@ -771,7 +771,8 @@
       "backups": "Backups",
       "mail": "Mail",
       "other": "Other",
-      "twofactor": "Two-factor sign-in"
+      "twofactor": "Two-factor sign-in",
+      "features": "Features"
     },
     "key": {
       "backup_interval": {

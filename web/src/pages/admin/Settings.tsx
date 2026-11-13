@@ -93,6 +93,7 @@ const sections: [string, RegExp][] = [
   ['backups', /^backup\./],
   ['mail', /^smtp\./],
   ['twofactor', /^auth\./],
+  ['features', /^features\./],
 ];
 // describe gives the label and help of a key from the language file
 // (NFR-007); rate limits share one text per kind with the role in it. A
