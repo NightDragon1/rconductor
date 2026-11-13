@@ -10,9 +10,8 @@ import (
 	"testing"
 )
 
-// TestMain keeps every git call of the tests away from the calling clone:
-// it stops when a git location points into the repository or one of its
-// worktrees, then gives the tests their own HOME and git configuration.
+// TestMain stops when a git location points into the repository or a
+// worktree of it, then gives the tests their own HOME and git config.
 func TestMain(m *testing.M) {
 	if err := isolateGit(); err != nil {
 		fmt.Fprintln(os.Stderr, "test isolation:", err)
@@ -46,8 +45,7 @@ func isolateGit() error {
 	return nil
 }
 
-// repoRoots returns the work tree of the tests and, in a worktree, the
-// clone that owns it (the part of its gitdir before /.git/).
+// repoRoots returns the work tree and, in a worktree, the owning clone.
 func repoRoots() ([]string, error) {
 	cur, err := os.Getwd()
 	for ; err == nil; cur = filepath.Dir(cur) {

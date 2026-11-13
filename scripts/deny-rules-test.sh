@@ -236,9 +236,8 @@ allowed 'git config --show-origin core.hooksPath'
 allowed 'git config --list --show-origin'
 allowed 'git config get core.hooksPath'
 
-# gh workflow run is not in the deny list: a pattern cannot express the
-# one configured exception, so the guard alone decides. Its decisions on a
-# made-up configuration, nothing is executed.
+# gh workflow run: the guard alone decides (a pattern cannot express the
+# configured exception); its decisions on a made-up form, nothing runs.
 allowed 'gh workflow run ci.yml --ref main'
 repo=$(cd "$(dirname "$0")/.." && pwd)
 gtmp=$(mktemp -d)
