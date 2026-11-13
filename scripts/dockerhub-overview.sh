@@ -2,15 +2,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Prints the Docker Hub texts of an image repo for a version (PRJ-003): the
-# overview from deploy/dockerhub/overview.md, or with --short the short
-# description (at most 100 characters). A test version 0.x carries the
-# pre-release notice and no line "Tags:"; from 1.0 on it is the other way
-# round. scripts/release-version.sh decides which a version is.
+# overview from deploy/dockerhub/overview-<panel|agent>.md, or with --short
+# the short description (at most 100 characters). A test version 0.x carries
+# the pre-release notice and no line "Tags:"; from 1.0 on it is the other way
+# round. scripts/release-version.sh decides which a version is. {version}
+# becomes the version.
 #
-# The overview takes the quick start of README.md in place of its marker
-# line, with relative links made absolute (Docker Hub has no repo to resolve
-# them against), and stays within the 25,000 characters Docker Hub allows
-# (PRJ-004).
+# The panel overview takes the security note, the quick start and the
+# important variables of README.md in place of its marker lines, with
+# relative links made absolute (Docker Hub has no repo to resolve them
+# against); the agent has a text of its own. Both stay within the 25,000
+# characters Docker Hub allows (PRJ-004).
 set -eu
 cd "$(dirname "$0")/.."
 short=false
@@ -35,32 +37,47 @@ if [ "$short" = true ]; then
   exit 0
 fi
 
-marker="<!-- quick start of README.md -->"
-# The section "Quick start" of README.md, without trailing blank lines.
-quickstart() {
-  awk '/^## / { on = ($0 == "## Quick start") } on' README.md |
-    sed 's#](\([^):]*\))#](https://github.com/NightDragon1/rconductor/blob/main/\1)#g' |
+# absolute makes relative links of README.md absolute and drops trailing
+# blank lines.
+absolute() {
+  sed 's#](\([^):]*\))#](https://github.com/NightDragon1/rconductor/blob/main/\1)#g' |
     awk '/^$/ { n++; next } { for (; n > 0; n--) print ""; print }'
+}
+# section prints the section of README.md with the given heading.
+section() {
+  awk -v h="## $1" '/^## / { on = ($0 == h) } on' README.md | absolute
+}
+# security prints the paragraph of README.md that starts with "Run it only".
+security() {
+  awk '/^Run it only/ { on = 1 } on && /^$/ { exit } on' README.md | absolute
 }
 overview() {
   if [ "$prerelease" = true ]; then
     # Drop the line of the stable tags and the blank line after it.
-    awk '/^Tags: / { tags = 1; next } tags && /^$/ { tags = 0; next } { tags = 0; print }' deploy/dockerhub/overview.md
+    awk '/^Tags: / { tags = 1; next } tags && /^$/ { tags = 0; next } tags && /^[^ ]/ && !/^$/ { next } { tags = 0; print }' "$template"
   else
     # Drop the pre-release blockquote and the blank line after it.
-    awk '/^>/ { quote = 1; next } quote && /^$/ { quote = 0; next } { quote = 0; print }' deploy/dockerhub/overview.md
+    awk '/^>/ { quote = 1; next } quote && /^$/ { quote = 0; next } { quote = 0; print }' "$template"
   fi | while IFS= read -r line; do
-    if [ "$line" = "$marker" ]; then
-      quickstart
-    else
-      printf '%s\n' "$line"
-    fi
+    case $line in
+      "<!-- security note of README.md -->") security ;;
+      "<!-- quick start of README.md -->") section "Quick start" ;;
+      "<!-- important variables of README.md -->") section "Important variables" ;;
+      *) printf '%s\n' "$line" | sed "s/{version}/$version/g" ;;
+    esac
   done
 }
+template=deploy/dockerhub/overview-$kind.md
 text=$(overview)
 case $text in
-  *"$marker"*) echo "the quick start was not filled in" >&2; exit 1 ;;
+  *"<!-- "*" of README.md -->"*) echo "a part of README.md was not filled in" >&2; exit 1 ;;
 esac
+for part in "Quick start" "in your LAN or behind a VPN" "## Links" "https://github.com/NightDragon1/rconductor/wiki"; do
+  case $text in
+    *"$part"*) ;;
+    *) echo "the overview of $kind lacks: $part" >&2; exit 1 ;;
+  esac
+done
 relative=$(printf '%s\n' "$text" | grep -o '](\([^)]*\))' | grep -v '^](https://' || true)
 [ -z "$relative" ] || { echo "relative links in the overview: $relative" >&2; exit 1; }
 length=$(printf '%s' "$text" | wc -m)

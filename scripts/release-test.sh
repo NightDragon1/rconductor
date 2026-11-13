@@ -70,7 +70,9 @@ for v in 0.10 1.0 12.34; do
   done
 done
 expect "overview of a test version carries the notice" 1 "$(hub 0.10 agent | grep -c '^> \*\*Status: pre-release')"
-expect "overview of a test version has the quick start" 1 "$(hub 0.10 agent | grep -c '^## Quick start$')"
+for kind in panel agent; do
+  expect "overview $kind of a test version has a quick start" 1 "$(hub 0.10 $kind | grep -c '^## Quick start')"
+done
 # The quick start is the one of README.md, with absolute links only, and
 # the whole text fits into Docker Hub (PRJ-004).
 section() { awk '/^## / { on = ($0 == "## Quick start") } on'; }
@@ -87,7 +89,28 @@ if hub 1.0 panel | grep -qi -e pre-release -e '^>'; then
   echo "the overview of 1.0 must not carry the pre-release notice" >&2
   fails=$((fails + 1))
 fi
-expect "overview of 1.0 keeps the links" 4 "$(hub 1.0 panel | grep -c '^- ')"
+# Each image has its own text with a quick start, the security note and the
+# links; the panel takes the important variables of README.md, the agent
+# names its own and the wiki page for a separate host (PRJ-004).
+for kind in panel agent; do
+  t=$(hub 1.1 $kind)
+  for part in "## Quick start" "in your LAN or behind a VPN" "## Links" "https://github.com/NightDragon1/rconductor/wiki" "## Important variables" 'such as `1.1`'; do
+    printf '%s\n' "$t" | grep -qF "$part" || { echo "overview $kind 1.1 lacks: $part" >&2; fails=$((fails + 1)); }
+  done
+  expect "overview $kind has no placeholder left" 0 "$(printf '%s\n' "$t" | grep -c '{version}')"
+  expect "overview $kind keeps the links" 4 "$(printf '%s\n' "$t" | sed -n '/^## Links/,$p' | grep -c '^- ')"
+done
+vars() { awk '/^## / { on = ($0 == "## Important variables") } on && /^\|/'; }
+expect "panel overview has the variables of the README" "$(vars < README.md)" "$(hub 1.1 panel | vars)"
+expect "agent overview points to the wiki page for a separate host" 1 "$(hub 1.1 agent | grep -c 'wiki/Agent-on-another-host')"
+if [ "$(hub 1.1 panel)" = "$(hub 1.1 agent)" ]; then
+  echo "panel and agent overviews must differ" >&2
+  fails=$((fails + 1))
+fi
+# Every variable the agent text names is in the configuration guide.
+for v in $(hub 1.1 agent | sed -n 's/^| `\(RCD_[A-Z_]*\|DOCKER_GID\)`.*/\1/p'); do
+  grep -q "\`$v\`" docs/user/configuration.md || { echo "agent overview names $v, which docs/user/configuration.md lacks" >&2; fails=$((fails + 1)); }
+done
 expect "overview of 1.0 has no double blank line" 0 "$(hub 1.0 panel | awk 'p == "" && $0 == "" { n++ } { p = $0 } END { print n + 0 }')"
 for bad in "1.0 web" "1.0.0 panel" "v1.0 panel" "latest agent"; do
   # shellcheck disable=SC2086 # split on purpose
@@ -146,22 +169,19 @@ done
 # The Docker Hub step is skipped for a release candidate.
 expect "describe skips a release candidate" 1 "$(grep -c "if: github.event_name == 'push' && needs.version.outputs.rc != 'true'" .github/workflows/release.yml)"
 
-# C4 (regression test): the Docker Hub step of release.yml stops before
-# the API when the overview script fails or prints nothing. The step runs
-# as the runner runs it, against a stand-in for curl and the script.
-step() { # the run block of the named step of release.yml
-  awk -v name="$1" '
-    index($0, "- name: " name) { found = 1; next }
-    found && !run && /run: \|/ { run = 1; match($0, /^ */); ind = RLENGTH; next }
-    run && /^ *[^ ]/ { match($0, /^ */); if (RLENGTH <= ind) exit }
-    run { print substr($0, ind + 3) }
-  ' .github/workflows/release.yml
-}
+# C4 (regression test): scripts/dockerhub-describe.sh, which the release run
+# and the description workflow both call, stops before Docker Hub hears of
+# anything (no login either) when an overview text fails or is empty. It runs
+# against stand-ins for curl and the overview script.
+for wf in release.yml dockerhub-describe.yml; do
+  expect "C4: $wf calls the describe script" 1 "$(grep -c 'run: scripts/dockerhub-describe.sh "$VERSION"' .github/workflows/$wf)"
+done
 hubstep=$(mktemp -d)
-step "Short description and overview of both repos" > "$hubstep/step.sh"
 mkdir -p "$hubstep/bin" "$hubstep/scripts"
+cp scripts/dockerhub-describe.sh "$hubstep/scripts/"
 cat > "$hubstep/bin/curl" <<'STUB'
 #!/bin/sh
+echo curl >> "$CALLS"
 out=/dev/null
 while [ $# -gt 0 ]; do
   case "$1" in -o) out=$2; shift ;; -X) echo "$2" >> "$CALLS" ;; esac
@@ -172,31 +192,29 @@ echo '{"access_token":"t"}' > "$out"
 printf 200
 STUB
 chmod +x "$hubstep/bin/curl"
-describe() { # how the stand-in overview script behaves: fail or empty
+describe() { # how the stand-in overview script behaves: fail, empty, agent-empty or ok
   case $1 in
     fail) printf '#!/bin/sh\necho broken >&2\nexit 1\n' ;;
     empty) printf '#!/bin/sh\nexit 0\n' ;;
+    agent-empty) printf '#!/bin/sh\nfor a; do :; done\n[ "$a" = agent ] || echo text\n' ;;
     ok) printf '#!/bin/sh\necho text\n' ;;
   esac > "$hubstep/scripts/dockerhub-overview.sh"
   chmod +x "$hubstep/scripts/dockerhub-overview.sh"
   : > "$hubstep/calls"
-  (cd "$hubstep" && CALLS=$hubstep/calls PATH="$hubstep/bin:$PATH" HUB=docker.io/x VERSION=1.1 \
-    DOCKERHUB_USERNAME=u DOCKERHUB_TOKEN=t bash --noprofile --norc -e step.sh >/dev/null 2>&1)
+  (CALLS=$hubstep/calls PATH="$hubstep/bin:$PATH" HUB=docker.io/x \
+    DOCKERHUB_USERNAME=u DOCKERHUB_TOKEN=t "$hubstep/scripts/dockerhub-describe.sh" 1.1 >/dev/null 2>&1)
 }
-[ -s "$hubstep/step.sh" ] || { echo "C4: the Docker Hub step was not found in release.yml" >&2; fails=$((fails + 1)); }
-for mode in fail empty; do
+for mode in fail empty agent-empty; do
   if describe "$mode"; then
-    echo "C4: the Docker Hub step went on with an overview script that is $mode" >&2
+    echo "C4: the describe script went on with an overview that is $mode" >&2
     fails=$((fails + 1))
   fi
-  if grep -qx PATCH "$hubstep/calls"; then
-    echo "C4: the Docker Hub step sent a description with an overview script that is $mode" >&2
-    fails=$((fails + 1))
-  fi
+  expect "C4: no call to Docker Hub with an overview that is $mode" 0 "$(grep -c . "$hubstep/calls")"
 done
-# With a working script the same step reaches the API for both images.
-describe ok || { echo "C4: the Docker Hub step failed with a working overview script" >&2; fails=$((fails + 1)); }
-expect "C4: descriptions sent with a working script" 2 "$(grep -cx PATCH "$hubstep/calls")"
+# With working texts the script logs in once and sets both images.
+describe ok || { echo "C4: the describe script failed with working texts" >&2; fails=$((fails + 1)); }
+expect "C4: descriptions sent with working texts" 2 "$(grep -cx PATCH "$hubstep/calls")"
+expect "C4: one login" 3 "$(grep -cx curl "$hubstep/calls")"
 rm -rf "$hubstep"
 
 [ "$fails" -eq 0 ] || exit 1
