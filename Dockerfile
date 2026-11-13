@@ -32,7 +32,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
 RUN mkdir -p /out/panel-root/data /out/panel-root/backups /out/agent-root \
  && install -d -m 0700 /out/panel-root/secrets /out/agent-root/secrets
 
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS panel
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS panel
 ARG VERSION=0.0.0-dev
 LABEL org.opencontainers.image.title="RCONductor panel" \
       org.opencontainers.image.source="https://github.com/NightDragon1/rconductor" \
@@ -46,7 +46,7 @@ EXPOSE 8080 8443
 VOLUME ["/data", "/secrets", "/backups"]
 ENTRYPOINT ["/usr/local/bin/rconductor-panel"]
 
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS agent
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS agent
 ARG VERSION=0.0.0-dev
 LABEL org.opencontainers.image.title="RCONductor agent" \
       org.opencontainers.image.source="https://github.com/NightDragon1/rconductor" \
