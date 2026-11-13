@@ -17,6 +17,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/cache"
 	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/events"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/mail"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -54,12 +55,13 @@ type apiServer struct {
 	// decode and pictures bound the bodies in work (limitBodies).
 	decode   *semaphore.Weighted
 	pictures *semaphore.Weighted
+	features *features.Set
 }
 
 var _ api.StrictServerInterface = (*apiServer)(nil)
 
 func (s *apiServer) handler() api.ServerInterface {
-	return api.NewStrictHandlerWithOptions(s, []api.StrictMiddlewareFunc{s.authenticate}, api.StrictHTTPServerOptions{
+	return api.NewStrictHandlerWithOptions(s, []api.StrictMiddlewareFunc{s.featureGate, s.authenticate}, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			WriteProblem(w, http.StatusBadRequest, api.ReasonCodeInvalid, err.Error())
 		},
@@ -147,6 +149,22 @@ func (s *apiServer) requireSession(next http.Handler) http.Handler {
 // authenticate resolves the session cookie for every operation, rejects
 // non-public operations without a session, and makes the HTTP request and
 // response writer available to the handlers (for cookies).
+// featureGate answers an operation of a feature flag that is off like an
+// unknown endpoint (NFR-019). authenticate wraps it, so a caller without
+// a session gets 401 as for every other operation.
+func (s *apiServer) featureGate(next api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
+	name, guarded := s.features.ForOperation(operationID)
+	if !guarded {
+		return next
+	}
+	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
+		if !s.features.Enabled(ctx, s.store, name) {
+			return nil, &problem{status: http.StatusNotFound, reason: api.ReasonCodeNotFound}
+		}
+		return next(ctx, w, r, request)
+	}
+}
+
 func (s *apiServer) authenticate(next api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error) {
 		ctx = context.WithValue(ctx, httpKey{}, httpPair{w: w, r: r})

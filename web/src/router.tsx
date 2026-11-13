@@ -9,7 +9,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { fetchSession, sessionKey } from '@/api/session';
-import { entryFor } from '@/nav';
+import { entryFor, navContext, shown } from '@/nav';
 import { placeholder } from '@/pages/Placeholder';
 import { ChangePasswordPage } from '@/pages/ChangePassword';
 import { HomePage } from '@/pages/Home';
@@ -118,13 +118,7 @@ function guarded(path: string, key: string, component?: () => React.JSX.Element 
       const entry = entryFor(path);
       const s = await sessionRoute(context);
       if (!entry || !s) throw notFound();
-      if (
-        !entry.allowed(s.user.role, {
-          supportersEnabled: s.ui.supporters_enabled,
-          supportersAllowed: s.ui.supporters_allowed,
-        })
-      )
-        throw notFound();
+      if (!shown(entry, s.user.role, navContext(s.ui))) throw notFound();
     },
     component: component ?? placeholder(key),
   });

@@ -28,6 +28,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	eventbus "github.com/NightDragon1/rconductor/internal/events"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/mail"
 	"github.com/NightDragon1/rconductor/internal/memlimit"
@@ -124,6 +125,9 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	if err := users.EnsureAuditDefaults(ctx, st); err != nil {
 		return err
 	}
+	if err := features.Default().EnsureDefaults(ctx, st); err != nil {
+		return err
+	}
 	if err := profiles.EnsureDefaults(ctx, st); err != nil {
 		return err
 	}
@@ -171,6 +175,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	}
 	checker := perm.NewChecker(st, logs.Module("perm"))
 	userSvc := users.NewService(st, checker, logs.Module("users"), authSvc.RevokeUser)
+	userSvc.UseFeatures(features.Default())
 	serverSvc := servers.NewService(st, checker, box, logs.Module("servers"))
 	if err := serverSvc.CheckCredentials(ctx); err != nil {
 		return err
@@ -257,7 +262,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
 			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
 	}
-	handler := web.NewHandler(web.Options{Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc, Mail: mailSvc,
+	handler := web.NewHandler(web.Options{Features: features.Default(), Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc, Mail: mailSvc,
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
 		Agents: agentSvc, Runtime: views,
 	})

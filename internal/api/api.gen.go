@@ -1404,6 +1404,9 @@ type Session struct {
 
 	// Ui Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings.
 	Ui struct {
+		// Features Names of the feature flags that are on (NFR-019); missing means none. The RCON admin switches them with features.<name> in /settings.
+		Features *[]string `json:"features,omitempty"`
+
 		// ShortcutsEnabled Keyboard shortcuts, off by default (UI-008).
 		ShortcutsEnabled bool `json:"shortcuts_enabled"`
 

@@ -1066,7 +1066,7 @@ export interface paths {
         head?: never;
         /**
          * Change global settings; RCON admin only (AUD-003).
-         * @description Only known keys with valid values, all or nothing; for example audit.retention_days, supporters.enabled, session.idle_timeout. Switching supporters off ends the sessions of all supporters.
+         * @description Only known keys with valid values, all or nothing; for example audit.retention_days, supporters.enabled, session.idle_timeout, or features.<name> (true or false) for a feature flag of this build (NFR-019). Switching supporters off ends the sessions of all supporters.
          */
         patch: operations["updateSettings"];
         trace?: never;
@@ -1855,6 +1855,8 @@ export interface components {
             panel_version: string;
             /** @description Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings. */
             ui: {
+                /** @description Names of the feature flags that are on (NFR-019); missing means none. The RCON admin switches them with features.<name> in /settings. */
+                features?: string[];
                 /** @description Keyboard shortcuts, off by default (UI-008). */
                 shortcuts_enabled: boolean;
                 /** @description The global supporter switch (ROLE-006); with the user's own release it decides whether a moderator manages supporters (Design 6.2). */
