@@ -105,6 +105,8 @@ type env struct {
 	// allows none. workflowFile is its file with links resolved.
 	workflowForm []string
 	workflowFile string
+	// projectRoot is the clone the guard belongs to, links resolved.
+	projectRoot string
 }
 
 // shaPlaceholder stands for one full commit SHA in the configured form.
@@ -151,6 +153,9 @@ func defaultEnv() env {
 		e.cacheDir = home + "/.cache/" + cacheName
 	}
 	loadWorkflowForm(&e)
+	if r, err := filepath.EvalSymlinks(os.Getenv("RCD_GUARD_ROOT")); err == nil && r != "" {
+		e.projectRoot = r
+	}
 	return e
 }
 

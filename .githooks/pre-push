@@ -7,6 +7,8 @@
 set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 refs=$(cat)
+# The clone must have its fixed configuration before anything leaves it.
+"$root/scripts/check-git-config.sh" "$root"
 # Pushing only wip/* branches: formatting and the secret check of what the
 # push adds, no lint or script tests.
 if [[ "$(printf '%s\n' "$refs" | "$root/scripts/hook-scope.sh" push)" == wip ]]; then
