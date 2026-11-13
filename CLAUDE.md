@@ -41,6 +41,17 @@ für RCON-fähige Spieleserver. Lizenz GNU AGPL-3.0.
 - Keine Abhängigkeit mit AGPL-inkompatibler Lizenz. Neue Abhängigkeiten nur
   mit kurzer Begründung.
 
+## Kern, Feature-Flags und Fitness Functions
+- Kernbereiche (Sicherheitskern): authz, cmd, render, redact, audit, input. Welche Pfade
+  zum Kern gehören, legt allein die Klassendatei .github/core-paths.yml fest.
+- Ein PR, der Kernpfade, api/openapi.yaml, migrations/, .github/ oder Regeldateien
+  (CLAUDE.md, CONTRIBUTING.md, .claude/, Release-Skripte) berührt, ist ein Kern-PR:
+  höchstens 400 geänderte Zeilen, Draft bis bereit, Merge nur durch den Maintainer.
+- Neue Funktionen außerhalb des Kerns liegen hinter einem Feature-Flag, Standard aus.
+- Code außerhalb des Kerns nutzt die Kernbereiche nur über ihre Schnittstellen und baut
+  sie nicht nach. Fitness Functions in der CI prüfen das. Ihre Ausnahmeliste darf nur
+  schrumpfen; neue Einträge sind nicht erlaubt.
+
 ## Tests und Prüfung
 - Go: go test ./..., Integrationstests mit testcontainers-go.
 - Oberfläche: Vitest, Abläufe mit Playwright.
