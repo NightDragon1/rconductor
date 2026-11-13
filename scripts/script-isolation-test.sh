@@ -20,13 +20,17 @@ cp -a "$src/tools/." "$clone/tools/"
 git -C "$clone" config user.name "isolation check"
 git -C "$clone" config user.email isolation@example.invalid
 git -C "$clone" add -A && git -C "$clone" commit -qm "scripts under test" --allow-empty
+# A hook in a worktree runs with GIT_DIR at <clone>/.git/worktrees/<name>
+# and no work tree; each test runs in both forms.
+git -C "$clone" worktree add -q "$tmp/wt" HEAD
+wtgit=$(git -C "$tmp/wt" rev-parse --absolute-git-dir)
 state() {
   {
     cat "$clone/.git/config"
     git -C "$clone" rev-parse HEAD
     git -C "$clone" ls-files -s | sha256sum
     git -C "$clone" status --porcelain=v1 --untracked-files=all
-  } 2>&1
+  } 2>&1 || true # a broken clone shows as a difference, not as an abort
 }
 before=$(state)
 fails=0
@@ -35,6 +39,7 @@ for t in "$clone"/scripts/*-test.sh; do
   case "$name" in script-isolation-test.sh) continue ;; esac
   (cd "$clone" && GIT_DIR=$clone/.git GIT_WORK_TREE=$clone GIT_INDEX_FILE=$clone/.git/index \
     bash "scripts/$name" >/dev/null 2>&1) || true
+  (cd "$tmp/wt" && GIT_DIR=$wtgit bash "scripts/$name" >/dev/null 2>&1) || true
   after=$(state)
   if [ "$after" != "$before" ]; then
     echo "$name changed the calling clone:" >&2

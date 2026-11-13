@@ -26,6 +26,9 @@ hook_run() {
 }
 
 # Bash cases run in an empty repository: git push reads its configuration.
+# Run from a git hook, these point at the calling clone, and git init
+# would reinitialise it.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_PREFIX
 git init -q "$tmp/repo"
 bash_json() { jq -nc --arg c "$1" --arg w "$tmp/repo" '{tool_name: "Bash", cwd: $w, tool_input: {command: $c}}'; }
 file_json() { jq -nc --arg t "$1" --arg p "$2" '{tool_name: $t, cwd: "/w", tool_input: {file_path: $p}}'; }
