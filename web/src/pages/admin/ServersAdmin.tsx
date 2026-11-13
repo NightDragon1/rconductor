@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
 import { ProfileList } from './ProfileList';
+import { ForeignText } from '@/components/ForeignText';
 
 type GamePort = components['schemas']['GamePort'];
 type Message = { ok: boolean; text: string } | null;
@@ -366,7 +367,7 @@ function ServerPanel({
                 .filter((a) => a.status === 'active' || a.id === d.agent_id)
                 .map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    <ForeignText text={a.name} />
                   </option>
                 ))}
               {!canSeeAgents && d.agent_id && (

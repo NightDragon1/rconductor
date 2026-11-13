@@ -73,6 +73,8 @@ rules:
   - tools/claudeguard/**
   - tools/fitness/**
   - scripts/fitness-ratchet.sh
+  - web/eslint.config.js
+  - web/scripts/fitness-render*
 
 # generated: output of oapi-codegen, sqlc and openapi-typescript
 generated:

@@ -15,7 +15,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "gen:api": "openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "fitness": "node scripts/fitness-render.ts && sh scripts/fitness-render-test.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "7.0.5",

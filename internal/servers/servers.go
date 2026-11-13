@@ -557,7 +557,7 @@ func validContainerName(n string) bool {
 }
 
 func checkPassword(pw logging.Secret) error {
-	if n := utf8.RuneCountInString(pw.Reveal()); n < 1 || n > maxPasswordLen {
+	if n := pw.Len(); n < 1 || n > maxPasswordLen {
 		return &users.InvalidError{Detail: fmt.Sprintf("the password has 1 to %d characters", maxPasswordLen)}
 	}
 	return nil

@@ -23,6 +23,7 @@ import { usePhone } from '@/lib/phone';
 import { cn } from '@/lib/utils';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
+import { ForeignText } from '@/components/ForeignText';
 
 type Token = components['schemas']['AgentToken'];
 const settingsKey = ['settings'] as const;
@@ -181,7 +182,7 @@ export function AgentsPage() {
             <Card
               key={a.id}
               mono
-              title={<bdi>{a.name}</bdi>}
+              title={<ForeignText text={a.name} />}
               facts={[
                 {
                   label: t('admin.statusLabel'),
@@ -220,7 +221,7 @@ export function AgentsPage() {
               {shown.map((a) => (
                 <tr key={a.id} id={a.id} className="border-t border-border">
                   <td className="p-3 font-mono">
-                    <bdi>{a.name}</bdi>
+                    <ForeignText text={a.name} />
                   </td>
                   <td
                     className={cn(

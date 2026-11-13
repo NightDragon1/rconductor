@@ -2120,6 +2120,7 @@ components:
           type: string
           format: uuid
         name:
+          x-foreign: true
           type: string
           description: Foreign data from the agent (SEC-006).
         fingerprint:
@@ -2237,6 +2238,7 @@ components:
           type: boolean
           description: The game profile defines a player list.
         players:
+          x-foreign: true
           type: array
           description: >-
             Player names; foreign data (SEC-006). Empty when the game gives
@@ -2283,6 +2285,7 @@ components:
           type: string
           description: The command as sent, after cleaning.
         response:
+          x-foreign: true
           type: string
           description: Foreign data from the game server (SEC-006).
         truncated:
@@ -2349,6 +2352,7 @@ components:
           type: string
           description: The command as sent, after cleaning.
         response:
+          x-foreign: true
           type: string
           description: Foreign data from the game server (SEC-006).
         truncated:
@@ -2621,6 +2625,7 @@ components:
         players_stale:
           type: boolean
         game_version:
+          x-foreign: true
           type: string
           maxLength: 64
           description: >-
@@ -2640,6 +2645,7 @@ components:
         name:
           type: string
         image:
+          x-foreign: true
           type: string
           description: Foreign data from the agent (SEC-006).
         state:
@@ -2670,6 +2676,7 @@ components:
         agent_connected:
           type: boolean
         capabilities:
+          x-foreign: true
           type: array
           items:
             type: string
@@ -2713,6 +2720,7 @@ components:
           type: integer
           description: Port on the host; missing when the port is not published.
         proto:
+          x-foreign: true
           type: string
           description: Foreign data from the agent for other ports (SEC-006).
         steam_url:
@@ -2727,6 +2735,7 @@ components:
       required: [name]
       properties:
         name:
+          x-foreign: true
           type: string
           description: Foreign data from the agent (SEC-006).
         size_bytes:
@@ -2853,6 +2862,7 @@ components:
         container:
           type: string
         lines:
+          x-foreign: true
           type: array
           description: Foreign data from the container (SEC-006).
           items:

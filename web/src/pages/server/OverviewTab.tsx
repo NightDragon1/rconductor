@@ -11,6 +11,7 @@ import { cardStatus } from '@/lib/status';
 import { useServer } from '@/api/live-servers';
 import { PortChips } from '@/components/PortChips';
 import { portsOf } from '@/lib/ports';
+import { ForeignText } from '@/components/ForeignText';
 
 interface Metrics {
   cpu_percent: number;
@@ -121,7 +122,9 @@ export function OverviewTab() {
           <ul className="flex flex-col gap-1">
             {volumes.map((v) => (
               <li key={v.name} className="flex flex-wrap justify-between gap-x-4 text-sm">
-                <bdi className="font-mono">{v.name}</bdi>
+                <bdi className="font-mono">
+                  <ForeignText text={v.name} />
+                </bdi>
                 {v.size_bytes !== undefined && v.measured_at && (
                   <span className={v.stale ? 'text-warn' : 'text-muted'}>
                     {t('volumes.size', { size: mb(v.size_bytes), ago: ago(t, v.measured_at, now) })}
