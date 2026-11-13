@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package buildinfo holds release information set at build time.
+// Package buildinfo holds release information set at build time (test change
+// for the CI scope, closed without merge).
 package buildinfo
 
 import (
