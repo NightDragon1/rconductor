@@ -19,7 +19,8 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OB
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 repo=$tmp/repo log=$tmp/calls
 mkdir -p "$repo/scripts" "$repo/.githooks" "$repo/web/node_modules/.bin" "$repo/internal/a" "$tmp/bin"
-cp "$src/scripts/hook-scope.sh" "$src/scripts/check-format.sh" "$src/scripts/check-changed.sh" "$src/scripts/check-secrets.sh" "$repo/scripts/"
+cp "$src/scripts/hook-scope.sh" "$src/scripts/check-format.sh" "$src/scripts/check-changed.sh" "$src/scripts/check-secrets.sh" \
+  "$src/scripts/check-git-config.sh" "$repo/scripts/"
 cp "$src/.githooks/pre-push" "$repo/.githooks/"
 printf '#!/bin/sh\necho "check.sh $*" >>"%s"\n' "$log" > "$repo/scripts/check.sh"
 for tool in go gofmt; do
@@ -33,6 +34,10 @@ export PATH="$tmp/bin:$PATH"
 git -C "$repo" init -q -b main
 git -C "$repo" config user.name test
 git -C "$repo" config user.email test@example.invalid
+# The fixed values the pre-push hook checks first.
+git -C "$repo" config remote.origin.url https://github.com/NightDragon1/rconductor.git
+git -C "$repo" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+git -C "$repo" config core.hooksPath .githooks
 echo "package a" > "$repo/internal/a/a.go"
 echo "export const b = 1;" > "$repo/web/b.ts"
 git -C "$repo" add -A
