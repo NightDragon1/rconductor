@@ -11,9 +11,9 @@ fields of the command page.
 | Storage | shipped profiles are built into the panel image (`profiles/` in the repository); your own go to `/data/profiles/*.yaml` |
 | Loading | changes arrive by file events; in addition the panel compares files every `profiles.poll_interval`, because network drives send no events |
 | Precedence | your profile with the id of a shipped one replaces it and is marked as adapted |
-| Kind | `kind: generic` for a game as such, `kind: specific` for a modpack or plugin that ranks above it; a profile without `kind` is generic. Profile files inherit nothing from each other; a server combines the profiles in its list (1.1) |
-| Origin | `researched_version` names the game version the commands were researched for, `sources` lists where they come from, `status` is `tested` after a run with a real server and `untested` otherwise; a profile without `status` is untested (1.1) |
-| End of an answer | with `protocol.type: source-rcon` the panel sends an empty packet after the first answer packet and collects the answer until the game answers it; the idle check sends the same packet. That is the default, `source_rcon: { end_marker: empty_response }`. Games that refuse that packet set `end_marker: none`, such as Factorio: no end packet and no idle packet are sent, the first answer packet is the whole answer, also an empty one, and the idle check relies on TCP keepalive. A game that splits long answers gives only their first part (about 4 KB) with `none`; Factorio sends long answers in one packet, up to 64 KiB. Input that the game does not answer at all ends at the command timeout and the connection stays; Factorio takes input without a leading `/` as chat and does not answer it. A packet over 64 KiB is refused and the panel connects again (1.1) |
+| Kind | `kind: generic` for a game as such, `kind: specific` for a modpack or plugin that ranks above it; a profile without `kind` is generic. Profile files inherit nothing from each other; a server combines the profiles in its list (new in 1.1) |
+| Origin | `researched_version` names the game version the commands were researched for, `sources` lists where they come from, `status` is `tested` after a run with a real server and `untested` otherwise; a profile without `status` is untested (new in 1.1) |
+| End of an answer | with `protocol.type: source-rcon` the panel sends an empty packet after the first answer packet and collects the answer until the game answers it; the idle check sends the same packet. That is the default, `source_rcon: { end_marker: empty_response }`. Games that refuse that packet set `end_marker: none`, such as Factorio: no end packet and no idle packet are sent, the first answer packet is the whole answer, also an empty one, and the idle check relies on TCP keepalive. A game that splits long answers gives only their first part (about 4 KB) with `none`; Factorio sends long answers in one packet, up to 64 KiB. Input that the game does not answer at all ends at the command timeout and the connection stays; Factorio takes input without a leading `/` as chat and does not answer it. A packet over 64 KiB is refused and the panel connects again (new in 1.1) |
 | Errors | an invalid file is not imported; the last valid state stays active, the error is in the log and the health overview |
 | Aliases | a file has at most 100 YAML aliases |
 | Anchors | an anchored value must not contain aliases |
@@ -22,9 +22,12 @@ fields of the command page.
 
 ### Shipped profiles
 
-The panel ships these profiles (1.1). A `specific` profile, such as a modpack or a
+The panel ships these profiles (new in 1.1). A `specific` profile, such as a modpack or a
 plugin, adds to a `generic` one; give the server both, the specific one on top (see
-[several profiles per server](#several-profiles-per-server)).
+[several profiles per server](#several-profiles-per-server)). The wiki page
+[Supported games](https://github.com/NightDragon1/rconductor/wiki/Supported-games)
+adds the protocol, researched version, status and sources of each profile; it is
+generated from `profiles/` by `scripts/wiki-supported-games.sh`.
 
 | Id | Name | Kind |
 | --- | --- | --- |
