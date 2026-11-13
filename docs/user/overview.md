@@ -40,3 +40,5 @@ hosts. A socket proxy in front of the socket narrows the agent further
 
 Messages, German as a second language, Postgres and more protocols are planned
 for later releases.
+
+Test change for the CI scope (closed without merge).
