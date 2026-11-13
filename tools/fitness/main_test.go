@@ -33,7 +33,6 @@ func TestExceptions(t *testing.T) {
 	allowed, err := readExceptions(p)
 	devnull, _ := os.Open(os.DevNull)
 	defer func() { _ = devnull.Close() }()
-	// One finding without exception, one exception without finding.
 	if err != nil || report([]finding{{"authz", "GetC", ""}, {"audit", "PostB", ""}}, allowed, devnull) != 2 {
 		t.Errorf("report: %v", err)
 	}

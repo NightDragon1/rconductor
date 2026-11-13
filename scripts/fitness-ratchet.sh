@@ -18,4 +18,3 @@ if [ -n "$added" ]; then
   printf '%s\n' "$added" >&2
   exit 1
 fi
-echo "fitness exceptions did not grow"
