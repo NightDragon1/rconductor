@@ -2,39 +2,29 @@
 
 ## 1.1
 
-- Wrappers are also refused with a namespace prefix such as minecraft:execute (CMD-005).
-- The panel works with older agents of the same major version and hides what they cannot do; update the panel before the agents (AGT-013).
-- The game version from the container logs shows on the cards and the server page, for every role that sees the server (AGT-006).
-- The used size of each volume is measured in the background; the API gives it with its age (AGT-007).
-- Ports and volumes on the cards and the server page, with a Steam connect link where the game profile sets `ports.steam_connect` (UI-005). Game profiles with `ports.steam_connect` fail the profile check of panel 1.0.
-- The Steam connect link shows the server's host, so only the RCON admin gets it; the server admin sees the game ports without it, and no longer host and RCON port either (UI-005, ROLE-003).
-- Topology page: host → agent → game server by server group, for RCON admin and server admin (UI-010).
-- Mail over SMTP: the RCON admin sets up host, port, encryption (STARTTLS, SSL/TLS or none), user, password and sender and sends a test mail from the settings (NFR-017).
-- Two-factor sign-in with an authenticator app (TOTP), optional for everyone or required by the RCON admin; recovery by mail to the address in the profile, or a reset by whoever manages the user (AUTH-008).
-- Visibility of commands in the history and the live console is fixed by role: moderators and supporters now see the commands of the other moderators and supporters on their servers; server admins no longer see those of RCON admins. A switch in the history shows only your own (ROLE-009).
-- Command templates with placeholders per server, such as `kick {player} {reason}`: RCON admin and server admin keep them in the console, moderators and supporters use those of their list on the command page; a filled template is checked like a typed command (CMD-008).
-- One command to several servers at once from the console, for RCON admin and server admin within their scope; each server checks and answers on its own and counts against its own rate limit (CMD-010).
-- Game profiles name their kind, `generic` or `specific` (a modpack or plugin above a game); without it a profile is generic. Profiles with `kind` fail the profile check of panel 1.0 (CAT-007).
-- The Minecraft profile treats `function`, `return` and `schedule` as wrappers like `execute`: moderators and supporters cannot send them (CMD-005).
-- 29 more shipped game profiles: ARK, Conan Exiles, Factorio, Insurgency: Sandstorm, Mordhau, Palworld, Project Zomboid, Squad, Starbound, V Rising, Source games, Minecraft Forge, NeoForge, Paper and 1.12.2, and Minecraft mods and plugins; the list is in the technical notes (CAT-001, DOC-005).
-- Game profiles name their origin: `researched_version`, `sources` and `status` (`tested` or `untested`, default `untested`); the shipped profiles use them instead of source comments. Profiles with these fields fail the profile check of panel 1.0 (CAT-001, CAT-007, DOC-005).
-- A command that the game runs and reports as failed (Satisfactory) shows as error with the game's text; the single-command API gives `result` and `reason` (`command_failed`) like history and multi-command (PROT-003).
-- Servers with an HTTPS API: the end of validity of the trusted certificate is stored and given with the server and the connection test; the trust holds regardless of it. The technical notes describe renewal and trusting again (PROT-003).
-- A server has an ordered list of game profiles, such as a modpack above its game: for each value the topmost profile that sets it wins, the command catalog is the union, wrappers of all profiles hold. All profiles need the same protocol. The server admin may change the list on servers in his scope. Servers of panel 1.0 keep their profile as the only entry (SRV-008, CAT-007).
-- API: the server field `profile_id` is replaced by the list `profile_ids`, top first; scripts that use `profile_id` must change (SRV-008).
-- Deleting a server, server group or user group now also removes the server scopes, moderator grants and supporter grants that name it, each with an audit entry `assignment.remove`. The update removes those left behind by earlier deletions the same way, without actor. The user panel shows only the stored scope, never the ID of an unknown server (ROLE-003, ROLE-004, ROLE-007).
-- Fixed: Factorio servers answered no command, because Factorio refuses the empty packet that marks the end of an answer; the panel ran into its timeout and reconnected. Game profiles now choose the end of an answer with `source_rcon.end_marker` (`empty_response`, the default, or `none`); the Factorio profile sets `none`. Panel 1.0 had the same problem with own Factorio profiles. With `none` the panel sends neither the end packet nor the idle packet. Profiles with `source_rcon` fail the profile check of panel 1.0 (PROT-001).
-- Fixed: an RCON answer over the packet limit of 64 KiB no longer shifts later answers on the same connection, as it could since 1.0; the panel refuses that answer and connects again, and each later command gets its own answer (PROT-001, PROT-002).
-- The console shows a hint when every command of the server starts with `/`, as in Factorio, and the input does not; Factorio takes such input as chat and does not answer. The input stays as typed (CMD-015, CAT-005).
-- Built with Go 1.27.4, which includes a security fix in net/http (SEC-013).
-- Rate limits count IPv6 clients per /64; when a limit's client table is full, new clients share an overflow limit instead of being refused or resetting the table (AUTH-008, CMD-019, NFR-017, AGT-003).
-- A recovery request is answered at once and handled in the background by a bounded pool; new settings `auth.recovery_workers` (default 4) and `auth.recovery_queue` (default 100). Requests beyond the queue get the same answer and are logged as `auth.recovery.dropped`, counted per minute (AUTH-008).
-- The game profile list of a server never changes its protocol, dialect or port; only the RCON admin changes the protocol, together with a new password, and the trusted certificate is then dropped (SRV-008).
-- Stricter game profile check: a field counts as set by its key in every YAML form; `null` values, keys that are not strings, and control characters in `players.command` and `stop.command` are refused; command separators of all profiles of a server hold like wrappers; a later import cannot change the protocol or dialect of a profile in use (SRV-008, CAT-005, CAT-007).
-- The player count of servers with an HTTPS API shows on the cards, without names (PROT-003).
-- Fixed: the theme switch shows whether light, dark or auto is active; servers no longer show as stopped after the agent restarts; leaving a page during a running save waits for the save; a certificate change on an open HTTPS-API connection sets the server status at once (UI-001, AGT-003, UI-008, PROT-003).
-- Fixed: using a second-factor code and taking the open sign-in happen in one step, so a repeated code can no longer end a valid sign-in (AUTH-008).
-- Fixed: a sign-in ends the own session that was sent along (AUTH-006).
+### New
+- Two-factor sign-in (TOTP) with recovery by mail; mail over SMTP (AUTH-008, NFR-017).
+- Command templates and one command to several servers at once (CMD-008, CMD-010).
+- Several game profiles per server, the top one wins; profiles are generic or specific (SRV-008, CAT-007).
+- Game servers with an HTTPS API, first Satisfactory, with certificate pinning (PROT-003).
+- Game version, volume sizes, ports and volumes on cards and server page; topology page (AGT-006, AGT-007, UI-005, UI-010).
+- History and live console visible by role (ROLE-009).
+- 29 more shipped game profiles.
+
+### Changed
+- API: `profile_id` is replaced by the list `profile_ids`; scripts must change (SRV-008).
+- Profiles using the new fields (`kind`, `ports.steam_connect`, `researched_version`, `sources`, `status`) fail the profile check of panel 1.0.
+- Update the panel before the agents; agents 1.x keep working (AGT-013).
+- Server admins see game ports only; host, RCON port and Steam link are for the RCON admin (UI-005).
+- Deleting a server or group also removes the assignments that name it.
+
+### Fixed
+- Factorio answers commands; answers over 64 KiB no longer shift later answers.
+- Second-factor code and sign-in in one step; a sign-in ends the session sent along.
+- Theme switch, server status after an agent restart, leaving a page while saving.
+
+### Security
+- Go 1.27.4 (net/http fix); rate limits per IPv6 /64 with an overflow limit; stricter profile check; wrappers also refused with a namespace prefix.
 
 ## 1.0
 
