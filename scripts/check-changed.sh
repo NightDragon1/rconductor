@@ -23,7 +23,7 @@ if [[ "$(scripts/hook-scope.sh commit)" == wip ]]; then
   echo "wip branch: tests left out"
   exit 0
 fi
-go_dirs=$(printf '%s\n' "$staged" | grep -E '\.go$' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' || true)
+go_dirs=$(printf '%s\n' "$staged" | grep -E '\.go$' | grep -v '/testdata/' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' || true)
 web_files=$(printf '%s\n' "$staged" | grep -E '^web/.*\.(ts|tsx)$' | sed 's|^web/||' || true)
 
 if [[ -n "$go_dirs" ]]; then

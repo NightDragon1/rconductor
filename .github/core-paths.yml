@@ -69,6 +69,8 @@ rules:
   - .githooks/**
   - scripts/release*
   - tools/claudeguard/**
+  - tools/fitness/**
+  - scripts/fitness-ratchet.sh
 
 # generated: output of oapi-codegen, sqlc and openapi-typescript
 generated:

@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Fitness exceptions (PRJ-005): rule symbol # reason; the CI refuses new ones.
+cmd internal/cache # player list command of the game profile, no user input
+cmd internal/servers # stop command of the game profile for the restart action (AGT-009), audited
