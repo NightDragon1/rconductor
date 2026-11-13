@@ -21,6 +21,8 @@ authz:
   - internal/auth/**
   - internal/web/api.go
   - internal/web/web.go
+  - internal/users/assignments.go
+  - internal/users/groups.go
 
 # cmd: commands from input to game server, and the orders the agent executes
 cmd:

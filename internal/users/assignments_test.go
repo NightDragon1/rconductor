@@ -217,3 +217,30 @@ func TestSupporterRelease(t *testing.T) {
 		t.Errorf("assign after the release ended: %v", err)
 	}
 }
+
+// TestScopeOnServerDeletedAfterRightsCached: a server deleted after the
+// rights were cached is no target of a scope or grant any more; the check
+// runs in the writing transaction (ROLE-003, ROLE-004). Fails before the
+// fix for the scope; the grant was refused before by an earlier check.
+func TestScopeOnServerDeletedAfterRightsCached(t *testing.T) {
+	f := withMore(t)
+	ctx := context.Background()
+	for _, who := range []string{"admin", "sa"} {
+		if _, err := f.checker.For(ctx, f.ids[who]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := f.count(`SELECT count(*) FROM admin_scopes WHERE server_id IN ('s1', 's2')`) + f.count(`SELECT count(*) FROM grants WHERE server_id = 's1'`)
+	f.exec(`UPDATE servers SET deleted_at = 't' WHERE id IN ('s1', 's2')`)
+	scopes := []Target{{ServerID: "s2"}}
+	if _, err := f.svc.UpdateAssignments(ctx, f.as("admin"), f.ids["sa"], AssignmentsUpdate{AdminScopes: &scopes}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("scope on a deleted server: %v, want ErrNotFound", err)
+	}
+	grants := []Target{{ServerID: "s1"}}
+	if _, err := f.svc.UpdateGroup(ctx, f.as("sa"), "mg0", GroupUpdate{Grants: &grants, Version: f.version("user_groups", "mg0")}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("grant on a deleted server: %v, want ErrNotFound", err)
+	}
+	if n := f.count(`SELECT count(*) FROM admin_scopes WHERE server_id IN ('s1', 's2')`) + f.count(`SELECT count(*) FROM grants WHERE server_id = 's1'`); n != before {
+		t.Errorf("%d new rows point at deleted servers", n-before)
+	}
+}
