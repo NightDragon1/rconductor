@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Review stage of each pull request (PRJ-005): scripts/classify.sh decides
+# from the changed files and .github/core-paths.yml, this job sets the
+# label stage-1 or stage-2 and, for stage 2, turns auto-merge off. A stage 2
+# pull request over 400 changed lines fails the job.
+#
+# pull_request_target runs this file and the scripts of the base branch
+# with a token that can label. Hard rules for this file:
+#   - no checkout of the pull request head, only of the base commit;
+#   - no code of the pull request runs; its file list is read as data;
+#   - no secrets; only the job token with the permissions below;
+#   - values from the pull request reach run scripts only through env,
+#     never through expressions inside run.
+name: Classify
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: classify-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    name: Classify
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 5
+    steps:
+      # The base commit, never the head of the pull request.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - name: Classify and label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files=$RUNNER_TEMP/files.tsv out=$RUNNER_TEMP/classify.out
+          rc=0 stage=
+          if gh api --paginate "repos/$GH_REPO/pulls/$PR/files" \
+            --jq '.[] | [.status, .additions, .deletions, .filename, (.previous_filename // "")] | @tsv' >"$files"; then
+            scripts/classify.sh .github/core-paths.yml "$files" >"$out" || rc=$?
+            cat "$out"
+            stage=$(sed -n 's/^stage=//p' "$out")
+            # The API lists at most 3000 files; a longer list is incomplete.
+            if [ "$(wc -l <"$files")" -ge 3000 ]; then
+              echo "::error::file list incomplete, counted as stage 2"
+              rc=1 stage=
+            fi
+          else
+            echo "::error::file list not readable, counted as stage 2"
+            rc=1
+          fi
+          # Anything but a clear stage-1 counts as stage 2.
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then stage=; fi
+          case "$stage" in
+            stage-1) other=stage-2 ;;
+            *) stage=stage-2 other=stage-1 ;;
+          esac
+          args=(--add-label "$stage")
+          labels=$(gh pr view "$PR" --json labels --jq '.labels[].name')
+          if printf '%s\n' "$labels" | grep -qxF "$other"; then
+            args+=(--remove-label "$other")
+          fi
+          gh pr edit "$PR" "${args[@]}"
+          if [ "$stage" = stage-2 ]; then
+            gh pr merge "$PR" --disable-auto || echo "auto-merge was not on"
+          fi
+          echo "review stage: $stage"
+          exit "$rc"
