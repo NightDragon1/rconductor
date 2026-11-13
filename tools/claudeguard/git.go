@@ -3,7 +3,11 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"os/exec"
 	"strings"
+	"time"
 )
 
 // blockedConfigPrefixes are git configuration keys that redirect remotes,
@@ -44,12 +48,14 @@ var gitLocal = setOf("add", "commit", "checkout", "switch", "restore", "reset", 
 
 // git checks a git call; args follow the program name.
 func (c *checker) git(args []arg, depth int) {
+	var target pushTarget
 	i := 0
 	for ; i < len(args); i++ {
 		a := args[i]
 		if a.dyn {
 			// A dynamic directory only selects the repository.
 			if hasAnyPrefix(a.val, gitDirOptsEq...) && !a.split {
+				target.unknown = target.unknown || strings.HasPrefix(a.val, "--git-dir=")
 				continue
 			}
 			c.deny("git argument before the subcommand is not literal")
@@ -69,6 +75,16 @@ func (c *checker) git(args []arg, depth int) {
 				c.deny("git " + v + " with a value that may split into several words cannot be checked")
 				return
 			}
+			if i < len(args) && (v == "-C" || v == "--git-dir") {
+				switch {
+				case args[i].dyn:
+					target.unknown = true
+				case v == "-C":
+					target.dirs = append(target.dirs, args[i].val)
+				default:
+					target.gitDir = args[i].val
+				}
+			}
 		case v == "-c" || v == "--config-env":
 			i++
 			if i >= len(args) {
@@ -85,7 +101,9 @@ func (c *checker) git(args []arg, depth int) {
 			if !c.gitConfigParam(strings.TrimPrefix(v, "--config-env=")) {
 				return
 			}
-		case strings.HasPrefix(v, "--git-dir=") || strings.HasPrefix(v, "--work-tree=") ||
+		case strings.HasPrefix(v, "--git-dir="):
+			target.gitDir = strings.TrimPrefix(v, "--git-dir=")
+		case strings.HasPrefix(v, "--work-tree=") ||
 			strings.HasPrefix(v, "--namespace=") || strings.HasPrefix(v, "--super-prefix=") ||
 			strings.HasPrefix(v, "--attr-source=") || strings.HasPrefix(v, "--exec-path=") ||
 			strings.HasPrefix(v, "--list-cmds="):
@@ -107,6 +125,7 @@ func (c *checker) git(args []arg, depth int) {
 	switch name := sub.val; {
 	case name == "push":
 		c.gitPush(rest)
+		c.pushes = append(c.pushes, target)
 	case name == "config":
 		c.gitConfig(rest)
 	case name == "remote":
@@ -616,4 +635,78 @@ func setOf(names ...string) map[string]bool {
 		m[n] = true
 	}
 	return m
+}
+
+// pushTarget is the repository a git push runs in, relative to the
+// directory of the call: the -C directories in order and --git-dir.
+type pushTarget struct {
+	dirs    []string
+	gitDir  string
+	unknown bool
+}
+
+// gitConfigTimeout bounds one read of the git configuration; the hook
+// timeout of Claude Code would let the call through.
+const gitConfigTimeout = 30 * time.Second
+
+// checkPushes denies a git push when the configuration of a repository it
+// may run in sets a mirror remote or a push refspec that forces or deletes,
+// or when that configuration cannot be read.
+func (c *checker) checkPushes() {
+	if len(c.pushes) == 0 {
+		return
+	}
+	bases, ok := c.bases()
+	if !ok || c.repoUnknown {
+		c.deny("git push after a change of directory or repository that is not literal cannot be checked")
+		return
+	}
+	for _, p := range c.pushes {
+		if p.unknown {
+			c.deny("git push in a repository that is not literal cannot be checked")
+			return
+		}
+		for _, b := range bases {
+			dir := b
+			for _, d := range p.dirs {
+				dir = absPath(d, dir, c.env)
+			}
+			if r := pushConfigReason(dir, p.gitDir); r != "" {
+				c.deny(r)
+				return
+			}
+		}
+	}
+}
+
+// pushConfigReason reads the remote push settings that git sees in dir
+// (all scopes, includes and the common directory of a worktree).
+func pushConfigReason(dir, gitDir string) string {
+	args := []string{"config", "--null", "--get-regexp", `^remote\..*\.(mirror|push)$`}
+	if gitDir != "" {
+		args = append([]string{"--git-dir=" + gitDir}, args...)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), gitConfigTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 && len(out) == 0 {
+		return "" // no such key
+	}
+	if err != nil {
+		return "the remote configuration in " + dir + " could not be read, so git push is denied"
+	}
+	for _, entry := range strings.Split(string(out), "\x00") {
+		key, val, hasVal := strings.Cut(entry, "\n")
+		val = strings.TrimSpace(val)
+		switch {
+		case strings.HasSuffix(key, ".mirror") && (!hasVal || !contains([]string{"false", "no", "off", "0", ""}, strings.ToLower(val))):
+			return "git push is denied: the configuration sets " + key
+		case strings.HasSuffix(key, ".push") && (strings.HasPrefix(val, "+") || (strings.HasPrefix(val, ":") && val != ":")):
+			return "git push is denied: the configuration sets a forcing or deleting refspec in " + key
+		}
+	}
+	return ""
 }

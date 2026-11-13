@@ -263,6 +263,8 @@ deny	FC	git -C /home/x/rconductor-wt-$w status --short
 deny	FC	git -C ../rconductor-gr-$x log --oneline -3
 deny	FC	git --git-dir="$d/.git" --work-tree=$w status
 deny	FC	git -C $dir push origin main
+deny	FC	git -C "$dir" push origin main
+deny	FC	git --git-dir="$d/.git" push origin main
 deny	FC	git -C "$x" push -f origin main
 deny	FC	git -C /home/x/rconductor-wt-$w push --del origin feature
 deny	FC	git --work-tree=$w config remote.origin.mirror true
@@ -355,6 +357,15 @@ deny	FC	gh api repos/x/y$z
 deny	FC	git grep -n $pat
 deny	FC	git grep "$pat"
 deny	FC	find $dir -name x
+deny	FC	GIT_DIR=/x/.git git push origin main
+deny	FC	HOME=/x git push origin main
+deny	FC	export GIT_COMMON_DIR=/x; git push origin main
+deny	FC	cd "$w" && git push origin main
+deny	FC	cd - && git push origin main
+deny	FC	pushd /x && popd && git push origin main
+deny	FC	env -C /x git push origin main
+deny	FC	sudo -D /x git push origin main
+deny	FC	find . -execdir git push origin main \;
 allow	ok	git rebase "origin/$x"
 allow	ok	git commit -m "x$y"
 allow	ok	git grep -e "$pat" -- '*.go'
