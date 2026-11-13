@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/moby/moby/api v1.56.1
 	github.com/moby/moby/client v0.6.2
-	github.com/oapi-codegen/runtime v1.8.0
+	github.com/oapi-codegen/runtime v1.9.0
 	github.com/pressly/goose/v3 v3.30.0
 	github.com/testcontainers/testcontainers-go v0.45.0
 	golang.org/x/crypto v0.58.0
