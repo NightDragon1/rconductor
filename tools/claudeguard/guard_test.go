@@ -5,12 +5,32 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 )
+
+// testCWD is an empty git repository, the working directory of the Bash
+// cases; git reads no user or system configuration in the tests.
+var testCWD string
+
+// setupRepo makes testCWD, an empty git repository; TestMain calls it
+// after isolating the git environment.
+func setupRepo() (func(), error) {
+	dir, err := os.MkdirTemp("", "claudeguard-test")
+	if err != nil {
+		return nil, err
+	}
+	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("git init: %s", out)
+	}
+	testCWD = dir
+	return func() { _ = os.RemoveAll(dir) }, nil
+}
 
 func testEnv(t *testing.T) env {
 	t.Helper()
@@ -24,10 +44,19 @@ const testForm = "test.yml -R owner/repo-x -f ref=<sha>"
 
 const testSHA = "0123456789abcdef0123456789abcdef01234567"
 
-func bashInput(cmd string) string {
+func gitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %s", args, out)
+	}
+}
+
+func bashInput(cmd string) string { return bashInputIn(cmd, testCWD) }
+
+func bashInputIn(cmd, cwd string) string {
 	b, _ := json.Marshal(map[string]any{
 		"tool_name":  "Bash",
-		"cwd":        "/w",
+		"cwd":        cwd,
 		"tool_input": map[string]any{"command": cmd},
 	})
 	return string(b)
@@ -261,6 +290,61 @@ func TestWorkflowFormFile(t *testing.T) {
 			loadWorkflowForm(&e)
 			if checkBash(run, "/w", e) != "" || checkEditPath(target, "/w", e) == "" {
 				t.Error("linked form denied or its target writable")
+			}
+		})
+	}
+}
+
+// TestPushRemoteConfig: git push is denied when the repository it runs in
+// has a mirror remote or a forcing or deleting push refspec, also through
+// a worktree, -C, --git-dir, cd and the global configuration, and when the
+// configuration cannot be read.
+func TestPushRemoteConfig(t *testing.T) {
+	e := testEnv(t)
+	repo := func(kv ...string) string {
+		dir := t.TempDir()
+		gitIn(t, dir, "init", "-q")
+		for i := 0; i+1 < len(kv); i += 2 {
+			gitIn(t, dir, "config", kv[i], kv[i+1])
+		}
+		return dir
+	}
+	plain := repo()
+	mirror := repo("remote.origin.url", "https://example.invalid/r.git", "remote.origin.mirror", "true")
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitIn(t, mirror, "worktree", "add", "-q", "--orphan", "-b", "wt", wt)
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(global, []byte("[remote \"x\"]\n\tpush = +refs/heads/*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		deny             bool
+		label            string
+		cwd, cmd, global string
+	}{
+		{false, "no push settings", plain, "git push origin main", ""},
+		{true, "mirror remote", mirror, "git push origin main", ""},
+		{true, "worktree of a mirror repository", wt, "git push origin main", ""},
+		{true, "forcing push refspec", repo("remote.origin.push", "+refs/heads/*:refs/heads/*"), "git push", ""},
+		{true, "deleting push refspec", repo("remote.origin.push", ":refs/heads/x"), "git push", ""},
+		{false, "plain push refspec", repo("remote.origin.push", "refs/heads/main:refs/heads/main"), "git push", ""},
+		{false, "mirror off", repo("remote.origin.mirror", "false"), "git push", ""},
+		{true, "-C into a mirror repository", plain, "git -C " + mirror + " push origin main", ""},
+		{true, "--git-dir of a mirror repository", plain, "git --git-dir=" + mirror + "/.git push origin main", ""},
+		{true, "cd into a mirror repository", plain, "cd " + mirror + " && git push origin main", ""},
+		{true, "push before cd in a loop", plain, "for d in 1 2; do git push; cd " + wt + "; done", ""},
+		{true, "global configuration", plain, "git push", global},
+		{false, "no push in a mirror repository", mirror, "git status", ""},
+		{true, "unreadable configuration", filepath.Join(plain, "missing"), "git push", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.label, func(t *testing.T) {
+			if c.global != "" {
+				t.Setenv("GIT_CONFIG_GLOBAL", c.global)
+			}
+			got := run(strings.NewReader(bashInputIn(c.cmd, c.cwd)), e)
+			if c.deny != (got != "") {
+				t.Errorf("deny=%v, got %q for %q in %s", c.deny, got, c.cmd, c.cwd)
 			}
 		})
 	}

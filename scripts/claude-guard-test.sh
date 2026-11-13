@@ -25,7 +25,9 @@ hook_run() {
   echo "$rc"
 }
 
-bash_json() { jq -nc --arg c "$1" '{tool_name: "Bash", cwd: "/w", tool_input: {command: $c}}'; }
+# Bash cases run in an empty repository: git push reads its configuration.
+git init -q "$tmp/repo"
+bash_json() { jq -nc --arg c "$1" --arg w "$tmp/repo" '{tool_name: "Bash", cwd: $w, tool_input: {command: $c}}'; }
 file_json() { jq -nc --arg t "$1" --arg p "$2" '{tool_name: $t, cwd: "/w", tool_input: {file_path: $p}}'; }
 
 # expect <case> <want status> <json>

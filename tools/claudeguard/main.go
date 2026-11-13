@@ -25,7 +25,10 @@
 // a call the guard cannot read (parse error, a command name or argument
 // that is not literal where it decides, an unknown subcommand or option) is
 // denied; a word that may split into several words counts as not literal.
-// gh workflow run is allowed in two fixed literal forms only.
+// A git push is also denied when the git configuration of the repository it
+// runs in has a mirror remote or a push refspec that forces or deletes;
+// the guard reads that configuration with git config and denies when it
+// cannot. gh workflow run is allowed in two fixed literal forms only.
 // --no-verify (and -n where it means --no-verify) and writes to
 // core.hooksPath are denied, so the repository hooks keep running. Edit, Write, MultiEdit and NotebookEdit are denied for paths in a
 // .git directory or a .git file, for the user's git configuration and for

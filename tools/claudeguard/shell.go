@@ -44,6 +44,14 @@ type checker struct {
 	cwd    string
 	env    env
 	reason string
+	// pushes are the git push calls, judged against the remote
+	// configuration after the whole command is read.
+	pushes []pushTarget
+	// chdirs are the literal targets of cd and pushd in the command.
+	chdirs []string
+	// repoUnknown is set when the command changes the directory or the
+	// configuration source of git in a way the guard cannot follow.
+	repoUnknown bool
 	// ghRepoEnv is set when the command sets GH_REPO or GH_HOST.
 	ghRepoEnv bool
 }
@@ -57,6 +65,9 @@ func (c *checker) deny(r string) {
 func checkBash(cmd, cwd string, e env) string {
 	c := &checker{cwd: cwd, env: e}
 	c.script(cmd, 0)
+	if c.reason == "" {
+		c.checkPushes()
+	}
 	return c.reason
 }
 
@@ -100,12 +111,15 @@ func (c *checker) script(src string, depth int) {
 }
 
 // assignName denies variables that inject git configuration and records
-// variables that change which repository gh uses.
+// variables that change which repository configuration git or gh uses.
 func (c *checker) assignName(name string) {
 	if strings.HasPrefix(name, "GIT_CONFIG") {
 		c.deny("setting " + name + " is not allowed; it injects git configuration")
 	}
-	if name == "GH_REPO" || name == "GH_HOST" {
+	switch name {
+	case "GIT_DIR", "GIT_COMMON_DIR", "HOME", "XDG_CONFIG_HOME":
+		c.repoUnknown = true
+	case "GH_REPO", "GH_HOST":
 		c.ghRepoEnv = true
 	}
 }
@@ -285,6 +299,10 @@ func (c *checker) call(args []arg, redirs []*syntax.Redirect, depth int) {
 				c.writeTarget(a.val)
 			}
 		}
+	case name == "cd" || (name == "pushd" && len(rest) > 0):
+		c.chdir(rest)
+	case name == "pushd" || name == "popd":
+		c.repoUnknown = true
 	case name == "find":
 		c.find(rest, depth)
 	case name == "xargs":
@@ -511,6 +529,11 @@ func (c *checker) unwrap(name string, args []arg) ([]arg, bool) {
 			case name == "env" && n == "split-string":
 				c.deny("env --split-string cannot be checked")
 				return nil, false
+			case n == "chdir":
+				c.repoUnknown = true
+				if !hasVal {
+					i++
+				}
 			case contains(spec.valLong, n):
 				if !hasVal {
 					i++
@@ -533,6 +556,12 @@ func (c *checker) unwrap(name string, args []arg) ([]arg, bool) {
 			case name == "env" && ch == 'S':
 				c.deny("env -S cannot be checked")
 				return nil, false
+			case (name == "env" && ch == 'C') || (name == "sudo" && ch == 'D'):
+				c.repoUnknown = true
+				if j == len(v)-1 {
+					i++
+				}
+				j = len(v)
 			case strings.IndexByte(spec.valShort, ch) >= 0:
 				if j == len(v)-1 {
 					i++
@@ -569,7 +598,9 @@ func (c *checker) find(args []arg, depth int) {
 			continue
 		}
 		switch args[i].val {
-		case "-exec", "-execdir", "-ok", "-okdir":
+		case "-exec", "-ok":
+		case "-execdir", "-okdir":
+			c.repoUnknown = true
 		default:
 			continue
 		}
@@ -695,6 +726,43 @@ func (c *checker) flock(args []arg, depth int) {
 	}
 	c.call(args[i:], nil, depth)
 }
+
+// chdir records the target of cd or pushd.
+func (c *checker) chdir(args []arg) {
+	for _, a := range args {
+		switch {
+		case a.dyn || a.is("-"):
+			c.repoUnknown = true
+			return
+		case a.val == "--" || (strings.HasPrefix(a.val, "-") && len(a.val) > 1):
+		default:
+			c.chdirs = append(c.chdirs, a.val)
+			return
+		}
+	}
+	c.chdirs = append(c.chdirs, "~")
+}
+
+// bases returns the directories a command may run in: the hook's working
+// directory and every combination with the literal cd targets. ok is
+// false when there are too many to check.
+func (c *checker) bases() (dirs []string, ok bool) {
+	dirs = []string{c.cwd}
+	for _, d := range c.chdirs {
+		for _, b := range dirs {
+			if p := absPath(d, b, c.env); !contains(dirs, p) {
+				dirs = append(dirs, p)
+			}
+		}
+		if len(dirs) > maxBases {
+			return dirs[:1], false
+		}
+	}
+	return dirs, true
+}
+
+// maxBases bounds the directories checked for one command.
+const maxBases = 32
 
 func contains(list []string, s string) bool {
 	for _, x := range list {

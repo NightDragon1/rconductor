@@ -17,7 +17,14 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "test isolation:", err)
 		os.Exit(2)
 	}
-	os.Exit(m.Run())
+	cleanup, err := setupRepo()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	code := m.Run()
+	cleanup()
+	os.Exit(code)
 }
 
 func isolateGit() error {
