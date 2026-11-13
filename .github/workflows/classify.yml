@@ -7,7 +7,7 @@
 #
 # pull_request_target runs this file and the scripts of the base branch
 # with a token that can label. Hard rules for this file:
-#   - no checkout of the pull request head, only of the base commit;
+#   - no checkout of the pull request head, only of the base branch;
 #   - no code of the pull request runs; its file list is read as data;
 #   - no secrets; only the job token with the permissions below;
 #   - values from the pull request reach run scripts only through env,
@@ -32,10 +32,12 @@ jobs:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 5
     steps:
-      # The base commit, never the head of the pull request.
+      # The current tip of the base branch, never the head of the pull
+      # request. base.sha can be older than the class file and the script
+      # (it stays at the commit the pull request was opened on).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.base.ref }}
           persist-credentials: false
       - name: Classify and label
         env:
