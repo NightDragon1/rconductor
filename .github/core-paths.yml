@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Class file of the core paths (PRJ-005): a pull request whose diff touches
+# one of these paths is a core PR (stage 2); scripts/classify.sh decides it
+# and the workflow classify.yml labels the pull request.
+#
+# Fixed format, read by scripts/classify.sh without a YAML parser:
+#   - a line "<area>:" at column 0 starts the list of an area;
+#   - each "  - <glob>" below it adds a glob, relative to the repository root;
+#   - comments ("#" at the line start) and blank lines are ignored;
+#   - any other line is an error.
+# Glob: "**" matches any number of directories (also none), "*" any
+# characters within one path segment, "?" one character other than "/".
+# A glob must not start with "*" (YAML would read it as an alias).
+# The list "generated" holds generated files: they never decide the stage
+# and do not count toward the size limit of 400 changed lines.
+
+# authz: rights, sessions, login, and the API middleware that enforces them
+authz:
+  - internal/perm/**
+  - internal/auth/**
+  - internal/web/api.go
+  - internal/web/web.go
+
+# cmd: commands from input to game server, and the orders the agent executes
+cmd:
+  - internal/commands/**
+  - internal/rcon/**
+  - internal/connmgr/**
+  - internal/agentproto/**
+  - internal/agent/docker.go
+
+# render: foreign data (SEC-006) shown in the UI
+render:
+  - internal/foreign/**
+  - web/src/components/ForeignText.tsx
+  - web/src/lib/foreign.ts
+
+# redact: no secrets in logs (SEC-012)
+redact:
+  - internal/logging/redact.go
+  - internal/logging/logging.go
+
+# audit: audit log and the fixed event codes
+audit:
+  - internal/audit/**
+  - internal/users/auditlog.go
+  - internal/logging/events.go
+
+# input: parsing and limits of untrusted input
+input:
+  - internal/pattern/**
+  - internal/web/headers.go
+  - internal/web/api_multi.go
+  - internal/netlimit/**
+  - internal/profiles/check.go
+
+# boundary: API contract, database schema and CI
+boundary:
+  - api/**
+  - migrations/**
+  - .github/**
+
+# rules: rule files, hooks, guard and release scripts
+rules:
+  - CLAUDE.md
+  - CONTRIBUTING.md
+  - .claude/**
+  - .githooks/**
+  - scripts/release*
+  - tools/claudeguard/**
+
+# generated: output of oapi-codegen, sqlc and openapi-typescript
+generated:
+  - internal/api/api.gen.go
+  - internal/store/sqlitedb/**
+  - web/src/api/schema.d.ts
