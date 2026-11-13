@@ -234,7 +234,9 @@ jobs:
   # not report them, or it satisfies the ruleset before the pull request's
   # run has finished.
   image:
-    name: ${{ needs.scope.outputs.stage2 == 'true' && 'Image (amd64)' || 'Image (amd64) not due' }}
+    # Static names: a skipped job reports its name unevaluated, and the
+    # ruleset needs these names also when documentation alone skips them.
+    name: Image (amd64)
     needs: scope
     if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
@@ -271,7 +273,7 @@ jobs:
           retention-days: 1
 
   integration:
-    name: ${{ needs.scope.outputs.stage2 == 'true' && 'Integration tests' || 'Integration tests not due' }}
+    name: Integration tests
     needs: [scope, image]
     if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
