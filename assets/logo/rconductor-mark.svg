@@ -1,0 +1,16 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RCONductor">
+  <defs>
+    <linearGradient id="ga" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <mask id="ma" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="#fff"/>
+      <path d="M21.5 23.5l7 6.5-7 6.5" fill="none" stroke="#000" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 38h10.5" stroke="#000" stroke-width="4.2" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <g transform="translate(0 0) scale(1.0)">
+    <path d="M12 30C12 18.4 21 9 32 9s20 9.4 20 21v23.5c0 2.1-2.3 3.2-3.9 1.9l-2.6-2.1a2.4 2.4 0 0 0-3 0l-2.9 2.3a2.4 2.4 0 0 1-3 0l-2.9-2.3a2.4 2.4 0 0 0-3 0l-2.9 2.3a2.4 2.4 0 0 1-3 0l-2.9-2.3a2.4 2.4 0 0 0-3 0l-2.6 2.1C14.3 56.7 12 55.6 12 53.5Z" fill="url(#ga)" mask="url(#ma)"/>
+  </g>
+</svg>
