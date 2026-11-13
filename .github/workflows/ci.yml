@@ -1,12 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Three stages (scripts/ci-scope.sh decides):
-#   1. every run: SPDX, script tests, Go lint, Go test, web lint and test, govulncheck
+#   1. every run that changes more than documentation: SPDX, script tests, Go lint,
+#      Go test, web lint and test, govulncheck (SPDX and Scope run always)
 #   2. push to main and pull requests: integration, E2E, amd64 image
 #   3. nightly, manual and tags: arm64 images, Minecraft and the long tests
 #      in real time, and everything else regardless of paths
 # E2E follows the changed paths; Minecraft also runs in stage 2 when RCON or
-# profiles change. release.yml calls this before publishing; images are only
+# profiles change. A change of documentation alone runs only Scope, SPDX and
+# the collecting jobs (PRJ-005); skipped jobs count as passed for the
+# ruleset, so there is no paths filter on the workflow. release.yml calls this before publishing; images are only
 # built here, never pushed.
 #
 # The repository variable CI_RUNNER sets the runner of all jobs, for example
@@ -41,6 +44,7 @@ jobs:
       e2e: ${{ steps.scope.outputs.e2e }}
       minecraft: ${{ steps.scope.outputs.minecraft }}
       sqlc: ${{ steps.scope.outputs.sqlc }}
+      code: ${{ steps.scope.outputs.code }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,6 +69,8 @@ jobs:
 
   scripts:
     name: Script tests
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 15
     steps:
@@ -91,6 +97,7 @@ jobs:
   go-lint:
     name: Go lint
     needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 20
     steps:
@@ -125,6 +132,8 @@ jobs:
   # index + 1, so the matrix is exactly 1 to N.
   go-test-shard:
     name: Go test shard ${{ matrix.shard }}
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 30
     strategy:
@@ -157,19 +166,22 @@ jobs:
   # due, so anything but success fails.
   go-test:
     name: Go test
-    needs: go-test-shard
+    needs: [scope, go-test-shard]
     if: ${{ !cancelled() }}
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 5
     steps:
       - env:
+          DUE: ${{ needs.scope.outputs.code == 'true' }}
           RESULT: ${{ needs.go-test-shard.result }}
         run: |
-          echo "shards: $RESULT"
-          [ "$RESULT" = success ]
+          echo "due: $DUE, shards: $RESULT"
+          [ "$DUE" != true ] || [ "$RESULT" = success ]
 
   govulncheck:
     name: govulncheck
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 15
     steps:
@@ -186,6 +198,8 @@ jobs:
 
   web:
     name: Web lint, test and build
+    needs: scope
+    if: needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 20
     defaults:
@@ -222,7 +236,7 @@ jobs:
   image:
     name: ${{ needs.scope.outputs.stage2 == 'true' && 'Image (amd64)' || 'Image (amd64) not due' }}
     needs: scope
-    if: needs.scope.outputs.stage2 == 'true'
+    if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 30
     steps:
@@ -259,7 +273,7 @@ jobs:
   integration:
     name: ${{ needs.scope.outputs.stage2 == 'true' && 'Integration tests' || 'Integration tests not due' }}
     needs: [scope, image]
-    if: needs.scope.outputs.stage2 == 'true'
+    if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 30
     steps:
@@ -282,7 +296,7 @@ jobs:
   e2e-shard:
     name: E2E shard ${{ matrix.shard }}
     needs: [scope, web]
-    if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true'
+    if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true' && needs.scope.outputs.code == 'true'
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 30
     # Browser and its libraries come with the image; its version follows
@@ -334,7 +348,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - env:
-          DUE: ${{ needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true' }}
+          DUE: ${{ needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true' && needs.scope.outputs.code == 'true' }}
           RESULT: ${{ needs.e2e-shard.result }}
         run: |
           echo "due: $DUE, shards: $RESULT"
