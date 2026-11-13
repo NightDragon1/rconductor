@@ -7,6 +7,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
+# Git runs hooks with variables that point at this clone; tests must not
+# inherit them (their own git calls would write here). From here on git
+# finds the repository from the work tree.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_PREFIX
 
 # The secret check runs on every branch.
 scripts/check-secrets.sh

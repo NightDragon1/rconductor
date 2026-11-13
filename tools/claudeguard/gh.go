@@ -3,6 +3,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 )
 
@@ -15,6 +16,7 @@ const (
 	ghPRMerge
 	ghRepoSync
 	ghDeployKey
+	ghWorkflowRun
 )
 
 // ghTop lists the top-level gh commands. A command with a nil map allows
@@ -41,7 +43,7 @@ var ghTop = map[string]map[string]ghRule{
 		"list": ghAllow, "ls": ghAllow, "view": ghAllow, "watch": ghAllow, "rerun": ghAllow,
 		"download": ghAllow,
 	},
-	"workflow": {"list": ghAllow, "ls": ghAllow, "view": ghAllow},
+	"workflow": {"list": ghAllow, "ls": ghAllow, "view": ghAllow, "run": ghWorkflowRun},
 	"repo": {
 		"view": ghAllow, "list": ghAllow, "ls": ghAllow, "clone": ghAllow, "set-default": ghAllow,
 		"sync": ghRepoSync, "deploy-key": ghDeployKey,
@@ -118,6 +120,10 @@ func (c *checker) gh(args []arg) {
 			return
 		}
 		c.deny("gh repo deploy-key may only list keys from a tool call")
+	case ghWorkflowRun:
+		if c.ghRepoEnv || !workflowRunAllowed(rest, c.env.workflowForm) {
+			c.deny("gh workflow run is allowed only for ci.yml on main and the one configured form")
+		}
 	default:
 		c.deny("gh " + name + " " + sub.val + " is not on the guard's list of allowed subcommands")
 	}
@@ -246,4 +252,37 @@ func (c *checker) ghAPI(args []arg) {
 			return
 		}
 	}
+}
+
+// workflowRunAllowed accepts exactly two literal argument lists of gh
+// workflow run: ci.yml on main, and the one form configured outside the
+// repository (see loadWorkflowForm), whose <sha> is one full commit SHA.
+func workflowRunAllowed(args []arg, form []string) bool {
+	vals := make([]string, len(args))
+	for i, a := range args {
+		if a.dyn {
+			return false
+		}
+		vals[i] = a.val
+	}
+	if slices.Equal(vals, []string{"ci.yml", "--ref", "main"}) {
+		return true
+	}
+	if len(form) == 0 || len(vals) != len(form) {
+		return false
+	}
+	for i, want := range form {
+		pre, ok := strings.CutSuffix(want, shaPlaceholder)
+		if !ok {
+			if vals[i] != want {
+				return false
+			}
+			continue
+		}
+		sha, ok := strings.CutPrefix(vals[i], pre)
+		if !ok || len(sha) != 40 || strings.Trim(sha, "0123456789abcdef") != "" {
+			return false
+		}
+	}
+	return true
 }

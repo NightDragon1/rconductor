@@ -24,7 +24,9 @@
 // A git or gh call is allowed only when its subcommand is on a known list;
 // a call the guard cannot read (parse error, a command name or argument
 // that is not literal where it decides, an unknown subcommand or option) is
-// denied. --no-verify (and -n where it means --no-verify) and writes to
+// denied; a word that may split into several words counts as not literal.
+// gh workflow run is allowed in two fixed literal forms only.
+// --no-verify (and -n where it means --no-verify) and writes to
 // core.hooksPath are denied, so the repository hooks keep running. Edit, Write, MultiEdit and NotebookEdit are denied for paths in a
 // .git directory or a .git file, for the user's git configuration and for
 // the guard's own build cache.
@@ -42,6 +44,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // maxInput bounds the hook input that is read from stdin.
@@ -94,6 +98,42 @@ type env struct {
 	home      string
 	xdgConfig string
 	cacheDir  string
+	// workflowForm is the one configured form of gh workflow run; empty
+	// allows none. workflowFile is its file with links resolved.
+	workflowForm []string
+	workflowFile string
+}
+
+// shaPlaceholder stands for one full commit SHA in the configured form.
+const shaPlaceholder = "<sha>"
+
+// loadWorkflowForm reads the one additional form of gh workflow run from
+// <XDG config>/rconductor-guard/workflows: one line of literal arguments
+// after "gh workflow run", one of them may end in <sha>. A missing, empty
+// or longer file allows nothing. The file and its link target are
+// protected from tool calls.
+func loadWorkflowForm(e *env) {
+	if e.xdgConfig == "" {
+		return
+	}
+	p := filepath.Join(e.xdgConfig, "rconductor-guard", "workflows")
+	if t, err := filepath.EvalSymlinks(p); err == nil {
+		e.workflowFile = t
+	}
+	b, err := os.ReadFile(filepath.Clean(p))
+	if err != nil || len(b) > 1024 {
+		return
+	}
+	var lines []string
+	for _, l := range strings.Split(string(b), "\n") {
+		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) != 1 || strings.Count(lines[0], shaPlaceholder) != 1 {
+		return
+	}
+	e.workflowForm = strings.Fields(lines[0])
 }
 
 func defaultEnv() env {
@@ -107,6 +147,7 @@ func defaultEnv() env {
 	} else if home != "" {
 		e.cacheDir = home + "/.cache/" + cacheName
 	}
+	loadWorkflowForm(&e)
 	return e
 }
 

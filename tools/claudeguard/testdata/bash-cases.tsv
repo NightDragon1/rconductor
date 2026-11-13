@@ -256,16 +256,21 @@ allow	ok	[ -z "$out" ] && break
 allow	ok	test -n "$x" && [[ -z $y ]] && echo ok
 allow	ok	echo [ a] [
 deny	FC	[ -n "$m" ] && git push -vvf origin main
-allow	ok	git -C /home/x/rconductor-wt-$w status --short
-allow	ok	git -C ../rconductor-gr-$x log --oneline -3
-allow	ok	git --git-dir="$d/.git" --work-tree=$w status
-allow	ok	git -C $dir push origin main
+allow	ok	git -C "/home/x/rconductor-wt-$w" status --short
+allow	ok	git -C ../rconductor-gr-"$x" log --oneline -3
+allow	ok	git --git-dir="$d/.git" --work-tree="$w" status
+deny	FC	git -C /home/x/rconductor-wt-$w status --short
+deny	FC	git -C ../rconductor-gr-$x log --oneline -3
+deny	FC	git --git-dir="$d/.git" --work-tree=$w status
+deny	FC	git -C $dir push origin main
 deny	FC	git -C "$x" push -f origin main
 deny	FC	git -C /home/x/rconductor-wt-$w push --del origin feature
 deny	FC	git --work-tree=$w config remote.origin.mirror true
 allow	ok	gh run watch $id --exit-status
-allow	ok	gh api repos/o/r/actions/jobs/$j/logs
-allow	ok	gh api repos/x/$y
+allow	ok	gh api repos/o/r/actions/jobs/"$j"/logs
+allow	ok	gh api "repos/x/$y"
+deny	FC	gh api repos/o/r/actions/jobs/$j/logs
+deny	FC	gh api repos/x/$y
 allow	ok	gh pr view "$n"
 allow	ok	gh issue close $1 -R o/r -c "x"
 allow	ok	gh pr merge 12 --auto --squash -R "$repo"
@@ -274,7 +279,9 @@ deny	FC	gh api repos/o/r/git/refs/$r -X DELETE
 deny	FC	gh api repos/o/r/issues/$n -f body=x
 deny	FC	gh pr merge 12 --squash $extra
 deny	FC	gh pr merge 12 --squash -R $repo
-allow	ok	push(){ w=$1; b=$2; cd "$w" && git push -q origin HEAD:refs/heads/$b; }; push a b
+deny	FC	push(){ w=$1; b=$2; cd "$w" && git push -q origin HEAD:refs/heads/$b; }; push a b
+deny	FC	push(){ b=$1; git push -q origin HEAD:refs/heads/$b; }; push a
+allow	ok	push(){ b=$1; git push -q origin HEAD:refs/heads/"$b"; }; push a
 allow	ok	git push origin HEAD:refs/heads/"$b"
 deny	FC	push(){ git push -q origin :refs/heads/$1; }; push a
 deny	FC	push(){ git push -q origin +HEAD:refs/heads/$1; }; push a
@@ -331,3 +338,55 @@ allow	ok	git config --show-origin core.hooksPath
 allow	ok	git config --list --show-origin
 allow	ok	git config get core.hooksPath
 allow	ok	git -c core.editor=true commit --amend --no-edit
+deny	FC	cmd="push --force"; git $cmd origin main
+deny	FC	set -- push -f; git "$@" origin main
+deny	FC	X=--force; git push origin main $X
+deny	FC	X=" --force"; git push origin main$X
+deny	FC	git push origin$x main
+deny	FC	IFS=,; a=push,-f; git $a origin main
+deny	FC	eval git push origin main $X
+deny	FC	git "$(echo push)" origin main
+deny	FC	git rebase origin/$x
+deny	FC	git commit -m x$y
+deny	FC	git tag v1$x
+deny	FC	gh pr merge 12$x --squash
+deny	FC	gh pr merge 12 --squash -R o/r$x
+deny	FC	gh api repos/x/y$z
+deny	FC	git grep -n $pat
+deny	FC	git grep "$pat"
+deny	FC	find $dir -name x
+allow	ok	git rebase "origin/$x"
+allow	ok	git commit -m "x$y"
+allow	ok	git grep -e "$pat" -- '*.go'
+allow	ok	find "$dir" -name x
+allow	ok	gh workflow run ci.yml --ref main
+allow	ok	gh workflow run test.yml -R owner/repo-x -f ref=0123456789abcdef0123456789abcdef01234567
+deny	C30	gh workflow run release.yml --ref main
+deny	C30	gh workflow run ci.yaml --ref main
+deny	C30	gh workflow run ./ci.yml --ref main
+deny	C30	gh workflow run ci.yml --ref feature
+deny	C30	gh workflow run ci.yml --ref=main
+deny	C30	gh workflow run --ref main ci.yml
+deny	C30	gh workflow run ci.yml --ref main -f x=y
+deny	C30	gh workflow run ci.yml --ref main --json
+deny	C30	gh workflow run ci.yml --ref main -R NightDragon1/rconductor
+deny	C30	gh workflow run ci.yml --ref "$b"
+deny	C30	GH_REPO=o/r gh workflow run ci.yml --ref main
+deny	C30	gh workflow run test.yml -f ref=0123456789abcdef0123456789abcdef01234567
+deny	C30	gh workflow run test.yml -R o/r -f ref=0123456789abcdef0123456789abcdef01234567
+deny	C30	gh workflow run test.yml --repo owner/repo-x -f ref=0123456789abcdef0123456789abcdef01234567
+deny	C30	gh workflow run test.yml --repo=owner/repo-x -f ref=0123456789abcdef0123456789abcdef01234567
+deny	C30	gh workflow run test.yml -f ref=0123456789abcdef0123456789abcdef01234567 -R owner/repo-x
+deny	C30	gh workflow run test.yml -R owner/repo-x -f ref=0123456
+deny	C30	gh workflow run test.yml -R owner/repo-x -f ref=0123456789abcdef0123456789abcdef0123456
+deny	C30	gh workflow run test.yml -R owner/repo-x -f ref=0123456789abcdef0123456789abcdef012345678
+deny	C30	gh workflow run test.yml -R owner/repo-x -f ref=0123456789ABCDEF0123456789abcdef01234567
+deny	C30	gh workflow run test.yml -R owner/repo-x -F ref=0123456789abcdef0123456789abcdef01234567
+deny	C30	gh workflow run test.yml -R owner/repo-x --raw-field ref=0123456789abcdef0123456789abcdef01234567
+deny	C30	gh workflow run test.yml -R owner/repo-x -r ref=0123456789abcdef0123456789abcdef01234567
+deny	C30	gh workflow run test.yml -R owner/repo-x -f ref=0123456789abcdef0123456789abcdef01234567 -f x=y
+deny	C30	gh workflow run test.yml -R owner/repo-x -f ref=0123456789abcdef0123456789abcdef01234567 --json
+deny	C30	gh workflow run test.yml -R owner/repo-x -f ref=$sha
+deny	C30	gh workflow run test.yml -R owner/repo-x -f "ref=$sha"
+deny	C30	gh workflow run test.yml -R owner/repo-x -f ref=0123456789abcdef0123456789abcdef01234567 extra
+deny	C30	gh workflow run "$w" --ref main

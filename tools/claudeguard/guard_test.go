@@ -15,8 +15,14 @@ import (
 func testEnv(t *testing.T) env {
 	t.Helper()
 	home := t.TempDir()
-	return env{home: home, xdgConfig: home + "/.config", cacheDir: home + "/.cache/" + cacheName}
+	return env{home: home, xdgConfig: home + "/.config", cacheDir: home + "/.cache/" + cacheName,
+		workflowForm: strings.Fields(testForm)}
 }
+
+// testForm is a made-up configured form of gh workflow run.
+const testForm = "test.yml -R owner/repo-x -f ref=<sha>"
+
+const testSHA = "0123456789abcdef0123456789abcdef01234567"
 
 func bashInput(cmd string) string {
 	b, _ := json.Marshal(map[string]any{
@@ -202,5 +208,60 @@ func TestLargeCommand(t *testing.T) {
 	cmd = strings.Repeat("git status; ", 5000)
 	if got := run(strings.NewReader(bashInput(cmd)), e); got != "" {
 		t.Errorf("long harmless list denied: %s", got)
+	}
+}
+
+func TestWorkflowFormFile(t *testing.T) {
+	run := "gh workflow run test.yml -R owner/repo-x -f ref=" + testSHA
+	for _, tc := range []struct {
+		name, content string
+		allow         bool
+	}{
+		{"missing file", "", false},
+		{"empty file", "\n", false},
+		{"form", "# comment\n" + testForm + "\n", true},
+		{"two forms", testForm + "\n" + testForm + "\n", false},
+		{"no placeholder", "test.yml -R owner/repo-x -f ref=x\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := testEnv(t)
+			e.workflowForm = nil
+			dir := filepath.Join(e.xdgConfig, "rconductor-guard")
+			if tc.content != "" {
+				if err := os.MkdirAll(dir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, "workflows"), []byte(tc.content), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			loadWorkflowForm(&e)
+			if got := checkBash(run, "/w", e) == ""; got != tc.allow {
+				t.Errorf("allowed = %t, want %t", got, tc.allow)
+			}
+			if checkBash("gh workflow run ci.yml --ref main", "/w", e) != "" {
+				t.Error("ci.yml on main is denied")
+			}
+			if checkBash("gh workflow run release.yml --ref main", "/w", e) == "" {
+				t.Error("release.yml is allowed")
+			}
+			if checkEditPath(filepath.Join(dir, "workflows"), "/w", e) == "" {
+				t.Error("the configuration is writable")
+			}
+			// A linked file: its target is protected as well.
+			target := filepath.Join(t.TempDir(), "workflows")
+			if err := os.WriteFile(target, []byte(testForm), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_ = os.MkdirAll(dir, 0o700)
+			_ = os.Remove(filepath.Join(dir, "workflows"))
+			if err := os.Symlink(target, filepath.Join(dir, "workflows")); err != nil {
+				t.Fatal(err)
+			}
+			loadWorkflowForm(&e)
+			if checkBash(run, "/w", e) != "" || checkEditPath(target, "/w", e) == "" {
+				t.Error("linked form denied or its target writable")
+			}
+		})
 	}
 }

@@ -116,7 +116,6 @@
       "Bash(gh repo edit*)",
       "Bash(gh repo archive*)",
       "Bash(gh repo rename*)",
-      "Bash(gh workflow run*)",
       "Bash(gh workflow enable*)",
       "Bash(gh workflow disable*)",
       "Bash(gh run cancel*)",
@@ -174,7 +173,8 @@
       "Edit(//**/.git/**)",
       "Edit(~/.gitconfig)",
       "Edit(~/.config/git/**)",
-      "Edit(~/.cache/rconductor-claudeguard/**)"
+      "Edit(~/.cache/rconductor-claudeguard/**)",
+      "Edit(~/.config/rconductor-guard/**)"
     ]
   }
 }

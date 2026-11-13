@@ -71,6 +71,10 @@ func protectedPath(p string, e env) string {
 	if e.cacheDir != "" && within(p, e.cacheDir) {
 		return "the guard's build cache is not writable from tool calls"
 	}
+	if (e.xdgConfig != "" && within(p, filepath.Join(e.xdgConfig, "rconductor-guard"))) ||
+		(e.workflowFile != "" && p == e.workflowFile) {
+		return "the guard's configuration is not writable from tool calls"
+	}
 	return ""
 }
 

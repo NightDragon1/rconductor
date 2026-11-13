@@ -78,7 +78,7 @@ for p in 'gh api -X*' 'gh api * -X*' 'gh api --method*' 'gh api * --method*' 'gh
   has "Bash($p)" C28
 done
 for p in 'git config alias.*' 'git config * alias.*' 'bash -c *' 'sh -c *' 'env * git push*' \
-  'command git push*' 'gh repo archive*' 'gh repo rename*' 'gh workflow run*' 'gh workflow enable*' \
+  'command git push*' 'gh repo archive*' 'gh repo rename*' 'gh workflow enable*' \
   'gh workflow disable*' 'gh run cancel*' 'gh secret*' 'gh variable*' 'gh label delete*' \
   'gh issue delete*' 'gh release *' 'gh ruleset*'; do
   has "Bash($p)" C30
@@ -104,7 +104,8 @@ for p in 'git commit *--no-verify*' 'git commit -n*' 'git commit * -n*' 'git * -
 done
 # File tools: Edit rules cover Edit, Write, MultiEdit and NotebookEdit.
 for p in 'Edit(.git)' 'Edit(**/.git/**)' 'Edit(//**/.git)' 'Edit(//**/.git/**)' \
-  'Edit(~/.gitconfig)' 'Edit(~/.config/git/**)' 'Edit(~/.cache/rconductor-claudeguard/**)'; do
+  'Edit(~/.gitconfig)' 'Edit(~/.config/git/**)' 'Edit(~/.cache/rconductor-claudeguard/**)' \
+  'Edit(~/.config/rconductor-guard/**)'; do
   has "$p" C36
 done
 # The PreToolUse guard is registered for the shell and the file tools.
@@ -150,7 +151,6 @@ denied 'env A=1 git push origin main' C30
 denied 'command git push origin main' C30
 denied 'gh repo archive x/y' C30
 denied 'gh repo rename z' C30
-denied 'gh workflow run ci.yml' C30
 denied 'gh workflow disable ci.yml' C30
 denied 'gh run cancel 123' C30
 denied 'gh secret set X' C30
@@ -235,5 +235,30 @@ allowed 'git config --global core.hooksPath'
 allowed 'git config --show-origin core.hooksPath'
 allowed 'git config --list --show-origin'
 allowed 'git config get core.hooksPath'
+
+# gh workflow run is not in the deny list: a pattern cannot express the
+# one configured exception, so the guard alone decides. Its decisions on a
+# made-up configuration, nothing is executed.
+allowed 'gh workflow run ci.yml --ref main'
+repo=$(cd "$(dirname "$0")/.." && pwd)
+gtmp=$(mktemp -d)
+trap 'rm -rf "$gtmp"' EXIT
+go -C "$repo/tools" build -o "$gtmp/guard" ./claudeguard
+sha=0123456789abcdef0123456789abcdef01234567
+form="gh workflow run test.yml -R owner/repo-x -f ref="
+# guard_says <want allow|deny> <label> <config dir> <command>
+guard_says() {
+  local got=allow
+  jq -nc --arg c "$4" '{tool_name: "Bash", cwd: "/w", tool_input: {command: $c}}' |
+    HOME="$gtmp/home" XDG_CONFIG_HOME="$3" XDG_CACHE_HOME="$gtmp/cache" "$gtmp/guard" 2>/dev/null || got=deny
+  if [ "$got" = "$1" ]; then echo "ok   $2"; else echo "FAIL $2: guard says $got"; fail=1; fi
+}
+mkdir -p "$gtmp/conf/rconductor-guard"
+echo "test.yml -R owner/repo-x -f ref=<sha>" >"$gtmp/conf/rconductor-guard/workflows"
+guard_says deny "C30 guard denies release.yml" "$gtmp/conf" "gh workflow run release.yml --ref main"
+guard_says deny "C30 guard denies a short ref" "$gtmp/conf" "$form${sha:0:39}"
+guard_says deny "C30 guard denies a ref that is not hex" "$gtmp/conf" "${form}g${sha:1}"
+guard_says deny "C30 guard denies the form without configuration" "$gtmp/none" "$form$sha"
+guard_says allow "C30 guard allows the configured form" "$gtmp/conf" "$form$sha"
 
 exit "$fail"
