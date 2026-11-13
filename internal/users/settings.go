@@ -124,6 +124,14 @@ func boolRule(raw json.RawMessage) (any, error) {
 	return b, nil
 }
 
+// flagRule takes exactly true or false for a feature flag (NFR-019).
+func flagRule(raw json.RawMessage) (any, error) {
+	if s := string(raw); s == "true" || s == "false" {
+		return s == "true", nil
+	}
+	return nil, fmt.Errorf("true or false")
+}
+
 // settingRules are the global settings the RCON admin may change (Design
 // 5.1); any other key is refused.
 var settingRules = map[string]rule{
@@ -237,6 +245,9 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 	values := map[string]string{}
 	for k, raw := range in {
 		r, ok := settingRules[k]
+		if !ok && s.features.Known(k) {
+			r, ok = flagRule, true
+		}
 		if !ok {
 			return nil, &InvalidError{Detail: fmt.Sprintf("unknown setting %q", k)}
 		}

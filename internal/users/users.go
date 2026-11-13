@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -61,12 +62,18 @@ type Service struct {
 	perm   *perm.Checker
 	log    *slog.Logger
 	revoke SessionRevoker
+	// features are the flags whose settings keys the RCON admin may
+	// change (NFR-019).
+	features *features.Set
 }
 
 // NewService returns the user administration.
 func NewService(st *store.Store, c *perm.Checker, log *slog.Logger, revoke SessionRevoker) *Service {
 	return &Service{st: st, perm: c, log: log, revoke: revoke}
 }
+
+// UseFeatures sets the feature flags whose keys UpdateSettings accepts.
+func (s *Service) UseFeatures(f *features.Set) { s.features = f }
 
 // User is a user as shown to someone who manages him (decision W4).
 type User struct {

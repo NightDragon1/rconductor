@@ -52,6 +52,36 @@ EOF
 expect "a docs change: e2e" false "$(field e2e)"
 expect "a docs change: minecraft" false "$(field minecraft)"
 expect "a docs change: sqlc" false "$(field sqlc)"
+expect "a docs change: code" false "$(field code)"
+
+change "docs and assets only" <<'EOF'
+mkdir -p assets/logo .github/ISSUE_TEMPLATE
+echo svg >assets/logo/a.svg
+echo t >.github/ISSUE_TEMPLATE/bug.md
+echo l >LICENSE
+echo c >>CHANGELOG.md
+EOF
+expect "docs, assets, licence, issue template: code" false "$(field code)"
+expect "docs, assets, licence, issue template: e2e" false "$(field e2e)"
+
+for f in README.md docs/user/configuration.md docs/user/technical.md; do
+  change "tested doc $f" <<EOF
+mkdir -p docs/user
+echo x >>$f
+EOF
+  expect "a doc that tests read ($f): code" true "$(field code)"
+done
+
+change "go.mod" <<'EOF'
+echo "module x" >go.mod
+EOF
+expect "go.mod: code" true "$(field code)"
+
+change "code with docs" <<'EOF'
+echo "export const d = 4;" >>web/src/a.ts
+echo x >web/README.md
+EOF
+expect "code with docs: code" true "$(field code)"
 
 change "ascii web" <<'EOF'
 echo "export const b = 2;" >>web/src/a.ts
@@ -82,6 +112,7 @@ EOF
 expect "C26: an unknown path: e2e" true "$(field e2e)"
 expect "C26: an unknown path: minecraft" true "$(field minecraft)"
 expect "C26: an unknown path: sqlc" true "$(field sqlc)"
+expect "an unknown path: code" true "$(field code)"
 
 [ "$fails" -eq 0 ] || exit 1
 echo "ci scope ok"

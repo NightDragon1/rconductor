@@ -23,7 +23,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { bufferOwner } from '@/lib/console';
 import { cn } from '@/lib/utils';
 import { applyTheme, storedTheme, themes, type Theme } from '@/lib/theme';
-import { adminNav, mainNav, type NavEntry } from '@/nav';
+import { adminNav, mainNav, navContext, shown, type NavEntry } from '@/nav';
 
 const collapsedKey = 'rcd.nav.collapsed';
 
@@ -134,11 +134,8 @@ function Navigation({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
   const { t } = useTranslation();
   const { data: session } = useSession();
   if (!session) return null;
-  const ctx = {
-    supportersEnabled: session.ui.supporters_enabled,
-    supportersAllowed: session.ui.supporters_allowed,
-  };
-  const visible = (list: NavEntry[]) => list.filter((e) => e.allowed(session.user.role, ctx));
+  const ctx = navContext(session.ui);
+  const visible = (list: NavEntry[]) => list.filter((e) => shown(e, session.user.role, ctx));
   const admin = visible(adminNav);
   const item = (e: NavEntry) => (
     <li key={e.to}>

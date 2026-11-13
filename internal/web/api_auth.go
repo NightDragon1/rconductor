@@ -81,6 +81,8 @@ func (s *apiServer) sessionOf(ctx context.Context, p auth.Principal) api.Session
 			out.Ui.SupportersAllowed = u.SupportersAllowed == 1
 		}
 	}
+	on := s.features.EnabledNames(ctx, s.store)
+	out.Ui.Features = &on
 	return out
 }
 

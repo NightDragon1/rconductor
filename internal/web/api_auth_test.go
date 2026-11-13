@@ -29,6 +29,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/events"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -76,6 +77,12 @@ func (l *lockedBuffer) String() string {
 
 func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	t.Helper()
+	return newAPIFixtureFeatures(t, proxies, nil)
+}
+
+// newAPIFixtureFeatures builds the fixture with test feature flags.
+func newAPIFixtureFeatures(t *testing.T, proxies Proxies, flags *features.Set) *apiFixture {
+	t.Helper()
 	st := storetest.New(t)
 	ctx := context.Background()
 	if err := auth.EnsureDefaults(ctx, st); err != nil {
@@ -114,6 +121,10 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	if err := users.EnsureAuditDefaults(ctx, st); err != nil {
 		t.Fatal(err)
 	}
+	if err := flags.EnsureDefaults(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	us.UseFeatures(flags)
 	hub := events.NewHub(checker, nil, svc, log, events.SettingsLimits(st))
 	svc.OnSessionsEnded(hub.CloseSessions)
 	panelKey, err := keys.LoadOrCreateIdentity(log, filepath.Join(t.TempDir(), keys.PanelKeyFile))
@@ -123,7 +134,7 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 	agentSvc := agents.NewService(st, log, "panel.lan:8443")
 	agentSvc.SetHub(agenthub.New(panelKey, log, agenthub.Options{Registry: agentSvc}))
 	h := NewHandler(Options{
-		Log: log, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies, Hub: hub, Agents: agentSvc,
+		Log: log, Features: flags, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies, Hub: hub, Agents: agentSvc,
 		Servers:  servers.NewService(st, checker, box, log),
 		Profiles: users.NewProfiles(us, hasher, svc.RevokeOtherSessions),
 	})

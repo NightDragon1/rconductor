@@ -21,6 +21,7 @@ export type Role = components['schemas']['Role'];
 export interface NavContext {
   supportersEnabled: boolean;
   supportersAllowed: boolean;
+  features: readonly string[]; // flags that are on (NFR-019)
 }
 
 export interface NavEntry {
@@ -30,6 +31,21 @@ export interface NavEntry {
   // allowed decides per role (Design 6.2); entries without right are
   // hidden, not greyed. The backend checks every request anyway.
   allowed: (role: Role, me: NavContext) => boolean;
+  feature?: string; // while this flag is off, entry and page do not exist
+}
+
+// navContext takes what the entries need from the session.
+export function navContext(ui: components['schemas']['Session']['ui']): NavContext {
+  return {
+    supportersEnabled: ui.supporters_enabled,
+    supportersAllowed: ui.supporters_allowed,
+    features: ui.features ?? [],
+  };
+}
+
+// shown decides by the entry's flag, if any, and its rule.
+export function shown(e: NavEntry, role: Role, me: NavContext): boolean {
+  return (e.feature === undefined || me.features.includes(e.feature)) && e.allowed(role, me);
 }
 
 const admins = (r: Role) => r === 'rcon_admin' || r === 'server_admin';
