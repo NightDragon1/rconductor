@@ -23,8 +23,11 @@ type Flag struct {
 	Operations []string
 }
 
-// production lists the flags of this build.
-var production = []Flag{}
+// production lists the flags of this build. A flag without operations
+// switches only the interface; the backend checks every request anyway.
+var production = []Flag{
+	{Name: "server_save_as_new"}, // Save as New in the server dialog (UI-017)
+}
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
