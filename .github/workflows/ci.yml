@@ -242,14 +242,16 @@ jobs:
           cache-dependency-path: web/package-lock.json
       # web/package.json is no core path (PRJ-005): no lifecycle script of it
       # runs, and the core checks start with node, not npm (no npm config),
-      # before any npm script; ESLint takes the core config only (-c).
+      # before any npm script; ESLint and openapi-typescript take a fixed
+      # config only (-c, --redocly), no lookup in web/.
       - run: npm ci --no-audit --no-fund --ignore-scripts
       - run: node node_modules/eslint/bin/eslint.js -c eslint.config.js .
       - run: node scripts/fitness-render.ts
       - run: sh scripts/fitness-render-test.sh
       - name: API types are up to date
         run: |
-          node node_modules/openapi-typescript/bin/cli.js ../api/openapi.yaml -o src/api/schema.d.ts
+          node node_modules/openapi-typescript/bin/cli.js --redocly scripts/fitness-render-redocly.yaml \
+            ../api/openapi.yaml -o src/api/schema.d.ts
           git diff --exit-code -- src/api
       - run: npm run format:check
       - run: npm test

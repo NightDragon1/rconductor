@@ -6,7 +6,7 @@
 // access counts when its declaration is that field of the generated
 // schema. Optional argument: the directory of a project to check.
 import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import ts from 'typescript';
 
 const root = resolve(process.argv[2] ?? join(import.meta.dirname, '..'));
@@ -89,11 +89,18 @@ function visit(node: ts.Node) {
 
 // A source file the program pulls in from outside src/ (an import of
 // ../lib/x.tsx, say) would go unchecked: it fails the check with exit 3.
+// Installed packages are the node_modules of the project or of a directory
+// above it (module resolution walks up); a declaration file elsewhere could
+// stand for a .js or .jsx the bundler takes, so it fails the check too.
+const installed: string[] = [];
+for (let d = root; ; d = dirname(d)) {
+  installed.push(join(d, 'node_modules') + '/');
+  if (dirname(d) === d) break;
+}
 const outside = program
   .getSourceFiles()
-  .filter((sf) => !sf.isDeclarationFile && !sf.fileName.includes('/node_modules/'))
   .map((sf) => resolve(sf.fileName))
-  .filter((f) => !f.startsWith(src + '/'));
+  .filter((f) => !f.startsWith(src + '/') && !installed.some((n) => f.startsWith(n)));
 if (outside.length > 0) {
   console.error(`fitness render: source file outside src/: ${outside.join(', ')}`);
   process.exit(3);

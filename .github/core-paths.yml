@@ -64,7 +64,8 @@ boundary:
   - .github/**
 
 # rules: rule files, hooks, guard and release scripts, and the scripts and
-# test data that decide whether a check runs at all (stage, CI scope, shards)
+# test data that decide whether a check runs at all (stage, CI scope, shards),
+# and the files that steer what the checked tools and the bundler read
 rules:
   - CLAUDE.md
   - CONTRIBUTING.md
@@ -82,6 +83,10 @@ rules:
   - scripts/go-test-shard*
   - .npmrc
   - web/.npmrc
+  - web/redocly.*
+  - web/.redocly.*
+  - web/index.html
+  - web/vite.config.ts
 
 # generated: output of oapi-codegen, sqlc and openapi-typescript
 generated:

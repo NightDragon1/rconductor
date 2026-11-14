@@ -21,20 +21,26 @@ out=$(node scripts/fitness-render.ts "$j" "$j/openapi.yaml" 2>&1)
 rc=$?
 [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'cannot read: .*src/Bad.jsx' ||
   { echo "render script: exit $rc on a .jsx file, want 3" >&2; exit 1; }
-# A source file imported from outside src/ fails it (exit 3).
+# A source file or declaration imported from outside src/ fails it (exit 3).
 o=scripts/testdata/render-outside
 out=$(node scripts/fitness-render.ts "$o" "$o/openapi.yaml" 2>&1)
 rc=$?
 [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'outside src/: .*lib/Away.tsx' ||
   { echo "render script: exit $rc on a file outside src/, want 3" >&2; exit 1; }
+t=scripts/testdata/render-outside-dts
+out=$(node scripts/fitness-render.ts "$t" "$t/openapi.yaml" 2>&1)
+rc=$?
+[ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'outside src/: .*lib/away.d.ts' ||
+  { echo "render script: exit $rc on types outside src/, want 3" >&2; exit 1; }
 # ESLint runs with the fixed core config (-c, no lookup) and must report
 # the rule (exit 1; exit 2 is a broken config): in the test project, and
 # below a nested eslint.config.js that turns the rule off.
-eslint() { node node_modules/eslint/bin/eslint.js -c eslint.config.js --no-ignore "$1" >/dev/null 2>&1; }
-eslint "$d/src"
-rc=$?
-[ "$rc" -eq 1 ] || { echo "eslint: exit $rc on dangerouslySetInnerHTML, want 1" >&2; exit 1; }
-eslint scripts/testdata/render-eslint/src
-rc=$?
-[ "$rc" -eq 1 ] || { echo "eslint: exit $rc below a nested config, want 1" >&2; exit 1; }
+eslint() { node node_modules/eslint/bin/eslint.js -c eslint.config.js --no-ignore "$1" 2>&1; }
+for p in "$d/src" scripts/testdata/render-eslint/src; do
+  out=$(eslint "$p")
+  rc=$?
+  [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'Use ForeignText' &&
+    printf '%s' "$out" | grep -q "$p/App.tsx" ||
+    { echo "eslint: exit $rc in $p, want 1 with the HTML rule on App.tsx" >&2; exit 1; }
+done
 echo "render fitness test ok"
