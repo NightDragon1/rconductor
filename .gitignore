@@ -30,6 +30,8 @@ coverage.out
 # Local working rules of Claude Code, not public
 /CLAUDE.local.md
 /.claude/commands
+/.claude/agents
+/.claude/settings.local.json
 /.claude/worktrees/
 
 # Editors and OS
