@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/rconductor-logo-dark.svg">
+    <img src="assets/logo/rconductor-logo.svg" alt="ShadowGhost.NET RCONductor" width="375">
+  </picture>
+</p>
+
 # ShadowGhost.NET Game RCONductor
 
 RCONductor is a self-hosted web panel for RCON-capable game servers with
