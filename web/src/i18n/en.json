@@ -969,6 +969,10 @@
       "features_log_filter_split": {
         "label": "Two-part log filter",
         "help": "Filters container logs by the bracket part and the text, joined with and, or, xor."
+      },
+      "features_command_palette": {
+        "label": "Command palette",
+        "help": "Shows the command palette in the console (button, Ctrl+K with shortcuts on)."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
