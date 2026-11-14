@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// <reference types="node" />
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, cpSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdtempSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -16,6 +16,7 @@ const generated = [
   'web/src/assets/logo/logo.svg',
   'web/src/assets/logo/logo-dark.svg',
   'web/src/assets/logo/mark.svg',
+  'web/src/assets/logo/mark-light.svg',
 ];
 
 function check(root?: string) {
@@ -62,6 +63,34 @@ describe('scripts/logo.sh (UI-023)', () => {
     const r = check(root);
     expect(r.status).not.toBe(0);
     expect(r.stderr).toContain('web/public/manifest.json');
+  });
+
+  it('a missing variant for the light design fails and is named', () => {
+    const root = copy();
+    unlinkSync(join(root, 'web/src/assets/logo/mark-light.svg'));
+    const r = check(root);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain('web/src/assets/logo/mark-light.svg');
+  });
+
+  it('the light design ends the gradient in the dark cyan, the others keep the brand colours', () => {
+    const end = (f: string) =>
+      [...readFileSync(join('..', f), 'utf8').matchAll(/stop-color="(#[0-9A-F]{6})"/g)].map(
+        (m) => m[1],
+      );
+    for (const f of ['web/src/assets/logo/logo.svg', 'web/src/assets/logo/mark-light.svg']) {
+      expect(end(f), f).not.toContain('#22D3EE');
+      expect(end(f), f).toContain('#0E7490');
+    }
+    for (const f of [
+      'web/src/assets/logo/logo-dark.svg',
+      'web/src/assets/logo/mark.svg',
+      'web/public/favicon.svg',
+      'web/public/icon.svg',
+    ]) {
+      expect(end(f), f).toContain('#22D3EE');
+      expect(end(f), f).not.toContain('#0E7490');
+    }
   });
 
   it('refuses unknown arguments', () => {

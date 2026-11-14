@@ -38,6 +38,11 @@ function wordMarks() {
   return [...document.querySelectorAll<HTMLImageElement>('img[alt="ShadowGhost.NET RCONductor"]')];
 }
 
+// marks finds both variants of the mark alone, the hidden one too.
+function marks() {
+  return [...document.querySelectorAll<HTMLImageElement>('img[alt="RCONductor"]')];
+}
+
 function visible(img: HTMLElement) {
   return getComputedStyle(img).display !== 'none';
 }
@@ -78,12 +83,28 @@ describe('project logo (UI-023)', () => {
     expect(visible(light)).toBe(false);
   });
 
-  it('shows the mark alone in the collapsed sidebar', async () => {
+  it('shows the mark alone in the collapsed sidebar, the variant of each design', async () => {
     localStorage.setItem('rcd.nav.collapsed', '1');
     await renderPage(() => <Shell />);
-    const mark = screen.getByRole('img', { name: 'RCONductor' });
-    expect(mark.getAttribute('src')).toMatch(/mark\.svg$/);
     expect(wordMarks()).toHaveLength(0);
+    const [light, dark] = marks() as [HTMLImageElement, HTMLImageElement];
+    expect(marks()).toHaveLength(2);
+    expect(light.getAttribute('src')).toMatch(/mark-light\.svg$/);
+    expect(dark.getAttribute('src')).toMatch(/mark\.svg$/);
+    expect(dark.getAttribute('src')).not.toMatch(/mark-light\.svg$/);
+    for (const [theme, shown, hidden] of [
+      ['light', light, dark],
+      ['dark', dark, light],
+    ] as const) {
+      document.documentElement.dataset.theme = theme;
+      expect(visible(shown), `${theme}: own variant`).toBe(true);
+      expect(visible(hidden), `${theme}: other variant`).toBe(false);
+      // Only the variant of the design is in the accessibility tree.
+      expect(screen.getByRole('img', { name: 'RCONductor' })).toBe(shown);
+    }
+    delete document.documentElement.dataset.theme;
+    expect(visible(dark)).toBe(true);
+    expect(visible(light)).toBe(false);
   });
 
   it('shows the word mark on the login page', async () => {
