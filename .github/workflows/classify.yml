@@ -2,8 +2,9 @@
 #
 # Review stage of each pull request (PRJ-005): scripts/classify.sh decides
 # from the changed files and .github/core-paths.yml, this job sets the
-# label stage-1 or stage-2 and, for stage 2, turns auto-merge off. A stage 2
-# pull request over 400 changed lines fails the job.
+# label stage-1 or stage-2. A stage 2 pull request over 400 changed lines
+# fails the job. The job token cannot turn auto-merge off; auto-merge is
+# only ever enabled on stage-1 pull requests.
 #
 # pull_request_target runs this file and the scripts of the base branch
 # with a token that can label. Hard rules for this file:
@@ -16,7 +17,7 @@ name: Classify
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -74,8 +75,5 @@ jobs:
             args+=(--remove-label "$other")
           fi
           gh pr edit "$PR" "${args[@]}"
-          if [ "$stage" = stage-2 ]; then
-            gh pr merge "$PR" --disable-auto || echo "auto-merge was not on"
-          fi
           echo "review stage: $stage"
           exit "$rc"
