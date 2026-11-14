@@ -85,7 +85,9 @@ jobs:
       - run: go -C tools tool golangci-lint run ./fitness
       - run: go -C tools test ./fitness
       - run: go -C tools run ./fitness -dir ..
-      - env:
+      # Scheduled and manual runs have no base to compare the list with.
+      - if: github.event_name == 'pull_request' || github.event_name == 'push'
+        env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: scripts/fitness-ratchet.sh "$BASE"
 
