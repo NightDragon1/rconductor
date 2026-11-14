@@ -28,6 +28,7 @@ type Flag struct {
 var production = []Flag{
 	{Name: "server_save_as_new"}, // Save as New in the server dialog (UI-017)
 	{Name: "log_filter_split"},   // two-part log filter, frontend only (UI-019)
+	{Name: "command_palette"},    // command palette in the console (CMD-016)
 }
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
