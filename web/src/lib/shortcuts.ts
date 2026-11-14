@@ -29,3 +29,26 @@ export function useShortcuts(keys: Record<string, () => void>) {
     return () => window.removeEventListener('keydown', handler);
   }, [on]);
 }
+
+// usePaletteKey opens the command palette on Ctrl+K (Cmd+K on a Mac),
+// also from a field (CMD-016): only while the palette is there (enabled)
+// and the RCON admin has switched keyboard shortcuts on.
+export function usePaletteKey(enabled: boolean, open: () => void) {
+  const { data: session } = useSession();
+  const on = enabled && !!session?.ui.shortcuts_enabled;
+  const ref = useRef(open);
+  useEffect(() => {
+    ref.current = open;
+  });
+  useEffect(() => {
+    if (!on) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== 'k' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey)
+        return;
+      e.preventDefault();
+      ref.current();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [on]);
+}

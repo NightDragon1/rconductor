@@ -371,6 +371,21 @@
     "slashHint": "Commands on this server start with /. Without it, the game may take the input as chat (Factorio does).",
     "favorites": "Favorites"
   },
+  "palette": {
+    "open": "Command palette",
+    "openKey": "Command palette (Ctrl+K)",
+    "title": "Command palette",
+    "explain": "Search the commands, templates and favorite servers you may use here. A command or template goes into the input line.",
+    "search": "Search commands, templates and favorites",
+    "results": "Results",
+    "none": "Nothing matches.",
+    "more": "Showing {{shown}} of {{total}}. Type more to narrow it down.",
+    "kind": {
+      "command": "Command",
+      "template": "Template",
+      "favorite": "Favorite"
+    }
+  },
   "commands": {
     "optional": "{{name}} (optional)",
     "args": "Arguments",

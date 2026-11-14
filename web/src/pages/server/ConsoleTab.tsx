@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useServer } from '@/api/live-servers';
 import { useAllowedCommands, useFavorites, useServers } from '@/api/servers';
 import { useSession } from '@/api/session';
+import { CommandPalette } from '@/components/CommandPalette';
 import { CopyButton } from '@/components/CopyButton';
 import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
@@ -305,14 +306,18 @@ export function ConsoleTab() {
             {track('others', t('console.others'), markerClass.others)}
             {hasAgent && track('logs', t('console.logs'), markerClass.log)}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto"
-            onClick={() => setTemplatesOpen(true)}
-          >
-            {t('templates.title')}
-          </Button>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <CommandPalette
+              serverId={id}
+              onUse={(command) => {
+                setInput(command);
+                setWalk(-1);
+              }}
+            />
+            <Button variant="outline" size="sm" onClick={() => setTemplatesOpen(true)}>
+              {t('templates.title')}
+            </Button>
+          </div>
           <Button variant="outline" size="sm" onClick={() => setMultiOpen(true)}>
             {t('multi.open')}
           </Button>
