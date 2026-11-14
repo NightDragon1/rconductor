@@ -189,7 +189,8 @@ allow	ok	git config remote.origin.url
 allow	ok	git config get remote.origin.url
 allow	ok	git config --list
 allow	ok	git config -l --show-origin
-allow	ok	git config --global user.email a@example.invalid
+deny	C36	git config --global user.email a@example.invalid
+deny	C36	git config user.name x
 allow	ok	git ls-files | wc -l
 allow	ok	git cat-file -p HEAD
 allow	ok	git read-tree --empty

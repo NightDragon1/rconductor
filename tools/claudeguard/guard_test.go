@@ -349,3 +349,54 @@ func TestPushRemoteConfig(t *testing.T) {
 		})
 	}
 }
+
+// TestRepairForms: in the clone of the guard and its worktrees exactly the
+// fixed repair writes of git config pass, also while the clone is broken.
+func TestRepairForms(t *testing.T) {
+	e := testEnv(t)
+	root := t.TempDir()
+	gitIn(t, root, "init", "-q")
+	gitIn(t, root, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "--allow-empty", "-m", "x")
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitIn(t, root, "worktree", "add", "-q", wt)
+	other := t.TempDir()
+	gitIn(t, other, "init", "-q")
+	r, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.projectRoot = r
+	fetch := "git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
+	for _, c := range []struct {
+		allow    bool
+		cwd, cmd string
+	}{
+		{true, root, "git config core.bare false"},
+		{true, root, "git config remote.origin.url " + projectURL},
+		{true, root, "git config --unset remote.origin.mirror"},
+		{true, root, "git config --unset-all remote.origin.push"},
+		{true, root, fetch},
+		{true, root, "git config core.hooksPath .githooks"},
+		{true, wt, "git config core.bare false"},
+		{false, root, "git config core.bare true"},
+		{false, root, "git config core.hooksPath /tmp"},
+		{false, root, "git config remote.origin.url https://example.invalid/r.git"},
+		{false, root, "git config --local core.bare false"},
+		{false, root, "git config --global core.bare false"},
+		{false, root, "git config --unset remote.origin.url"},
+		{false, root, "git config user.name x"},
+		{false, other, "git config core.bare false"},
+		{false, root, "cd " + other + " && git config core.bare false"},
+	} {
+		if got := checkBash(c.cmd, c.cwd, e) == ""; got != c.allow {
+			t.Errorf("%q in %s: allowed=%t, want %t", c.cmd, c.cwd, got, c.allow)
+		}
+	}
+	gitIn(t, root, "config", "core.bare", "true")
+	if checkBash("git config core.bare false", root, e) != "" {
+		t.Error("a broken clone cannot be repaired")
+	}
+	if checkBash("git config core.bare false", root, env{}) == "" {
+		t.Error("repair allowed without the clone of the guard")
+	}
+}

@@ -35,7 +35,8 @@ if [ ! -x "$bin" ]; then
   mv -f "$tmp" "$bin" || deny "the guard could not be installed in $cache"
 fi
 
-"$bin"
+# The clone of the guard: the only place for git config repairs.
+RCD_GUARD_ROOT=$root "$bin"
 rc=$?
 case $rc in
   0 | 2) exit "$rc" ;;

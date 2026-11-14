@@ -408,12 +408,12 @@ func (c *checker) gitConfig(args []arg) {
 	if read {
 		return
 	}
-	for _, a := range args {
-		_, v, hasEq := strings.Cut(a.val, "=")
-		if blockedConfigKey(a.val) || (hasEq && blockedConfigKey(v)) {
-			c.deny("git config may not write " + a.val + " from a tool call")
-			return
-		}
+	vals := make([]string, len(args))
+	for i, a := range args {
+		vals[i] = a.val
+	}
+	if !c.repairAllowed(vals) {
+		c.deny("git config may write only the fixed repair values of this clone from a tool call")
 	}
 }
 

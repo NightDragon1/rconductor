@@ -44,6 +44,7 @@ scripts/hook-scope-test.sh
 scripts/check-secrets-test.sh
 scripts/script-isolation-test.sh
 scripts/classify-test.sh
+scripts/check-git-config-test.sh
 go -C tools tool golangci-lint run ./claudeguard
 if $tests; then
   CGO_ENABLED=1 go -C tools test -race ./claudeguard
