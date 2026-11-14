@@ -418,7 +418,22 @@
     "agentGone": "The agent is disconnected; no new lines arrive.",
     "rateLimited": "Too many requests for this container. Try again in {{s}} s.",
     "unsupported": "The agent does not support logs. Update the agent.",
-    "failed": "The earlier lines could not be read."
+    "failed": "The earlier lines could not be read.",
+    "split": {
+      "bracket": "Filter the bracket part",
+      "bracketHint": "[Thread/LEVEL] …",
+      "text": "Filter the text after the brackets",
+      "op": "Combine the two filters",
+      "ops": {
+        "and": "and",
+        "or": "or",
+        "xor": "either, not both"
+      },
+      "problem": {
+        "tooLong": "A filter has more than {{max}} characters; the filter is not applied.",
+        "control": "A filter contains control characters; the filter is not applied."
+      }
+    }
   },
   "invite": {
     "title": "Accept the invitation",
@@ -935,6 +950,10 @@
       "features_server_save_as_new": {
         "label": "Save as New",
         "help": "Keeps the server dialog open after creating a server and offers Save and Save as New."
+      },
+      "features_log_filter_split": {
+        "label": "Two-part log filter",
+        "help": "Filters container logs by the bracket part and the text, joined with and, or, xor."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."

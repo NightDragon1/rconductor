@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, must } from '@/api/client';
 import { useServer } from '@/api/live-servers';
+import { useSession } from '@/api/session';
 import type { Server } from '@/api/servers';
 import { CopyButton } from '@/components/CopyButton';
 import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { compileFilter, LOG_OPS, MAX_FILTER_LENGTH, type LogOp } from '@/lib/logfilter';
 import { bufferWriter, MAX_LOG_LINES, prependTail, updateBuffer, useBuffer } from '@/lib/console';
 import { stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
@@ -31,6 +33,13 @@ export function LogsView({ server }: { server: Server }) {
   useLogsFeed(id, !!id);
   const buf = useBuffer(id);
   const [filter, setFilter] = useState('');
+  // The two-part filter behind its flag (UI-019, NFR-019).
+  const { data: session } = useSession();
+  const split = session?.ui.features?.includes('log_filter_split') ?? false;
+  const [bracket, setBracket] = useState('');
+  const [rest, setRest] = useState('');
+  const [op, setOp] = useState<LogOp>('and');
+  const opId = useId();
   const [follow, setFollow] = useState(true);
   const [wrap, setWrap] = useState(true);
   const [earlier, setEarlier] = useState<'idle' | 'busy' | 'done'>('idle');
@@ -40,7 +49,16 @@ export function LogsView({ server }: { server: Server }) {
 
   const all = buf.logs.flatMap((l) => l.lines.map(stripCodes));
   const q = filter.trim().toLowerCase();
-  const shown = q ? all.filter((l) => l.toLowerCase().includes(q)) : all;
+  const compiled = split ? compileFilter({ bracket, text: rest, op }) : undefined;
+  // A part the filter refuses filters nothing; the hint says why.
+  const splitTest = compiled?.ok ? compiled.test : undefined;
+  const shown = split
+    ? splitTest
+      ? all.filter(splitTest)
+      : all
+    : q
+      ? all.filter((l) => l.toLowerCase().includes(q))
+      : all;
   const text = shown.join('\n');
 
   // Follow keeps the end in view; scrolling up ends it (Design 6.1).
@@ -103,15 +121,56 @@ export function LogsView({ server }: { server: Server }) {
           {t('logs.clear')}
         </Button>
         <CopyButton text={text} target={pre} label={t('logs.copy')} />
-        <Input
-          type="search"
-          className="ml-auto w-full max-md:col-span-2 md:w-56"
-          placeholder={t('console.filter')}
-          aria-label={t('logs.filterLabel')}
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
+        {split ? (
+          <div className="ml-auto flex w-full flex-wrap items-center gap-2 max-md:col-span-2 md:w-auto">
+            <Input
+              type="search"
+              className="w-full md:w-48"
+              placeholder={t('logs.split.bracketHint')}
+              aria-label={t('logs.split.bracket')}
+              value={bracket}
+              onChange={(e) => setBracket(e.target.value)}
+            />
+            <label htmlFor={opId} className="sr-only">
+              {t('logs.split.op')}
+            </label>
+            <select
+              id={opId}
+              className="h-9 rounded-md border border-control bg-surface px-2 text-sm max-md:h-11"
+              value={op}
+              onChange={(e) => setOp(e.target.value as LogOp)}
+            >
+              {LOG_OPS.map((o) => (
+                <option key={o} value={o}>
+                  {t(`logs.split.ops.${o}`)}
+                </option>
+              ))}
+            </select>
+            <Input
+              type="search"
+              className="w-full md:w-48"
+              placeholder={t('console.filter')}
+              aria-label={t('logs.split.text')}
+              value={rest}
+              onChange={(e) => setRest(e.target.value)}
+            />
+          </div>
+        ) : (
+          <Input
+            type="search"
+            className="ml-auto w-full max-md:col-span-2 md:w-56"
+            placeholder={t('console.filter')}
+            aria-label={t('logs.filterLabel')}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        )}
       </div>
+      {compiled && !compiled.ok && (
+        <p role="status" className="border-b border-border px-3 py-2 text-sm text-warn">
+          {t(`logs.split.problem.${compiled.problem}`, { max: MAX_FILTER_LENGTH })}
+        </p>
+      )}
       {agentGone && (
         <p className="border-b border-border px-3 py-2 text-sm text-warn">{t('logs.agentGone')}</p>
       )}
