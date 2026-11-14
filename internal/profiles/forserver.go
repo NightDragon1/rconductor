@@ -58,23 +58,39 @@ func ForServer(ctx context.Context, q *sqlitedb.Queries, serverID string) (*Prof
 // CatalogForServer is the catalog of a server: the union of the catalogs
 // of its profiles, top first; the upper entry wins for the same path.
 func CatalogForServer(ctx context.Context, q *sqlitedb.Queries, serverID string) ([]Command, error) {
+	out, _, err := CatalogWithSources(ctx, q, serverID)
+	return out, err
+}
+
+// CatalogWithSources is CatalogForServer plus, for each entry, the id of
+// the profile it comes from (the upper one on the same path, UI-020).
+func CatalogWithSources(ctx context.Context, q *sqlitedb.Queries, serverID string) ([]Command, []string, error) {
 	ids, err := q.GetServerProfiles(ctx, serverID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	cats := make([][]Command, 0, len(ids))
+	source := map[string]string{}
 	for _, id := range ids {
 		rows, err := q.ListCatalogOfProfile(ctx, id)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		cat := make([]Command, 0, len(rows))
 		for _, r := range rows {
 			c := Command{Path: r.Path, Description: r.Description, Params: []Param{}}
 			_ = json.Unmarshal([]byte(r.Params), &c.Params)
 			cat = append(cat, c)
+			if path := NormalizePath(c.Path); source[path] == "" {
+				source[path] = id
+			}
 		}
 		cats = append(cats, cat)
 	}
-	return MergeCatalogs(cats), nil
+	out := MergeCatalogs(cats)
+	from := make([]string, len(out))
+	for i, c := range out {
+		from[i] = source[NormalizePath(c.Path)]
+	}
+	return out, from, nil
 }

@@ -71,11 +71,54 @@ func toAPICatalog(c profiles.Command) api.CatalogCommand {
 }
 
 // GetServerProfile is the effective profile of a server for the profile
-// browser (UI-020); contract first, the server must be in the caller's
-// scope (otherwise 404) before anything else.
+// browser (UI-020): the merge the backend uses for the server (SRV-008,
+// D-074), read only. The server must be in the caller's scope (otherwise
+// 404); game ports only for the RCON admin and the server admin (D-056).
 func (s *apiServer) GetServerProfile(ctx context.Context, req api.GetServerProfileRequestObject) (api.GetServerProfileResponseObject, error) {
-	if _, err := s.servers.Get(ctx, adminRequest(ctx), req.Id.String()); err != nil {
+	id := req.Id.String()
+	if _, err := s.servers.Get(ctx, adminRequest(ctx), id); err != nil {
 		return nil, adminError(err)
 	}
-	return nil, notImplemented("getServerProfile")
+	eff, ids, err := profiles.ForServer(ctx, s.store.Queries, id)
+	if err != nil {
+		return nil, err
+	}
+	catalog, from, err := profiles.CatalogWithSources(ctx, s.store.Queries, id)
+	if err != nil {
+		return nil, err
+	}
+	out := api.EffectiveProfile{
+		ProfileIds: make([]uuid.UUID, 0, len(ids)), Wrappers: []string{}, Separators: []string{},
+		Catalog: make([]api.EffectiveCommand, 0, len(catalog)),
+	}
+	for _, pid := range ids {
+		u, _ := uuid.Parse(pid)
+		out.ProfileIds = append(out.ProfileIds, u)
+	}
+	if eff != nil {
+		r := eff.Syntax
+		out.Protocol, out.MaxLength = eff.Protocol.Type, r.MaxLength
+		if r.CaseSensitive != nil {
+			out.CaseSensitive = *r.CaseSensitive
+		}
+		if r.StripPrefix != nil {
+			out.StripPrefix = *r.StripPrefix
+		}
+		out.Wrappers = append(out.Wrappers, r.Wrappers...)
+		out.Separators = append(out.Separators, r.Separators...)
+		p, _ := principal(ctx)
+		if role := perm.Role(p.Role); role == perm.RCONAdmin || role == perm.ServerAdmin {
+			ports := make([]api.GamePort, 0, len(eff.Ports.Game))
+			for _, gp := range eff.Ports.Game {
+				ports = append(ports, api.GamePort{Port: gp.Port, Proto: api.GamePortProto(gp.Proto), Name: gp.Name})
+			}
+			out.GamePorts = &ports
+		}
+	}
+	for i, c := range catalog {
+		pc := toAPICatalog(c)
+		u, _ := uuid.Parse(from[i])
+		out.Catalog = append(out.Catalog, api.EffectiveCommand{Path: pc.Path, Description: pc.Description, Params: pc.Params, ProfileId: u})
+	}
+	return api.GetServerProfile200JSONResponse(out), nil
 }
