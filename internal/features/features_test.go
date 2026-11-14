@@ -22,3 +22,19 @@ func TestDefaultKnowsServerSaveAsNew(t *testing.T) {
 		t.Fatal("server_save_as_new must not guard an operation")
 	}
 }
+
+func TestDefaultHoldsTheBuildFlags(t *testing.T) {
+	s := Default()
+	// Frontend-only flags guard no operation (UI-019).
+	if !s.Known(Key("log_filter_split")) {
+		t.Fatal("log_filter_split missing")
+	}
+	for _, op := range []string{"ListServers", "GetServer"} {
+		if name, ok := s.ForOperation(op); ok {
+			t.Errorf("%s guarded by %s", op, name)
+		}
+	}
+	if s.Enabled(t.Context(), nil, "log_filter_split") {
+		t.Error("flag on without a store")
+	}
+}
