@@ -130,6 +130,9 @@ type checker struct {
 	target  string
 	rights  map[string]*perm.Rights
 	managed map[string]bool
+	// q reads in the writing transaction once it is open: a target must
+	// still exist when the row that names it is written.
+	q *sqlitedb.Queries
 	// denials are written after the transaction has ended, because the
 	// open write transaction holds the database lock.
 	denials []func()
@@ -163,9 +166,15 @@ func (c *checker) inScope(id string, t Target) (bool, error) {
 		return false, err
 	}
 	q := c.s.st.Queries
+	if c.q != nil {
+		q = c.q
+	}
 	if t.ServerID != "" {
-		_, ok := r.Server(t.ServerID)
-		return ok, nil
+		if _, ok := r.Server(t.ServerID); !ok {
+			return false, nil
+		}
+		n, err := q.ServerExists(c.ctx, t.ServerID)
+		return err == nil && n > 0, err
 	}
 	n, err := q.ServerGroupExists(c.ctx, t.ServerGroupID)
 	if err != nil || n == 0 {
@@ -241,6 +250,7 @@ func (s *Service) applyAssignments(ck *checker, u User, cur current, up Assignme
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
+	ck.q = q
 	changes := map[string]any{}
 	now := store.Now()
 

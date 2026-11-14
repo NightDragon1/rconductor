@@ -267,6 +267,20 @@ func (s *Service) UpdateGroup(ctx context.Context, req Request, id string, up Gr
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
+	// The targets of the grants must still exist in this transaction.
+	if up.Grants != nil {
+		ck.q = q
+		for _, tg := range *up.Grants {
+			if ok, err := ck.inScope(g.OwnerID, tg); err != nil || !ok {
+				_ = tx.Rollback()
+				if err == nil {
+					s.deniedOn(ctx, req, "group.update", "user_group", id, "not_found", map[string]any{"grant": tg})
+					err = ErrNotFound
+				}
+				return Group{}, err
+			}
+		}
+	}
 	// Optimistic locking in one statement (revision 2.4 candidate 24);
 	// the version is required, checked after role and scope. The group is
 	// read after the version, in the transaction: names, list and members
