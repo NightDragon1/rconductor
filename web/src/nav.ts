@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
+  BookOpen,
   Bot,
   FileClock,
   LayoutGrid,
@@ -56,6 +57,14 @@ export const mainNav: NavEntry[] = [
   { to: '/servers', key: 'servers', icon: Server, allowed: () => true },
   { to: '/topology', key: 'topology', icon: Network, allowed: admins },
   { to: '/audit', key: 'audit', icon: FileClock, allowed: admins },
+  // Read only for every role (UI-020); the backend shows each role what it may see.
+  {
+    to: '/profiles',
+    key: 'profiles',
+    icon: BookOpen,
+    allowed: () => true,
+    feature: 'profile_browser',
+  },
 ];
 
 export const adminNav: NavEntry[] = [
