@@ -50,7 +50,13 @@ check "workflow change" 0 "stage-2 boundary 2" "modified 1 1 .github/workflows/c
 check "class file change" 0 "stage-2 boundary 1" "modified 1 0 .github/core-paths.yml"
 check "rules files" 0 "stage-2 rules 4" "modified 1 0 CLAUDE.md" "modified 1 0 scripts/release-notes.sh" \
   "modified 1 0 .githooks/pre-push" "modified 1 0 tools/claudeguard/x/y.go"
-check "not a release script" 0 "stage-1  1" "modified 1 0 scripts/ci-scope.sh"
+check "not a release script" 0 "stage-1  1" "modified 1 0 scripts/check-spdx.sh"
+check "gate scripts and test data" 0 "stage-2 rules 4" "modified 1 0 scripts/classify.sh" \
+  "modified 1 0 scripts/ci-scope-test.sh" "modified 1 0 scripts/go-test-shard.sh" \
+  "added 1 0 web/scripts/testdata/render-narrow/src/Hidden.tsx"
+check "npm config" 0 "stage-2 rules 2" "added 1 0 web/.npmrc" "added 1 0 .npmrc"
+check "tool and bundler config" 0 "stage-2 rules 4" "added 1 0 web/redocly.yaml" \
+  "added 1 0 web/.redocly.yml" "modified 1 0 web/index.html" "modified 1 0 web/vite.config.ts"
 check "exact file only" 0 "stage-1  2" "modified 1 0 internal/logging/witness.go" "added 1 0 docs/CLAUDE.md"
 check "several areas" 0 "stage-2 audit,redact 2" "modified 1 0 internal/logging/events.go" \
   "modified 1 0 internal/logging/redact.go"

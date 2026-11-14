@@ -63,7 +63,9 @@ boundary:
   - migrations/**
   - .github/**
 
-# rules: rule files, hooks, guard and release scripts
+# rules: rule files, hooks, guard and release scripts, and the scripts and
+# test data that decide whether a check runs at all (stage, CI scope, shards),
+# and the files that steer what the checked tools and the bundler read
 rules:
   - CLAUDE.md
   - CONTRIBUTING.md
@@ -75,6 +77,16 @@ rules:
   - scripts/fitness-ratchet.sh
   - web/eslint.config.js
   - web/scripts/fitness-render*
+  - web/scripts/testdata/**
+  - scripts/classify*
+  - scripts/ci-scope*
+  - scripts/go-test-shard*
+  - .npmrc
+  - web/.npmrc
+  - web/redocly.*
+  - web/.redocly.*
+  - web/index.html
+  - web/vite.config.ts
 
 # generated: output of oapi-codegen, sqlc and openapi-typescript
 generated:
