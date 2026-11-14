@@ -80,6 +80,8 @@ rules:
   - scripts/classify*
   - scripts/ci-scope*
   - scripts/go-test-shard*
+  - .npmrc
+  - web/.npmrc
 
 # generated: output of oapi-codegen, sqlc and openapi-typescript
 generated:

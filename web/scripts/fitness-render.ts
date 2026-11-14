@@ -46,7 +46,7 @@ const foreign = foreignFields(readFileSync(spec, 'utf8'));
 // outside the core paths: its include, paths or options must not narrow or
 // redirect the check. Every file under src/ is a root; a source file the
 // check cannot read (.js, .jsx, ...) fails it with exit 3.
-const src = join(root, 'src');
+const src = resolve(root, 'src');
 const other = ts.sys
   .readDirectory(src, ['.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'])
   .map((f) => resolve(f));
@@ -87,8 +87,19 @@ function visit(node: ts.Node) {
   ts.forEachChild(node, visit);
 }
 
+// A source file the program pulls in from outside src/ (an import of
+// ../lib/x.tsx, say) would go unchecked: it fails the check with exit 3.
+const outside = program
+  .getSourceFiles()
+  .filter((sf) => !sf.isDeclarationFile && !sf.fileName.includes('/node_modules/'))
+  .map((sf) => resolve(sf.fileName))
+  .filter((f) => !f.startsWith(src + '/'));
+if (outside.length > 0) {
+  console.error(`fitness render: source file outside src/: ${outside.join(', ')}`);
+  process.exit(3);
+}
 for (const sf of program.getSourceFiles()) {
-  if (!sf.isDeclarationFile && sf.fileName.startsWith(join(root, 'src'))) visit(sf);
+  if (!sf.isDeclarationFile && resolve(sf.fileName).startsWith(src + '/')) visit(sf);
 }
 for (const f of findings) console.log(`${f}: shown without ForeignText`);
 if (findings.length > 0) process.exit(1);
