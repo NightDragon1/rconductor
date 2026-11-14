@@ -21,7 +21,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: classify-${{ github.event.pull_request.number }}
@@ -32,6 +31,10 @@ jobs:
     name: Classify
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 5
+    # The label is the only write; everything else reads.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       # The current tip of the base branch, never the head of the pull
       # request. base.sha can be older than the class file and the script

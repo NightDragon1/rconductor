@@ -12,9 +12,13 @@
 # ruleset, so there is no paths filter on the workflow. release.yml calls this before publishing; images are only
 # built here, never pushed.
 #
-# The repository variable CI_RUNNER sets the runner of all jobs, for example
-# ubuntu-latest. A self-hosted runner would run code of fork pull requests,
-# so keep those to approved runs first.
+# Runners: pull requests from this repository, pushes to main and the
+# nightly run go to the self-hosted runners (labels self-hosted, lan3).
+# Pull requests from forks, tags (release.yml calls this file, so a release
+# never runs on them) and manual runs stay on the GitHub runner, which the
+# repository variable CI_RUNNER may name (default ubuntu-26.04). The choice
+# is an expression in runs-on, never a skipped job: skipped required checks
+# would count as passed.
 name: CI
 
 on:
@@ -36,7 +40,7 @@ concurrency:
 jobs:
   scope:
     name: Scope
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 5
     outputs:
       stage2: ${{ steps.scope.outputs.stage2 }}
@@ -59,7 +63,7 @@ jobs:
 
   spdx:
     name: SPDX headers
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,7 +75,7 @@ jobs:
     name: Fitness functions
     needs: scope
     if: needs.scope.outputs.code == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -82,6 +86,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Tools of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - run: go -C tools tool golangci-lint run ./fitness
       - run: go -C tools test ./fitness
       - run: go -C tools run ./fitness -dir ..
@@ -95,7 +102,7 @@ jobs:
     name: Script tests
     needs: scope
     if: needs.scope.outputs.code == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,6 +112,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Tools of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - run: scripts/ci-scope-test.sh
       - run: scripts/go-test-shard-test.sh
       - run: scripts/deny-rules-test.sh
@@ -124,7 +134,7 @@ jobs:
     name: Go lint
     needs: scope
     if: needs.scope.outputs.code == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -136,6 +146,9 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/go.sum
+      - name: Tools of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/golangci-lint
@@ -160,7 +173,7 @@ jobs:
     name: Go test shard ${{ matrix.shard }}
     needs: scope
     if: needs.scope.outputs.code == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -173,6 +186,9 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Tools of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - name: Every package is in exactly one shard
         env:
           TOTAL: ${{ strategy.job-total }}
@@ -194,7 +210,7 @@ jobs:
     name: Go test
     needs: [scope, go-test-shard]
     if: ${{ !cancelled() }}
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 5
     steps:
       - env:
@@ -208,7 +224,7 @@ jobs:
     name: govulncheck
     needs: scope
     if: needs.scope.outputs.code == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -220,13 +236,16 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/go.sum
+      - name: Tools of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - run: go tool -modfile=tools/go.mod govulncheck -tags integration,minecraft ./...
 
   web:
     name: Web lint, test and build
     needs: scope
     if: needs.scope.outputs.code == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 20
     defaults:
       run:
@@ -272,7 +291,7 @@ jobs:
     name: Image (amd64)
     needs: scope
     if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.code == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -309,7 +328,7 @@ jobs:
     name: Integration tests
     needs: [scope, image]
     if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.code == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -318,6 +337,9 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Tools of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: images
@@ -332,7 +354,7 @@ jobs:
     name: E2E shard ${{ matrix.shard }}
     needs: [scope, web]
     if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true' && needs.scope.outputs.code == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 30
     # Browser and its libraries come with the image; its version follows
     # @playwright/test (renovate.json). The stack needs no Docker.
@@ -348,6 +370,9 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Tools of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
@@ -379,7 +404,7 @@ jobs:
     name: ${{ needs.scope.outputs.stage2 == 'true' && 'E2E (Playwright)' || 'E2E (Playwright) not due' }}
     needs: [scope, e2e-shard]
     if: ${{ !cancelled() }}
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 5
     steps:
       - env:
@@ -393,7 +418,7 @@ jobs:
     name: Image (arm64) (${{ matrix.target }})
     needs: scope
     if: needs.scope.outputs.stage3 == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 45
     strategy:
       matrix:
@@ -417,7 +442,7 @@ jobs:
     name: Long tests
     needs: scope
     if: needs.scope.outputs.stage3 == 'true'
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -426,6 +451,9 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Tools of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - run: make measure-login
 
   minecraft:
@@ -434,7 +462,7 @@ jobs:
     if: >-
       needs.scope.outputs.stage3 == 'true' ||
       (needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.minecraft == 'true')
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -443,6 +471,9 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Tools of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       # The server JAR is pinned by version and SHA-1 in the script; the
       # cache key follows the script, so a new pin downloads again.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
