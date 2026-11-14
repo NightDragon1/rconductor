@@ -39,6 +39,7 @@ function storeHelp(on: boolean) {
 // Keys with their own label and help in the language file.
 const keyTexts = [
   'features_server_save_as_new',
+  'features_log_filter_split',
   'auth_recovery_lifetime',
   'auth_recovery_per_hour',
   'auth_recovery_queue',

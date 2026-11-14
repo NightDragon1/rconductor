@@ -950,6 +950,10 @@
       "features_server_save_as_new": {
         "label": "Save as New",
         "help": "Keeps the server dialog open after creating a server and offers Save and Save as New."
+      },
+      "features_log_filter_split": {
+        "label": "Two-part log filter",
+        "help": "Filters container logs by the bracket part and the text, joined with and, or, xor."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
