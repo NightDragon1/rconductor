@@ -172,6 +172,14 @@ denied 'gh repo sync x/y --source a/b --force' C36
 denied 'gh repo sync --force' C36
 denied 'gh pr merge 12 --admin --squash' C36
 denied 'gh pr merge 12 --squash --admin=true' C36
+has 'Bash(gh pr update-branch*)' C103
+has 'Bash(gh pr * update-branch*)' C103
+has 'Bash(*/gh pr update-branch*)' C103
+has 'Bash(*/gh pr * update-branch*)' C103
+denied 'gh pr update-branch 12 --rebase' C103
+denied 'gh pr update-branch 12' C103
+denied 'gh pr -R o/r update-branch 12' C103
+denied '/home/u/.local/bin/gh pr update-branch 12 --rebase' C103
 denied 'gh auth token' C38
 denied 'gh ssh-key add key.pub' C38
 denied 'gh repo deploy-key add key.pub' C38
