@@ -240,16 +240,16 @@ jobs:
           node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci --no-audit --no-fund
-      - name: API types are up to date
-        run: |
-          npm run gen:api
-          git diff --exit-code -- src/api
-      # Lint and the render fitness function run directly, not through the
-      # npm scripts: web/package.json is no core path (PRJ-005).
+      # web/package.json is no core path (PRJ-005): no lifecycle script of it
+      # runs, and the core checks run directly, before any npm script.
+      - run: npm ci --no-audit --no-fund --ignore-scripts
       - run: npx --no-install eslint .
       - run: node scripts/fitness-render.ts
       - run: sh scripts/fitness-render-test.sh
+      - name: API types are up to date
+        run: |
+          npx --no-install openapi-typescript ../api/openapi.yaml -o src/api/schema.d.ts
+          git diff --exit-code -- src/api
       - run: npm run format:check
       - run: npm test
       - run: npm run build

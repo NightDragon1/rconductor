@@ -6,7 +6,7 @@
 // access counts when its declaration is that field of the generated
 // schema. Optional argument: the directory of a project to check.
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import ts from 'typescript';
 
 const root = resolve(process.argv[2] ?? join(import.meta.dirname, '..'));
@@ -28,9 +28,10 @@ export function foreignFields(yaml: string): Set<string> {
   return out;
 }
 
-// schemaField names the schema field a declaration belongs to.
+// Only the generated schema of the project counts, by its exact path.
+const schemaFile = resolve(root, 'src', 'api', 'schema.d.ts');
 function schemaField(d: ts.Declaration): string | undefined {
-  if (!ts.isPropertySignature(d) || !d.getSourceFile().fileName.endsWith('schema.d.ts')) return;
+  if (!ts.isPropertySignature(d) || resolve(d.getSourceFile().fileName) !== schemaFile) return;
   const owner = d.parent?.parent;
   if (!owner || !ts.isPropertySignature(owner)) return;
   return `${owner.name.getText()}.${d.name.getText()}`;
@@ -41,24 +42,29 @@ process.on('uncaughtException', (e) => {
   process.exit(2);
 });
 const foreign = foreignFields(readFileSync(spec, 'utf8'));
-const cfgPath = join(root, 'tsconfig.app.json');
-const cfg = ts.parseJsonConfigFileContent(
-  ts.readConfigFile(cfgPath, ts.sys.readFile).config,
-  ts.sys,
-  dirname(cfgPath),
-);
-// tsconfig.app.json lies outside the core paths: it must not narrow the
-// check, so every source file under src/ has to be in the program.
-const inProgram = new Set(cfg.fileNames.map((f) => resolve(f)));
-const missing = ts.sys
-  .readDirectory(join(root, 'src'), ['.ts', '.tsx'])
-  .map((f) => resolve(f))
-  .filter((f) => !inProgram.has(f));
-if (missing.length > 0) {
-  console.error(`fitness render: not in the checked program: ${missing.join(', ')}`);
-  process.exit(2);
+// The program is fixed here, not taken from tsconfig.app.json, which lies
+// outside the core paths: its include, paths or options must not narrow or
+// redirect the check. Every file under src/ is a root; a source file the
+// check cannot read (.js, .jsx, ...) fails it with exit 3.
+const src = join(root, 'src');
+const other = ts.sys
+  .readDirectory(src, ['.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'])
+  .map((f) => resolve(f));
+if (other.length > 0) {
+  console.error(`fitness render: source file the check cannot read: ${other.join(', ')}`);
+  process.exit(3);
 }
-const program = ts.createProgram(cfg.fileNames, cfg.options);
+const program = ts.createProgram(ts.sys.readDirectory(src, ['.ts', '.tsx']), {
+  jsx: ts.JsxEmit.ReactJSX,
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  target: ts.ScriptTarget.ES2023,
+  baseUrl: root,
+  paths: { '@/*': ['./src/*'] },
+  types: [],
+  skipLibCheck: true,
+  noEmit: true,
+});
 const checker = program.getTypeChecker();
 const findings: string[] = [];
 
