@@ -628,6 +628,11 @@
     "new": "New server",
     "create": "Create server",
     "save": "Save",
+    "saveAsNew": "Save as New",
+    "createdStay": "Server {{name}} created. Save changes it; Save as New creates another one.",
+    "savedAsNew": "Server {{name}} created as a new server.",
+    "saveAsNewPassword": "Enter the RCON password again for the new server.",
+    "saveAsNewToken": "Enter the API token again for the new server.",
     "testConnection": "Test connection",
     "testResult": {
       "ok": "Connection works: the game server accepted the password.",
