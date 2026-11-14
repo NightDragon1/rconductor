@@ -361,7 +361,7 @@ jobs:
     # runner is itself a container with the host's Docker socket, so job
     # containers miss its paths: there the job installs the browser of the
     # locked @playwright/test instead. The stack needs no Docker.
-    container: ${{ ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '' || 'mcr.microsoft.com/playwright:v1.65.0-noble@sha256:9beb546099e11f52d62e505537914870e01a67e0e6b00ae41da4775324e73dbe' }}
+    container: ${{ !((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && 'mcr.microsoft.com/playwright:v1.65.0-noble@sha256:9beb546099e11f52d62e505537914870e01a67e0e6b00ae41da4775324e73dbe' || '' }}
     strategy:
       fail-fast: false
       matrix:
