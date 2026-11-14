@@ -356,9 +356,12 @@ jobs:
     if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true' && needs.scope.outputs.code == 'true'
     runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 30
-    # Browser and its libraries come with the image; its version follows
-    # @playwright/test (renovate.json). The stack needs no Docker.
-    container: mcr.microsoft.com/playwright:v1.65.0-noble@sha256:9beb546099e11f52d62e505537914870e01a67e0e6b00ae41da4775324e73dbe
+    # On the GitHub runner browser and libraries come with the image; its
+    # version follows @playwright/test (renovate.json). The self-hosted
+    # runner is itself a container with the host's Docker socket, so job
+    # containers miss its paths: there the job installs the browser of the
+    # locked @playwright/test instead. The stack needs no Docker.
+    container: ${{ ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '' || 'mcr.microsoft.com/playwright:v1.65.0-noble@sha256:9beb546099e11f52d62e505537914870e01a67e0e6b00ae41da4775324e73dbe' }}
     strategy:
       fail-fast: false
       matrix:
@@ -385,6 +388,10 @@ jobs:
       - name: Web dependencies
         working-directory: web
         run: npm ci --no-audit --no-fund
+      - name: Browser of the self-hosted runner
+        if: runner.environment == 'self-hosted'
+        working-directory: web
+        run: npx --no-install playwright install --with-deps chromium
       - name: Tests
         working-directory: web
         env:
