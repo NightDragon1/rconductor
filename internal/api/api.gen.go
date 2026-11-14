@@ -884,12 +884,16 @@ type GamePortProto string
 
 // GameProfile defines model for GameProfile.
 type GameProfile struct {
-	CaseSensitive bool               `json:"case_sensitive"`
-	Catalog       []CatalogCommand   `json:"catalog"`
-	DefaultPort   int                `json:"default_port"`
-	GamePorts     []GamePort         `json:"game_ports"`
-	Id            openapi_types.UUID `json:"id"`
-	ImportedAt    time.Time          `json:"imported_at"`
+	CaseSensitive bool             `json:"case_sensitive"`
+	Catalog       []CatalogCommand `json:"catalog"`
+
+	// DefaultPort RCON port of the profile; only for the RCON admin (D-056).
+	DefaultPort *int `json:"default_port,omitempty"`
+
+	// GamePorts Game ports of the profile; only for the RCON admin and server admins (D-056), missing for other roles.
+	GamePorts  *[]GamePort        `json:"game_ports,omitempty"`
+	Id         openapi_types.UUID `json:"id"`
+	ImportedAt time.Time          `json:"imported_at"`
 
 	// Kind generic for a game as such, specific for a modpack or plugin that ranks above it (CAT-007); a profile without kind is generic.
 	Kind GameProfileKind `json:"kind"`

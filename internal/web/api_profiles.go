@@ -19,18 +19,28 @@ func (s *apiServer) ListProfiles(ctx context.Context, _ api.ListProfilesRequestO
 	}
 	p, _ := principal(ctx)
 	admin := perm.Role(p.Role) == perm.RCONAdmin
+	// Ports by role (D-056): the RCON port only for the RCON admin, game
+	// ports also for server admins, none for moderators and supporters.
+	gamePorts := admin || perm.Role(p.Role) == perm.ServerAdmin
 	out := api.ProfileList{Items: make([]api.GameProfile, 0, len(list))}
 	for _, sp := range list {
 		id, _ := uuid.Parse(sp.ID)
 		r := sp.Rules
 		g := api.GameProfile{
-			Id: id, Slug: sp.Slug, Name: sp.Name, Kind: api.GameProfileKind(profiles.KindOf(&sp.Rules)), Protocol: sp.Protocol, DefaultPort: sp.DefaultPort,
+			Id: id, Slug: sp.Slug, Name: sp.Name, Kind: api.GameProfileKind(profiles.KindOf(&sp.Rules)), Protocol: sp.Protocol,
 			Overridden: sp.Overridden, ImportedAt: sp.ImportedAt,
 			CaseSensitive: *r.Syntax.CaseSensitive, StripPrefix: *r.Syntax.StripPrefix, MaxLength: r.Syntax.MaxLength,
-			Wrappers: r.Syntax.Wrappers, GamePorts: []api.GamePort{}, Catalog: []api.CatalogCommand{},
+			Wrappers: r.Syntax.Wrappers, Catalog: []api.CatalogCommand{},
 		}
-		for _, gp := range r.Ports.Game {
-			g.GamePorts = append(g.GamePorts, api.GamePort{Port: gp.Port, Proto: api.GamePortProto(gp.Proto), Name: gp.Name})
+		if admin {
+			g.DefaultPort = &sp.DefaultPort
+		}
+		if gamePorts {
+			ports := make([]api.GamePort, 0, len(r.Ports.Game))
+			for _, gp := range r.Ports.Game {
+				ports = append(ports, api.GamePort{Port: gp.Port, Proto: api.GamePortProto(gp.Proto), Name: gp.Name})
+			}
+			g.GamePorts = &ports
 		}
 		for _, c := range r.Catalog {
 			g.Catalog = append(g.Catalog, toAPICatalog(c))

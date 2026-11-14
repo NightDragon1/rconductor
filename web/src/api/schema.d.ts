@@ -1518,7 +1518,8 @@ export interface components {
              */
             kind: "generic" | "specific";
             protocol: string;
-            default_port: number;
+            /** @description RCON port of the profile; only for the RCON admin (D-056). */
+            default_port?: number;
             /** @description A custom profile replaces the shipped one. */
             overridden: boolean;
             /** Format: date-time */
@@ -1527,7 +1528,8 @@ export interface components {
             strip_prefix: string;
             max_length: number;
             wrappers: string[];
-            game_ports: components["schemas"]["GamePort"][];
+            /** @description Game ports of the profile; only for the RCON admin and server admins (D-056), missing for other roles. */
+            game_ports?: components["schemas"]["GamePort"][];
             catalog: components["schemas"]["CatalogCommand"][];
             /** @description Reason of the last rejected file; RCON admin only. */
             last_error?: string;

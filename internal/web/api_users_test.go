@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/api"
+	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
 func (f *apiFixture) login(t *testing.T, pseudonym string) *http.Cookie {
@@ -118,6 +119,34 @@ func TestProfilesAPI(t *testing.T) {
 	gtnh, ok := bySlug["minecraft-gtnh"]
 	if !ok || len(gtnh.Catalog) != 83 || len(gtnh.Wrappers) != 0 || gtnh.LastError != nil {
 		t.Errorf("gtnh profile = %+v", gtnh)
+	}
+}
+
+// TestProfilePortsByRole covers D-056 for GET /profiles: the RCON port
+// only for the RCON admin, game ports also for server admins, no port
+// field at all for moderators.
+func TestProfilePortsByRole(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	var hash string
+	if err := f.st.DB.QueryRow(`SELECT password_hash FROM users WHERE id = ?`, f.userID).Scan(&hash); err != nil {
+		t.Fatal(err)
+	}
+	storetest.CreateUser(t, f.st, storetest.User{Pseudonym: "SA", Role: "server_admin", PasswordHash: hash, CreatedBy: f.adminID})
+	for who, want := range map[string][2]bool{"Boss": {true, true}, "SA": {false, true}, "Mod": {false, false}} {
+		rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/profiles", cookies: []*http.Cookie{f.login(t, who)}})
+		var raw struct {
+			Items []map[string]json.RawMessage `json:"items"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil || len(raw.Items) == 0 {
+			t.Fatalf("%s: %d %s", who, rec.Code, rec.Body.String())
+		}
+		for _, p := range raw.Items {
+			_, rcon := p["default_port"]
+			_, game := p["game_ports"]
+			if rcon != want[0] || game != want[1] {
+				t.Fatalf("%s: default_port present=%t, game_ports present=%t, want %v", who, rcon, game, want)
+			}
+		}
 	}
 }
 

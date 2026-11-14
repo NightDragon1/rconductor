@@ -2922,7 +2922,7 @@ components:
 
     GameProfile:
       type: object
-      required: [id, slug, name, kind, protocol, default_port, overridden, imported_at, case_sensitive, strip_prefix, max_length, wrappers, game_ports, catalog]
+      required: [id, slug, name, kind, protocol, overridden, imported_at, case_sensitive, strip_prefix, max_length, wrappers, catalog]
       properties:
         id:
           type: string
@@ -2942,6 +2942,7 @@ components:
           type: string
         default_port:
           type: integer
+          description: RCON port of the profile; only for the RCON admin (D-056).
         overridden:
           type: boolean
           description: A custom profile replaces the shipped one.
@@ -2960,6 +2961,9 @@ components:
             type: string
         game_ports:
           type: array
+          description: >-
+            Game ports of the profile; only for the RCON admin and server
+            admins (D-056), missing for other roles.
           items:
             $ref: "#/components/schemas/GamePort"
         catalog:
