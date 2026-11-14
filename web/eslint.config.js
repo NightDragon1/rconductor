@@ -7,7 +7,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', '.dist-language', 'src/api/schema.d.ts'] },
+  { ignores: ['dist', '.dist-language', 'src/api/schema.d.ts', 'scripts/testdata'] },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.strict, prettier],
@@ -22,6 +22,33 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+    },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}', 'scripts/testdata/*/src/**/*.{ts,tsx}'],
+    rules: {
+      // Fitness function render (PRJ-005): no HTML from strings; foreign
+      // data goes through ForeignText.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+          message: 'Use ForeignText.',
+        },
+        {
+          selector: 'AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]',
+          message: 'No HTML from strings.',
+        },
+        {
+          selector: "CallExpression[callee.property.name='insertAdjacentHTML']",
+          message: 'No HTML from strings.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='document'][callee.property.name=/^write(ln)?$/]",
+          message: 'No HTML from strings.',
+        },
+      ],
     },
   },
   {

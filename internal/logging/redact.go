@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // Redacted replaces every secret value in the output.
@@ -17,6 +18,9 @@ type Secret string
 
 // Reveal returns the wrapped value.
 func (s Secret) Reveal() string { return string(s) }
+
+// Len is the length in runes, for checks that need no value.
+func (s Secret) Len() int { return utf8.RuneCountInString(string(s)) }
 
 // String implements fmt.Stringer.
 func (Secret) String() string { return Redacted }

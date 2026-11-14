@@ -7,6 +7,7 @@ import { useSession } from '@/api/session';
 import { byGroups } from '@/lib/groups';
 import { cardStatus, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
+import { ForeignText } from '@/components/ForeignText';
 
 const dot: Record<Tone, string> = {
   ok: 'bg-ok',
@@ -38,7 +39,13 @@ function AgentNode({
         <span aria-hidden>→</span>
         <span className="flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5">
           <span className={cn('size-2 rounded-full', dot[tone])} aria-hidden />
-          {agent ? <bdi className="font-mono">{agent.name}</bdi> : t('topology.agent')}
+          {agent ? (
+            <bdi className="font-mono">
+              <ForeignText text={agent.name} />
+            </bdi>
+          ) : (
+            t('topology.agent')
+          )}
           <span className="text-muted">· {t(`topology.state.${state}`)}</span>
         </span>
       </div>

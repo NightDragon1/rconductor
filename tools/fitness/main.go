@@ -7,6 +7,8 @@
 //	       the caller's principal (internal/web.principal) or internal/perm
 //	audit  every operation that is not a read reaches internal/audit.Write
 //	cmd    only the command pipeline calls Execute of the RCON packages
+//	redact secrets are revealed only at their destinations; nothing in
+//	       internal/ prints past the redacting log handler (fmt.Print, log)
 //
 // Excepted findings pass (rule symbol # reason); a stale exception fails.
 package main
@@ -32,10 +34,14 @@ import (
 )
 
 // Package paths below the module path.
-const webPkg, permPkg, auditPkg = "/internal/web", "/internal/perm", "/internal/audit"
+const webPkg, permPkg, auditPkg, logPkg = "/internal/web", "/internal/perm", "/internal/audit", "/internal/logging"
 
-// Execute of cmdSinks sends a command to a game server; only cmdCore calls it.
+// Execute of cmdSinks sends a command to a game server; only cmdCore calls
+// it. logging.Secret.Reveal is called only by revealers.
 var (
+	revealers = []string{"/internal/logging", "/internal/store/secret", "/internal/rcon"}
+	// harness are test programs, not part of panel or agent.
+	harness  = []string{"/internal/e2e", "/internal/integration"}
 	cmdSinks = []string{"/internal/rcon", "/internal/connmgr"}
 	cmdCore  = []string{"/internal/rcon", "/internal/connmgr", "/internal/commands"}
 )
@@ -165,20 +171,27 @@ func check(dir string) ([]finding, error) {
 		}
 	}
 	cg := vta.CallGraph(funcs, cha.CallGraph(prog))
-	cmdCallers := map[string]bool{}
+	edges := map[finding]bool{}
 	for fn, n := range cg.Nodes {
-		if fn == nil || pkgPath(fn) == "" || hasPrefix(pkgPath(fn), mod, cmdCore) {
+		p := pkgPath(fn)
+		if fn == nil || p == "" {
 			continue
 		}
+		rel := strings.TrimPrefix(p, mod+"/")
 		for _, e := range n.Out {
-			if c := e.Callee.Func; c.Name() == "Execute" && hasPrefix(pkgPath(c), mod, cmdSinks) {
-				cmdCallers[strings.TrimPrefix(pkgPath(fn), mod+"/")] = true
+			c, cp := e.Callee.Func, pkgPath(e.Callee.Func)
+			switch {
+			case c.Name() == "Execute" && hasPrefix(cp, mod, cmdSinks) && !hasPrefix(p, mod, cmdCore):
+				edges[finding{"cmd", rel, "sends a command to a game server outside the command pipeline"}] = true
+			case c.Name() == "Reveal" && cp == mod+logPkg && !hasPrefix(p, mod, revealers):
+				edges[finding{"redact", rel, "reveals a secret outside its destinations"}] = true
+			case (cp == "log" || (cp == "fmt" && strings.HasPrefix(c.Name(), "Print"))) && strings.HasPrefix(p, mod+"/internal/") &&
+				!hasPrefix(p, mod, harness):
+				edges[finding{"redact", rel, "prints past the redacting log handler"}] = true
 			}
 		}
 	}
-	for _, p := range slices.Sorted(maps.Keys(cmdCallers)) {
-		found = append(found, finding{"cmd", p, "sends a command to a game server outside the command pipeline"})
-	}
+	found = append(found, slices.SortedFunc(maps.Keys(edges), func(a, b finding) int { return strings.Compare(a.key(), b.key()) })...)
 	authz := func(f *ssa.Function) bool {
 		p := pkgPath(f)
 		return (p == mod+webPkg && f.Name() == "principal") || p == mod+permPkg || strings.HasPrefix(p, mod+permPkg+"/")
