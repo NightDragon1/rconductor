@@ -1,5 +1,7 @@
 # RCONductor agent
 
+![ShadowGhost.NET RCONductor](https://raw.githubusercontent.com/NightDragon1/rconductor/main/assets/logo/rconductor-logo.svg)
+
 The agent of RCONductor, the self-hosted web panel for RCON-capable game
 servers (image `nightdragon1/rconductor-panel`). One agent runs on each game
 host: it reads the Docker socket, reports the containers labelled

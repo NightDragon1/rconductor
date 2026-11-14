@@ -53,6 +53,13 @@
   color-scheme: light;
 }
 
+/* The logo in the variant of the current design (UI-023): dark is the
+   base, data-theme switches to light. */
+:root[data-theme='light'] .logo-dark,
+:root:not([data-theme='light']) .logo-light {
+  display: none;
+}
+
 /* A tap target of 44 px on a phone (UI-012): links and small buttons in
    running text grow around their text. */
 @utility tap {

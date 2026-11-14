@@ -1,5 +1,7 @@
 # RCONductor panel
 
+![ShadowGhost.NET RCONductor](https://raw.githubusercontent.com/NightDragon1/rconductor/main/assets/logo/rconductor-logo.svg)
+
 Self-hosted web panel for RCON-capable game servers, with roles and
 permissions. Containers are controlled by a small agent per game host
 (image `nightdragon1/rconductor-agent`); the panel never touches the Docker

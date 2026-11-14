@@ -7,6 +7,7 @@ import { api } from '@/api/client';
 import { sessionKey } from '@/api/session';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Logo } from '@/components/Logo';
 import { PasswordInput } from '@/components/PasswordInput';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -82,7 +83,8 @@ export function LoginPage() {
 
   if (code) {
     return (
-      <main className="flex min-h-full items-center justify-center p-4">
+      <main className="flex min-h-full flex-col items-center justify-center gap-6 p-4">
+        <Logo />
         <Card className="w-full max-w-sm">
           <h1 className="mb-2 text-xl font-semibold">{t('login.codeTitle')}</h1>
           <p className="mb-6 text-sm text-muted">{t('login.codeExplain')}</p>
@@ -117,7 +119,8 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-full items-center justify-center p-4">
+    <main className="flex min-h-full flex-col items-center justify-center gap-6 p-4">
+      <Logo />
       <Card className="w-full max-w-sm">
         <h1 className="mb-6 text-xl font-semibold">{t('login.title')}</h1>
         <form className="space-y-4" onSubmit={submit}>

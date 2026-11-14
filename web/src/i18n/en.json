@@ -4,6 +4,8 @@
     "loading": "Loading…",
     "error": "Something went wrong. Please try again.",
     "org": "ShadowGhost.NET",
+    "logo": "ShadowGhost.NET RCONductor",
+    "mark": "RCONductor",
     "version": "RCONductor {{version}}",
     "later": "This page follows in a later step."
   },

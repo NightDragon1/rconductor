@@ -55,6 +55,7 @@ go generate ./...
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff
 (cd web && npm run -s gen:api >/dev/null && npx prettier --write src/api/schema.d.ts >/dev/null)
 git diff --exit-code -- internal/api web/src/api
+scripts/logo.sh --check
 
 if $tests; then
   step go test

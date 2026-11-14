@@ -55,8 +55,8 @@ expect "a docs change: sqlc" false "$(field sqlc)"
 expect "a docs change: code" false "$(field code)"
 
 change "docs and assets only" <<'EOF'
-mkdir -p assets/logo .github/ISSUE_TEMPLATE
-echo svg >assets/logo/a.svg
+mkdir -p assets/other .github/ISSUE_TEMPLATE
+echo svg >assets/other/a.svg
 echo t >.github/ISSUE_TEMPLATE/bug.md
 echo l >LICENSE
 echo c >>CHANGELOG.md
@@ -64,9 +64,9 @@ EOF
 expect "docs, assets, licence, issue template: code" false "$(field code)"
 expect "docs, assets, licence, issue template: e2e" false "$(field e2e)"
 
-for f in README.md docs/user/configuration.md docs/user/technical.md; do
+for f in README.md docs/user/configuration.md docs/user/technical.md assets/logo/rconductor-mark.svg; do
   change "tested doc $f" <<EOF
-mkdir -p docs/user
+mkdir -p docs/user assets/logo
 echo x >>$f
 EOF
   expect "a doc that tests read ($f): code" true "$(field code)"
