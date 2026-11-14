@@ -9,11 +9,24 @@ import { defineConfig, devices } from '@playwright/test';
 // The tag e2e builds the stack with its control listener for the tests
 // (AGT-005).
 const language = 'web/.dist-language';
+// E2E_PORT_BASE moves the four ports, for parallel shards on runners that
+// share one host network; default 4380.
+const portBase = Number(process.env.E2E_PORT_BASE ?? 4380);
+if (!Number.isInteger(portBase) || portBase < 1024 || portBase > 65532) {
+  throw new Error(`E2E_PORT_BASE ${process.env.E2E_PORT_BASE}: want 1024 to 65532`);
+}
 const stacks = [
-  { name: 'root', port: 4380, base: '/', host: '', dist: '', trusted: '' },
-  { name: 'basepath', port: 4381, base: '/rcon', host: '', dist: '', trusted: '127.0.0.1/32' },
-  { name: 'insecure', port: 4382, base: '/', host: 'rcon.lan', dist: '', trusted: '' },
-  { name: 'language', port: 4383, base: '/', host: '', dist: language, trusted: '' },
+  { name: 'root', port: portBase, base: '/', host: '', dist: '', trusted: '' },
+  {
+    name: 'basepath',
+    port: portBase + 1,
+    base: '/rcon',
+    host: '',
+    dist: '',
+    trusted: '127.0.0.1/32',
+  },
+  { name: 'insecure', port: portBase + 2, base: '/', host: 'rcon.lan', dist: '', trusted: '' },
+  { name: 'language', port: portBase + 3, base: '/', host: '', dist: language, trusted: '' },
 ];
 const insecureOnly = /clipboard\.spec\.ts/;
 const phoneOnly = /mobile\.spec\.ts/;
