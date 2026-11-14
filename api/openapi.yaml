@@ -2463,6 +2463,8 @@ components:
         protocol:
           type: string
           description: Admins only.
+        formatting:
+          $ref: "#/components/schemas/Formatting"
         host:
           type: string
           description: >-
@@ -3000,6 +3002,8 @@ components:
             admins (D-056), missing for other roles.
           items:
             $ref: "#/components/schemas/GamePort"
+        formatting:
+          $ref: "#/components/schemas/Formatting"
         catalog:
           type: array
           items:
@@ -3044,10 +3048,22 @@ components:
             admin of this server (D-056), missing for other roles.
           items:
             $ref: "#/components/schemas/GamePort"
+        formatting:
+          $ref: "#/components/schemas/Formatting"
         catalog:
           type: array
           items:
             $ref: "#/components/schemas/EffectiveCommand"
+
+    Formatting:
+      type: string
+      enum: [minecraft]
+      description: >-
+        Display of the formatting codes in game server answers (CMD-017), from
+        the profile field formatting; for a server the topmost profile that
+        sets it (D-074). minecraft shows § codes as styles of a fixed list
+        while the flag color_codes is on; without the field or with the flag
+        off the codes are removed before display (SEC-006).
 
     EffectiveCommand:
       type: object

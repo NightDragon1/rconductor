@@ -133,6 +133,21 @@ func (e ConnectionTestResultResult) Valid() bool {
 	}
 }
 
+// Defines values for Formatting.
+const (
+	Minecraft Formatting = "minecraft"
+)
+
+// Valid indicates whether the value is a known member of the Formatting enum.
+func (e Formatting) Valid() bool {
+	switch e {
+	case Minecraft:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GamePortProto.
 const (
 	Tcp GamePortProto = "tcp"
@@ -873,6 +888,9 @@ type EffectiveProfile struct {
 	CaseSensitive bool               `json:"case_sensitive"`
 	Catalog       []EffectiveCommand `json:"catalog"`
 
+	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+	Formatting *Formatting `json:"formatting,omitempty"`
+
 	// GamePorts Effective game ports; only for the RCON admin and the server admin of this server (D-056), missing for other roles.
 	GamePorts *[]GamePort `json:"game_ports,omitempty"`
 	MaxLength int         `json:"max_length"`
@@ -899,6 +917,9 @@ type Favorites struct {
 	ServerIds []openapi_types.UUID `json:"server_ids"`
 }
 
+// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+type Formatting string
+
 // GamePort defines model for GamePort.
 type GamePort struct {
 	Name  string        `json:"name"`
@@ -916,6 +937,9 @@ type GameProfile struct {
 
 	// DefaultPort RCON port of the profile; only for the RCON admin (D-056).
 	DefaultPort *int `json:"default_port,omitempty"`
+
+	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+	Formatting *Formatting `json:"formatting,omitempty"`
 
 	// GamePorts Game ports of the profile; only for the RCON admin and server admins (D-056), missing for other roles.
 	GamePorts  *[]GamePort        `json:"game_ports,omitempty"`
@@ -1288,6 +1312,9 @@ type Server struct {
 
 	// Credentials Admins only. reenter: the credentials were encrypted with another master key and must be entered again (SRV-002).
 	Credentials *ServerCredentials `json:"credentials,omitempty"`
+
+	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+	Formatting *Formatting `json:"formatting,omitempty"`
 
 	// GamePorts Admins only; the override of the server or the profile's ports (SRV-005).
 	GamePorts         *[]GamePort          `json:"game_ports,omitempty"`

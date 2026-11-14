@@ -980,6 +980,10 @@
       "features_profile_browser": {
         "label": "Profile browser",
         "help": "Shows the game profiles with their command catalog and the effective profile of each server, read only."
+      },
+      "features_color_codes": {
+        "label": "Color codes",
+        "help": "Shows the formatting codes of game server answers (for example Minecraft § codes) as a fixed set of styles instead of removing them."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
