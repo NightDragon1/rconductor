@@ -739,6 +739,30 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/Busy"
+  /servers/{id}/profile:
+    parameters:
+      - $ref: "#/components/parameters/ServerID"
+    get:
+      operationId: getServerProfile
+      summary: Effective game profile of a server, read only (UI-020, SRV-008, D-074).
+      description: >-
+        Merged from the server's profiles top first: for each value the
+        topmost profile that sets it wins, wrappers and separators are the
+        union, the catalog is the union with the upper profile winning on
+        the same path. Behind the feature flag profile_browser. A server
+        outside the caller's scope is 404.
+      tags: [profiles]
+      responses:
+        "200":
+          description: The effective profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveProfile"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /servers/{id}/history:
     parameters:
       - $ref: "#/components/parameters/ServerID"
@@ -2986,6 +3010,61 @@ components:
         last_error_at:
           type: string
           format: date-time
+
+    EffectiveProfile:
+      type: object
+      required: [profile_ids, protocol, case_sensitive, strip_prefix, max_length, wrappers, separators, catalog]
+      properties:
+        profile_ids:
+          type: array
+          description: Profiles of the server, top first (SRV-008).
+          items:
+            type: string
+            format: uuid
+        protocol:
+          type: string
+        case_sensitive:
+          type: boolean
+        strip_prefix:
+          type: string
+        max_length:
+          type: integer
+        wrappers:
+          type: array
+          items:
+            type: string
+        separators:
+          type: array
+          items:
+            type: string
+        game_ports:
+          type: array
+          description: >-
+            Effective game ports; only for the RCON admin and the server
+            admin of this server (D-056), missing for other roles.
+          items:
+            $ref: "#/components/schemas/GamePort"
+        catalog:
+          type: array
+          items:
+            $ref: "#/components/schemas/EffectiveCommand"
+
+    EffectiveCommand:
+      type: object
+      required: [path, description, params, profile_id]
+      properties:
+        path:
+          type: string
+        description:
+          type: string
+        params:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileParam"
+        profile_id:
+          type: string
+          format: uuid
+          description: The profile the entry comes from (the upper one on the same path).
 
     ProfileList:
       type: object

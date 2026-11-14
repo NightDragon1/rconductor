@@ -69,3 +69,13 @@ func toAPICatalog(c profiles.Command) api.CatalogCommand {
 	}
 	return cmd
 }
+
+// GetServerProfile is the effective profile of a server for the profile
+// browser (UI-020); contract first, the server must be in the caller's
+// scope (otherwise 404) before anything else.
+func (s *apiServer) GetServerProfile(ctx context.Context, req api.GetServerProfileRequestObject) (api.GetServerProfileResponseObject, error) {
+	if _, err := s.servers.Get(ctx, adminRequest(ctx), req.Id.String()); err != nil {
+		return nil, adminError(err)
+	}
+	return nil, notImplemented("getServerProfile")
+}

@@ -858,6 +858,33 @@ type ContainerRuntime struct {
 	Volumes *[]VolumeRuntime `json:"volumes,omitempty"`
 }
 
+// EffectiveCommand defines model for EffectiveCommand.
+type EffectiveCommand struct {
+	Description string         `json:"description"`
+	Params      []ProfileParam `json:"params"`
+	Path        string         `json:"path"`
+
+	// ProfileId The profile the entry comes from (the upper one on the same path).
+	ProfileId openapi_types.UUID `json:"profile_id"`
+}
+
+// EffectiveProfile defines model for EffectiveProfile.
+type EffectiveProfile struct {
+	CaseSensitive bool               `json:"case_sensitive"`
+	Catalog       []EffectiveCommand `json:"catalog"`
+
+	// GamePorts Effective game ports; only for the RCON admin and the server admin of this server (D-056), missing for other roles.
+	GamePorts *[]GamePort `json:"game_ports,omitempty"`
+	MaxLength int         `json:"max_length"`
+
+	// ProfileIds Profiles of the server, top first (SRV-008).
+	ProfileIds  []openapi_types.UUID `json:"profile_ids"`
+	Protocol    string               `json:"protocol"`
+	Separators  []string             `json:"separators"`
+	StripPrefix string               `json:"strip_prefix"`
+	Wrappers    []string             `json:"wrappers"`
+}
+
 // EmailInput defines model for EmailInput.
 type EmailInput struct {
 	Code *string `json:"code,omitempty"`
@@ -1958,6 +1985,9 @@ type ServerInterface interface {
 	// GetPlayers Players online, from the cache (SRV-006, Overview 4.6).
 	// (GET /servers/{id}/players)
 	GetPlayers(w http.ResponseWriter, r *http.Request, id ServerID)
+	// GetServerProfile Effective game profile of a server, read only (UI-020, SRV-008, D-074).
+	// (GET /servers/{id}/profile)
+	GetServerProfile(w http.ResponseWriter, r *http.Request, id ServerID)
 	// ListTemplates Command templates of the server (CMD-008).
 	// (GET /servers/{id}/templates)
 	ListTemplates(w http.ResponseWriter, r *http.Request, id ServerID)
@@ -3217,6 +3247,32 @@ func (siw *ServerInterfaceWrapper) GetPlayers(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetServerProfile operation middleware
+func (siw *ServerInterfaceWrapper) GetServerProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ServerID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServerProfile(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTemplates operation middleware
 func (siw *ServerInterfaceWrapper) ListTemplates(w http.ResponseWriter, r *http.Request) {
 
@@ -4094,6 +4150,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/servers/{id}/templates/{template_id}", wrapper.UpdateTemplate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/commands/multi", wrapper.SendMultiCommand)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/players", wrapper.GetPlayers)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/profile", wrapper.GetServerProfile)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/history", wrapper.GetHistory)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/servers/{id}/actions", wrapper.ServerAction)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/servers/{id}/logs", wrapper.GetServerLogs)
@@ -8229,6 +8286,60 @@ func (response GetPlayers503ApplicationProblemPlusJSONResponse) VisitGetPlayersR
 	return err
 }
 
+type GetServerProfileRequestObject struct {
+	Id ServerID `json:"id"`
+}
+
+type GetServerProfileResponseObject interface {
+	VisitGetServerProfileResponse(w http.ResponseWriter) error
+}
+
+type GetServerProfile200JSONResponse EffectiveProfile
+
+func (response GetServerProfile200JSONResponse) VisitGetServerProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerProfile401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerProfile401ApplicationProblemPlusJSONResponse) VisitGetServerProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerProfile404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerProfile404ApplicationProblemPlusJSONResponse) VisitGetServerProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTemplatesRequestObject struct {
 	Id ServerID `json:"id"`
 }
@@ -10378,6 +10489,9 @@ type StrictServerInterface interface {
 	// GetPlayers Players online, from the cache (SRV-006, Overview 4.6).
 	// (GET /servers/{id}/players)
 	GetPlayers(ctx context.Context, request GetPlayersRequestObject) (GetPlayersResponseObject, error)
+	// GetServerProfile Effective game profile of a server, read only (UI-020, SRV-008, D-074).
+	// (GET /servers/{id}/profile)
+	GetServerProfile(ctx context.Context, request GetServerProfileRequestObject) (GetServerProfileResponseObject, error)
 	// ListTemplates Command templates of the server (CMD-008).
 	// (GET /servers/{id}/templates)
 	ListTemplates(ctx context.Context, request ListTemplatesRequestObject) (ListTemplatesResponseObject, error)
@@ -11974,6 +12088,32 @@ func (sh *strictHandler) GetPlayers(w http.ResponseWriter, r *http.Request, id S
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetPlayersResponseObject); ok {
 		if err := validResponse.VisitGetPlayersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetServerProfile operation middleware
+func (sh *strictHandler) GetServerProfile(w http.ResponseWriter, r *http.Request, id ServerID) {
+	var request GetServerProfileRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetServerProfile(ctx, request.(GetServerProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetServerProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetServerProfileResponseObject); ok {
+		if err := validResponse.VisitGetServerProfileResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
