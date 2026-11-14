@@ -73,16 +73,17 @@ it('measures like the WCAG formula', () => {
 
 // UI-023: the logo of each design is readable on every surface of it. The
 // words in solid colour reach 4.5:1 like text. The gradient of "RCON" and
-// of the mark is a brand colour of the logotype, which WCAG 1.4.3 leaves
-// out; its start still reaches 3:1, so the word is recognisable from its
-// first letters, and the dark design reaches 3:1 along all of it.
+// of the mark reaches 3:1 along all of it (UI-001 with WCAG 1.4.11): the
+// mark alone stands for the logo in the collapsed sidebar. The light
+// design ends the gradient in a dark cyan for that (scripts/logo.sh).
 describe.each([
-  ['dark', tokens(dark), 'src/assets/logo/logo-dark.svg'],
-  ['light', tokens(light), 'src/assets/logo/logo.svg'],
-])('logo contrast in the %s design', (theme, colors, file) => {
-  const svg = readFileSync(file, 'utf8');
-  const solid = [...svg.matchAll(/<path [^>]*fill="(#[0-9A-Fa-f]{6})"/g)].map((m) => m[1] ?? '');
-  const stops = [...svg.matchAll(/stop-color="(#[0-9A-Fa-f]{6})"/g)].map((m) => m[1] ?? '');
+  ['dark', tokens(dark), 'src/assets/logo/logo-dark.svg', 'src/assets/logo/mark.svg'],
+  ['light', tokens(light), 'src/assets/logo/logo.svg', 'src/assets/logo/mark-light.svg'],
+])('logo contrast in the %s design', (_, colors, wordMark, mark) => {
+  const read = (file: string) => readFileSync(file, 'utf8');
+  const solid = [...read(wordMark).matchAll(/<path [^>]*fill="(#[0-9A-Fa-f]{6})"/g)].map(
+    (m) => m[1] ?? '',
+  );
 
   it('words in solid colour reach 4.5:1', () => {
     expect(solid.length).toBeGreaterThan(0);
@@ -95,15 +96,43 @@ describe.each([
     }
   });
 
-  it('the gradient reaches 3:1 at its start, in the dark design throughout', () => {
-    expect(stops.length).toBeGreaterThan(0);
-    const measured = theme === 'dark' ? stops : stops.slice(0, 1);
-    for (const fg of measured) {
-      for (const surface of surfaces) {
-        expect(contrast(fg, colors[surface] ?? ''), `${fg} on ${surface}`).toBeGreaterThanOrEqual(
-          3,
-        );
+  it.each([
+    ['word mark', wordMark],
+    ['mark', mark],
+  ])('the gradient of the %s reaches 3:1 at every stop and in between', (_part, file) => {
+    const gradients = [...read(file).matchAll(/<linearGradient[\s\S]*?<\/linearGradient>/g)].map(
+      (g) => [...g[0].matchAll(/stop-color="(#[0-9A-Fa-f]{6})"/g)].map((m) => m[1] ?? ''),
+    );
+    expect(gradients.length).toBeGreaterThan(0);
+    for (const stops of gradients) {
+      expect(stops.length).toBeGreaterThan(1);
+      // The stops and ten steps between each pair, mixed in sRGB like the
+      // browser does by default.
+      const measured = stops.flatMap((a, i) => {
+        const b = stops[i + 1];
+        return b ? Array.from({ length: 10 }, (_, k) => mix(a, b, k / 10)) : [a];
+      });
+      for (const fg of measured) {
+        for (const surface of surfaces) {
+          expect(contrast(fg, colors[surface] ?? ''), `${fg} on ${surface}`).toBeGreaterThanOrEqual(
+            3,
+          );
+        }
       }
     }
   });
 });
+
+function mix(a: string, b: string, t: number) {
+  return (
+    '#' +
+    [1, 3, 5]
+      .map((i) => {
+        const [x, y] = [parseInt(a.slice(i, i + 2), 16), parseInt(b.slice(i, i + 2), 16)];
+        return Math.round(x + (y - x) * t)
+          .toString(16)
+          .padStart(2, '0');
+      })
+      .join('')
+  );
+}
