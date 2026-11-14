@@ -418,7 +418,22 @@
     "agentGone": "The agent is disconnected; no new lines arrive.",
     "rateLimited": "Too many requests for this container. Try again in {{s}} s.",
     "unsupported": "The agent does not support logs. Update the agent.",
-    "failed": "The earlier lines could not be read."
+    "failed": "The earlier lines could not be read.",
+    "split": {
+      "bracket": "Filter the bracket part",
+      "bracketHint": "[Thread/LEVEL] …",
+      "text": "Filter the text after the brackets",
+      "op": "Combine the two filters",
+      "ops": {
+        "and": "and",
+        "or": "or",
+        "xor": "either, not both"
+      },
+      "problem": {
+        "tooLong": "A filter has more than {{max}} characters; the filter is not applied.",
+        "control": "A filter contains control characters; the filter is not applied."
+      }
+    }
   },
   "invite": {
     "title": "Accept the invitation",
