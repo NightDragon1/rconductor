@@ -11,13 +11,13 @@ import {
   Monitor,
   Moon,
   Sun,
-  Terminal,
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/client';
 import { useSession } from '@/api/session';
+import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { bufferOwner } from '@/lib/console';
@@ -114,18 +114,9 @@ export function Shell() {
 }
 
 function Brand({ collapsed }: { collapsed: boolean }) {
-  const { t } = useTranslation();
   return (
-    <div className="flex items-center gap-3 px-4 py-5">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-accent/60 bg-accent/10 text-accent">
-        <Terminal aria-hidden className="size-5" />
-      </span>
-      {!collapsed && (
-        <span className="leading-tight">
-          <span className="block font-semibold">{t('app.name')}</span>
-          <span className="block text-xs text-muted">{t('app.org')}</span>
-        </span>
-      )}
+    <div className="flex items-center px-4 py-5">
+      {collapsed ? <Logo markOnly className="shrink-0" /> : <Logo />}
     </div>
   );
 }
