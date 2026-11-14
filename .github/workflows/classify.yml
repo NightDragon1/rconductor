@@ -30,7 +30,7 @@ concurrency:
 jobs:
   classify:
     name: Classify
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       # The current tip of the base branch, never the head of the pull

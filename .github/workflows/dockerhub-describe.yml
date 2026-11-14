@@ -22,7 +22,7 @@ env:
 jobs:
   describe:
     name: Docker Hub description
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     environment: release
     steps:
