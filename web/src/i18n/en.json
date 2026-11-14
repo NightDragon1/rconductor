@@ -371,6 +371,21 @@
     "slashHint": "Commands on this server start with /. Without it, the game may take the input as chat (Factorio does).",
     "favorites": "Favorites"
   },
+  "palette": {
+    "open": "Command palette",
+    "openKey": "Command palette (Ctrl+K)",
+    "title": "Command palette",
+    "explain": "Search the commands, templates and favorite servers you may use here. A command or template goes into the input line.",
+    "search": "Search commands, templates and favorites",
+    "results": "Results",
+    "none": "Nothing matches.",
+    "more": "Showing {{shown}} of {{total}}. Type more to narrow it down.",
+    "kind": {
+      "command": "Command",
+      "template": "Template",
+      "favorite": "Favorite"
+    }
+  },
   "commands": {
     "optional": "{{name}} (optional)",
     "args": "Arguments",
@@ -954,6 +969,10 @@
       "features_log_filter_split": {
         "label": "Two-part log filter",
         "help": "Filters container logs by the bracket part and the text, joined with and, or, xor."
+      },
+      "features_command_palette": {
+        "label": "Command palette",
+        "help": "Shows the command palette in the console (button, Ctrl+K with shortcuts on)."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
