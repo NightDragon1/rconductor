@@ -37,7 +37,7 @@ env:
 jobs:
   version:
     name: Version
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -62,7 +62,7 @@ jobs:
     name: Dry run ${{ matrix.target }}
     if: github.event_name == 'workflow_dispatch'
     needs: version
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     strategy:
       matrix:
@@ -111,7 +111,7 @@ jobs:
     name: Publish ${{ matrix.target }}
     if: github.event_name == 'push'
     needs: [version, ci]
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     environment: release
     permissions:
@@ -167,7 +167,7 @@ jobs:
   verify:
     name: Verify the published images
     needs: [version, publish]
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -187,7 +187,7 @@ jobs:
     # Next to publish, so that one approval of the environment covers both;
     # release does not wait for it.
     needs: [version, ci]
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     environment: release
     permissions:
@@ -206,7 +206,7 @@ jobs:
   release:
     name: GitHub release
     needs: [version, verify]
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-26.04' }}
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: write

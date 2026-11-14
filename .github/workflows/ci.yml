@@ -14,7 +14,10 @@
 #
 # The repository variable CI_RUNNER sets the runner of all jobs, for example
 # ubuntu-latest. A self-hosted runner would run code of fork pull requests,
-# so keep those to approved runs first.
+# so keep those to approved runs first. Only this workflow reads the
+# variable; release, classify and the Docker Hub description have a fixed
+# GitHub-hosted runner. When release.yml calls this workflow, these jobs
+# still follow the variable.
 name: CI
 
 on:
