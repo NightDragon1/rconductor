@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Fixed Redocly config for the API type check in CI (PRJ-005): given with
+# --redocly, so no redocly.yaml in web/ is looked up; without an apis entry
+# the CLI takes input and output from the command line.
+rules: {}

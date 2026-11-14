@@ -28,9 +28,10 @@ export function foreignFields(yaml: string): Set<string> {
   return out;
 }
 
-// schemaField names the schema field a declaration belongs to.
+// Only the generated schema of the project counts, by its exact path.
+const schemaFile = resolve(root, 'src', 'api', 'schema.d.ts');
 function schemaField(d: ts.Declaration): string | undefined {
-  if (!ts.isPropertySignature(d) || !d.getSourceFile().fileName.endsWith('schema.d.ts')) return;
+  if (!ts.isPropertySignature(d) || resolve(d.getSourceFile().fileName) !== schemaFile) return;
   const owner = d.parent?.parent;
   if (!owner || !ts.isPropertySignature(owner)) return;
   return `${owner.name.getText()}.${d.name.getText()}`;
@@ -41,13 +42,29 @@ process.on('uncaughtException', (e) => {
   process.exit(2);
 });
 const foreign = foreignFields(readFileSync(spec, 'utf8'));
-const cfgPath = join(root, 'tsconfig.app.json');
-const cfg = ts.parseJsonConfigFileContent(
-  ts.readConfigFile(cfgPath, ts.sys.readFile).config,
-  ts.sys,
-  dirname(cfgPath),
-);
-const program = ts.createProgram(cfg.fileNames, cfg.options);
+// The program is fixed here, not taken from tsconfig.app.json, which lies
+// outside the core paths: its include, paths or options must not narrow or
+// redirect the check. Every file under src/ is a root; a source file the
+// check cannot read (.js, .jsx, ...) fails it with exit 3.
+const src = resolve(root, 'src');
+const other = ts.sys
+  .readDirectory(src, ['.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'])
+  .map((f) => resolve(f));
+if (other.length > 0) {
+  console.error(`fitness render: source file the check cannot read: ${other.join(', ')}`);
+  process.exit(3);
+}
+const program = ts.createProgram(ts.sys.readDirectory(src, ['.ts', '.tsx']), {
+  jsx: ts.JsxEmit.ReactJSX,
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  target: ts.ScriptTarget.ES2023,
+  baseUrl: root,
+  paths: { '@/*': ['./src/*'] },
+  types: [],
+  skipLibCheck: true,
+  noEmit: true,
+});
 const checker = program.getTypeChecker();
 const findings: string[] = [];
 
@@ -70,8 +87,26 @@ function visit(node: ts.Node) {
   ts.forEachChild(node, visit);
 }
 
+// A source file the program pulls in from outside src/ (an import of
+// ../lib/x.tsx, say) would go unchecked: it fails the check with exit 3.
+// Installed packages are the node_modules of the project or of a directory
+// above it (module resolution walks up); a declaration file elsewhere could
+// stand for a .js or .jsx the bundler takes, so it fails the check too.
+const installed: string[] = [];
+for (let d = root; ; d = dirname(d)) {
+  installed.push(join(d, 'node_modules') + '/');
+  if (dirname(d) === d) break;
+}
+const outside = program
+  .getSourceFiles()
+  .map((sf) => resolve(sf.fileName))
+  .filter((f) => !f.startsWith(src + '/') && !installed.some((n) => f.startsWith(n)));
+if (outside.length > 0) {
+  console.error(`fitness render: source file outside src/: ${outside.join(', ')}`);
+  process.exit(3);
+}
 for (const sf of program.getSourceFiles()) {
-  if (!sf.isDeclarationFile && sf.fileName.startsWith(join(root, 'src'))) visit(sf);
+  if (!sf.isDeclarationFile && resolve(sf.fileName).startsWith(src + '/')) visit(sf);
 }
 for (const f of findings) console.log(`${f}: shown without ForeignText`);
 if (findings.length > 0) process.exit(1);

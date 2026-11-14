@@ -25,7 +25,10 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/**/*.{ts,tsx}', 'scripts/testdata/*/src/**/*.{ts,tsx}'],
+    files: [
+      'src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+      'scripts/testdata/*/src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}',
+    ],
     rules: {
       // Fitness function render (PRJ-005): no HTML from strings; foreign
       // data goes through ForeignText.
