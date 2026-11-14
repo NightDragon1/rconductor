@@ -140,6 +140,14 @@ func TestProfilePortsByRole(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil || len(raw.Items) == 0 {
 			t.Fatalf("%s: %d %s", who, rec.Code, rec.Body.String())
 		}
+		// formatting (CMD-017) for every role, e.g. on the Minecraft profiles.
+		seen := false
+		for _, p := range raw.Items {
+			seen = seen || string(p["formatting"]) == `"minecraft"`
+		}
+		if !seen {
+			t.Errorf("%s: no profile with formatting minecraft", who)
+		}
 		for _, p := range raw.Items {
 			_, rcon := p["default_port"]
 			_, game := p["game_ports"]

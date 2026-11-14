@@ -23,6 +23,7 @@ syntax:
   # must be listed. Wrappers are united across profiles, execute, function,
   # return and schedule come from minecraft-java once it lists them.
   wrappers: ["minecraft:execute", "minecraft:function", "minecraft:return", "minecraft:schedule"]
+formatting: minecraft
 catalog:
   - path: tps
     description: Show TPS for the last 1, 5 and 15 minutes

@@ -146,6 +146,19 @@ func TestServerProfileEffectiveView(t *testing.T) {
 			t.Errorf("%s: game_ports present = %t, want %t", who, ok, ports)
 		}
 	}
+	// formatting (CMD-017) for every role in scope: on the effective view
+	// and on the server itself.
+	for _, who := range []string{"Boss", "SA", "Mod"} {
+		_, p := view(who)
+		if p.Formatting == nil || *p.Formatting != api.Minecraft {
+			t.Errorf("%s: effective formatting = %v, want minecraft", who, p.Formatting)
+		}
+		rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/servers/" + id, cookies: []*http.Cookie{f.login(t, who)}})
+		var s api.Server
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &s) != nil || s.Formatting == nil || *s.Formatting != api.Minecraft {
+			t.Errorf("%s: server formatting = %d %s", who, rec.Code, rec.Body.String())
+		}
+	}
 
 	// Same merge as the backend: profile list, syntax and catalog.
 	_, got := view("Boss")

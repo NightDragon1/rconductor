@@ -32,6 +32,7 @@ func toAPIServer(s servers.Server) api.Server {
 	out := api.Server{
 		Id: id, Name: s.Name, ProfileIds: profileIDs(s.ProfileIDs), Groups: uuids(s.GroupIDs),
 		Status: api.ServerStatus(s.Status), StatusSince: s.StatusSince,
+		Formatting: formattingOf(s.Formatting),
 	}
 	if !s.Detailed {
 		return out
@@ -51,6 +52,16 @@ func toAPIServer(s servers.Server) api.Server {
 		out.Host, out.Port = &s.Host, &s.Port
 	}
 	return out
+}
+
+// formattingOf is the formatting of a profile or server for the API
+// (CMD-017); none is missing.
+func formattingOf(f string) *api.Formatting {
+	if f == "" {
+		return nil
+	}
+	v := api.Formatting(f)
+	return &v
 }
 
 func serverInput(b *api.ServerInput) (servers.Input, error) {
