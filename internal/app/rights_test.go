@@ -436,6 +436,8 @@ func matrix() []matrixOp {
 		}, false},
 		{"GET", "/servers/{id}/players", "OONOOOUP", serverPath("/players"), false},
 		{"GET", "/servers/{id}/history", "OONOOOUP", serverPath("/history"), false},
+		// Behind the flag profile_browser, off by default: 404 for every role.
+		{"GET", "/servers/{id}/profile", "NNNNNNUP", serverPath("/profile"), false},
 		{"POST", "/servers/{id}/actions", "OONFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/servers/" + f.server + "/actions", body: map[string]string{"action": "restart"}}
 		}, false},

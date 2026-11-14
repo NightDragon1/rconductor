@@ -429,6 +429,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/servers/{id}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Effective game profile of a server, read only (UI-020, SRV-008, D-074).
+         * @description Merged from the server's profiles top first: for each value the topmost profile that sets it wins, wrappers and separators are the union, the catalog is the union with the upper profile winning on the same path. Behind the feature flag profile_browser. A server outside the caller's scope is 404.
+         */
+        get: operations["getServerProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/servers/{id}/history": {
         parameters: {
             query?: never;
@@ -1535,6 +1557,29 @@ export interface components {
             last_error?: string;
             /** Format: date-time */
             last_error_at?: string;
+        };
+        EffectiveProfile: {
+            /** @description Profiles of the server, top first (SRV-008). */
+            profile_ids: string[];
+            protocol: string;
+            case_sensitive: boolean;
+            strip_prefix: string;
+            max_length: number;
+            wrappers: string[];
+            separators: string[];
+            /** @description Effective game ports; only for the RCON admin and the server admin of this server (D-056), missing for other roles. */
+            game_ports?: components["schemas"]["GamePort"][];
+            catalog: components["schemas"]["EffectiveCommand"][];
+        };
+        EffectiveCommand: {
+            path: string;
+            description: string;
+            params: components["schemas"]["ProfileParam"][];
+            /**
+             * Format: uuid
+             * @description The profile the entry comes from (the upper one on the same path).
+             */
+            profile_id: string;
         };
         ProfileList: {
             items: components["schemas"]["GameProfile"][];
@@ -2753,6 +2798,30 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
             503: components["responses"]["Busy"];
+        };
+    };
+    getServerProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The effective profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveProfile"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
         };
     };
     getHistory: {
