@@ -16,6 +16,7 @@ status: untested
 protocol:
   type: source-rcon
   default_port: 25575
+formatting: minecraft
 catalog:
   - path: forge tps
     description: Show tick time and TPS, overall or for one dimension

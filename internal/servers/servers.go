@@ -65,6 +65,9 @@ type Server struct {
 	// ProfileID is the top one.
 	ProfileIDs []string
 	GroupIDs   []string
+	// Formatting is how answers show formatting codes (CMD-017), from the
+	// effective profile; empty means the codes are removed.
+	Formatting string
 	Detailed   bool
 	// Connection marks that Host and Port are filled: for the RCON admin
 	// only (D-056).
@@ -268,6 +271,17 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 	if srv.GroupIDs == nil {
 		srv.GroupIDs = []string{}
 	}
+	// The effective profile: the topmost profile that sets a field (D-074).
+	var eff *profiles.Profile
+	if r.ProfileID.Valid {
+		if e, _, err := profiles.ForServer(ctx, s.st.Queries, r.ID); err == nil {
+			eff = e
+		}
+	}
+	// How answers show formatting codes (CMD-017); every role in scope.
+	if eff != nil {
+		srv.Formatting = eff.Formatting
+	}
 	if !detailed {
 		return srv, nil
 	}
@@ -292,11 +306,9 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 		if err := json.Unmarshal([]byte(r.GamePorts.String), &srv.GamePorts); err != nil {
 			return Server{}, err
 		}
-	} else if r.ProfileID.Valid {
+	} else if eff != nil && eff.Ports.Game != nil {
 		// The game ports of the topmost profile that sets them (D-074).
-		if eff, _, err := profiles.ForServer(ctx, s.st.Queries, r.ID); err == nil && eff != nil && eff.Ports.Game != nil {
-			srv.GamePorts = eff.Ports.Game
-		}
+		srv.GamePorts = eff.Ports.Game
 	}
 	return srv, nil
 }

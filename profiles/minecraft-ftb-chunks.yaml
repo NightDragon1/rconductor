@@ -13,6 +13,7 @@ status: untested
 protocol:
   type: source-rcon
   default_port: 25575
+formatting: minecraft
 catalog:
   - path: ftbchunks admin extra_claim_chunks
     description: Get, set or add extra claimable chunks for a player

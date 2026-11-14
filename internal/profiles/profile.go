@@ -448,6 +448,9 @@ func (p *Profile) check() []string {
 	case !source.KnownEndMarker(p.SourceRCON.EndMarker):
 		bad("source_rcon.end_marker must be one of %s", strings.Join(source.EndMarkers(), ", "))
 	}
+	if p.Formatting != "" && !slices.Contains(Formattings, p.Formatting) {
+		bad("formatting must be one of %s", strings.Join(Formattings, ", "))
+	}
 	if p.Protocol.DefaultPort < 1 || p.Protocol.DefaultPort > 65535 {
 		bad("protocol.default_port is required, 1 to 65535")
 	}
@@ -552,3 +555,7 @@ func checkParams(i int, params []Param) []string {
 
 // hasControl reports whether s has a control character.
 func hasControl(s string) bool { return strings.ContainsFunc(s, unicode.IsControl) }
+
+// Formattings are the known values of the field formatting (CMD-017): how
+// the console shows the formatting codes of answers.
+var Formattings = []string{"minecraft"}

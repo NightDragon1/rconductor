@@ -30,7 +30,7 @@ func (s *apiServer) ListProfiles(ctx context.Context, _ api.ListProfilesRequestO
 			Id: id, Slug: sp.Slug, Name: sp.Name, Kind: api.GameProfileKind(profiles.KindOf(&sp.Rules)), Protocol: sp.Protocol,
 			Overridden: sp.Overridden, ImportedAt: sp.ImportedAt,
 			CaseSensitive: *r.Syntax.CaseSensitive, StripPrefix: *r.Syntax.StripPrefix, MaxLength: r.Syntax.MaxLength,
-			Wrappers: r.Syntax.Wrappers, Catalog: []api.CatalogCommand{},
+			Wrappers: r.Syntax.Wrappers, Catalog: []api.CatalogCommand{}, Formatting: formattingOf(r.Formatting),
 		}
 		if admin {
 			g.DefaultPort = &sp.DefaultPort
@@ -96,6 +96,7 @@ func (s *apiServer) GetServerProfile(ctx context.Context, req api.GetServerProfi
 		out.ProfileIds = append(out.ProfileIds, u)
 	}
 	if eff != nil {
+		out.Formatting = formattingOf(eff.Formatting)
 		r := eff.Syntax
 		out.Protocol, out.MaxLength = eff.Protocol.Type, r.MaxLength
 		if r.CaseSensitive != nil {

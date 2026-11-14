@@ -12,6 +12,7 @@ status: untested
 protocol:
   type: source-rcon
   default_port: 25575
+formatting: minecraft
 catalog:
   - path: ftbteams list
     description: List teams

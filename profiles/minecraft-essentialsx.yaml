@@ -29,6 +29,7 @@ syntax:
     - "essentials:pt"
     - "essentials:ept"
     - "essentials:epowertool"
+formatting: minecraft
 catalog:
   # --- Moderation ---
   - path: kick

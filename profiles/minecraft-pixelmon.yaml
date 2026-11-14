@@ -15,6 +15,7 @@ status: untested
 protocol:
   type: source-rcon
   default_port: 25575
+formatting: minecraft
 catalog:
   - path: pokegive
     description: Give a Pokemon to a player (Pokemon spec, e.g. pikachu lvl:20 shiny)

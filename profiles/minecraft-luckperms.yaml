@@ -14,6 +14,7 @@ status: untested
 protocol:
   type: source-rcon
   default_port: 25575
+formatting: minecraft
 catalog:
   - path: lp info
     description: Show LuckPerms and storage information
