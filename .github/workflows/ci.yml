@@ -86,9 +86,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Tools of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - run: go -C tools tool golangci-lint run ./fitness
       - run: go -C tools test ./fitness
       - run: go -C tools run ./fitness -dir ..
@@ -112,9 +109,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Tools of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - run: scripts/ci-scope-test.sh
       - run: scripts/go-test-shard-test.sh
       - run: scripts/deny-rules-test.sh
@@ -146,9 +140,6 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/go.sum
-      - name: Tools of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/golangci-lint
@@ -186,9 +177,6 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Tools of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - name: Every package is in exactly one shard
         env:
           TOTAL: ${{ strategy.job-total }}
@@ -236,9 +224,6 @@ jobs:
           cache-dependency-path: |
             go.sum
             tools/go.sum
-      - name: Tools of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - run: go tool -modfile=tools/go.mod govulncheck -tags integration,minecraft ./...
 
   web:
@@ -337,9 +322,6 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Tools of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: images
@@ -356,12 +338,9 @@ jobs:
     if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true' && needs.scope.outputs.code == 'true'
     runs-on: ${{ fromJSON(((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && '["self-hosted","lan3"]' || format('"{0}"', vars.CI_RUNNER || 'ubuntu-26.04')) }}
     timeout-minutes: 30
-    # On the GitHub runner browser and libraries come with the image; its
-    # version follows @playwright/test (renovate.json). The self-hosted
-    # runner is itself a container with the host's Docker socket, so job
-    # containers miss its paths: there the job installs the browser of the
-    # locked @playwright/test instead. The stack needs no Docker.
-    container: ${{ !((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule') && 'mcr.microsoft.com/playwright:v1.65.0-noble@sha256:9beb546099e11f52d62e505537914870e01a67e0e6b00ae41da4775324e73dbe' || '' }}
+    # Browser and its libraries come with the image; its version follows
+    # @playwright/test (renovate.json). The stack needs no Docker.
+    container: mcr.microsoft.com/playwright:v1.65.0-noble@sha256:9beb546099e11f52d62e505537914870e01a67e0e6b00ae41da4775324e73dbe
     strategy:
       fail-fast: false
       matrix:
@@ -373,9 +352,6 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Tools of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
@@ -388,10 +364,6 @@ jobs:
       - name: Web dependencies
         working-directory: web
         run: npm ci --no-audit --no-fund
-      - name: Browser of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        working-directory: web
-        run: npx --no-install playwright install --with-deps chromium
       - name: Tests
         working-directory: web
         env:
@@ -458,9 +430,6 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Tools of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       - run: make measure-login
 
   minecraft:
@@ -478,9 +447,6 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - name: Tools of the self-hosted runner
-        if: runner.environment == 'self-hosted'
-        run: command -v make >/dev/null && command -v gcc >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends make gcc libc6-dev; }
       # The server JAR is pinned by version and SHA-1 in the script; the
       # cache key follows the script, so a new pin downloads again.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
