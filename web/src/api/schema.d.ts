@@ -1304,6 +1304,7 @@ export interface components {
             groups: string[];
             /** @description Admins only. */
             protocol?: string;
+            formatting?: components["schemas"]["Formatting"];
             /** @description RCON admin only; the server admin sees of the ports only the game ports (D-056). */
             host?: string;
             /** @description RCON port; RCON admin only (D-056). */
@@ -1552,6 +1553,7 @@ export interface components {
             wrappers: string[];
             /** @description Game ports of the profile; only for the RCON admin and server admins (D-056), missing for other roles. */
             game_ports?: components["schemas"]["GamePort"][];
+            formatting?: components["schemas"]["Formatting"];
             catalog: components["schemas"]["CatalogCommand"][];
             /** @description Reason of the last rejected file; RCON admin only. */
             last_error?: string;
@@ -1569,8 +1571,14 @@ export interface components {
             separators: string[];
             /** @description Effective game ports; only for the RCON admin and the server admin of this server (D-056), missing for other roles. */
             game_ports?: components["schemas"]["GamePort"][];
+            formatting?: components["schemas"]["Formatting"];
             catalog: components["schemas"]["EffectiveCommand"][];
         };
+        /**
+         * @description Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+         * @enum {string}
+         */
+        Formatting: "minecraft";
         EffectiveCommand: {
             path: string;
             description: string;
