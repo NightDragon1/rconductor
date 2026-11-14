@@ -931,6 +931,10 @@
       "auth_recovery_queue": {
         "label": "Recovery queue",
         "help": "Recovery requests waiting in the background; further ones are dropped with the same answer."
+      },
+      "features_server_save_as_new": {
+        "label": "Save as New",
+        "help": "Keeps the server dialog open after creating a server and offers Save and Save as New."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
