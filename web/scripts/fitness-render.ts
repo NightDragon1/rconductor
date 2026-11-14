@@ -47,6 +47,17 @@ const cfg = ts.parseJsonConfigFileContent(
   ts.sys,
   dirname(cfgPath),
 );
+// tsconfig.app.json lies outside the core paths: it must not narrow the
+// check, so every source file under src/ has to be in the program.
+const inProgram = new Set(cfg.fileNames.map((f) => resolve(f)));
+const missing = ts.sys
+  .readDirectory(join(root, 'src'), ['.ts', '.tsx'])
+  .map((f) => resolve(f))
+  .filter((f) => !inProgram.has(f));
+if (missing.length > 0) {
+  console.error(`fitness render: not in the checked program: ${missing.join(', ')}`);
+  process.exit(2);
+}
 const program = ts.createProgram(cfg.fileNames, cfg.options);
 const checker = program.getTypeChecker();
 const findings: string[] = [];

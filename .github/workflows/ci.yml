@@ -245,8 +245,11 @@ jobs:
         run: |
           npm run gen:api
           git diff --exit-code -- src/api
-      - run: npm run lint
-      - run: npm run fitness
+      # Lint and the render fitness function run directly, not through the
+      # npm scripts: web/package.json is no core path (PRJ-005).
+      - run: npx --no-install eslint .
+      - run: node scripts/fitness-render.ts
+      - run: sh scripts/fitness-render-test.sh
       - run: npm run format:check
       - run: npm test
       - run: npm run build
