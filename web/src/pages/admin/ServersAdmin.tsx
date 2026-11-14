@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { certNotice } from '@/lib/cert';
 import { api, must, patchVersioned } from '@/api/client';
@@ -104,12 +104,15 @@ const draftOf = (s?: Server): Draft => ({
 // RCON admin; a server admin may change only the profile list of a server
 // in his scope (SRV-008), the backend checks it; a phone sees it read-only.
 // The password is only set, never shown. Agent and container come from the agent's list
-// (revision 2.4 candidate 22).
+// (revision 2.4 candidate 22). With saveAsNew (flag server_save_as_new) the
+// panel stays open after creating: Save changes the server just created,
+// Save as New creates another one from the form (UI-017).
 function ServerPanel({
-  server,
+  server: opened,
   canEdit,
   canEditProfiles,
   canSeeAgents,
+  saveAsNew,
   onClose,
   onCreated,
 }: {
@@ -117,6 +120,7 @@ function ServerPanel({
   canEdit: boolean;
   canEditProfiles: boolean;
   canSeeAgents: boolean;
+  saveAsNew: boolean;
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -126,6 +130,9 @@ function ServerPanel({
   const profiles = useProfiles();
   const agents = useAgents(canSeeAgents);
   const panel = useReveal<HTMLElement>();
+  // made is the server this panel created last; Save then changes it.
+  const [made, setMade] = useState<Server>();
+  const server = opened ?? made;
   const [d, setD] = useState<Draft>(() => draftOf(server));
   const [message, setMessage] = useState<Message>(null);
   const [conflict, setConflict] = useState(false);
@@ -133,6 +140,10 @@ function ServerPanel({
   const [testing, setTesting] = useState(false);
   const [seen, setSeen] = useState<Seen | null>(null);
   const [base, setBase] = useState(server);
+  // One create at a time: a second click while one is pending sends nothing.
+  const busy = useRef(false);
+  const [pending, setPending] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
   useUnsaved(JSON.stringify(d) !== JSON.stringify(draftOf(base)));
   const containers = useQuery({
     queryKey: ['agent-containers', d.agent_id],
@@ -189,8 +200,60 @@ function ServerPanel({
     );
   };
 
+  // once runs a write unless another one of this panel is pending.
+  const once = async (run: () => Promise<void>) => {
+    if (busy.current) return;
+    busy.current = true;
+    setPending(true);
+    try {
+      await run();
+    } finally {
+      busy.current = false;
+      setPending(false);
+    }
+  };
+  // create sends the form as a new server and keeps the panel on it; the
+  // password field starts empty again, it is never taken from the answer.
+  const create = async (done: (name: string) => string) => {
+    let created = null as Server | null;
+    const r = await saving(
+      outcome('new', async () => {
+        created = must(await api.POST('/servers', { body: body() }));
+      }),
+    );
+    void qc.invalidateQueries({ queryKey: serversKey });
+    if (!r.ok || !created) {
+      setMessage({ ok: false, text: reasonText(t, r) });
+      return;
+    }
+    const s: Server = created;
+    setMade(s);
+    setBase(s);
+    setD(draftOf(s));
+    setConflict(false);
+    setSeen(null);
+    setMessage({ ok: true, text: done(s.name) });
+  };
+  const createAgain = () => {
+    if (busy.current || !form.current?.reportValidity()) return;
+    if (!d.password) {
+      setMessage({
+        ok: false,
+        text: t(httpApi ? 'servers.saveAsNewToken' : 'servers.saveAsNewPassword'),
+      });
+      return;
+    }
+    void once(() => create((name) => t('servers.savedAsNew', { name })));
+  };
+
   const save = (e: FormEvent) => {
     e.preventDefault();
+    if (saveAsNew) {
+      void once(() =>
+        server ? change(server) : create((name) => t('servers.createdStay', { name })),
+      );
+      return;
+    }
     if (!server) {
       void (async () => {
         const r = await saving(
@@ -264,7 +327,7 @@ function ServerPanel({
       {server?.credentials && server.credentials !== 'ok' && (
         <p className="text-sm text-warn">{t(`servers.credentials.${server.credentials}`)}</p>
       )}
-      <form onSubmit={save} className="flex flex-col gap-3">
+      <form ref={form} onSubmit={save} className="flex flex-col gap-3">
         <Row label={t('servers.name')}>
           {(id) => (
             <Input
@@ -490,7 +553,14 @@ function ServerPanel({
         {mayProfiles && (
           <div className="flex flex-wrap gap-2">
             {!conflict && (
-              <Button type="submit">{server ? t('servers.save') : t('servers.create')}</Button>
+              <Button type="submit" disabled={pending}>
+                {server ? t('servers.save') : t('servers.create')}
+              </Button>
+            )}
+            {saveAsNew && canEdit && made && !conflict && (
+              <Button type="button" variant="outline" disabled={pending} onClick={createAgain}>
+                {t('servers.saveAsNew')}
+              </Button>
             )}
             {canEdit && !conflict && (
               <Button
@@ -753,6 +823,8 @@ export function ServersAdminPage() {
   // A server admin changes the profile list of the servers in his scope;
   // the list shows only those (SRV-008, Design 6.2).
   const canEditProfiles = session?.user.role === 'server_admin' && !phone;
+  // Save as New only for who may create servers (UI-017, NFR-019).
+  const saveAsNew = canEdit && (session?.ui.features ?? []).includes('server_save_as_new');
   const servers = useServers();
   const groups = useServerGroups(true);
   const profiles = useProfiles();
@@ -1008,6 +1080,7 @@ export function ServersAdminPage() {
           canEdit={canEdit}
           canEditProfiles={canEditProfiles}
           canSeeAgents={canSeeAgents}
+          saveAsNew={saveAsNew}
           onClose={() => guard(() => setOpen(null))}
           onCreated={() => setOpen(null)}
         />

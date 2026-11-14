@@ -12,3 +12,13 @@ func TestNewRefusesBadFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultKnowsServerSaveAsNew(t *testing.T) {
+	s := Default()
+	if !s.Known(Key("server_save_as_new")) {
+		t.Fatal("flag server_save_as_new missing")
+	}
+	if _, ok := s.ForOperation("CreateServer"); ok {
+		t.Fatal("server_save_as_new must not guard an operation")
+	}
+}
