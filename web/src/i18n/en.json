@@ -975,6 +975,10 @@
       "features_command_palette": {
         "label": "Command palette",
         "help": "Shows the command palette in the console (button, Ctrl+K with shortcuts on)."
+      },
+      "features_profile_browser": {
+        "label": "Profile browser",
+        "help": "Shows the game profiles with their command catalog and the effective profile of each server, read only."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
