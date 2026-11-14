@@ -7,13 +7,14 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
-import { api, must } from './client';
+import { api, ApiError, must } from './client';
 import type { components } from './schema';
 
 export type Server = components['schemas']['Server'];
 export type ServerRuntime = components['schemas']['ServerRuntime'];
 export type ServerGroup = components['schemas']['ServerGroup'];
 export type GameProfile = components['schemas']['GameProfile'];
+export type EffectiveProfile = components['schemas']['EffectiveProfile'];
 export type Agent = components['schemas']['Agent'];
 export type User = components['schemas']['User'];
 
@@ -108,6 +109,20 @@ export function useProfiles() {
     queryKey: profilesKey,
     queryFn: async () => must(await api.GET('/profiles')).items,
     staleTime: 5 * 60_000,
+  });
+}
+
+// useServerProfile reads the effective game profile of a server (UI-020,
+// flag profile_browser). A 404 (flag off, server outside the scope) is an
+// answer, not a fault: it is not asked again.
+export function useServerProfile(id: string | undefined) {
+  return useQuery({
+    queryKey: ['server-profile', id],
+    queryFn: async () =>
+      must(await api.GET('/servers/{id}/profile', { params: { path: { id: id ?? '' } } })),
+    enabled: id !== undefined,
+    staleTime: 5 * 60_000,
+    retry: (count, e) => !(e instanceof ApiError && e.status === 404) && count < 3,
   });
 }
 
