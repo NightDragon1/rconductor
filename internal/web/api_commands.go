@@ -27,6 +27,10 @@ func commandError(err error) error {
 				detail = "empty or too long after cleaning"
 			}
 			return &problem{status: http.StatusUnprocessableEntity, reason: api.ReasonCodeInvalid, detail: detail}
+		case commands.ReasonMessageTooLong:
+			// The message with sender and prefix is longer than the server
+			// takes; it is never cut (CMD-020, D-081).
+			return &problem{status: http.StatusBadRequest, reason: api.ReasonCodeMessageTooLong, detail: "message too long for the server"}
 		case commands.ReasonRateLimited:
 			return &problem{status: http.StatusTooManyRequests, reason: api.ReasonCodeRateLimited,
 				retryAfter: max(1, int(math.Ceil(denied.RetryAfter.Seconds())))}

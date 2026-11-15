@@ -21,8 +21,11 @@ import (
 
 // Reasons of a refused command (Design 3.5).
 const (
-	ReasonInvalid        = "invalid"
-	ReasonNotInList      = "not_in_list"
+	ReasonInvalid   = "invalid"
+	ReasonNotInList = "not_in_list"
+	// ReasonMessageTooLong: the built message would exceed what the server
+	// takes in one command (D-081); it is never cut.
+	ReasonMessageTooLong = "message_too_long"
 	ReasonWrapperBlocked = "wrapper_blocked"
 	ReasonRateLimited    = "rate_limited"
 )
@@ -39,6 +42,8 @@ type Syntax struct {
 	PlayerPattern string
 	// Separators start another command in the game's console (T-006).
 	Separators []string
+	// Message is the profile's message_command (CMD-020); nil without one.
+	Message *profiles.MessageCommand
 }
 
 // HasSeparator reports whether the command holds a command separator of the

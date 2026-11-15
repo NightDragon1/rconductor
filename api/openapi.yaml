@@ -4025,6 +4025,7 @@ components:
         - precondition_required
         - totp_setup_required
         - command_failed
+        - message_too_long
 
     Problem:
       type: object
