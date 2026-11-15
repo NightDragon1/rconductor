@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Fragment, memo } from 'react';
+import { Fragment, memo, useMemo } from 'react';
 import { bidiLabel, splitBidi } from '@/lib/foreign';
 import { formatLines, type Formatting, type Segment } from '@/lib/formatting';
 
@@ -55,8 +55,13 @@ const StyledLine = memo(function StyledLine({ segments }: { segments: Segment[] 
 // (CMD-017); without it the text is shown as given, so the caller decides
 // whether codes are removed (SEC-006).
 export function ForeignText({ text, formatting }: { text: string; formatting?: Formatting }) {
-  if (formatting === 'minecraft') {
-    return formatLines(text).map((segments, i) => (
+  // Cut once per text, not on every render of the page around it.
+  const styled = useMemo(
+    () => (formatting === 'minecraft' ? formatLines(text) : undefined),
+    [text, formatting],
+  );
+  if (styled) {
+    return styled.map((segments, i) => (
       <Fragment key={i}>
         {i > 0 && '\n'}
         <StyledLine segments={segments} />

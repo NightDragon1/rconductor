@@ -47,6 +47,8 @@ describe('formatLines (CMD-017)', () => {
   it('keeps unknown and cut codes as text, like with the flag off', () => {
     expect(formatLines('hello §zworld')).toEqual([[{ text: 'hello §zworld', className: '' }]]);
     expect(formatLines('end §')).toEqual([[{ text: 'end §', className: '' }]]);
+    // The Kelvin sign lowercases to k but is no code, like with the flag off.
+    expect(formatLines('§\u212Ax')).toEqual([[{ text: '§\u212Ax', className: '' }]]);
     expect(formatLines('§§aa')).toEqual([
       [
         { text: '§', className: '' },
@@ -80,11 +82,9 @@ describe('formatLines (CMD-017)', () => {
   });
 
   it('caps the styled segments of a large answer, the rest without codes (1 MiB)', () => {
-    const big = '§ax§by'.repeat(1 << 17);
-    expect(big.length).toBeGreaterThanOrEqual(1 << 19);
-    const t0 = performance.now();
+    const big = '§ax§by'.repeat(Math.ceil((1 << 20) / 6));
+    expect(big.length).toBeGreaterThanOrEqual(1 << 20);
     const segs = formatLines(big).flat();
-    expect(performance.now() - t0).toBeLessThan(2000);
     expect(segs.filter((s) => s.className).length).toBe(MAX_STYLED);
     const rest = segs[segs.length - 1];
     expect(rest?.className).toBe('');

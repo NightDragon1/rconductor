@@ -95,8 +95,10 @@ export function formatLines(text: string): Segment[][] {
     };
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
-      const code = ch === '§' ? (line[i + 1] ?? '').toLowerCase() : '';
-      if (!code || !/[0-9a-fk-orx]/.test(code)) {
+      // ASCII only, before lowercasing: U+212A would turn into k.
+      const next = line[i + 1] ?? '';
+      const code = ch === '§' && /^[0-9a-fk-orx]$/i.test(next) ? next.toLowerCase() : '';
+      if (!code) {
         buf += ch;
         continue;
       }
