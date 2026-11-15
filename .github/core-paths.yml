@@ -24,6 +24,8 @@ authz:
   - internal/web/web.go
   - internal/users/assignments.go
   - internal/users/groups.go
+# the session with the role and lock the pipeline is handed
+  - internal/store/queries/sqlite/sessions.sql
 
 # cmd: commands from input to game server, and the orders the agent executes,
 # with the profile rules and queries that decide what is checked and sent
@@ -104,6 +106,8 @@ rules:
   - web/.redocly.*
   - web/index.html
   - web/vite.config.ts
+# which query files sqlc generates the database code from
+  - sqlc.yaml
 
 # generated: output of oapi-codegen, sqlc and openapi-typescript, and the
 # lockfiles

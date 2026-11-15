@@ -69,8 +69,10 @@ check "empty list" 0 "stage-1  0"
 check "profile rules" 0 "stage-2 cmd 2" "modified 1 0 internal/profiles/effective.go" \
   "modified 1 0 internal/profiles/forserver.go"
 check "pipeline query" 0 "stage-2 cmd 1" "modified 1 0 internal/store/queries/sqlite/settings.sql"
+check "session query" 0 "stage-2 authz 1" "modified 1 0 internal/store/queries/sqlite/sessions.sql"
+check "sqlc config" 0 "stage-2 rules 1" "modified 1 0 sqlc.yaml"
 check "other profile and query files" 0 "stage-1  2" "modified 1 0 internal/profiles/catalog.go" \
-  "modified 1 0 internal/store/queries/sqlite/sessions.sql"
+  "modified 1 0 internal/store/queries/sqlite/smtp.sql"
 check "bad line" 2 "" "modified x 0 a.go"
 
 # The class file is read strictly: a line outside the format fails.
