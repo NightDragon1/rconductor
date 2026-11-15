@@ -432,6 +432,7 @@
       "timeout": "The server did not answer in time",
       "busy": "The server is busy",
       "command_failed": "The game reported the command as failed",
+      "message_too_long": "The message is too long for the server with your name and the prefix",
       "other": "The command failed"
     },
     "preview": "› {{command}}"
@@ -750,6 +751,21 @@
     "newGroupName": "Name of a new server group",
     "createGroup": "Create group",
     "noGroups": "No server groups.",
+    "sayPrefix": {
+      "label": "Message prefix",
+      "placeholder": "e.g. [R]",
+      "hint": "Shown before the sender's name in messages to the players. At most 16 characters, no §. Empty: no prefix.",
+      "problem": "At most 16 printable characters and no § – the panel will refuse this prefix.",
+      "save": "Save prefix",
+      "clear": "Clear prefix",
+      "saved": "Prefix saved.",
+      "cleared": "Prefix cleared.",
+      "invalid": "Not saved: at most 16 printable characters, no §.",
+      "undo": "Message prefix of {{name}} changed",
+      "several": "Servers in several groups use the prefix of the first group by name.",
+      "uses": "{{server}} uses the prefix of {{group}}.",
+      "usesNone": "{{server}} has no prefix in any of its groups."
+    },
     "deleteGroup": "Delete group …",
     "deleteGroupTitle": "Delete the server group {{name}}?",
     "deleteGroupText": "Grants and scopes on this group end at once; the servers stay. This cannot be undone.",
