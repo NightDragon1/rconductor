@@ -42,7 +42,8 @@ const (
 var hostileLines = []string{hostileMarkup, "§ahello §zworld", "file\u202Etxt.exe"}
 
 // fakeHost stands in for Docker: survival and arena run, creative restarts
-// three times within minutes (a restart loop), lobby is stopped.
+// three times within minutes and then once a minute (a restart loop), lobby
+// is stopped.
 type fakeHost struct {
 	followed sync.Map // containers whose logs were followed once
 	ticking  sync.Map // container → stop of its tick lines
@@ -56,9 +57,10 @@ func (*fakeHost) Capabilities() []string {
 
 func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
 	now := time.Now().UTC()
-	creative := func(ago time.Duration, n int) agentproto.Container {
-		return agentproto.Container{ID: "c2", Name: "mc-creative", Image: imageCreativ, State: "running", StartedAt: now.Add(-ago), RestartCount: n}
+	creativeAt := func(at time.Time, n int) agentproto.Container {
+		return agentproto.Container{ID: "c2", Name: "mc-creative", Image: imageCreativ, State: "running", StartedAt: at, RestartCount: n}
 	}
+	creative := func(ago time.Duration, n int) agentproto.Container { return creativeAt(now.Add(-ago), n) }
 	snap := agentproto.Snapshot{Containers: []agentproto.Container{
 		{ID: "c1", Name: "mc-survival", Image: imageDigest, State: "running", StartedAt: now.Add(-50 * time.Hour), Volumes: []string{"mc-survival-data"},
 			Ports: []agentproto.Port{{Private: 25565, Public: 25565, Proto: "tcp"}, {Private: 8100, Public: 8100, Proto: "tcp"}}},
@@ -84,9 +86,20 @@ func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
 	}}
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
+	// creative restarts once a minute for as long as the stack runs, so it
+	// stays in a restart loop (cache.LoopWindow) also in a long unsharded
+	// run, not only in the first minutes.
+	restarts, last := 3, now.Add(-time.Minute)
 	for {
 		if err := out.Send(ctx, agentproto.TypeMetrics, "", metrics); err != nil {
 			return err
+		}
+		if at := time.Now().UTC(); at.Sub(last) >= time.Minute {
+			restarts++
+			last = at
+			if err := out.Send(ctx, agentproto.TypeContainerEvent, "", agentproto.ContainerEvent{Container: creativeAt(at, restarts)}); err != nil {
+				return err
+			}
 		}
 		select {
 		case <-ctx.Done():
