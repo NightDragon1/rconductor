@@ -11,10 +11,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/NightDragon1/rconductor/internal/commands/sayconf"
 	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/rcon/source"
-	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
@@ -128,13 +128,13 @@ func (s *Service) sayPrefix(ctx context.Context, serverID string) (string, error
 		return strings.Compare(a, b)
 	})
 	for _, id := range ids {
-		v, err := s.st.Queries.GetSetting(ctx, sqlitedb.GetSettingParams{Key: servers.SettingSayPrefix, ScopeType: servers.ScopeServerGroup, ScopeID: id})
+		v, err := s.st.Queries.GetSetting(ctx, sqlitedb.GetSettingParams{Key: sayconf.Setting, ScopeType: sayconf.ScopeServerGroup, ScopeID: id})
 		if err != nil {
 			continue // no prefix for this group
 		}
 		var p string
 		if json.Unmarshal([]byte(v), &p) == nil {
-			if p = cleanPart(p, servers.MaxSayPrefix); p != "" {
+			if p = cleanPart(p, sayconf.MaxPrefix); p != "" {
 				return p, nil
 			}
 		}
