@@ -26,6 +26,7 @@ func TestCommandErrors(t *testing.T) {
 		"not in list":  {&commands.DeniedError{Reason: commands.ReasonNotInList}, http.StatusForbidden, api.ReasonCodeNotInList, 0},
 		"wrapper":      {&commands.DeniedError{Reason: commands.ReasonWrapperBlocked}, http.StatusForbidden, api.ReasonCodeWrapperBlocked, 0},
 		"invalid":      {&commands.DeniedError{Reason: commands.ReasonInvalid}, http.StatusUnprocessableEntity, api.ReasonCodeInvalid, 0},
+		"message long": {&commands.DeniedError{Reason: commands.ReasonMessageTooLong}, http.StatusBadRequest, api.ReasonCodeMessageTooLong, 0},
 		"rate limited": {&commands.DeniedError{Reason: commands.ReasonRateLimited, RetryAfter: 2100 * time.Millisecond}, http.StatusTooManyRequests, api.ReasonCodeRateLimited, 3},
 		"unavailable":  {commands.ErrUnavailable, http.StatusServiceUnavailable, api.ReasonCodeServerUnavailable, 0},
 		"timeout":      {commands.ErrTimeout, http.StatusGatewayTimeout, api.ReasonCodeTimeout, 0},

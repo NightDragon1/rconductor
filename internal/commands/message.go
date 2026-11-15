@@ -94,10 +94,13 @@ func messageText(cmd string, m *profiles.MessageCommand, caseSensitive bool) (st
 	if m == nil {
 		return "", false
 	}
+	// The path as the profile check normalizes it, compared like a list
+	// entry: whole first token, case by the profile (D-081).
+	path := profiles.NormalizePath(m.Path)
 	head, rest, _ := strings.Cut(cmd, " ")
-	same := head == m.Path
+	same := head == path
 	if !caseSensitive {
-		same = strings.EqualFold(head, m.Path)
+		same = strings.EqualFold(head, path)
 	}
 	rest = strings.TrimSpace(rest)
 	if !same || rest == "" {

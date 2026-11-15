@@ -108,4 +108,8 @@ func TestMessageText(t *testing.T) {
 	if _, ok := messageText("say hi", nil, false); ok {
 		t.Error("matched without message_command")
 	}
+	// The path as the profile check normalizes it (space around it).
+	if got, ok := messageText("say hi", &profiles.MessageCommand{Path: " say ", Render: profiles.RenderMinecraftTellraw}, false); !ok || got != "hi" {
+		t.Errorf("path with space around it: %q %v", got, ok)
+	}
 }
