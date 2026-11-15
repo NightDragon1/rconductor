@@ -101,6 +101,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/about": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Name, version, license and repository of the panel (UI-024, D-080).
+         * @description Needs no session. Without one the answer holds name, version, license and repository only; with a session also commit and build date; for the RCON admin also the agents with their version. The agent version is foreign data (SEC-006): at most 64 characters, otherwise unknown, like a missing version (agents 1.0 and 1.1).
+         */
+        get: operations["getAbout"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/session": {
         parameters: {
             query?: never;
@@ -1478,6 +1498,29 @@ export interface components {
         ServerGroupList: {
             items: components["schemas"]["ServerGroup"][];
         };
+        About: {
+            /** @description RCONductor. */
+            name: string;
+            version: string;
+            /** @description SPDX expression, AGPL-3.0-or-later. */
+            license: string;
+            repo_url: string;
+            /** @description Git commit of the build, or unknown; only with a session. */
+            commit?: string;
+            /** @description Build time in UTC (RFC 3339), or unknown; only with a session. */
+            build_date?: string;
+            /** @description Paired agents with their version; only for the RCON admin. */
+            agents?: components["schemas"]["AboutAgent"][];
+        };
+        AboutAgent: {
+            /** Format: uuid */
+            id: string;
+            /** @description Foreign data (SEC-006). */
+            name: string;
+            /** @description Version the agent reported in its hello, at most 64 characters; unknown when missing or longer (D-080). Foreign data (SEC-006). */
+            version: string;
+            connected: boolean;
+        };
         ServerGroupInput: {
             name?: string;
             server_ids?: string[];
@@ -2188,6 +2231,26 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getAbout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description About the panel. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["About"];
+                };
+            };
         };
     };
     getSession: {

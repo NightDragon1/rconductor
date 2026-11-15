@@ -57,6 +57,7 @@ func readPendingCookie(r *http.Request) string {
 // second factor first (AUTH-008); no WebSocket either.
 var whileTOTPSetup = map[string]bool{
 	"GetSession": true, "Logout": true, "GetSecondFactor": true, "SetupSecondFactor": true, "ConfirmSecondFactor": true,
+	"GetAbout": true,
 }
 
 func (s *apiServer) authClient(ctx context.Context) auth.Client {
