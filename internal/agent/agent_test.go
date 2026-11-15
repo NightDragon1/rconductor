@@ -396,3 +396,38 @@ func TestVersionHint(t *testing.T) {
 		logtest.Wait(t, logs, want)
 	}
 }
+
+// hostBackend is a backend that names its host (AGT-014).
+type hostBackend struct {
+	*fakeBackend
+	host *agentproto.DockerHost
+}
+
+func (b hostBackend) Host(context.Context) *agentproto.DockerHost { return b.host }
+
+// TestHelloDockerHost covers AGT-014: the agent sends the host its backend
+// names in the hello, and the panel's hub keeps it for the agent.
+func TestHelloDockerHost(t *testing.T) {
+	p := newPanel(t)
+	cfg := agentCfg(t, t.TempDir())
+	cfg.PairingToken, cfg.PanelAddr = p.token(), p.addr
+	want := agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}
+	log := logging.New(&lockedBuf{}, "agent", config.Log{Format: "json"}).Root()
+	a, err := New(cfg, log, hostBackend{&fakeBackend{}, &want})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.backoff = func(int) time.Duration { return 20 * time.Millisecond }
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- a.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Errorf("run: %v", err)
+		}
+	})
+	waitFor(t, "pairing", func() bool { return a.State().AgentID != "" })
+	id := a.State().AgentID
+	waitFor(t, "docker host", func() bool { d, ok := p.hub.DockerHost(id); return ok && d == want })
+}
