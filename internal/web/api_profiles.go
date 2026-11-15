@@ -32,6 +32,7 @@ func (s *apiServer) ListProfiles(ctx context.Context, _ api.ListProfilesRequestO
 			Overridden: sp.Overridden, ImportedAt: sp.ImportedAt,
 			CaseSensitive: *r.Syntax.CaseSensitive, StripPrefix: *r.Syntax.StripPrefix, MaxLength: r.Syntax.MaxLength,
 			Wrappers: r.Syntax.Wrappers, Catalog: []api.CatalogCommand{}, Formatting: formattingOf(r.Formatting),
+			MessageCommand: messageCommandOf(r.MessageCommand),
 		}
 		if admin {
 			g.DefaultPort = &sp.DefaultPort
@@ -98,6 +99,7 @@ func (s *apiServer) GetServerProfile(ctx context.Context, req api.GetServerProfi
 	}
 	if eff != nil {
 		out.Formatting = formattingOf(eff.Formatting)
+		out.MessageCommand = messageCommandOf(eff.MessageCommand)
 		r := eff.Syntax
 		out.Protocol, out.MaxLength = eff.Protocol.Type, r.MaxLength
 		if r.CaseSensitive != nil {
@@ -123,4 +125,13 @@ func (s *apiServer) GetServerProfile(ctx context.Context, req api.GetServerProfi
 		out.Catalog = append(out.Catalog, api.EffectiveCommand{Path: pc.Path, Description: pc.Description, Params: pc.Params, ProfileId: u})
 	}
 	return api.GetServerProfile200JSONResponse(out), nil
+}
+
+// messageCommandOf is the profile field message_command for the API
+// (CMD-020); nil without one.
+func messageCommandOf(m *profiles.MessageCommand) *api.MessageCommand {
+	if m == nil {
+		return nil
+	}
+	return &api.MessageCommand{Path: m.Path, Render: api.MessageCommandRender(m.Render)}
 }
