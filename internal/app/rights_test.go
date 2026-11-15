@@ -376,6 +376,8 @@ func matrix() []matrixOp {
 			return request{path: "/auth/login", body: map[string]string{"pseudonym": rSI, "password": matrixPassword}}
 		}, true},
 		{"GET", "/auth/session", "OOOOOOUO", at("/auth/session"), false},
+		// Public (UI-024, D-080); also for the restricted sessions, like an anonymous call.
+		{"GET", "/about", "OOOOOOOO", at("/about"), false},
 		// Second factor (AUTH-008): the second step without a waiting
 		// login and a made-up link are refused for everyone; the recovery
 		// request answers alike.

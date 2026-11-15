@@ -79,11 +79,21 @@ func NewAt(fsys fs.FS, basePath string) http.Handler {
 			serveIndex(w, r, index, ok)
 			return
 		}
-		if hidden(name) || !serveFile(w, r, fsys, name, "public, max-age=31536000, immutable") {
+		// Hashed assets never change; the license list keeps its name from
+		// build to build, so it is revalidated (NFR-021).
+		cache := "public, max-age=31536000, immutable"
+		if name == thirdPartyFile {
+			cache = "no-cache"
+		}
+		if hidden(name) || !serveFile(w, r, fsys, name, cache) {
 			web.WriteProblem(w, http.StatusNotFound, "", "")
 		}
 	})
 }
+
+// thirdPartyFile is the license list of the bundled UI dependencies,
+// written by the build (web/vite.config.ts).
+const thirdPartyFile = "third-party-licenses.txt"
 
 // nonceSlot marks where each answer puts its nonce meta element.
 const nonceSlot = "<!--rcd-nonce-->"

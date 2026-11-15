@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"slices"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -373,10 +374,18 @@ func SameMajor(a, b string) bool {
 	return ma >= 0 && ma == buildinfo.MajorOf(b)
 }
 
+// MaxHelloVersion is the longest version an agent may report (D-080).
+const MaxHelloVersion = 64
+
 // Clean bounds and cleans the foreign data of a hello (SEC-006).
 func (h *Hello) Clean() error {
 	h.Name = foreign.Name(h.Name, 64)
-	h.Version = foreign.Name(h.Version, 64)
+	// A version over MaxHelloVersion characters is unknown, never cut to a
+	// plausible one (D-080); it then fails the major check (AGT-013).
+	h.Version = foreign.Name(h.Version, MaxHelloVersion+1)
+	if utf8.RuneCountInString(h.Version) > MaxHelloVersion {
+		h.Version = buildinfo.Unknown
+	}
 	h.Backend = foreign.Name(h.Backend, 32)
 	if len(h.Capabilities) > 32 || len(h.AgentID) > 64 || len(h.Token) > 256 {
 		return protoErr("hello over its limits")

@@ -364,7 +364,8 @@ func TestAgentWithoutPanel(t *testing.T) {
 	}
 }
 
-// TestStartBanner: the agent logs the banner of AGT-016 before app.start.
+// TestStartBanner: the agent logs the banner of AGT-016 and app.start with
+// commit and build date.
 func TestStartBanner(t *testing.T) {
 	var out lockedBuf
 	cfg := config.Agent{SecretsDir: t.TempDir(), DockerHost: "unix:///nonexistent.sock", LabelKey: "rconductor.manage", LabelValue: "true",

@@ -30,11 +30,11 @@ import (
 // publicOperations need no session; every other operation is rejected
 // with 401 unless a valid session is present (default deny).
 // The names are the generated Go method names of the operations.
-var publicOperations = map[string]bool{"Login": true, "RedeemInvite": true, "LoginCode": true, "RequestRecovery": true, "RedeemRecovery": true}
+var publicOperations = map[string]bool{"Login": true, "RedeemInvite": true, "LoginCode": true, "RequestRecovery": true, "RedeemRecovery": true, "GetAbout": true}
 
 // whileMustChange are the only operations a user with a forced password
 // change may call (AUTH-010).
-var whileMustChange = map[string]bool{"ChangePassword": true, "Logout": true, "GetSession": true}
+var whileMustChange = map[string]bool{"ChangePassword": true, "Logout": true, "GetSession": true, "GetAbout": true}
 
 // apiServer implements the generated strict server interface.
 type apiServer struct {
