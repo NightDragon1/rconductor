@@ -100,3 +100,9 @@ describe('formatLines (CMD-017)', () => {
     expect(out[out.length - 1]).toEqual([{ text: 'x', className: '' }]);
   });
 });
+
+// A display limit of the browser, not a setting: a change of the
+// value must be deliberate.
+it('keeps the cap of styled segments at 2000', () => {
+  expect(MAX_STYLED).toBe(2000);
+});
