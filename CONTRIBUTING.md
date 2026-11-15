@@ -90,5 +90,5 @@ syntax of the file:
 New dependencies must be compatible with the AGPL; name the reason in the
 pull request. A pull request that changes a lockfile lists the added packages
 and the changed origins or checksums in its text, as printed by
-`scripts/lockfile-packages.py <base>`. By contributing you agree that your
-work is licensed under AGPL-3.0-or-later.
+`scripts/lockfile-packages.py $(git merge-base origin/main HEAD)`. By
+contributing you agree that your work is licensed under AGPL-3.0-or-later.

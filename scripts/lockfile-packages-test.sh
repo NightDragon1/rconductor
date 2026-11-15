@@ -4,8 +4,10 @@
 #
 # Checks scripts/lockfile-packages.py (PRJ-005, SEC-013) in a throwaway
 # repository: new npm packages and Go modules, changed resolved, integrity
-# and go.sum hashes, /go.mod lines ignored, no change and a lockfile missing
-# on the base side.
+# and go.sum hashes (also of /go.mod lines), a package moved or copied to
+# another key with a foreign origin, a version bump to a version the base
+# had, aliases, new lockfiles, no change, a lockfile missing on the base
+# side, and lockfiles or refs it cannot read.
 set -eu
 src=$(cd "$(dirname "$0")/.." && pwd)
 repo=$(mktemp -d)
@@ -29,12 +31,19 @@ import json, sys
 a = sys.argv[1:]
 pkgs = {"": {"name": "web"}}
 for i in range(0, len(a), 4):
-    pkgs[a[i]] = {"version": a[i + 1], "resolved": a[i + 2], "integrity": a[i + 3]}
+    key, name = a[i], None
+    if "=" in key:
+        key, name = key.split("=")
+    pkgs[key] = {"version": a[i + 1], "resolved": a[i + 2], "integrity": a[i + 3]}
+    if name:
+        pkgs[key]["name"] = name
 print(json.dumps({"lockfileVersion": 3, "packages": pkgs}, indent=2))
 EOF
 }
 R=https://registry.npmjs.org
-npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1
+npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 \
+  node_modules/a/node_modules/b 1.0.0 "$R/b/-/b-1.0.0.tgz" sha512-b1 \
+  node_modules/b 2.0.0 "$R/b/-/b-2.0.0.tgz" sha512-b2
 printf '%s\n' \
   "example.com/m v1.0.0 h1:old=" \
   "example.com/m v1.0.0/go.mod h1:mod=" >"$repo/go.sum"
@@ -51,6 +60,15 @@ change() {
   git -C "$repo" commit -qm "$1" --allow-empty
 }
 out() { "$repo/scripts/lockfile-packages.py" "$base"; }
+# fails_run NAME [REF]: the run fails.
+fails_run() {
+  if "$repo/scripts/lockfile-packages.py" "${2:-$base}" >/dev/null 2>&1; then
+    echo "$1: passed, want a failure" >&2
+    fails=$((fails + 1))
+  fi
+}
+# The npm entries of the base.
+BASE_NPM="node_modules/a 1.0.0 $R/a/-/a-1.0.0.tgz sha512-a1 node_modules/a/node_modules/b 1.0.0 $R/b/-/b-1.0.0.tgz sha512-b1 node_modules/b 2.0.0 $R/b/-/b-2.0.0.tgz sha512-b2"
 # has NAME TEXT: the output contains the line TEXT.
 has() {
   grep -qxF -- "$2" <<<"$got" || { echo "$1: missing [$2] in:" >&2; echo "$got" >&2; fails=$((fails + 1)); }
@@ -60,8 +78,7 @@ hasnt() {
 }
 
 change "new npm package" <<EOF
-npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 \
-  node_modules/a/node_modules/@s/b 2.0.0 "$R/@s/b/-/b-2.0.0.tgz" sha512-b2
+npm $BASE_NPM node_modules/a/node_modules/@s/b 2.0.0 "$R/@s/b/-/b-2.0.0.tgz" sha512-b2
 EOF
 got=$(out)
 has "new npm package" "- @s/b@2.0.0 ($R/@s/b/-/b-2.0.0.tgz)"
@@ -73,17 +90,18 @@ EOF
 got=$(out)
 has "new go module" "- example.com/n@v0.2.0 (proxy.golang.org, example.com/n)"
 hasnt "a /go.mod line is ignored" "v0.2.0/go.mod"
-has "lockfile missing on the base side: header" "## tools/go.sum"
 
 change "changed resolved" <<EOF
-npm node_modules/a 1.0.0 "https://evil.example/a-1.0.0.tgz" sha512-a1
+npm node_modules/a 1.0.0 "https://evil.example/a-1.0.0.tgz" sha512-a1 \
+  node_modules/a/node_modules/b 1.0.0 "$R/b/-/b-1.0.0.tgz" sha512-b1 node_modules/b 2.0.0 "$R/b/-/b-2.0.0.tgz" sha512-b2
 EOF
 got=$(out)
 has "changed resolved" "- a@1.0.0 (node_modules/a) resolved: $R/a/-/a-1.0.0.tgz -> https://evil.example/a-1.0.0.tgz"
 hasnt "changed resolved: not new" "- a@1.0.0 (http"
 
 change "changed integrity" <<EOF
-npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-other
+npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-other \
+  node_modules/a/node_modules/b 1.0.0 "$R/b/-/b-1.0.0.tgz" sha512-b1 node_modules/b 2.0.0 "$R/b/-/b-2.0.0.tgz" sha512-b2
 EOF
 got=$(out)
 has "changed integrity" "- a@1.0.0 (node_modules/a) integrity: sha512-a1 -> sha512-other"
@@ -100,6 +118,65 @@ printf '%s\n' "example.com/m v1.0.0 h1:old=" "example.com/m v1.0.0/go.mod h1:mod
 EOF
 got=$(out)
 hasnt "a /go.mod-only line is ignored" "example.com/x"
+
+change "moved to another key with a foreign origin" <<EOF
+npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 \
+  node_modules/b 1.0.0 "https://evil.example/b-1.0.0.tgz" sha512-evil
+EOF
+got=$(out)
+has "moved with a foreign origin" "- b@1.0.0 (node_modules/b) origin not in the base: resolved https://evil.example/b-1.0.0.tgz, integrity sha512-evil"
+
+change "extra copy with a foreign origin" <<EOF
+npm $BASE_NPM node_modules/c/node_modules/b 1.0.0 "https://evil.example/b-1.0.0.tgz" sha512-b1
+EOF
+got=$(out)
+has "extra copy with a foreign origin" "- b@1.0.0 (node_modules/c/node_modules/b) origin not in the base: resolved https://evil.example/b-1.0.0.tgz, integrity sha512-b1"
+
+change "bump to a version the base had" <<EOF
+npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 \
+  node_modules/a/node_modules/b 2.0.0 "$R/b/-/b-2.0.0.tgz" sha512-b2 node_modules/b 2.0.0 "$R/b/-/b-2.0.0.tgz" sha512-b2
+EOF
+got=$(out)
+hasnt "bump to a version the base had, same origin" "b@2.0.0"
+change "bump to a version the base had, other origin" <<EOF
+npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 \
+  node_modules/a/node_modules/b 2.0.0 "https://evil.example/b-2.0.0.tgz" sha512-b2 node_modules/b 2.0.0 "$R/b/-/b-2.0.0.tgz" sha512-b2
+EOF
+got=$(out)
+has "bump to a version the base had, other origin" "- b@2.0.0 (node_modules/a/node_modules/b) origin not in the base: resolved https://evil.example/b-2.0.0.tgz, integrity sha512-b2"
+
+change "alias" <<EOF
+npm $BASE_NPM node_modules/x=real 3.0.0 "$R/real/-/real-3.0.0.tgz" sha512-r3
+EOF
+got=$(out)
+has "alias" "- x (alias of real)@3.0.0 ($R/real/-/real-3.0.0.tgz)"
+
+change "changed /go.mod hash" <<'EOF'
+printf '%s\n' "example.com/m v1.0.0 h1:old=" "example.com/m v1.0.0/go.mod h1:other=" >go.sum
+EOF
+got=$(out)
+has "changed /go.mod hash" "- example.com/m@v1.0.0/go.mod hash: h1:mod= -> h1:other="
+
+change "new lockfile" <<'EOF'
+printf '%s\n' "example.com/w v1.0.0 h1:w=" >web/go.sum
+EOF
+got=$(out)
+has "new lockfile: header" "## web/go.sum"
+has "new lockfile: module" "- example.com/w@v1.0.0 (proxy.golang.org, example.com/w)"
+
+change "not JSON" <<'EOF'
+echo '{"lockfileVersion": 3, "packages": ' >web/package-lock.json
+EOF
+fails_run "not JSON"
+change "no packages" <<'EOF'
+echo '{"lockfileVersion": 3}' >web/package-lock.json
+EOF
+fails_run "no packages"
+change "lockfileVersion 1" <<'EOF'
+echo '{"lockfileVersion": 1, "packages": {}}' >web/package-lock.json
+EOF
+fails_run "lockfileVersion 1"
+fails_run "unknown ref" 0000000000000000000000000000000000000000
 
 change "no change" <<'EOF'
 true
