@@ -283,3 +283,10 @@ describe('earlier lines', () => {
     expect(prependTail(b, ['x', 'y'])).toBe(b);
   });
 });
+
+// Display limits of the console in the browser: a change of a value must
+// be deliberate.
+it('keeps the console limits at 1000 commands and 500 log lines', () => {
+  expect(MAX_COMMANDS).toBe(1000);
+  expect(MAX_LOG_LINES).toBe(500);
+});

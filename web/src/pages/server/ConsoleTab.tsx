@@ -25,6 +25,7 @@ import {
 import { playerRule } from '@/lib/commandform';
 import { clock } from '@/lib/format';
 import { stripCodes } from '@/lib/serverpage';
+import { COLOR_CODES_FLAG, type Formatting } from '@/lib/formatting';
 import { cn } from '@/lib/utils';
 import { MultiCommand } from './MultiCommand';
 import { TemplatesPanel } from './TemplatesPanel';
@@ -56,8 +57,10 @@ function CommandView({
   now,
   collapsed,
   onToggle,
+  formatting,
 }: {
   b: CmdBlock;
+  formatting?: Formatting;
   now: number;
   t0: 'own' | 'others' | 'log' | 'error';
   collapsed: boolean;
@@ -65,9 +68,11 @@ function CommandView({
 }) {
   const { t, i18n } = useTranslation();
   const pre = useRef<HTMLPreElement>(null);
-  // Answers are foreign data: text only, color codes dropped (SEC-006).
-  // The detail of a refusal comes from the panel, not the game server.
+  // Answers are foreign data: text only, color codes dropped (SEC-006),
+  // or shown as styles of the fixed list with formatting (CMD-017). The
+  // detail of a refusal comes from the panel, not the game server.
   const answer = b.response ? stripCodes(b.response) : (b.detail ?? '');
+  const styled = !!b.response && !!formatting;
   const copy = answer ? `${b.command}\n${answer}` : b.command;
   return (
     <article
@@ -117,7 +122,11 @@ function CommandView({
               b.result !== 'ok' && 'text-danger',
             )}
           >
-            <ForeignText text={answer} />
+            {styled ? (
+              <ForeignText text={b.response ?? ''} formatting={formatting} />
+            ) : (
+              <ForeignText text={answer} />
+            )}
           </pre>
           {b.truncated && <p className="mt-1 text-xs text-warn">{t('history.truncated')}</p>}
         </div>
@@ -194,6 +203,11 @@ export function ConsoleTab() {
   const server = useServer();
   const id = server?.id ?? '';
   const hasAgent = !!server?.agent_id;
+  // Styles only with the flag on and a scheme from the profiles (CMD-017).
+  const formatting =
+    session?.ui.features?.includes(COLOR_CODES_FLAG) && server?.formatting
+      ? server.formatting
+      : undefined;
   const allowed = useAllowedCommands(id, !!id);
   // Running commands turn into failed ones without any event.
   const [now, setNow] = useState(Date.now);
@@ -414,6 +428,7 @@ export function ConsoleTab() {
                         t0={tone(b, me, now)}
                         collapsed={collapsed.has(b.id)}
                         onToggle={() => toggle(b.id)}
+                        formatting={formatting}
                       />
                     ) : (
                       <LogView b={b} />
