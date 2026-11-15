@@ -9,6 +9,27 @@
     "version": "RCONductor {{version}}",
     "later": "This page follows in a later step."
   },
+  "about": {
+    "open": "About",
+    "title": "About RCONductor",
+    "close": "Close",
+    "version": "Version",
+    "commit": "Commit",
+    "buildDate": "Build date",
+    "author": "NightDragon",
+    "license": "Licensed under AGPL-3.0-or-later. This program comes with ABSOLUTELY NO WARRANTY.",
+    "more": "For more see",
+    "licenseText": "License text",
+    "thirdParty": "Third-party licenses",
+    "agents": "Agents",
+    "noAgents": "No agents are paired.",
+    "connected": "connected",
+    "disconnected": "not connected",
+    "agentVersion": "Version",
+    "majorDiffers": "Its major version differs from the panel ({{major}}). Update the agent or the panel.",
+    "line": "{{name}} {{version}} · {{license}} ·",
+    "github": "GitHub"
+  },
   "login": {
     "title": "Sign in",
     "pseudonym": "Pseudonym",

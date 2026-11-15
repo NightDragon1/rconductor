@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAbout, webUrl } from '@/api/about';
 import { api } from '@/api/client';
 import { sessionKey } from '@/api/session';
 import { Button } from '@/components/ui/button';
@@ -115,6 +116,7 @@ export function LoginPage() {
             {t('login.lostFactor')}
           </Link>
         </Card>
+        <AboutLine />
       </main>
     );
   }
@@ -143,6 +145,33 @@ export function LoginPage() {
           </Button>
         </form>
       </Card>
+      <AboutLine />
     </main>
+  );
+}
+
+// AboutLine names version and license below the sign-in (UI-024); the
+// panel answers GET /about without a session.
+export function AboutLine() {
+  const { t } = useTranslation();
+  const { data } = useAbout();
+  if (!data) return null;
+  const repo = webUrl(data.repo_url);
+  return (
+    <p className="text-center text-xs text-muted">
+      {t('about.line', { name: data.name, version: data.version, license: data.license })}{' '}
+      {repo ? (
+        <a
+          href={repo}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="tap underline underline-offset-2"
+        >
+          {t('about.github')}
+        </a>
+      ) : (
+        t('about.github')
+      )}
+    </p>
   );
 }
