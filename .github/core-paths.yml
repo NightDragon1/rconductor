@@ -97,7 +97,8 @@ generated:
   - internal/store/sqlitedb/**
   - web/src/api/schema.d.ts
 # Lockfiles: the PR text lists the packages they add (name@version and
-# origin), which is reviewed instead of the diff.
+# origin) and the changed origins or checksums, as scripts/lockfile-packages.py
+# prints them; that list is reviewed instead of the diff.
   - go.sum
   - tools/go.sum
   - web/package-lock.json
