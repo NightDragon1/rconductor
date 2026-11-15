@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/client';
 import { useSession } from '@/api/session';
+import { AboutButton } from '@/components/AboutDialog';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -81,6 +82,7 @@ export function Shell() {
         </Button>
         <UserBlock collapsed={collapsed} />
         <PanelVersion collapsed={collapsed} />
+        <AboutButton collapsed={collapsed} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -97,6 +99,7 @@ export function Shell() {
               <Navigation collapsed={false} onNavigate={() => setMenuOpen(false)} />
               <UserBlock collapsed={false} />
               <PanelVersion collapsed={false} />
+              <AboutButton collapsed={false} />
             </SheetContent>
           </Sheet>
           <span className="font-semibold">{t('app.name')}</span>
