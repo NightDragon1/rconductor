@@ -106,6 +106,8 @@ jobs:
     if: github.event_name == 'push'
     needs: version
     uses: ./.github/workflows/ci.yml
+    with:
+      runner: ubuntu-26.04
 
   publish:
     name: Publish ${{ matrix.target }}
