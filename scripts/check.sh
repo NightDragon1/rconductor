@@ -34,6 +34,7 @@ scripts/check-spdx.sh
 
 step release scripts
 scripts/release-test.sh
+scripts/third-party-go-test.sh
 
 step CI scripts
 scripts/ci-scope-test.sh
