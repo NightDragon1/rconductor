@@ -17,6 +17,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agenthub"
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/agents"
+	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/logtest"
@@ -357,6 +358,21 @@ func TestAgentWithoutPanel(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Main(ctx, cfg, &out) }()
 	logtest.Wait(t, &out, `"comp":"agent"`, `"event":"key.created"`, `"event":"app.ready"`, "RCD_PAIRING_TOKEN")
+	cancel()
+	if err := <-done; err != nil {
+		t.Errorf("run = %v", err)
+	}
+}
+
+// TestStartBanner: the agent logs the banner of AGT-016 before app.start.
+func TestStartBanner(t *testing.T) {
+	var out lockedBuf
+	cfg := config.Agent{SecretsDir: t.TempDir(), DockerHost: "unix:///nonexistent.sock", LabelKey: "rconductor.manage", LabelValue: "true",
+		Log: config.Log{Format: "json"}}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- Main(ctx, cfg, &out) }()
+	logtest.Wait(t, &out, append(buildinfo.Banner("Agent"), `"event":"app.start"`, `"commit":"unknown"`, `"build_date":"unknown"`)...)
 	cancel()
 	if err := <-done; err != nil {
 		t.Errorf("run = %v", err)

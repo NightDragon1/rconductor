@@ -22,23 +22,48 @@ COPY . .
 COPY --from=ui /src/internal/webui/dist/ internal/webui/dist/
 ARG TARGETOS TARGETARCH
 ARG VERSION=0.0.0-dev
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
-      -ldflags "-s -w -X github.com/NightDragon1/rconductor/internal/buildinfo.Version=$VERSION" \
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+RUN ldflags="-s -w -X github.com/NightDragon1/rconductor/internal/buildinfo.Version=$VERSION \
+      -X github.com/NightDragon1/rconductor/internal/buildinfo.Commit=$COMMIT \
+      -X github.com/NightDragon1/rconductor/internal/buildinfo.BuildDate=$BUILD_DATE" \
+ && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "$ldflags" \
       -o /out/panel ./cmd/panel \
- && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
-      -ldflags "-s -w -X github.com/NightDragon1/rconductor/internal/buildinfo.Version=$VERSION" \
+ && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "$ldflags" \
       -o /out/agent ./cmd/agent
 # Volume mount points owned by the non-root user, so named volumes start
 # writable; /secrets is private to that user.
 RUN mkdir -p /out/panel-root/data /out/panel-root/backups /out/agent-root \
  && install -d -m 0700 /out/panel-root/secrets /out/agent-root/secrets
 
+# /licenses in each image (NFR-021): the license and the licenses of the
+# linked Go modules, for the panel also those of the bundled UI. A stage of
+# its own, so that the license tool never sees the built binaries.
+FROM --platform=$BUILDPLATFORM golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9 AS licenses
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY tools/go.mod tools/go.sum tools/
+RUN go mod download \
+ && go -C tools build -o /usr/local/bin/go-licenses github.com/google/go-licenses/v2
+COPY . .
+COPY --from=ui /src/internal/webui/dist/third-party-licenses.txt /tmp/third-party-ui.txt
+ARG TARGETOS TARGETARCH
+RUN mkdir -p /out/panel /out/agent \
+ && cp LICENSE /out/panel/LICENSE && cp LICENSE /out/agent/LICENSE \
+ && export GOOS=$TARGETOS GOARCH=$TARGETARCH \
+ && { scripts/third-party-go.sh go-licenses ./cmd/panel && echo && cat /tmp/third-party-ui.txt; } > /out/panel/THIRD_PARTY \
+ && scripts/third-party-go.sh go-licenses ./cmd/agent > /out/agent/THIRD_PARTY
+
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS panel
 ARG VERSION=0.0.0-dev
+ARG COMMIT=unknown
 LABEL org.opencontainers.image.title="RCONductor panel" \
       org.opencontainers.image.source="https://github.com/NightDragon1/rconductor" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
-      org.opencontainers.image.version="$VERSION"
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$COMMIT" \
+      org.opencontainers.image.authors="NightDragon (ShadowGhost.NET)"
+COPY --from=licenses /out/panel/ /licenses/
 COPY --from=build --chown=65532:65532 /out/panel-root/ /
 COPY --from=build /out/panel /usr/local/bin/rconductor-panel
 USER 65532:65532
@@ -49,10 +74,14 @@ ENTRYPOINT ["/usr/local/bin/rconductor-panel"]
 
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS agent
 ARG VERSION=0.0.0-dev
+ARG COMMIT=unknown
 LABEL org.opencontainers.image.title="RCONductor agent" \
       org.opencontainers.image.source="https://github.com/NightDragon1/rconductor" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
-      org.opencontainers.image.version="$VERSION"
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$COMMIT" \
+      org.opencontainers.image.authors="NightDragon (ShadowGhost.NET)"
+COPY --from=licenses /out/agent/ /licenses/
 COPY --from=build --chown=65532:65532 /out/agent-root/ /
 COPY --from=build /out/agent /usr/local/bin/rconductor-agent
 # Non-root; the Docker socket is reached through its group (group_add with

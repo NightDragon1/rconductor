@@ -20,7 +20,11 @@ import (
 func Main(ctx context.Context, cfg config.Agent, out io.Writer) error {
 	logs := logging.New(out, "agent", cfg.Log)
 	log := logs.Root()
-	log.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version))
+	for _, line := range buildinfo.Banner("Agent") {
+		log.Info(line)
+	}
+	log.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version),
+		slog.String("commit", buildinfo.Commit), slog.String("build_date", buildinfo.BuildDate))
 	err := runAgent(ctx, cfg, logs)
 	if err != nil {
 		log.Error("agent stopped with error", slog.Any("err", err))

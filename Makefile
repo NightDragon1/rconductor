@@ -4,7 +4,11 @@
 # A release tag (v1.0); without one a semantic dev version, so that panel
 # and agent of one build share the major version (AGT-013).
 VERSION ?= $(shell git describe --tags --dirty --match 'v[0-9]*' 2>/dev/null || echo 0.0.0-dev+$$(git rev-parse --short HEAD 2>/dev/null || echo unknown))
-LDFLAGS := -s -w -X github.com/NightDragon1/rconductor/internal/buildinfo.Version=$(VERSION)
+COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+BUILD_DATE ?= $(shell TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)
+LDFLAGS := -s -w -X github.com/NightDragon1/rconductor/internal/buildinfo.Version=$(VERSION) \
+	-X github.com/NightDragon1/rconductor/internal/buildinfo.Commit=$(COMMIT) \
+	-X github.com/NightDragon1/rconductor/internal/buildinfo.BuildDate=$(BUILD_DATE)
 GOFLAGS := -trimpath
 SQLC_VERSION := 1.31.1
 SQLC ?= sqlc
@@ -34,8 +38,8 @@ PANEL_IMAGE ?= rconductor-panel:dev
 AGENT_IMAGE ?= rconductor-agent:dev
 
 images:
-	docker buildx build --load --target panel --build-arg VERSION=$(VERSION) -t $(PANEL_IMAGE) .
-	docker buildx build --load --target agent --build-arg VERSION=$(VERSION) -t $(AGENT_IMAGE) .
+	docker buildx build --load --target panel --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) -t $(PANEL_IMAGE) .
+	docker buildx build --load --target agent --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILD_DATE=$(BUILD_DATE) -t $(AGENT_IMAGE) .
 
 test-integration: images integration-tests
 

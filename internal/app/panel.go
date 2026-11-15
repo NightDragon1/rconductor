@@ -74,7 +74,11 @@ func RunPanel(ctx context.Context, cfg config.Panel, out io.Writer, opts PanelOp
 	audit.SetLostLog(root)
 	defer context.AfterFunc(ctx, audit.Stop)()
 	memlimit.Apply(root)
-	root.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version))
+	for _, line := range buildinfo.Banner("Panel") {
+		root.Info(line)
+	}
+	root.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version),
+		slog.String("commit", buildinfo.Commit), slog.String("build_date", buildinfo.BuildDate))
 
 	err := runPanel(ctx, cfg, logs, opts)
 	if err != nil {

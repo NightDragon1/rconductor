@@ -3,6 +3,7 @@
 import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import license from 'rollup-plugin-license';
 import { defineConfig } from 'vitest/config';
 import { pseudo } from './src/test/pseudo';
 
@@ -16,8 +17,26 @@ const testLanguage = {
   },
 };
 
+// Licenses of the bundled dependencies (NFR-021): one text file next to the
+// UI, which the image also copies to /licenses.
+const thirdParty = license({
+  thirdParty: {
+    includePrivate: false,
+    output: {
+      file: fileURLToPath(
+        new URL('../internal/webui/dist/third-party-licenses.txt', import.meta.url),
+      ),
+      template: (deps) =>
+        [...deps]
+          .sort((a, b) => ((a.name ?? '') < (b.name ?? '') ? -1 : 1))
+          .map((d) => `== ${d.name} ${d.version} (${d.license})\n${d.licenseText ?? ''}\n`)
+          .join('\n'),
+    },
+  },
+});
+
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), ...(mode === 'language' ? [testLanguage] : [])],
+  plugins: [react(), tailwindcss(), thirdParty, ...(mode === 'language' ? [testLanguage] : [])],
   // Relative asset URLs; the panel sets <base href> from RCD_BASE_PATH.
   base: './',
   resolve: {

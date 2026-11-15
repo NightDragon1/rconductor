@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/auth/password"
+	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/logtest"
@@ -173,6 +174,18 @@ func TestPanelFailsOnBadKeyFile(t *testing.T) {
 		t.Fatal("panel started without its configured master key")
 	}
 	logtest.Wait(t, &out, "panel stopped with error")
+}
+
+// TestPanelStartBanner: the panel logs the banner of AGT-016 at start, also
+// when it then stops with an error.
+func TestPanelStartBanner(t *testing.T) {
+	root := t.TempDir()
+	cfg := testConfig(t, root)
+	cfg.MasterKeyFile = filepath.Join(root, "missing-secret")
+
+	var out syncBuffer
+	_ = RunPanel(context.Background(), cfg, &out, PanelOptions{Console: io.Discard, HashParams: &fastHash})
+	logtest.Wait(t, &out, append(buildinfo.Banner("Panel"), `"event":"app.start"`, `"commit":"unknown"`, `"build_date":"unknown"`)...)
 }
 
 // TestInitialPasswordLifecycle covers AUTH-003 and AUTH-007 end to end: the

@@ -1,0 +1,9 @@
+{{- /*
+SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+Template for scripts/third-party-go.sh (NFR-021).
+*/ -}}
+{{ range . }}== {{ .Name }} {{ .Version }} ({{ .LicenseName }})
+{{ .LicenseText }}
+{{ end }}
