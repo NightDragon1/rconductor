@@ -5,25 +5,39 @@ package web
 
 import (
 	"context"
+	"errors"
+	"net/http"
 
 	"github.com/NightDragon1/rconductor/internal/api"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
 // GetServerGroupSayPrefix reads the prefix of messages to the players for
-// a group (CMD-020, D-082); contract first, the group must be visible to
-// the caller (otherwise 404) before anything else.
+// a group (CMD-020, D-082): the RCON admin and a server admin with every
+// server of the group in scope; the version is that of the group.
 func (s *apiServer) GetServerGroupSayPrefix(ctx context.Context, req api.GetServerGroupSayPrefixRequestObject) (api.GetServerGroupSayPrefixResponseObject, error) {
-	if _, err := s.servers.Group(ctx, adminRequest(ctx), req.Id.String()); err != nil {
+	id := req.Id.String()
+	p, err := s.servers.SayPrefix(ctx, adminRequest(ctx), id)
+	if err != nil {
 		return nil, adminError(err)
 	}
-	return nil, notImplemented("getServerGroupSayPrefix")
+	return api.GetServerGroupSayPrefix200JSONResponse{SayPrefix: p, Version: s.serverGroupVersions(ctx)[id]}, nil
 }
 
-// SetServerGroupSayPrefix sets the prefix of a group (CMD-020, D-082);
-// contract first, like GetServerGroupSayPrefix.
+// SetServerGroupSayPrefix sets or clears the prefix of a group (CMD-020,
+// D-082), with If-Match on the version of the group.
 func (s *apiServer) SetServerGroupSayPrefix(ctx context.Context, req api.SetServerGroupSayPrefixRequestObject) (api.SetServerGroupSayPrefixResponseObject, error) {
-	if _, err := s.servers.Group(ctx, adminRequest(ctx), req.Id.String()); err != nil {
+	if req.Body == nil {
+		return nil, bodyRequired()
+	}
+	id := req.Id.String()
+	p, err := s.servers.SetSayPrefix(ctx, adminRequest(ctx), id, req.Body.SayPrefix, ifMatch(req.Params.IfMatch))
+	// An invalid prefix is 400 (D-082), not 422 as other invalid input.
+	if inv := (*users.InvalidError)(nil); errors.As(err, &inv) {
+		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: inv.Detail}
+	}
+	if err != nil {
 		return nil, adminError(err)
 	}
-	return nil, notImplemented("setServerGroupSayPrefix")
+	return api.SetServerGroupSayPrefix200JSONResponse{SayPrefix: p, Version: s.serverGroupVersions(ctx)[id]}, nil
 }
