@@ -12,20 +12,19 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/NightDragon1/rconductor/internal/commands/sayconf"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
-// SettingSayPrefix is the prefix of messages to the players, a setting
-// per server group (CMD-020, D-082).
-const SettingSayPrefix = "say_prefix"
-
-// ScopeServerGroup is the scope type of a setting per server group.
-const ScopeServerGroup = "server_group"
-
-// MaxSayPrefix bounds the prefix (D-082).
-const MaxSayPrefix = 16
+// The setting, its scope and its bound belong to the command pipeline,
+// which builds the message from it (CMD-020, D-082).
+const (
+	SettingSayPrefix = sayconf.Setting
+	ScopeServerGroup = sayconf.ScopeServerGroup
+	MaxSayPrefix     = sayconf.MaxPrefix
+)
 
 // Audit and refusal actions of the prefix; their own, so a refused write is
 // not logged as a read of the group.
