@@ -88,5 +88,7 @@ syntax of the file:
   `THIRD_PARTY_NOTICES.md`
 
 New dependencies must be compatible with the AGPL; name the reason in the
-pull request. By contributing you agree that your work is licensed under
-AGPL-3.0-or-later.
+pull request. A pull request that changes a lockfile lists the added packages
+and the changed origins or checksums in its text, as printed by
+`scripts/lockfile-packages.py <base>`. By contributing you agree that your
+work is licensed under AGPL-3.0-or-later.
