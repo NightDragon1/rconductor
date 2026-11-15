@@ -59,7 +59,8 @@ test.describe('docker host on', () => {
     await as(page, state, 'sadmin');
     expect((await page.request.get('api/v1/agents')).status()).toBe(403);
     await page.goto('topology');
-    await expect(page.getByRole('region', { name: 'minecraft' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'survival' })).toBeVisible();
+    await expect(page.getByRole('main')).toContainText('Agent');
     const html = await page.content();
     expect(html).not.toContain(hostIP);
     expect(html).not.toContain('nas</b>');
