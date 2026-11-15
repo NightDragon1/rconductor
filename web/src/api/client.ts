@@ -30,7 +30,7 @@ export type VersionedPath =
   | '/server-groups/{id}/say-prefix';
 
 // PatchPath are the versioned writes by PATCH; /settings/smtp (putVersioned)
-// and the say prefix of a group (CMD-020) are PUTs.
+// and the say prefix of a group (CMD-020, putSayPrefix) are PUTs.
 type PatchPath = Exclude<VersionedPath, '/settings/smtp' | '/server-groups/{id}/say-prefix'>;
 
 type Patch<P extends PatchPath> = paths[P]['patch'];
@@ -67,6 +67,21 @@ export function putVersioned(
   body: SMTPPut['requestBody']['content']['application/json'],
 ) {
   return api.PUT(path, { params: { header: { 'If-Match': version } }, body });
+}
+
+type SayPrefixPut = paths['/server-groups/{id}/say-prefix']['put'];
+
+// putSayPrefix sets the say prefix of a server group with If-Match set to
+// version (CMD-020, D-082); an empty prefix removes it.
+export function putSayPrefix(
+  id: string,
+  version: string,
+  body: SayPrefixPut['requestBody']['content']['application/json'],
+) {
+  return api.PUT('/server-groups/{id}/say-prefix', {
+    params: { path: { id }, header: { 'If-Match': version } },
+    body,
+  });
 }
 
 // ApiError carries the Problem Details of a failed call (RFC 9457).

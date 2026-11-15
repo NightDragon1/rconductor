@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
 import { topProfile } from '@/lib/profiles';
+import { SAY_SENDER_FLAG } from '@/lib/sayprefix';
 import { stripCodes } from '@/lib/serverpage';
 import { cardStatus } from '@/lib/status';
 import { usePhone, useReveal } from '@/lib/phone';
@@ -33,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
 import { ProfileList } from './ProfileList';
+import { SayPrefixField } from './SayPrefix';
 import { ForeignText } from '@/components/ForeignText';
 
 type GamePort = components['schemas']['GamePort'];
@@ -631,15 +633,23 @@ function ServerPanel({
 }
 
 // GroupPanel changes a server group (SRV-003): its servers, as a whole
-// with If-Match; a server may be in several groups.
+// with If-Match; a server may be in several groups. With sayPrefix (flag
+// say_sender) it also holds the prefix of messages to the players
+// (CMD-020); whether it shows and may be changed the backend decides.
 function GroupPanel({
   group,
+  groups,
   canEdit,
+  sayPrefix,
+  readOnly,
   servers,
   onClose,
 }: {
   group: ServerGroup;
+  groups: ServerGroup[];
   canEdit: boolean;
+  sayPrefix: boolean;
+  readOnly: boolean;
   servers: Server[];
   onClose: () => void;
 }) {
@@ -782,6 +792,19 @@ function GroupPanel({
           {t('admin.save')}
         </Button>
       )}
+      {sayPrefix && (
+        <SayPrefixField
+          group={group}
+          groups={groups}
+          servers={servers}
+          readOnly={readOnly}
+          onVersion={(version) => {
+            setBase((b) => ({ ...b, version }));
+            setDraft((d) => ({ ...d, version }));
+            void qc.invalidateQueries({ queryKey: serverGroupsKey });
+          }}
+        />
+      )}
       {canEdit && (
         <Button
           variant="outline"
@@ -827,6 +850,8 @@ export function ServersAdminPage() {
   const canEditProfiles = session?.user.role === 'server_admin' && !phone;
   // Save as New only for who may create servers (UI-017, NFR-019).
   const saveAsNew = canEdit && (session?.ui.features ?? []).includes('server_save_as_new');
+  // The say prefix of a group (CMD-020) behind the flag say_sender.
+  const sayPrefix = (session?.ui.features ?? []).includes(SAY_SENDER_FLAG);
   const servers = useServers();
   const groups = useServerGroups(true);
   const profiles = useProfiles();
@@ -1091,7 +1116,10 @@ export function ServersAdminPage() {
         <GroupPanel
           key={currentGroup.id}
           group={currentGroup}
+          groups={groups.data ?? []}
           canEdit={canEdit}
+          sayPrefix={sayPrefix}
+          readOnly={phone}
           servers={all}
           onClose={() => guard(() => setOpen(null))}
         />
