@@ -4,6 +4,7 @@
 package agentproto
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -141,6 +142,42 @@ func TestCleanHello(t *testing.T) {
 	h.Capabilities = make([]string, 40)
 	if err := h.Clean(); !errors.Is(err, ErrProtocol) {
 		t.Errorf("too many capabilities: %v", err)
+	}
+}
+
+// TestCleanDockerHost covers the Docker host of a hostile agent (SEC-006,
+// AGT-014): the name loses control and direction characters and is bounded,
+// the address stays only as a parsed IP address without zone, and a hello
+// without it stays without.
+func TestCleanDockerHost(t *testing.T) {
+	for name, tc := range map[string]struct{ in, want DockerHost }{
+		"plain":     {DockerHost{Name: "nas", IP: "192.168.1.5"}, DockerHost{Name: "nas", IP: "192.168.1.5"}},
+		"override":  {DockerHost{Name: "n\u202eas\x00"}, DockerHost{Name: "nas"}},
+		"long name": {DockerHost{Name: strings.Repeat("h", 300)}, DockerHost{Name: strings.Repeat("h", MaxHostName)}},
+		"ipv6":      {DockerHost{IP: "fd00::1"}, DockerHost{IP: "fd00::1"}},
+		"mapped":    {DockerHost{IP: "::ffff:10.0.0.1"}, DockerHost{IP: "10.0.0.1"}},
+		"zone":      {DockerHost{IP: "fe80::1%<b>eth0</b>"}, DockerHost{IP: "fe80::1"}},
+		"with port": {DockerHost{IP: "10.0.0.1:2377"}, DockerHost{}},
+		"not an ip": {DockerHost{IP: "<script>"}, DockerHost{}},
+		"long junk": {DockerHost{IP: strings.Repeat("1", 10000)}, DockerHost{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := Hello{Name: "host", Version: "1.0.0", Backend: "docker", DockerHost: &tc.in}
+			if err := h.Clean(); err != nil {
+				t.Fatal(err)
+			}
+			if *h.DockerHost != tc.want {
+				t.Errorf("docker host = %+v, want %+v", *h.DockerHost, tc.want)
+			}
+		})
+	}
+	h := Hello{Name: "host", Version: "1.0.0", Backend: "docker"}
+	if err := h.Clean(); err != nil || h.DockerHost != nil {
+		t.Errorf("without docker host: %+v %v", h, err)
+	}
+	b, _ := json.Marshal(h)
+	if strings.Contains(string(b), "docker_host") {
+		t.Errorf("hello without docker host = %s", b)
 	}
 }
 

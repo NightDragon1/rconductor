@@ -8,7 +8,9 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -17,6 +19,8 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/api/types/swarm"
+	"github.com/moby/moby/api/types/system"
 	"github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
 
@@ -40,6 +44,15 @@ type fakeDocker struct {
 	since     []string
 	volumes   []volume.Volume
 	diskUsage int
+	// info answers Info, infoErr fails it.
+	info    system.Info
+	infoErr error
+}
+
+func (f *fakeDocker) Info(context.Context, client.InfoOptions) (client.SystemInfoResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return client.SystemInfoResult{Info: f.info}, f.infoErr
 }
 
 func (f *fakeDocker) ContainerList(_ context.Context, o client.ContainerListOptions) (client.ContainerListResult, error) {
@@ -592,5 +605,32 @@ func TestAnswersOnlyOnRequest(t *testing.T) {
 		if len(answers) != 1 || answers[0].Ref != e.ID {
 			t.Errorf("%s: answers %+v, want one with ref %s", o.typ, answers, e.ID)
 		}
+	}
+}
+
+// TestDockerHost covers AGT-014: the agent names the host as the daemon
+// does, the address only where the daemon has one; a daemon without either
+// or one that fails gives no host, and that is no error.
+func TestDockerHost(t *testing.T) {
+	for name, tc := range map[string]struct {
+		info system.Info
+		err  error
+		want *agentproto.DockerHost
+	}{
+		"name and swarm address": {info: system.Info{Name: "nas", Swarm: swarm.Info{NodeAddr: "192.168.1.5"}},
+			want: &agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}},
+		"name only":    {info: system.Info{Name: "nas"}, want: &agentproto.DockerHost{Name: "nas"}},
+		"cleaned":      {info: system.Info{Name: "n\u202eas", Swarm: swarm.Info{NodeAddr: "no ip"}}, want: &agentproto.DockerHost{Name: "nas"}},
+		"nothing":      {info: system.Info{}},
+		"daemon fails": {info: system.Info{Name: "nas"}, err: errors.New("down")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := &fakeDocker{info: tc.info, infoErr: tc.err}
+			d := newDocker(f, config.Agent{}, slog.New(slog.DiscardHandler))
+			got := d.Host(context.Background())
+			if (got == nil) != (tc.want == nil) || got != nil && *got != *tc.want {
+				t.Errorf("host = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }

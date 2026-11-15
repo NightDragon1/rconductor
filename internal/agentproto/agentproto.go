@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"slices"
 	"time"
 	"unicode/utf8"
@@ -139,6 +140,30 @@ type Hello struct {
 	Backend      string   `json:"backend"`
 	Capabilities []string `json:"capabilities"`
 	Token        string   `json:"token,omitempty"`
+	// DockerHost is the host of the Docker daemon as the daemon names it
+	// (AGT-014); a panel before 1.2 ignores it.
+	DockerHost *DockerHost `json:"docker_host,omitempty"`
+}
+
+// DockerHost is the name and address of the host the Docker daemon runs
+// on, each empty when the daemon does not give it (AGT-014).
+type DockerHost struct {
+	Name string `json:"name,omitempty"`
+	IP   string `json:"ip,omitempty"`
+}
+
+// MaxHostName bounds the host name, the length of a DNS name.
+const MaxHostName = 253
+
+// Clean bounds the name and keeps the address only when it parses as an
+// IP address, without a zone, which would be free text (SEC-006).
+func (d *DockerHost) Clean() {
+	d.Name = foreign.Name(d.Name, MaxHostName)
+	ip := d.IP
+	d.IP = ""
+	if a, err := netip.ParseAddr(ip); err == nil {
+		d.IP = a.Unmap().WithZone("").String()
+	}
 }
 
 // Welcome accepts the agent and names its ID.
@@ -392,6 +417,9 @@ func (h *Hello) Clean() error {
 	}
 	for i, c := range h.Capabilities {
 		h.Capabilities[i] = foreign.Name(c, 64)
+	}
+	if h.DockerHost != nil {
+		h.DockerHost.Clean()
 	}
 	return nil
 }

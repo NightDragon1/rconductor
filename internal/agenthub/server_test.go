@@ -227,6 +227,95 @@ func TestVersionRule(t *testing.T) {
 	logtest.Wait(t, f.logs, `"event":"agent.rejected","reason":"version"`)
 }
 
+// rawHello sends a hello as raw JSON fields, so that one may be missing.
+func rawHello(t *testing.T, c *websocket.Conn, fields map[string]any) agentproto.Envelope {
+	t.Helper()
+	data, _ := agentproto.Encode(agentproto.TypeHello, "", fields)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.Write(ctx, websocket.MessageText, data); err != nil {
+		t.Fatal(err)
+	}
+	_, answer, err := c.Read(ctx)
+	if err != nil {
+		t.Fatalf("no answer to hello: %v", err)
+	}
+	var e agentproto.Envelope
+	if err := json.Unmarshal(answer, &e); err != nil {
+		t.Fatal(err)
+	}
+	return e
+}
+
+// TestVersionRuleUnknown covers D-080 and AGT-013 at the hub: a hello
+// without a version and one whose version is 65 characters long, though it
+// starts with the panel's own, are both refused for the version and logged
+// as agent.rejected with reason version; the long one is not cut to a
+// matching version.
+func TestVersionRuleUnknown(t *testing.T) {
+	for name, version := range map[string]any{
+		"missing": nil,
+		"65":      buildinfo.Version + "+" + strings.Repeat("x", agentproto.MaxHelloVersion-len(buildinfo.Version)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t, ThrottleOptions{})
+			agent := agentKey(t)
+			f.known.keys[agent.Fingerprint()] = "agent-1"
+			c, err := f.dial(t, agent, f.panel.Fingerprint())
+			if err != nil {
+				t.Fatal(err)
+			}
+			fields := map[string]any{"agent_id": "agent-1", "name": "host-1", "backend": "docker", "capabilities": []string{}}
+			if version != nil {
+				if n := len([]rune(version.(string))); n != agentproto.MaxHelloVersion+1 {
+					t.Fatalf("version has %d characters", n)
+				}
+				fields["version"] = version
+			}
+			e := rawHello(t, c, fields)
+			r, _ := agentproto.Payload[agentproto.Reject](e)
+			if e.Type != agentproto.TypeReject || r.Reason != agentproto.RejectVersion {
+				t.Errorf("answer = %+v %+v", e, r)
+			}
+			logtest.Wait(t, f.logs, `"event":"agent.rejected","reason":"version"`)
+		})
+	}
+}
+
+// TestDockerHostOfHello covers AGT-014 at the hub: the Docker host of the
+// last hello is kept cleaned per agent, and a later hello without one
+// clears it.
+func TestDockerHostOfHello(t *testing.T) {
+	f := newFixture(t, ThrottleOptions{})
+	agent := agentKey(t)
+	f.known.keys[agent.Fingerprint()] = "agent-1"
+	if _, ok := f.hub.DockerHost("agent-1"); ok {
+		t.Fatal("docker host before any hello")
+	}
+	c, err := f.dial(t, agent, f.panel.Fingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := hello(t, c, agentproto.Hello{AgentID: "agent-1", DockerHost: &agentproto.DockerHost{Name: "n\u202eas", IP: "::ffff:192.168.1.5"}})
+	if e.Type != agentproto.TypeWelcome {
+		t.Fatalf("answer = %+v", e)
+	}
+	if d, ok := f.hub.DockerHost("agent-1"); !ok || d != (agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}) {
+		t.Errorf("docker host = %+v %v", d, ok)
+	}
+	_ = c.CloseNow()
+	c, err = f.dial(t, agent, f.panel.Fingerprint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := hello(t, c, agentproto.Hello{AgentID: "agent-1"}); e.Type != agentproto.TypeWelcome {
+		t.Fatalf("answer = %+v", e)
+	}
+	if d, ok := f.hub.DockerHost("agent-1"); ok {
+		t.Errorf("docker host after a hello without = %+v", d)
+	}
+}
+
 // TestOversizedMessage covers SEC-007: a message over 1 MiB ends the
 // session (agent.limit and agent.disconnected).
 func TestOversizedMessage(t *testing.T) {
