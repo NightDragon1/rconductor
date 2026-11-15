@@ -9,12 +9,12 @@ import { TopologyPage } from './Topology';
 
 const now = new Date().toISOString();
 
-function session(role: string) {
+function session(role: string, features: string[] = []) {
   return {
     user: { id: 'u0', pseudonym: 'me', role },
     expires_at: now,
     must_change_password: false,
-    ui: { shortcuts_enabled: false, supporters_enabled: true, supporters_allowed: true },
+    ui: { shortcuts_enabled: false, supporters_enabled: true, supporters_allowed: true, features },
   };
 }
 
@@ -52,13 +52,20 @@ const servers: Server[] = [
 ];
 const groups = [{ id: 'g1', name: 'main', server_ids: ['s1'] }];
 const agents = [
-  { id: 'a1', name: 'host-1', remote: '10.0.0.5', status: 'active', connected: true },
+  {
+    id: 'a1',
+    name: 'host-1',
+    remote: '10.0.0.5',
+    status: 'active',
+    connected: true,
+    docker_host: { name: '<b>nas</b>', ip: '192.168.1.5' },
+  },
   { id: 'a2', name: 'host-2', status: 'active', connected: false },
 ];
 
-function data(role: string) {
+function data(role: string, features: string[] = []) {
   return [
-    [sessionKey, session(role)],
+    [sessionKey, session(role, features)],
     [serversKey, servers],
     [serverGroupsKey, groups],
     [agentsKey, agents],
@@ -90,6 +97,34 @@ describe('topology (UI-010)', () => {
     expect(page).not.toContain('10.0.0.5');
     expect(screen.getAllByText('Agent').length).toBe(2);
     expect(page).toContain('disconnected');
+  });
+
+  it('shows the agent address and no Docker host while docker_host is off (AGT-014)', async () => {
+    setLanguage('en');
+    await renderPage(TopologyPage, data('rcon_admin'));
+    const main = screen.getByRole('region', { name: 'main' });
+    expect(main.textContent).toContain('10.0.0.5');
+    expect(main.textContent).not.toContain('192.168.1.5');
+  });
+
+  it('shows the Docker host as text in place of the agent address with docker_host (AGT-014)', async () => {
+    setLanguage('en');
+    await renderPage(TopologyPage, data('rcon_admin', ['docker_host']));
+    const main = screen.getByRole('region', { name: 'main' });
+    expect(main.textContent).toContain('<b>nas</b> (192.168.1.5)');
+    expect(main.textContent).not.toContain('10.0.0.5');
+    expect(main.querySelector('b')).toBeNull();
+    // host-2 has no Docker host: nothing in its place.
+    const rest = screen.getByRole('region', { name: 'Other servers' });
+    expect(rest.textContent).toContain('host-2');
+  });
+
+  it('gives the server admin no Docker host, also with docker_host (AGT-014)', async () => {
+    setLanguage('en');
+    await renderPage(TopologyPage, data('server_admin', ['docker_host']));
+    const page = document.body.textContent ?? '';
+    expect(page).not.toContain('nas');
+    expect(page).not.toContain('192.168.1.5');
   });
 
   it('has no text outside the language files (NFR-007)', async () => {

@@ -1,0 +1,79 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import type { Page } from '@playwright/test';
+import { expect, login, secret, test, type StackState } from './fixtures';
+
+// Docker host of the agents (AGT-014) behind the flag docker_host: the fake
+// daemon of host-1 names its host "<b>nas</b>-1" with a direction override
+// and the address 192.168.1.5 (internal/e2e/stack); the agent host-legacy
+// sends none, as an agent of 1.1.
+
+const hostName = '<b>nas</b>-1';
+const hostIP = '192.168.1.5';
+
+async function as(page: Page, state: StackState, user: string) {
+  await login(page, user, secret(state, user));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+}
+
+// agentNode is the line of an agent in the topology.
+const agentNode = (page: Page, agent: string) =>
+  page
+    .getByRole('region', { name: 'minecraft' })
+    .getByRole('listitem')
+    .filter({ hasText: agent })
+    .first();
+
+test.describe('docker host on', () => {
+  test.use({ flags: ['docker_host'] });
+
+  test('the RCON admin sees the Docker host as text in topology and agent list', async ({
+    page,
+    state,
+  }) => {
+    await as(page, state, 'admin');
+    const r = await page.request.get('api/v1/agents');
+    expect(r.status()).toBe(200);
+    const { items } = (await r.json()) as {
+      items: { name: string; remote?: string; docker_host?: { name?: string; ip?: string } }[];
+    };
+    const host1 = items.find((a) => a.name === 'host-1');
+    expect(host1?.docker_host).toEqual({ name: hostName, ip: hostIP });
+    expect(items.find((a) => a.name === 'host-legacy')?.docker_host).toBeUndefined();
+
+    await page.goto('topology');
+    const node = agentNode(page, 'host-1');
+    await expect(node).toContainText(`${hostName} (${hostIP})`);
+    // Markup stays text (SEC-006); the agent's own address is gone.
+    await expect(node.locator('b')).toHaveCount(0);
+    if (host1?.remote) await expect(node).not.toContainText(host1.remote);
+
+    await page.goto('admin/agents');
+    const row = page.getByRole('row').filter({ hasText: 'host-1' });
+    await expect(page.getByRole('columnheader', { name: 'Docker host' })).toBeVisible();
+    await expect(row).toContainText(`${hostName} (${hostIP})`);
+    await expect(row.locator('b')).toHaveCount(0);
+  });
+
+  test('a server admin gets neither name nor address', async ({ page, state }) => {
+    await as(page, state, 'sadmin');
+    expect((await page.request.get('api/v1/agents')).status()).toBe(403);
+    await page.goto('topology');
+    await expect(page.getByRole('region', { name: 'minecraft' })).toBeVisible();
+    const html = await page.content();
+    expect(html).not.toContain(hostIP);
+    expect(html).not.toContain('nas</b>');
+  });
+});
+
+test('docker host off: the agent data are as in 1.1', async ({ page, state }) => {
+  await as(page, state, 'admin');
+  const r = await page.request.get('api/v1/agents');
+  const { items } = (await r.json()) as { items: { docker_host?: unknown }[] };
+  expect(items.every((a) => a.docker_host === undefined)).toBe(true);
+  await page.goto('topology');
+  await expect(agentNode(page, 'host-1')).not.toContainText(hostIP);
+  await page.goto('admin/agents');
+  await expect(page.getByRole('row').filter({ hasText: 'host-1' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Docker host' })).toHaveCount(0);
+});
