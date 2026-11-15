@@ -2,12 +2,17 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests", "docker:pinDigests"],
   "automerge": false,
+  "timezone": "Europe/Vienna",
+  "schedule": ["* 0-5 1 * *"],
+  "prConcurrentLimit": 3,
+  "osvVulnerabilityAlerts": true,
   "rebaseWhen": "behind-base-branch",
   "dependencyDashboard": true,
   "minimumReleaseAge": "3 days",
   "internalChecksFilter": "strict",
   "vulnerabilityAlerts": {
-    "minimumReleaseAge": null
+    "minimumReleaseAge": null,
+    "schedule": ["at any time"]
   },
   "labels": ["dependencies"],
   "postUpdateOptions": ["gomodTidy"],
@@ -26,7 +31,8 @@
       "description": "Patch releases of the Go toolchain (go.mod go and toolchain, the golang build image) carry security fixes: no waiting time",
       "matchDepNames": ["go", "golang"],
       "matchUpdateTypes": ["patch"],
-      "minimumReleaseAge": null
+      "minimumReleaseAge": null,
+      "schedule": ["at any time"]
     },
     {
       "description": "Web UI dependencies",
