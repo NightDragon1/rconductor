@@ -101,6 +101,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/about": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Name, version, license and repository of the panel (UI-024, D-080).
+         * @description Needs no session. Without one the answer holds name, version, license and repository only; with a session also commit and build date; for the RCON admin also the paired agents with their version. A session that must change its password or set up the second factor first gets the answer without a session. The agent version is foreign data (SEC-006): at most 64 characters, otherwise unknown, like a missing version (agents 1.0 and 1.1).
+         */
+        get: operations["getAbout"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/session": {
         parameters: {
             query?: never;
@@ -567,7 +587,7 @@ export interface paths {
         };
         /**
          * Prefix of messages to the players for the servers of a group (CMD-020, D-082); RCON admin, or a server admin who has every server of the group in scope.
-         * @description Behind the feature flag say_sender (404 while off). A server admin without every server of the group in scope gets 403; other roles get 403; a group the caller cannot see is 404.
+         * @description Behind the feature flag say_sender (404 while off). A server admin sees the group only with every server of it in scope, otherwise 404 as outside the scope (D-051); moderators and supporters get 403; an unknown group is 404.
          */
         get: operations["getServerGroupSayPrefix"];
         /**
@@ -1521,6 +1541,29 @@ export interface components {
             /** @enum {string} */
             render: "minecraft-tellraw";
         };
+        About: {
+            /** @description RCONductor. */
+            name: string;
+            version: string;
+            /** @description SPDX expression, AGPL-3.0-or-later. */
+            license: string;
+            repo_url: string;
+            /** @description Git commit of the build, or unknown; only with a session. */
+            commit?: string;
+            /** @description Build time in UTC (RFC 3339), or unknown; only with a session. */
+            build_date?: string;
+            /** @description Paired agents (status active) with their version; only for the RCON admin with an unrestricted session. */
+            agents?: components["schemas"]["AboutAgent"][];
+        };
+        AboutAgent: {
+            /** Format: uuid */
+            id: string;
+            /** @description Foreign data (SEC-006). */
+            name: string;
+            /** @description Version the agent reported in its hello, at most 64 characters; unknown when missing or longer (D-080). Foreign data (SEC-006). */
+            version: string;
+            connected: boolean;
+        };
         ServerGroupInput: {
             name?: string;
             server_ids?: string[];
@@ -2233,6 +2276,26 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    getAbout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description About the panel. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["About"];
+                };
+            };
         };
     };
     getSession: {

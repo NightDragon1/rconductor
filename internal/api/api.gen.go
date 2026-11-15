@@ -631,6 +631,38 @@ func (e ListAuditParamsKind) Valid() bool {
 	}
 }
 
+// About defines model for About.
+type About struct {
+	// Agents Paired agents (status active) with their version; only for the RCON admin with an unrestricted session.
+	Agents *[]AboutAgent `json:"agents,omitempty"`
+
+	// BuildDate Build time in UTC (RFC 3339), or unknown; only with a session.
+	BuildDate *string `json:"build_date,omitempty"`
+
+	// Commit Git commit of the build, or unknown; only with a session.
+	Commit *string `json:"commit,omitempty"`
+
+	// License SPDX expression, AGPL-3.0-or-later.
+	License string `json:"license"`
+
+	// Name RCONductor.
+	Name    string `json:"name"`
+	RepoUrl string `json:"repo_url"`
+	Version string `json:"version"`
+}
+
+// AboutAgent defines model for AboutAgent.
+type AboutAgent struct {
+	Connected bool               `json:"connected"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Name Foreign data (SEC-006).
+	Name string `json:"name"`
+
+	// Version Version the agent reported in its hello, at most 64 characters; unknown when missing or longer (D-080). Foreign data (SEC-006).
+	Version string `json:"version"`
+}
+
 // Agent defines model for Agent.
 type Agent struct {
 	Capabilities []string  `json:"capabilities"`
@@ -1908,6 +1940,9 @@ type UpdateAssignmentsJSONRequestBody = AssignmentsUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetAbout Name, version, license and repository of the panel (UI-024, D-080).
+	// (GET /about)
+	GetAbout(w http.ResponseWriter, r *http.Request)
 	// ListAgents Paired, pending and revoked agents (Design 1.2); RCON admin only.
 	// (GET /agents)
 	ListAgents(w http.ResponseWriter, r *http.Request)
@@ -2164,6 +2199,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetAbout operation middleware
+func (siw *ServerInterfaceWrapper) GetAbout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAbout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListAgents operation middleware
 func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
@@ -4291,6 +4340,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/recovery", wrapper.RequestRecovery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/recovery/redeem", wrapper.RedeemRecovery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.Logout)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/about", wrapper.GetAbout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/session", wrapper.GetSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/second-factor", wrapper.GetSecondFactor)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/second-factor/setup", wrapper.SetupSecondFactor)
@@ -4403,6 +4453,27 @@ type RateLimitedApplicationProblemPlusJSONResponse struct {
 }
 
 type UnauthenticatedApplicationProblemPlusJSONResponse Problem
+
+type GetAboutRequestObject struct {
+}
+
+type GetAboutResponseObject interface {
+	VisitGetAboutResponse(w http.ResponseWriter) error
+}
+
+type GetAbout200JSONResponse About
+
+func (response GetAbout200JSONResponse) VisitGetAboutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListAgentsRequestObject struct {
 }
@@ -10686,6 +10757,9 @@ func (response OpenWebSocket403ApplicationProblemPlusJSONResponse) VisitOpenWebS
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// GetAbout Name, version, license and repository of the panel (UI-024, D-080).
+	// (GET /about)
+	GetAbout(ctx context.Context, request GetAboutRequestObject) (GetAboutResponseObject, error)
 	// ListAgents Paired, pending and revoked agents (Design 1.2); RCON admin only.
 	// (GET /agents)
 	ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error)
@@ -10971,6 +11045,30 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetAbout operation middleware
+func (sh *strictHandler) GetAbout(w http.ResponseWriter, r *http.Request) {
+	var request GetAboutRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAbout(ctx, request.(GetAboutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAbout")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAboutResponseObject); ok {
+		if err := validResponse.VisitGetAboutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListAgents operation middleware

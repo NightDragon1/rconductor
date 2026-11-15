@@ -17,6 +17,8 @@ var built = fstest.MapFS{
 	"assets/app-1.js":  {Data: []byte("console.log(1)")},
 	"assets/app-1.css": {Data: []byte("body{}")},
 	".gitkeep":         {Data: nil},
+
+	"third-party-licenses.txt": {Data: []byte("== react 19 (MIT)\n")},
 }
 
 func get(t *testing.T, h http.Handler, method, target string) *httptest.ResponseRecorder {
@@ -50,6 +52,18 @@ func TestAssets(t *testing.T) {
 	}
 	if cc := rec.Header().Get("Cache-Control"); cc != "public, max-age=31536000, immutable" {
 		t.Errorf("Cache-Control = %q", cc)
+	}
+}
+
+// TestThirdPartyRevalidated: the license list keeps its name from build to
+// build, so it is revalidated instead of cached for a year (NFR-021).
+func TestThirdPartyRevalidated(t *testing.T) {
+	rec := get(t, New(built), http.MethodGet, "/third-party-licenses.txt")
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Body.String(), "== react") {
+		t.Fatalf("license list: %d %q", rec.Code, rec.Body.String())
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("Cache-Control = %q, want no-cache", cc)
 	}
 }
 

@@ -377,6 +377,8 @@ func matrix() []matrixOp {
 			return request{path: "/auth/login", body: map[string]string{"pseudonym": rSI, "password": matrixPassword}}
 		}, true},
 		{"GET", "/auth/session", "OOOOOOUO", at("/auth/session"), false},
+		// Public (UI-024, D-080); also for the restricted sessions, like an anonymous call.
+		{"GET", "/about", "OOOOOOOO", at("/about"), false},
 		// Second factor (AUTH-008): the second step without a waiting
 		// login and a made-up link are refused for everyone; the recovery
 		// request answers alike.
@@ -1229,9 +1231,9 @@ func TestIfMatchRequiredFromSpec(t *testing.T) {
 	var versioned []string
 	paths := map[string]bool{}
 	// Writes behind a feature flag, off by default, answer 404 for every
-	// role (NFR-019): no role may write them here, the rest holds. Their
-	// package tests the order of D-051 with the flag on; the exception ends
-	// when the flags go before the release.
+	// role (NFR-019): no role may write them here, the rest holds. With the
+	// flag on, the order of D-051 needs a test in the backend of the
+	// feature; the exception ends when the flags go before the release.
 	flagged := map[string]bool{}
 	for path, ops := range doc.Paths {
 		for method, raw := range ops {
