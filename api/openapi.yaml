@@ -1041,6 +1041,70 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /server-groups/{id}/say-prefix:
+    parameters:
+      - $ref: "#/components/parameters/ServerGroupID"
+    get:
+      operationId: getServerGroupSayPrefix
+      summary: >-
+        Prefix of messages to the players for the servers of a group
+        (CMD-020, D-082); RCON admin, or a server admin who has every server
+        of the group in scope.
+      description: >-
+        Behind the feature flag say_sender (404 while off). A server admin
+        without every server of the group in scope gets 403; other roles
+        get 403; a group the caller cannot see is 404.
+      tags: [servers]
+      responses:
+        "200":
+          description: The prefix; an empty string when none is set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SayPrefix"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: setServerGroupSayPrefix
+      summary: >-
+        Set or clear the prefix of messages to the players for a group
+        (CMD-020, D-082); same roles as reading; in the audit.
+      description: >-
+        Behind the feature flag say_sender (404 while off). At most 16
+        printable characters without §, otherwise 400; an empty string
+        removes the prefix. Requires If-Match with the version read before.
+      tags: [servers]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SayPrefixInput"
+      responses:
+        "200":
+          description: The stored prefix.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SayPrefix"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
   /agents:
     get:
       operationId: listAgents
@@ -2827,6 +2891,43 @@ components:
           items:
             $ref: "#/components/schemas/ServerGroup"
 
+    SayPrefix:
+      type: object
+      required: [say_prefix, version]
+      properties:
+        say_prefix:
+          type: string
+          description: Prefix before the sender, e.g. "[R]"; empty when none is set.
+        version:
+          type: string
+          description: Version for If-Match.
+
+    SayPrefixInput:
+      type: object
+      required: [say_prefix]
+      properties:
+        say_prefix:
+          type: string
+          maxLength: 16
+          description: At most 16 printable characters without §; empty removes the prefix.
+
+    MessageCommand:
+      type: object
+      required: [path, render]
+      description: >-
+        Messages to the players with the sender (CMD-020, D-081), from the
+        profile field message_command; for a server the topmost profile that
+        sets it (D-074). A command on this path is checked as typed and then
+        sent in the fixed form of render, with prefix, sender and text
+        escaped; while the flag say_sender is off it is sent unchanged.
+      properties:
+        path:
+          type: string
+          description: Command path that is rewritten, e.g. say.
+        render:
+          type: string
+          enum: [minecraft-tellraw]
+
     ServerGroupInput:
       type: object
       properties:
@@ -3005,6 +3106,8 @@ components:
             $ref: "#/components/schemas/GamePort"
         formatting:
           $ref: "#/components/schemas/Formatting"
+        message_command:
+          $ref: "#/components/schemas/MessageCommand"
         catalog:
           type: array
           items:
@@ -3051,6 +3154,8 @@ components:
             $ref: "#/components/schemas/GamePort"
         formatting:
           $ref: "#/components/schemas/Formatting"
+        message_command:
+          $ref: "#/components/schemas/MessageCommand"
         catalog:
           type: array
           items:

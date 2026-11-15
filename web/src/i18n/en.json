@@ -984,6 +984,10 @@
       "features_color_codes": {
         "label": "Color codes",
         "help": "Shows the formatting codes of game server answers (for example Minecraft § codes) as a fixed set of styles instead of removing them."
+      },
+      "features_say_sender": {
+        "label": "Messages with sender",
+        "help": "Messages to the players (for example Minecraft say) show the name of the signed-in user and a prefix per server group instead of [Rcon]."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."

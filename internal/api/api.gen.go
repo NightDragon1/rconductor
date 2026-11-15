@@ -226,6 +226,21 @@ func (e HistoryEntryResult) Valid() bool {
 	}
 }
 
+// Defines values for MessageCommandRender.
+const (
+	MinecraftTellraw MessageCommandRender = "minecraft-tellraw"
+)
+
+// Valid indicates whether the value is a known member of the MessageCommandRender enum.
+func (e MessageCommandRender) Valid() bool {
+	switch e {
+	case MinecraftTellraw:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MultiCommandItemResult.
 const (
 	MultiCommandItemResultDenied   MultiCommandItemResult = "denied"
@@ -895,6 +910,9 @@ type EffectiveProfile struct {
 	GamePorts *[]GamePort `json:"game_ports,omitempty"`
 	MaxLength int         `json:"max_length"`
 
+	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped; while the flag say_sender is off it is sent unchanged.
+	MessageCommand *MessageCommand `json:"message_command,omitempty"`
+
 	// ProfileIds Profiles of the server, top first (SRV-008).
 	ProfileIds  []openapi_types.UUID `json:"profile_ids"`
 	Protocol    string               `json:"protocol"`
@@ -953,7 +971,10 @@ type GameProfile struct {
 	LastError   *string    `json:"last_error,omitempty"`
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
 	MaxLength   int        `json:"max_length"`
-	Name        string     `json:"name"`
+
+	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped; while the flag say_sender is off it is sent unchanged.
+	MessageCommand *MessageCommand `json:"message_command,omitempty"`
+	Name           string          `json:"name"`
 
 	// Overridden A custom profile replaces the shipped one.
 	Overridden  bool     `json:"overridden"`
@@ -1063,6 +1084,16 @@ type LoginRequest struct {
 	Password  string `json:"password"`
 	Pseudonym string `json:"pseudonym"`
 }
+
+// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped; while the flag say_sender is off it is sent unchanged.
+type MessageCommand struct {
+	// Path Command path that is rewritten, e.g. say.
+	Path   string               `json:"path"`
+	Render MessageCommandRender `json:"render"`
+}
+
+// MessageCommandRender defines model for MessageCommand.Render.
+type MessageCommandRender string
 
 // MultiCommandInput defines model for MultiCommandInput.
 type MultiCommandInput struct {
@@ -1273,6 +1304,21 @@ type SMTPTestResult struct {
 
 // SMTPTestResultCategory Why the mail did not go out; nothing more is told.
 type SMTPTestResultCategory string
+
+// SayPrefix defines model for SayPrefix.
+type SayPrefix struct {
+	// SayPrefix Prefix before the sender, e.g. "[R]"; empty when none is set.
+	SayPrefix string `json:"say_prefix"`
+
+	// Version Version for If-Match.
+	Version string `json:"version"`
+}
+
+// SayPrefixInput defines model for SayPrefixInput.
+type SayPrefixInput struct {
+	// SayPrefix At most 16 printable characters without §; empty removes the prefix.
+	SayPrefix string `json:"say_prefix"`
+}
 
 // SecondFactor defines model for SecondFactor.
 type SecondFactor struct {
@@ -1705,6 +1751,12 @@ type UpdateServerGroupParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
+// SetServerGroupSayPrefixParams defines parameters for SetServerGroupSayPrefix.
+type SetServerGroupSayPrefixParams struct {
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
 // UpdateServerParams defines parameters for UpdateServer.
 type UpdateServerParams struct {
 	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
@@ -1808,6 +1860,9 @@ type CreateServerGroupJSONRequestBody = ServerGroupInput
 
 // UpdateServerGroupJSONRequestBody defines body for UpdateServerGroup for application/json ContentType.
 type UpdateServerGroupJSONRequestBody = ServerGroupInput
+
+// SetServerGroupSayPrefixJSONRequestBody defines body for SetServerGroupSayPrefix for application/json ContentType.
+type SetServerGroupSayPrefixJSONRequestBody = SayPrefixInput
 
 // CreateServerJSONRequestBody defines body for CreateServer for application/json ContentType.
 type CreateServerJSONRequestBody = ServerInput
@@ -1976,6 +2031,12 @@ type ServerInterface interface {
 	// UpdateServerGroup Rename a group or replace its servers; RCON admin only.
 	// (PATCH /server-groups/{id})
 	UpdateServerGroup(w http.ResponseWriter, r *http.Request, id ServerGroupID, params UpdateServerGroupParams)
+	// GetServerGroupSayPrefix Prefix of messages to the players for the servers of a group (CMD-020, D-082); RCON admin, or a server admin who has every server of the group in scope.
+	// (GET /server-groups/{id}/say-prefix)
+	GetServerGroupSayPrefix(w http.ResponseWriter, r *http.Request, id ServerGroupID)
+	// SetServerGroupSayPrefix Set or clear the prefix of messages to the players for a group (CMD-020, D-082); same roles as reading; in the audit.
+	// (PUT /server-groups/{id}/say-prefix)
+	SetServerGroupSayPrefix(w http.ResponseWriter, r *http.Request, id ServerGroupID, params SetServerGroupSayPrefixParams)
 	// ListServers Servers in the caller's scope (ROLE-003).
 	// (GET /servers)
 	ListServers(w http.ResponseWriter, r *http.Request)
@@ -2907,6 +2968,82 @@ func (siw *ServerInterfaceWrapper) UpdateServerGroup(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateServerGroup(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetServerGroupSayPrefix operation middleware
+func (siw *ServerInterfaceWrapper) GetServerGroupSayPrefix(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ServerGroupID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServerGroupSayPrefix(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetServerGroupSayPrefix operation middleware
+func (siw *ServerInterfaceWrapper) SetServerGroupSayPrefix(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ServerGroupID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetServerGroupSayPrefixParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetServerGroupSayPrefix(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4186,6 +4323,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/server-groups/{id}", wrapper.DeleteServerGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{id}", wrapper.GetServerGroup)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/server-groups/{id}", wrapper.UpdateServerGroup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{id}/say-prefix", wrapper.GetServerGroupSayPrefix)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/server-groups/{id}/say-prefix", wrapper.SetServerGroupSayPrefix)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/tokens", wrapper.CreateAgentToken)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{id}", wrapper.DeleteAgent)
@@ -7127,6 +7266,196 @@ type UpdateServerGroup428ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateServerGroup428ApplicationProblemPlusJSONResponse) VisitUpdateServerGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerGroupSayPrefixRequestObject struct {
+	Id ServerGroupID `json:"id"`
+}
+
+type GetServerGroupSayPrefixResponseObject interface {
+	VisitGetServerGroupSayPrefixResponse(w http.ResponseWriter) error
+}
+
+type GetServerGroupSayPrefix200JSONResponse SayPrefix
+
+func (response GetServerGroupSayPrefix200JSONResponse) VisitGetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerGroupSayPrefix401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerGroupSayPrefix401ApplicationProblemPlusJSONResponse) VisitGetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerGroupSayPrefix403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerGroupSayPrefix403ApplicationProblemPlusJSONResponse) VisitGetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServerGroupSayPrefix404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetServerGroupSayPrefix404ApplicationProblemPlusJSONResponse) VisitGetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetServerGroupSayPrefixRequestObject struct {
+	Id     ServerGroupID `json:"id"`
+	Params SetServerGroupSayPrefixParams
+	Body   *SetServerGroupSayPrefixJSONRequestBody
+}
+
+type SetServerGroupSayPrefixResponseObject interface {
+	VisitSetServerGroupSayPrefixResponse(w http.ResponseWriter) error
+}
+
+type SetServerGroupSayPrefix200JSONResponse SayPrefix
+
+func (response SetServerGroupSayPrefix200JSONResponse) VisitSetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetServerGroupSayPrefix400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SetServerGroupSayPrefix400ApplicationProblemPlusJSONResponse) VisitSetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetServerGroupSayPrefix401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response SetServerGroupSayPrefix401ApplicationProblemPlusJSONResponse) VisitSetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetServerGroupSayPrefix403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SetServerGroupSayPrefix403ApplicationProblemPlusJSONResponse) VisitSetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetServerGroupSayPrefix404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response SetServerGroupSayPrefix404ApplicationProblemPlusJSONResponse) VisitSetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetServerGroupSayPrefix409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response SetServerGroupSayPrefix409ApplicationProblemPlusJSONResponse) VisitSetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetServerGroupSayPrefix428ApplicationProblemPlusJSONResponse struct {
+	PreconditionRequiredApplicationProblemPlusJSONResponse
+}
+
+func (response SetServerGroupSayPrefix428ApplicationProblemPlusJSONResponse) VisitSetServerGroupSayPrefixResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -10480,6 +10809,12 @@ type StrictServerInterface interface {
 	// UpdateServerGroup Rename a group or replace its servers; RCON admin only.
 	// (PATCH /server-groups/{id})
 	UpdateServerGroup(ctx context.Context, request UpdateServerGroupRequestObject) (UpdateServerGroupResponseObject, error)
+	// GetServerGroupSayPrefix Prefix of messages to the players for the servers of a group (CMD-020, D-082); RCON admin, or a server admin who has every server of the group in scope.
+	// (GET /server-groups/{id}/say-prefix)
+	GetServerGroupSayPrefix(ctx context.Context, request GetServerGroupSayPrefixRequestObject) (GetServerGroupSayPrefixResponseObject, error)
+	// SetServerGroupSayPrefix Set or clear the prefix of messages to the players for a group (CMD-020, D-082); same roles as reading; in the audit.
+	// (PUT /server-groups/{id}/say-prefix)
+	SetServerGroupSayPrefix(ctx context.Context, request SetServerGroupSayPrefixRequestObject) (SetServerGroupSayPrefixResponseObject, error)
 	// ListServers Servers in the caller's scope (ROLE-003).
 	// (GET /servers)
 	ListServers(ctx context.Context, request ListServersRequestObject) (ListServersResponseObject, error)
@@ -11771,6 +12106,66 @@ func (sh *strictHandler) UpdateServerGroup(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateServerGroupResponseObject); ok {
 		if err := validResponse.VisitUpdateServerGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetServerGroupSayPrefix operation middleware
+func (sh *strictHandler) GetServerGroupSayPrefix(w http.ResponseWriter, r *http.Request, id ServerGroupID) {
+	var request GetServerGroupSayPrefixRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetServerGroupSayPrefix(ctx, request.(GetServerGroupSayPrefixRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetServerGroupSayPrefix")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetServerGroupSayPrefixResponseObject); ok {
+		if err := validResponse.VisitGetServerGroupSayPrefixResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetServerGroupSayPrefix operation middleware
+func (sh *strictHandler) SetServerGroupSayPrefix(w http.ResponseWriter, r *http.Request, id ServerGroupID, params SetServerGroupSayPrefixParams) {
+	var request SetServerGroupSayPrefixRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	var body SetServerGroupSayPrefixJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetServerGroupSayPrefix(ctx, request.(SetServerGroupSayPrefixRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetServerGroupSayPrefix")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetServerGroupSayPrefixResponseObject); ok {
+		if err := validResponse.VisitSetServerGroupSayPrefixResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

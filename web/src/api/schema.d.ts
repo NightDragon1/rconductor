@@ -556,6 +556,32 @@ export interface paths {
         patch: operations["updateServerGroup"];
         trace?: never;
     };
+    "/server-groups/{id}/say-prefix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerGroupID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Prefix of messages to the players for the servers of a group (CMD-020, D-082); RCON admin, or a server admin who has every server of the group in scope.
+         * @description Behind the feature flag say_sender (404 while off). A server admin without every server of the group in scope gets 403; other roles get 403; a group the caller cannot see is 404.
+         */
+        get: operations["getServerGroupSayPrefix"];
+        /**
+         * Set or clear the prefix of messages to the players for a group (CMD-020, D-082); same roles as reading; in the audit.
+         * @description Behind the feature flag say_sender (404 while off). At most 16 printable characters without §, otherwise 400; an empty string removes the prefix. Requires If-Match with the version read before.
+         */
+        put: operations["setServerGroupSayPrefix"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents": {
         parameters: {
             query?: never;
@@ -1478,6 +1504,23 @@ export interface components {
         ServerGroupList: {
             items: components["schemas"]["ServerGroup"][];
         };
+        SayPrefix: {
+            /** @description Prefix before the sender, e.g. "[R]"; empty when none is set. */
+            say_prefix: string;
+            /** @description Version for If-Match. */
+            version: string;
+        };
+        SayPrefixInput: {
+            /** @description At most 16 printable characters without §; empty removes the prefix. */
+            say_prefix: string;
+        };
+        /** @description Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped; while the flag say_sender is off it is sent unchanged. */
+        MessageCommand: {
+            /** @description Command path that is rewritten, e.g. say. */
+            path: string;
+            /** @enum {string} */
+            render: "minecraft-tellraw";
+        };
         ServerGroupInput: {
             name?: string;
             server_ids?: string[];
@@ -1554,6 +1597,7 @@ export interface components {
             /** @description Game ports of the profile; only for the RCON admin and server admins (D-056), missing for other roles. */
             game_ports?: components["schemas"]["GamePort"][];
             formatting?: components["schemas"]["Formatting"];
+            message_command?: components["schemas"]["MessageCommand"];
             catalog: components["schemas"]["CatalogCommand"][];
             /** @description Reason of the last rejected file; RCON admin only. */
             last_error?: string;
@@ -1572,6 +1616,7 @@ export interface components {
             /** @description Effective game ports; only for the RCON admin and the server admin of this server (D-056), missing for other roles. */
             game_ports?: components["schemas"]["GamePort"][];
             formatting?: components["schemas"]["Formatting"];
+            message_command?: components["schemas"]["MessageCommand"];
             catalog: components["schemas"]["EffectiveCommand"][];
         };
         /**
@@ -3122,6 +3167,66 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
+            428: components["responses"]["PreconditionRequired"];
+        };
+    };
+    getServerGroupSayPrefix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServerGroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The prefix; an empty string when none is set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SayPrefix"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setServerGroupSayPrefix: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: components["parameters"]["ServerGroupID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SayPrefixInput"];
+            };
+        };
+        responses: {
+            /** @description The stored prefix. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SayPrefix"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             428: components["responses"]["PreconditionRequired"];
         };
     };

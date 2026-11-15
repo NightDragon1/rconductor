@@ -32,6 +32,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 )
 
@@ -452,6 +453,13 @@ func matrix() []matrixOp {
 		}, false},
 		{"GET", "/server-groups/{id}", "OONFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/server-groups/" + f.serverGroup}
+		}, false},
+		// Behind the flag say_sender, off by default: 404 for every role.
+		{"GET", "/server-groups/{id}/say-prefix", "NNNNNNUP", func(f *rightsFixture, _ string) request {
+			return request{path: "/server-groups/" + f.serverGroup + "/say-prefix"}
+		}, false},
+		{"PUT", "/server-groups/{id}/say-prefix", "NNNNNNUP", func(f *rightsFixture, _ string) request {
+			return request{path: "/server-groups/" + f.serverGroup + "/say-prefix", body: map[string]any{"say_prefix": "[R]"}}
 		}, false},
 		{"PATCH", "/server-groups/{id}", "OFFFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/server-groups/" + f.serverGroup, body: map[string]any{"name": "group-main"}}
@@ -1220,6 +1228,11 @@ func TestIfMatchRequiredFromSpec(t *testing.T) {
 	const ref = "#/components/parameters/IfMatch"
 	var versioned []string
 	paths := map[string]bool{}
+	// Writes behind a feature flag, off by default, answer 404 for every
+	// role (NFR-019): no role may write them here, the rest holds. Their
+	// package tests the order of D-051 with the flag on; the exception ends
+	// when the flags go before the release.
+	flagged := map[string]bool{}
 	for path, ops := range doc.Paths {
 		for method, raw := range ops {
 			op, _ := raw.(map[string]any)
@@ -1228,6 +1241,11 @@ func TestIfMatchRequiredFromSpec(t *testing.T) {
 				if m, _ := p.(map[string]any); m["$ref"] == ref {
 					versioned = append(versioned, strings.ToUpper(method)+" "+path)
 					paths[path] = true
+					if id, _ := op["operationId"].(string); id != "" {
+						if _, ok := features.Default().ForOperation(strings.ToUpper(id[:1]) + id[1:]); ok {
+							flagged[strings.ToUpper(method)+" "+path] = true
+						}
+					}
 				}
 			}
 		}
@@ -1292,7 +1310,7 @@ func TestIfMatchRequiredFromSpec(t *testing.T) {
 				t.Errorf("%s as %s without If-Match = %d %s, want %c of the rights matrix", name, role, st, reason, want)
 			}
 		}
-		if allowed == 0 {
+		if allowed == 0 && !flagged[name] {
 			t.Errorf("%s: no role may write it in the rights matrix", name)
 		}
 	}
