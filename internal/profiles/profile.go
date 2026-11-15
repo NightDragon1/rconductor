@@ -90,7 +90,10 @@ type Profile struct {
 	Stop       *Stop       `yaml:"stop" json:"stop,omitempty"`
 	Version    *Version    `yaml:"version" json:"version,omitempty"`
 	Formatting string      `yaml:"formatting" json:"formatting,omitempty"`
-	Catalog    []Command   `yaml:"catalog" json:"-"`
+	// MessageCommand names the command whose text goes to the players with
+	// the sender and the prefix of the server group (CMD-020, D-081).
+	MessageCommand *MessageCommand `yaml:"message_command" json:"message_command,omitempty"`
+	Catalog        []Command       `yaml:"catalog" json:"-"`
 	// ResearchedVersion, Sources and Status describe where the profile
 	// comes from (D-072): the game version the commands were researched
 	// for, the sources, and whether a run with a real server confirmed it.
@@ -107,18 +110,19 @@ type Profile struct {
 
 // Fields a profile can set; Effective merges them one by one (D-074).
 const (
-	FieldCaseSensitive = "syntax.case_sensitive"
-	FieldStripPrefix   = "syntax.strip_prefix"
-	FieldMaxLength     = "syntax.max_length"
-	FieldPlayerPattern = "syntax.player_pattern"
-	FieldSeparators    = "syntax.separators"
-	FieldGamePorts     = "ports.game"
-	FieldSteamConnect  = "ports.steam_connect"
-	FieldPlayers       = "players"
-	FieldStop          = "stop"
-	FieldVersion       = "version"
-	FieldFormatting    = "formatting"
-	FieldEndMarker     = "source_rcon.end_marker"
+	FieldCaseSensitive  = "syntax.case_sensitive"
+	FieldStripPrefix    = "syntax.strip_prefix"
+	FieldMaxLength      = "syntax.max_length"
+	FieldPlayerPattern  = "syntax.player_pattern"
+	FieldSeparators     = "syntax.separators"
+	FieldGamePorts      = "ports.game"
+	FieldSteamConnect   = "ports.steam_connect"
+	FieldPlayers        = "players"
+	FieldStop           = "stop"
+	FieldVersion        = "version"
+	FieldFormatting     = "formatting"
+	FieldEndMarker      = "source_rcon.end_marker"
+	FieldMessageCommand = "message_command"
 )
 
 // mergedFields are the fields Effective merges one by one (D-074); each is
@@ -126,7 +130,7 @@ const (
 var mergedFields = []string{
 	FieldCaseSensitive, FieldStripPrefix, FieldMaxLength, FieldPlayerPattern, FieldSeparators,
 	FieldGamePorts, FieldSteamConnect, FieldPlayers, FieldStop, FieldVersion, FieldFormatting,
-	FieldEndMarker,
+	FieldEndMarker, FieldMessageCommand,
 }
 
 // setFields lists the fields the file writes itself, by the keys in the
@@ -452,6 +456,15 @@ func (p *Profile) check() []string {
 	if p.Formatting != "" && !slices.Contains(Formattings, p.Formatting) {
 		bad("formatting must be one of %s", strings.Join(Formattings, ", "))
 	}
+	if m := p.MessageCommand; m != nil {
+		path := NormalizePath(m.Path)
+		if path == "" || len(m.Path) > maxMessagePath || len(strings.Fields(path)) != 1 || hasControl(m.Path) {
+			bad("message_command.path must be one command word, at most %d characters", maxMessagePath)
+		}
+		if !slices.Contains(Renders, m.Render) {
+			bad("message_command.render must be one of %s", strings.Join(Renders, ", "))
+		}
+	}
 	if p.Protocol.DefaultPort < 1 || p.Protocol.DefaultPort > 65535 {
 		bad("protocol.default_port is required, 1 to 65535")
 	}
@@ -560,3 +573,20 @@ func hasControl(s string) bool { return strings.ContainsFunc(s, unicode.IsContro
 // Formattings are the known values of the field formatting (CMD-017): how
 // the console shows the formatting codes of answers.
 var Formattings = []string{"minecraft"}
+
+// MessageCommand is the command whose text the panel sends to the players
+// with sender and prefix, in the fixed form of Render (CMD-020, D-081).
+type MessageCommand struct {
+	Path   string `yaml:"path" json:"path"`
+	Render string `yaml:"render" json:"render"`
+}
+
+// RenderMinecraftTellraw is the only render so far (D-083).
+const RenderMinecraftTellraw = "minecraft-tellraw"
+
+// Renders are the known values of message_command.render; each has its
+// fixed form in internal/commands (D-081).
+var Renders = []string{RenderMinecraftTellraw}
+
+// maxMessagePath bounds message_command.path.
+const maxMessagePath = 32

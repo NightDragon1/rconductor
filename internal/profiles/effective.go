@@ -62,6 +62,9 @@ func Effective(list []*Profile) *Profile {
 	if p := owner(FieldEndMarker); p != nil {
 		out.SourceRCON = p.SourceRCON
 	}
+	if p := owner(FieldMessageCommand); p != nil {
+		out.MessageCommand = p.MessageCommand
+	}
 	// Separators, like wrappers, hold from every profile; no profile lifts
 	// one (D-076).
 	sepSeen := map[string]bool{}
@@ -132,6 +135,8 @@ func (p *Profile) legacySets(f string) bool {
 		return p.Formatting != ""
 	case FieldEndMarker:
 		return p.SourceRCON != nil && p.SourceRCON.EndMarker != ""
+	case FieldMessageCommand:
+		return p.MessageCommand != nil
 	}
 	return false
 }
