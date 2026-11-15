@@ -26,6 +26,23 @@
   --group-4: #38bdf8;
   --group-5: #f472b6;
   --group-6: #a3e635;
+  /* Minecraft colors of answers (CMD-017), at least 4.5:1 on every surface. */
+  --mc-0: #8b93a1;
+  --mc-1: #818cf8;
+  --mc-2: #4ade80;
+  --mc-3: #22d3ee;
+  --mc-4: #f87171;
+  --mc-5: #e879f9;
+  --mc-6: #fbbf24;
+  --mc-7: #d1d5db;
+  --mc-8: #9ca3af;
+  --mc-9: #a5b4fc;
+  --mc-a: #86efac;
+  --mc-b: #67e8f9;
+  --mc-c: #fca5a5;
+  --mc-d: #f0abfc;
+  --mc-e: #fde047;
+  --mc-f: #f9fafb;
   color-scheme: dark;
 }
 
@@ -50,6 +67,23 @@
   --group-4: #0369a1;
   --group-5: #be185d;
   --group-6: #4d7c0f;
+  /* Minecraft colors, light design: at least 4.5:1 on every surface. */
+  --mc-0: #111827;
+  --mc-1: #1d4ed8;
+  --mc-2: #166534;
+  --mc-3: #0e7490;
+  --mc-4: #b91c1c;
+  --mc-5: #86198f;
+  --mc-6: #9a4a07;
+  --mc-7: #525a66;
+  --mc-8: #4b5563;
+  --mc-9: #4338ca;
+  --mc-a: #3f6212;
+  --mc-b: #0f766e;
+  --mc-c: #be123c;
+  --mc-d: #a21caf;
+  --mc-e: #854d0e;
+  --mc-f: #374151;
   color-scheme: light;
 }
 
@@ -92,6 +126,22 @@
   --color-group-4: var(--group-4);
   --color-group-5: var(--group-5);
   --color-group-6: var(--group-6);
+  --color-mc-0: var(--mc-0);
+  --color-mc-1: var(--mc-1);
+  --color-mc-2: var(--mc-2);
+  --color-mc-3: var(--mc-3);
+  --color-mc-4: var(--mc-4);
+  --color-mc-5: var(--mc-5);
+  --color-mc-6: var(--mc-6);
+  --color-mc-7: var(--mc-7);
+  --color-mc-8: var(--mc-8);
+  --color-mc-9: var(--mc-9);
+  --color-mc-a: var(--mc-a);
+  --color-mc-b: var(--mc-b);
+  --color-mc-c: var(--mc-c);
+  --color-mc-d: var(--mc-d);
+  --color-mc-e: var(--mc-e);
+  --color-mc-f: var(--mc-f);
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, monospace;
 }

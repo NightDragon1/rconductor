@@ -37,6 +37,7 @@ render:
   - internal/foreign/**
   - web/src/components/ForeignText.tsx
   - web/src/lib/foreign.ts
+  - web/src/lib/formatting.ts
 
 # redact: no secrets in logs (SEC-012)
 redact:
