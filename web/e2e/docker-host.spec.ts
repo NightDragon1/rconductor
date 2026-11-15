@@ -48,6 +48,12 @@ test.describe('docker host on', () => {
     await expect(node.locator('b')).toHaveCount(0);
     if (host1?.remote) await expect(node).not.toContainText(host1.remote);
 
+    // The server page names the host of its agent (AGT-014: each server with agent).
+    await page.goto(`servers/${state.servers.survival}/overview`);
+    const head = page.getByRole('region', { name: 'survival', exact: true });
+    await expect(head).toContainText(`Docker host ${hostName} (${hostIP})`);
+    await expect(head.locator('b')).toHaveCount(0);
+
     await page.goto('admin/agents');
     const row = page.getByRole('row').filter({ hasText: 'host-1' });
     await expect(page.getByRole('columnheader', { name: 'Docker host' })).toBeVisible();
@@ -68,10 +74,15 @@ test.describe('docker host on', () => {
     await page.goto('topology');
     await expect(page.getByRole('link', { name: 'survival' })).toBeVisible();
     await expect(page.getByRole('main')).toContainText('Agent');
-    const html = await page.content();
+    let html = await page.content();
     expect(html).not.toContain(hostIP);
     expect(html).not.toContain('nas</b>');
     expect(html).not.toContain('Connected from');
+    await page.goto(`servers/${state.servers.survival}/overview`);
+    await expect(page.getByRole('region', { name: 'survival', exact: true })).toBeVisible();
+    html = await page.content();
+    expect(html).not.toContain(hostIP);
+    expect(html).not.toContain('Docker host');
   });
 });
 
