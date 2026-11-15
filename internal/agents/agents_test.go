@@ -135,7 +135,13 @@ func (f *fixture) hello(a *agent, pinned string, h agentproto.Hello) agentproto.
 	}
 	f.t.Cleanup(func() { _ = c.CloseNow() })
 	a.conn = c
-	h.Name, h.Backend, h.Version = "host-1", "docker", buildinfo.Version
+	h.Name, h.Backend = "host-1", "docker"
+	switch h.Version {
+	case "":
+		h.Version = buildinfo.Version
+	case noVersion:
+		h.Version = ""
+	}
 	data, _ := agentproto.Encode(agentproto.TypeHello, "", h)
 	if err := c.Write(ctx, websocket.MessageText, data); err != nil {
 		f.t.Fatal(err)
@@ -453,5 +459,35 @@ func TestDockerHostBehindFlag(t *testing.T) {
 	}
 	if got, err := f.svc.Get(ctx, f.admin, w.AgentID); err != nil || got.DockerHost != nil {
 		t.Errorf("without docker host: %+v %v", got.DockerHost, err)
+	}
+}
+
+// noVersion asks fixture.hello to send a hello without a version.
+const noVersion = "<none>"
+
+// TestRefusedHelloKeepsToken covers D-080 with AGT-011: a hello with a
+// pairing token whose version is missing or 65 characters long is refused
+// for the version before the registry sees it, so the token stays valid and
+// no agent is added.
+func TestRefusedHelloKeepsToken(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	tok, err := f.svc.CreateToken(ctx, f.admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pt, _ := agentproto.ParsePairingToken(tok.Token)
+	long := buildinfo.Version + "+" + strings.Repeat("x", agentproto.MaxHelloVersion-len(buildinfo.Version))
+	for _, v := range []string{noVersion, long} {
+		if e := f.hello(newAgent(t), pt.Fingerprint, agentproto.Hello{Token: pt.Secret, Version: v}); reason(e) != agentproto.RejectVersion {
+			t.Fatalf("version %q: %+v", v, e)
+		}
+	}
+	if list, err := f.svc.List(ctx, f.admin); err != nil || len(list) != 0 {
+		t.Fatalf("agents after refused hellos = %+v %v", list, err)
+	}
+	e := f.hello(newAgent(t), pt.Fingerprint, agentproto.Hello{Token: pt.Secret})
+	if w, _ := agentproto.Payload[agentproto.Welcome](e); e.Type != agentproto.TypeWelcome || w.AgentID == "" {
+		t.Errorf("token after refused hellos: %+v", e)
 	}
 }

@@ -684,7 +684,7 @@ type Agent struct {
 	Name     string              `json:"name"`
 	PairedBy *openapi_types.UUID `json:"paired_by,omitempty"`
 
-	// Remote Source address of the last connection.
+	// Remote Source address of the agent's last connection to the agent port. While the flag docker_host is on, the interface shows it as "Connected from" when the Docker host has no address (D-084); it is never part of docker_host.
 	Remote    *string     `json:"remote,omitempty"`
 	RevokedAt *time.Time  `json:"revoked_at,omitempty"`
 	Status    AgentStatus `json:"status"`

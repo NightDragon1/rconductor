@@ -1198,7 +1198,7 @@ export interface components {
             status: "pending" | "active" | "revoked";
             version: string;
             capabilities: string[];
-            /** @description Source address of the last connection. */
+            /** @description Source address of the agent's last connection to the agent port. While the flag docker_host is on, the interface shows it as "Connected from" when the Docker host has no address (D-084); it is never part of docker_host. */
             remote?: string;
             docker_host?: components["schemas"]["DockerHost"];
             /** Format: uuid */

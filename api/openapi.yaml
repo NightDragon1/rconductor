@@ -2249,7 +2249,11 @@ components:
             type: string
         remote:
           type: string
-          description: Source address of the last connection.
+          description: >-
+            Source address of the agent's last connection to the agent port.
+            While the flag docker_host is on, the interface shows it as
+            "Connected from" when the Docker host has no address (D-084);
+            it is never part of docker_host.
         docker_host:
           $ref: "#/components/schemas/DockerHost"
         paired_by:
