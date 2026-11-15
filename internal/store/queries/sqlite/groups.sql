@@ -34,4 +34,5 @@ SELECT owner_id FROM command_lists WHERE id = ? AND deleted_at IS NULL;
 -- Grants end with their user group (ROLE-004); see DeleteServerGrants.
 DELETE FROM grants WHERE user_group_id = ? RETURNING id, user_id, server_group_id, server_id;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

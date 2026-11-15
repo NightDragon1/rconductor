@@ -76,6 +76,7 @@ Every source file starts with an SPDX line in its first lines, in the comment
 syntax of the file:
 
 ```go
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 ```
 

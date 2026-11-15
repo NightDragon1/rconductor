@@ -6,4 +6,5 @@ UPDATE smtp_settings SET host = ?, port = ?, encryption = ?, username = ?, passw
     version = version + 1, updated_at = ?
 WHERE id = 1 AND version = ?;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

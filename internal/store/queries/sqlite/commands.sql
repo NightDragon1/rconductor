@@ -26,4 +26,5 @@ WHERE a.kind = 'command' AND a.action IN ('cmd.sent', 'cmd.denied') AND a.server
 ORDER BY a.ts DESC, a.id DESC
 LIMIT sqlc.arg(lim);
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

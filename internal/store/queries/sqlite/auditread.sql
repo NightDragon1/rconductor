@@ -32,4 +32,5 @@ UPDATE settings SET value = ?, updated_at = ? WHERE key = ? AND scope_type = 'gl
 -- name: ListSupporterIDs :many
 SELECT id FROM users WHERE role = 'supporter' AND deleted_at IS NULL;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Three stages (scripts/ci-scope.sh decides):
@@ -76,6 +77,7 @@ jobs:
         with:
           persist-credentials: false
       - run: scripts/check-spdx.sh
+      - uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6.0.0
 
   fitness:
     name: Fitness functions

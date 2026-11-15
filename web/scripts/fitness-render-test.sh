@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Negative test of the render fitness function (PRJ-005): the test project
 # breaks the rule once for the script (exit 1, not a crash) and once for ESLint;

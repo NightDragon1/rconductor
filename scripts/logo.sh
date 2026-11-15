@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Makes every size and format of the project logo from the templates in
@@ -36,7 +37,9 @@ die() { echo "logo.sh: $*" >&2; exit 1; }
 # last line.
 template() {
   [ -f "$src/$1" ] || die "missing template $src/$1"
+  # REUSE-IgnoreStart
   head -n 1 "$src/$1" | grep -q '^<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->$' || die "$src/$1: first line is not the SPDX comment"
+  # REUSE-IgnoreEnd
   sed -n 2p "$src/$1" | grep -q '^<svg ' || die "$src/$1: second line does not open the svg element"
   tail -n 1 "$src/$1" | grep -q '^</svg>$' || die "$src/$1: last line does not close the svg element"
 }

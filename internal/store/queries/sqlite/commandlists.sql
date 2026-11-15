@@ -21,4 +21,5 @@ DELETE FROM command_list_entries WHERE command_list_id = ?;
 -- name: InsertCommandListEntry :exec
 INSERT INTO command_list_entries (id, command_list_id, path, passable) VALUES (?, ?, ?, ?);
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

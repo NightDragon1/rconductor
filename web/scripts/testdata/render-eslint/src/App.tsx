@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Breaks the HTML rule below a nested config that turns it off (fitness test data).
 import type { components } from './api/schema';

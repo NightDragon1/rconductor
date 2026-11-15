@@ -31,4 +31,5 @@ SELECT id, version FROM server_groups WHERE deleted_at IS NULL;
 -- name: GetSettingsVersion :one
 SELECT version FROM settings_version WHERE id = 1;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

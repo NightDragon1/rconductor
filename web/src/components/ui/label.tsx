@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2023 shadcn
 // SPDX-License-Identifier: MIT
 // Adapted from shadcn/ui (https://github.com/shadcn-ui/ui), Copyright (c) 2023
 // shadcn, MIT License; see THIRD_PARTY_NOTICES.md. Changed: RCONductor tokens.

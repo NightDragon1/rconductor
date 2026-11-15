@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { APIRequestContext } from '@playwright/test';
 import { test, expect, secret, type StackState } from './fixtures';

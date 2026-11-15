@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # want<TAB>label<TAB>command, read by guard_test.go. Labels: case IDs, FC (fail closed), ok (allowed).
 deny	C34	git push --del origin feature

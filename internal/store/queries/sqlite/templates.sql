@@ -27,4 +27,5 @@ WHERE id = ? AND server_id = ? AND deleted_at IS NULL;
 UPDATE command_templates SET deleted_at = ?, updated_at = ?
 WHERE server_id = ? AND deleted_at IS NULL;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

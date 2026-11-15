@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // The ordered profile list of a server (SRV-008, CAT-007, D-074): top
 // first; a specific profile (modpack, plugin) ranks above a generic one.

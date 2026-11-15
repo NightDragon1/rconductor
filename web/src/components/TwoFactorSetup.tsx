@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import QRCode from 'qrcode';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
