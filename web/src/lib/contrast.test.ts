@@ -66,6 +66,21 @@ describe.each([
   });
 });
 
+// CMD-017: the Minecraft colors of answers are text and reach 4.5:1 on
+// every surface in both designs.
+describe.each([
+  ['dark', tokens(dark)],
+  ['light', tokens(light)],
+])('Minecraft colors in the %s design', (_, colors) => {
+  it.each('0123456789abcdef'.split('').map((c) => `mc-${c}`))('%s reaches 4.5:1', (name) => {
+    for (const surface of surfaces) {
+      const [fg = '', bg = ''] = [colors[name], colors[surface]];
+      expect(fg, name).not.toBe('');
+      expect(contrast(fg, bg), `${name} on ${surface}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 it('measures like the WCAG formula', () => {
   expect(contrast('#000000', '#ffffff')).toBeCloseTo(21);
   expect(contrast('#767676', '#ffffff')).toBeCloseTo(4.54, 1);
