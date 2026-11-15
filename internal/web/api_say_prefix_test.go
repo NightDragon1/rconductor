@@ -6,6 +6,7 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/api"
@@ -13,15 +14,47 @@ import (
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
-// TestSayPrefixBehindFlag: GET and PUT /server-groups/{id}/say-prefix
-// (CMD-020, D-082) are 404 while the flag say_sender is off and for an
-// unknown group; only then does the handler answer.
-func TestSayPrefixBehindFlag(t *testing.T) {
+func sayFlags(t *testing.T) *features.Set {
+	t.Helper()
 	flags, err := features.New(features.Flag{Name: "say_sender", Operations: []string{"GetServerGroupSayPrefix", "SetServerGroupSayPrefix"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+	return flags
+}
+
+// sayPrefixOf reads the prefix of a group as c, with status.
+func sayPrefixOf(t *testing.T, f *apiFixture, c *http.Cookie, group string) (api.SayPrefix, int) {
+	t.Helper()
+	rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/server-groups/" + group + "/say-prefix", cookies: []*http.Cookie{c}})
+	var p api.SayPrefix
+	if rec.Code == http.StatusOK {
+		if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return p, rec.Code
+}
+
+// putSayPrefix writes body as c; ifMatch "" sends no If-Match.
+func putSayPrefix(t *testing.T, f *apiFixture, c *http.Cookie, group, body, ifMatch string) (int, string) {
+	t.Helper()
+	h := map[string]string{}
+	if ifMatch != "" {
+		h["If-Match"] = ifMatch
+	}
+	rec := f.do(t, call{method: http.MethodPut, path: "/api/v1/server-groups/" + group + "/say-prefix", cookies: []*http.Cookie{c},
+		origin: "http://panel.lan", body: body, headers: h})
+	return rec.Code, rec.Body.String()
+}
+
+// TestSayPrefixBehindFlag: GET and PUT /server-groups/{id}/say-prefix
+// (CMD-020, D-082) are 404 while the flag say_sender is off and for an
+// unknown group; with the flag on the RCON admin reads, sets and clears the
+// prefix; invalid prefixes are 400, a stale version 409, and every change
+// is in the audit.
+func TestSayPrefixBehindFlag(t *testing.T) {
+	f := newAPIFixtureFeatures(t, Proxies{}, sayFlags(t))
 	admin := f.login(t, "Boss")
 	const origin = "http://panel.lan"
 	rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/server-groups", cookies: []*http.Cookie{admin}, origin: origin,
@@ -30,48 +63,73 @@ func TestSayPrefixBehindFlag(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &g); err != nil || rec.Code != http.StatusCreated {
 		t.Fatalf("group = %d %s", rec.Code, rec.Body.String())
 	}
-	path := "/api/v1/server-groups/" + g.Id.String() + "/say-prefix"
-	get := func(c *http.Cookie, p string) int {
-		return f.do(t, call{method: http.MethodGet, path: p, cookies: []*http.Cookie{c}}).Code
+	id := g.Id.String()
+	if _, got := sayPrefixOf(t, f, admin, id); got != http.StatusNotFound {
+		t.Errorf("GET with the flag off = %d, want 404", got)
 	}
-	put := func(c *http.Cookie, p string) int {
-		return f.do(t, call{method: http.MethodPut, path: p, cookies: []*http.Cookie{c}, origin: origin,
-			body: `{"say_prefix":"[R]"}`, headers: map[string]string{"If-Match": "1"}}).Code
-	}
-	if got, got2 := get(admin, path), put(admin, path); got != http.StatusNotFound || got2 != http.StatusNotFound {
-		t.Errorf("flag off = %d, %d, want 404", got, got2)
+	if got, _ := putSayPrefix(t, f, admin, id, `{"say_prefix":"[R]"}`, "1"); got != http.StatusNotFound {
+		t.Errorf("PUT with the flag off = %d, want 404", got)
 	}
 	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
 		body: `{"features.say_sender":true}`}).Code; got != http.StatusOK {
 		t.Fatalf("switch flag on = %d", got)
 	}
-	if got := f.do(t, call{method: http.MethodGet, path: path}).Code; got != http.StatusUnauthorized {
+	if got := f.do(t, call{method: http.MethodGet, path: "/api/v1/server-groups/" + id + "/say-prefix"}).Code; got != http.StatusUnauthorized {
 		t.Errorf("without session = %d, want 401", got)
 	}
-	unknown := "/api/v1/server-groups/00000000-0000-4000-8000-000000000000/say-prefix"
-	if got, got2 := get(admin, unknown), put(admin, unknown); got != http.StatusNotFound || got2 != http.StatusNotFound {
-		t.Errorf("unknown group = %d, %d, want 404", got, got2)
+	const unknown = "00000000-0000-4000-8000-000000000000"
+	if _, got := sayPrefixOf(t, f, admin, unknown); got != http.StatusNotFound {
+		t.Errorf("GET unknown group = %d, want 404", got)
 	}
-	if got, got2 := get(admin, path), put(admin, path); got != http.StatusNotImplemented || got2 != http.StatusNotImplemented {
-		t.Errorf("flag on = %d, %d, want 501 (contract first)", got, got2)
+	if got, _ := putSayPrefix(t, f, admin, unknown, `{"say_prefix":"[R]"}`, "1"); got != http.StatusNotFound {
+		t.Errorf("PUT unknown group = %d, want 404", got)
+	}
+	p, got := sayPrefixOf(t, f, admin, id)
+	if got != http.StatusOK || p.SayPrefix != "" {
+		t.Fatalf("GET = %d %+v, want no prefix", got, p)
+	}
+	for _, bad := range []string{strings.Repeat("x", 17), "[§cR]", "a\u0001", "a\u202eb", "a\nb"} {
+		body, _ := json.Marshal(map[string]string{"say_prefix": bad})
+		if got, b := putSayPrefix(t, f, admin, id, string(body), p.Version); got != http.StatusBadRequest {
+			t.Errorf("prefix %q = %d %s, want 400", bad, got, b)
+		}
+	}
+	if got, b := putSayPrefix(t, f, admin, id, `{"say_prefix":" [R] "}`, p.Version); got != http.StatusOK || !strings.Contains(b, `"say_prefix":"[R]"`) {
+		t.Fatalf("set = %d %s", got, b)
+	}
+	if got, _ := putSayPrefix(t, f, admin, id, `{"say_prefix":"[X]"}`, p.Version); got != http.StatusConflict {
+		t.Errorf("stale version = %d, want 409", got)
+	}
+	q, _ := sayPrefixOf(t, f, admin, id)
+	if q.SayPrefix != "[R]" || q.Version == p.Version {
+		t.Errorf("after set: %+v, before %+v", q, p)
+	}
+	if got, _ := putSayPrefix(t, f, admin, id, `{"say_prefix":""}`, q.Version); got != http.StatusOK {
+		t.Errorf("clear = %d", got)
+	}
+	if r, _ := sayPrefixOf(t, f, admin, id); r.SayPrefix != "" {
+		t.Errorf("after clear: %+v", r)
+	}
+	var n int
+	if err := f.st.DB.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE action = 'server_group.say_prefix.update' AND target_id = ?`, id).Scan(&n); err != nil || n != 2 {
+		t.Errorf("audit entries = %d %v, want 2", n, err)
 	}
 }
 
 // TestSayPrefixRolesWithFlag: with the flag on, the RCON admin and a server
-// admin with every server of the group in scope reach the handler; a
-// server admin with only part of the group in scope gets 404 as outside the
-// scope; moderators get 403 (D-082, D-051).
+// admin with every server of the group in scope read and write the prefix;
+// a server admin with only part of the group in scope gets 404 as outside
+// the scope; moderators and supporters get 403 (D-082). The rights come
+// before the version: without If-Match only those who may write get 428
+// (D-051).
 func TestSayPrefixRolesWithFlag(t *testing.T) {
-	flags, err := features.New(features.Flag{Name: "say_sender", Operations: []string{"GetServerGroupSayPrefix", "SetServerGroupSayPrefix"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+	f := newAPIFixtureFeatures(t, Proxies{}, sayFlags(t))
 	var hash string
 	if err := f.st.DB.QueryRow(`SELECT password_hash FROM users WHERE id = ?`, f.userID).Scan(&hash); err != nil {
 		t.Fatal(err)
 	}
 	saID := storetest.CreateUser(t, f.st, storetest.User{Pseudonym: "SA", Role: "server_admin", PasswordHash: hash, CreatedBy: f.adminID})
+	storetest.CreateUser(t, f.st, storetest.User{Pseudonym: "Sup", Role: "supporter", PasswordHash: hash, CreatedBy: f.adminID})
 	admin := f.login(t, "Boss")
 	const origin = "http://panel.lan"
 	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
@@ -92,14 +150,8 @@ func TestSayPrefixRolesWithFlag(t *testing.T) {
 	}
 	group := func(name string, ids ...string) string {
 		t.Helper()
-		body := `{"name":"` + name + `","server_ids":[`
-		for i, id := range ids {
-			if i > 0 {
-				body += ","
-			}
-			body += `"` + id + `"`
-		}
-		rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/server-groups", cookies: []*http.Cookie{admin}, origin: origin, body: body + "]}"})
+		body, _ := json.Marshal(map[string]any{"name": name, "server_ids": ids})
+		rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/server-groups", cookies: []*http.Cookie{admin}, origin: origin, body: string(body)})
 		var g api.ServerGroup
 		if err := json.Unmarshal(rec.Body.Bytes(), &g); err != nil || rec.Code != http.StatusCreated {
 			t.Fatalf("group %s = %d %s", name, rec.Code, rec.Body.String())
@@ -113,24 +165,34 @@ func TestSayPrefixRolesWithFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.checker.Invalidate()
-	sa, mod := f.login(t, "SA"), f.login(t, "Mod")
+	sa, mod, sup := f.login(t, "SA"), f.login(t, "Mod"), f.login(t, "Sup")
 	for _, tc := range []struct {
 		who   string
 		c     *http.Cookie
 		group string
-		want  int
+		want  int // refusal, or 0 for allowed
 	}{
-		{"RCON admin", admin, mixed, http.StatusNotImplemented},
-		{"server admin, whole group in scope", sa, full, http.StatusNotImplemented},
+		{"RCON admin", admin, mixed, 0},
+		{"server admin, whole group in scope", sa, full, 0},
 		{"server admin, part of the group in scope", sa, mixed, http.StatusNotFound},
 		{"moderator", mod, full, http.StatusForbidden},
+		{"supporter", sup, full, http.StatusForbidden},
 	} {
-		path := "/api/v1/server-groups/" + tc.group + "/say-prefix"
-		get := f.do(t, call{method: http.MethodGet, path: path, cookies: []*http.Cookie{tc.c}}).Code
-		put := f.do(t, call{method: http.MethodPut, path: path, cookies: []*http.Cookie{tc.c}, origin: origin,
-			body: `{"say_prefix":"[R]"}`, headers: map[string]string{"If-Match": "1"}}).Code
-		if get != tc.want || put != tc.want {
-			t.Errorf("%s: GET %d, PUT %d, want %d", tc.who, get, put, tc.want)
+		p, get := sayPrefixOf(t, f, tc.c, tc.group)
+		noVersion, _ := putSayPrefix(t, f, tc.c, tc.group, `{"say_prefix":"[R]"}`, "")
+		version := p.Version
+		if version == "" {
+			version = "1"
+		}
+		put, _ := putSayPrefix(t, f, tc.c, tc.group, `{"say_prefix":"[R]"}`, version)
+		if tc.want == 0 {
+			if get != http.StatusOK || noVersion != http.StatusPreconditionRequired || put != http.StatusOK {
+				t.Errorf("%s: GET %d, PUT without If-Match %d, PUT %d; want 200, 428, 200", tc.who, get, noVersion, put)
+			}
+			continue
+		}
+		if get != tc.want || noVersion != tc.want || put != tc.want {
+			t.Errorf("%s: GET %d, PUT without If-Match %d, PUT %d; want %d each", tc.who, get, noVersion, put, tc.want)
 		}
 	}
 }

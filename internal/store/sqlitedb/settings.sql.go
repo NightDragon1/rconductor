@@ -9,6 +9,21 @@ import (
 	"context"
 )
 
+const deleteScopedSetting = `-- name: DeleteScopedSetting :exec
+DELETE FROM settings WHERE key = ? AND scope_type = ? AND scope_id = ?
+`
+
+type DeleteScopedSettingParams struct {
+	Key       string
+	ScopeType string
+	ScopeID   string
+}
+
+func (q *Queries) DeleteScopedSetting(ctx context.Context, arg DeleteScopedSettingParams) error {
+	_, err := q.db.ExecContext(ctx, deleteScopedSetting, arg.Key, arg.ScopeType, arg.ScopeID)
+	return err
+}
+
 const getSetting = `-- name: GetSetting :one
 SELECT value FROM settings
 WHERE key = ? AND scope_type = ? AND scope_id = ?
@@ -72,4 +87,31 @@ func (q *Queries) InsertSettingIfMissing(ctx context.Context, arg InsertSettingI
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const upsertScopedSetting = `-- name: UpsertScopedSetting :exec
+INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (key, scope_type, scope_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+`
+
+type UpsertScopedSettingParams struct {
+	ID        string
+	Key       string
+	Value     string
+	ScopeType string
+	ScopeID   string
+	UpdatedAt string
+}
+
+func (q *Queries) UpsertScopedSetting(ctx context.Context, arg UpsertScopedSettingParams) error {
+	_, err := q.db.ExecContext(ctx, upsertScopedSetting,
+		arg.ID,
+		arg.Key,
+		arg.Value,
+		arg.ScopeType,
+		arg.ScopeID,
+		arg.UpdatedAt,
+	)
+	return err
 }

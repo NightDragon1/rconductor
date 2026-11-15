@@ -587,7 +587,7 @@ export interface paths {
         };
         /**
          * Prefix of messages to the players for the servers of a group (CMD-020, D-082); RCON admin, or a server admin who has every server of the group in scope.
-         * @description Behind the feature flag say_sender (404 while off). A server admin sees the group only with every server of it in scope, otherwise 404 as outside the scope (D-051); moderators and supporters get 403; an unknown group is 404.
+         * @description Behind the feature flag say_sender (404 while off). A server admin sees the group only with every server of it in scope, otherwise 404 as outside the scope (D-051); moderators and supporters get 403, also for an unknown group; for the RCON admin and server admins an unknown group is 404.
          */
         get: operations["getServerGroupSayPrefix"];
         /**
