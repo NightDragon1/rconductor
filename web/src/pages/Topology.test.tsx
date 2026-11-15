@@ -60,7 +60,14 @@ const agents = [
     connected: true,
     docker_host: { name: '<b>nas</b>', ip: '192.168.1.5' },
   },
-  { id: 'a2', name: 'host-2', status: 'active', connected: false },
+  {
+    id: 'a2',
+    name: 'host-2',
+    remote: '10.0.0.9',
+    status: 'active',
+    connected: false,
+    docker_host: { name: 'box' },
+  },
 ];
 
 function data(role: string, features: string[] = []) {
@@ -114,9 +121,11 @@ describe('topology (UI-010)', () => {
     expect(main.textContent).toContain('<b>nas</b> (192.168.1.5)');
     expect(main.textContent).not.toContain('10.0.0.5');
     expect(main.querySelector('b')).toBeNull();
-    // host-2 has no Docker host: nothing in its place.
+    // host-2's daemon gives no address: the connection address, marked (D-084).
     const rest = screen.getByRole('region', { name: 'Other servers' });
-    expect(rest.textContent).toContain('host-2');
+    expect(rest.textContent).toContain('box');
+    expect(rest.textContent).toContain('Connected from 10.0.0.9');
+    expect(main.textContent).not.toContain('Connected from');
   });
 
   it('gives the server admin no Docker host, also with docker_host (AGT-014)', async () => {
@@ -125,6 +134,8 @@ describe('topology (UI-010)', () => {
     const page = document.body.textContent ?? '';
     expect(page).not.toContain('nas');
     expect(page).not.toContain('192.168.1.5');
+    expect(page).not.toContain('10.0.0.9');
+    expect(page).not.toContain('Connected from');
   });
 
   it('has no text outside the language files (NFR-007)', async () => {

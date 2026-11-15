@@ -53,6 +53,13 @@ test.describe('docker host on', () => {
     await expect(page.getByRole('columnheader', { name: 'Docker host' })).toBeVisible();
     await expect(row).toContainText(`${hostName} (${hostIP})`);
     await expect(row.locator('b')).toHaveCount(0);
+    await expect(row).not.toContainText('Connected from');
+    // host-legacy names no host: the address it connected from, marked (D-084).
+    const legacy = items.find((a) => a.name === 'host-legacy');
+    expect(legacy?.remote).toBeTruthy();
+    await expect(page.getByRole('row').filter({ hasText: 'host-legacy' })).toContainText(
+      `Connected from ${legacy?.remote}`,
+    );
   });
 
   test('a server admin gets neither name nor address', async ({ page, state }) => {
@@ -64,6 +71,7 @@ test.describe('docker host on', () => {
     const html = await page.content();
     expect(html).not.toContain(hostIP);
     expect(html).not.toContain('nas</b>');
+    expect(html).not.toContain('Connected from');
   });
 });
 

@@ -184,7 +184,7 @@ socket narrows the API further (see below).
 
 A socket proxy lets the agent reach only the parts of the Docker API it
 needs: listing and inspecting containers, events, logs, stats, start, stop
-and restart. This example uses
+and restart, and the daemon information for the name of the Docker host. This example uses
 [linuxserver/socket-proxy](https://github.com/linuxserver/docker-socket-proxy)
 (GPL-3.0, a separate image); the integration tests run every agent function
 through it.
@@ -199,6 +199,8 @@ services:
     environment:
       CONTAINERS: "1"      # list, inspect, logs and stats of containers
       EVENTS: "1"          # status changes
+      INFO: "1"            # name of the Docker host (shown with the flag docker_host);
+                           # /info also tells the agent the OS, kernel and daemon settings
       ALLOW_START: "1"
       ALLOW_STOP: "1"
       ALLOW_RESTARTS: "1"  # also allows kill, which the agent never calls

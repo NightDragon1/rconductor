@@ -803,6 +803,7 @@
     "version": "Version",
     "lastSeen": "Last seen",
     "dockerHost": "Docker host",
+    "connectedFrom": "Connected from",
     "none": "No agents yet.",
     "connected": "connected",
     "disconnected": "disconnected",

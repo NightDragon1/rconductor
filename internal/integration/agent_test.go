@@ -335,7 +335,7 @@ func TestAgentThroughSocketProxy(t *testing.T) {
 	proxy, err := testcontainers.Run(ctx, socketProxyImage,
 		testcontainers.WithExposedPorts("2375/tcp"),
 		testcontainers.WithEnv(map[string]string{
-			"CONTAINERS": "1", "EVENTS": "1", "ALLOW_START": "1", "ALLOW_STOP": "1", "ALLOW_RESTARTS": "1", "ALLOW_LOGS": "1", "POST": "0",
+			"CONTAINERS": "1", "EVENTS": "1", "INFO": "1", "ALLOW_START": "1", "ALLOW_STOP": "1", "ALLOW_RESTARTS": "1", "ALLOW_LOGS": "1", "POST": "0",
 		}),
 		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) {
 			hc.Binds = append(hc.Binds, "/var/run/docker.sock:/var/run/docker.sock:ro")
@@ -355,14 +355,24 @@ func TestAgentThroughSocketProxy(t *testing.T) {
 	startTicker(t, plain, map[string]string{})
 	p := newPanelSide(t, "127.0.0.1:0")
 	runAgent(t, p, endpoint)
-	exerciseAgent(t, p, p.connectedAgent(), labeled, plain, ctr)
+	agentID := p.connectedAgent()
+	exerciseAgent(t, p, agentID, labeled, plain, ctr)
 
-	// The proxy itself refuses creating containers.
 	dc, err := client.New(client.WithHost(endpoint))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = dc.Close() }()
+	// With INFO the agent names the Docker host as the daemon does (AGT-014).
+	info, err := dc.Info(ctx, client.InfoOptions{})
+	if err != nil {
+		t.Fatalf("info through the proxy: %v", err)
+	}
+	if d, ok := p.hub.DockerHost(agentID); !ok || d.Name == "" || d.Name != info.Info.Name {
+		t.Errorf("docker host = %+v %v, daemon names %q", d, ok, info.Info.Name)
+	}
+
+	// The proxy itself refuses creating containers.
 	if _, err := dc.ContainerCreate(ctx, client.ContainerCreateOptions{Config: &container.Config{Image: alpineImage}}); err == nil {
 		t.Error("the socket proxy allowed creating a container")
 	}

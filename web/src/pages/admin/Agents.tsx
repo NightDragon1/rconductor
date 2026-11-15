@@ -199,7 +199,7 @@ export function AgentsPage() {
                 },
                 { label: t('agents.version'), value: <bdi className="font-mono">{a.version}</bdi> },
                 ...(dockerHost
-                  ? [{ label: t('agents.dockerHost'), value: <DockerHost host={a.docker_host} /> }]
+                  ? [{ label: t('agents.dockerHost'), value: <DockerHost agent={a} /> }]
                   : []),
                 {
                   label: t('agents.fingerprint'),
@@ -254,7 +254,7 @@ export function AgentsPage() {
                   </td>
                   {dockerHost && (
                     <td className="p-3">
-                      <DockerHost host={a.docker_host} />
+                      <DockerHost agent={a} />
                     </td>
                   )}
                   <td

@@ -42,7 +42,7 @@ function AgentNode({
         {/* With the flag docker_host the host of the daemon replaces the
             agent's own, often internal, address (AGT-014). */}
         {dockerHost ? (
-          <DockerHost host={agent?.docker_host} />
+          <DockerHost agent={agent} />
         ) : (
           agent?.remote && <bdi className="font-mono">{agent.remote}</bdi>
         )}
