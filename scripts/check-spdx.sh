@@ -1,15 +1,20 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Fails if a tracked text file lacks an SPDX license header in its first
-# lines. Exempt: docs/, Markdown, LICENSE, JSON (no comment
-# syntax), Go module files, generated code, placeholders and binary files.
+# lines. Exempt: docs/, Markdown, LICENSE, LICENSES/, AUTHORS, JSON (no
+# comment syntax), Go module files, generated code, placeholders and binary
+# files; REUSE.toml licenses them, and reuse lint checks the whole tree.
+# This script keeps the rules reuse lint does not know: AGPL-3.0-or-later
+# for own files, MIT only for the copied files below.
 # sqlc query files carry the header at the end, because sqlc copies leading
 # comments into the generated code.
 set -eu
 cd "$(dirname "$0")/.."
+# REUSE-IgnoreStart
 missing=$(git ls-files |
-  grep -vE '^docs/|\.md$|^LICENSE$|\.json$|(^|/)go\.(mod|sum)$|(^|/)\.gitkeep$' |
+  grep -vE '^docs/|\.md$|^LICENSE$|^LICENSES/|^AUTHORS$|\.json$|(^|/)go\.(mod|sum)$|(^|/)\.gitkeep$' |
   while IFS= read -r f; do
     grep -Iq . "$f" 2>/dev/null || continue # binary or empty
     head -n 5 "$f" | grep -qiE 'code generated|auto-generated' && continue
@@ -29,6 +34,7 @@ missing=$(git ls-files |
     esac
     echo "$lines" | grep -q 'SPDX-License-Identifier: AGPL-3.0-or-later' || echo "$f"
   done)
+# REUSE-IgnoreEnd
 if [ -n "$missing" ]; then
   echo "missing SPDX header:"
   echo "$missing"

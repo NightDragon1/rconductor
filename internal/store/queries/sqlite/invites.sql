@@ -21,4 +21,5 @@ UPDATE invites SET used_at = ?, used_by = ? WHERE id = ? AND used_at IS NULL;
 -- name: DeleteInvite :exec
 DELETE FROM invites WHERE id = ?;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

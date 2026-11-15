@@ -54,4 +54,5 @@ JOIN user_groups g ON g.id = m.user_group_id AND g.kind = 'moderator' AND g.dele
 -- name: ListSupporterLinks :many
 SELECT DISTINCT supporter_id, moderator_id FROM supporter_grants;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

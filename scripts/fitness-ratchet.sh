@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # The fitness exception list may only shrink (PRJ-005): fails on an entry

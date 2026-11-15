@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // The pages of the interface per test user (Design 6.2), for checks that

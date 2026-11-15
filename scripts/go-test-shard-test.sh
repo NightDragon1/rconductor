@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Checks the shard gate of scripts/go-test-shard.sh (NFR-013): a matrix

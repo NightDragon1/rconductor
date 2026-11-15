@@ -11,4 +11,5 @@ DELETE FROM user_favorites WHERE user_id = ?;
 -- name: InsertFavorite :exec
 INSERT INTO user_favorites (user_id, server_id, position) VALUES (?, ?, ?);
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

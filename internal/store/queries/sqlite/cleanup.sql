@@ -45,4 +45,5 @@ DELETE FROM servers WHERE id = ? AND deleted_at IS NOT NULL;
 -- name: DeleteServerGroupRecord :exec
 DELETE FROM server_groups WHERE id = ? AND deleted_at IS NOT NULL;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

@@ -11,4 +11,5 @@ INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at)
 VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (key, scope_type, scope_id) DO NOTHING;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

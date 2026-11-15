@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Command claudeguard is the PreToolUse hook of Claude Code for this

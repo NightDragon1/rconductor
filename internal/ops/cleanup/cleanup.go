@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package cleanup is the daily clean-up job (Design 4.4): it enforces the

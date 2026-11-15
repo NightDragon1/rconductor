@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Formatting of the given files (NFR-013): gofmt for Go, Prettier for the

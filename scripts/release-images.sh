@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Prints the image names of a target for all tags in both registries as a

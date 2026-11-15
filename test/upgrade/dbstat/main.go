@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Command dbstat reads the panel database for the upgrade test

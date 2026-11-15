@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Licensing of files that carry no header of their own (NFR-021): files
+# without comment syntax (JSON, Go module files), generated code, images and
+# the logo templates, and Markdown texts. scripts/check-spdx.sh exempts the
+# same groups from its header check.
+version = 1
+
+# Generated code (oapi-codegen, sqlc, openapi-typescript): generators
+# rewrite these files, so they cannot hold a header.
+[[annotations]]
+path = [
+  "internal/api/api.gen.go",
+  "internal/store/sqlitedb/**",
+  "web/src/api/schema.d.ts",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 NightDragon · ShadowGhost.NET"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Files without comment syntax: JSON (also lockfiles) and Go module files.
+[[annotations]]
+path = ["**/*.json", "**/go.mod", "**/go.sum"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 NightDragon · ShadowGhost.NET"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Logo templates and images. The SVG files keep their license comment in
+# the first line, which scripts/logo.sh checks; the copyright comes from here.
+[[annotations]]
+path = ["assets/logo/**", "**/*.svg", "**/*.png", "**/*.ico", "**/*.webp"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 NightDragon · ShadowGhost.NET"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# AUTHORS, documentation and Markdown texts. The release publishes
+# README.md, the CHANGELOG and the Docker Hub texts unchanged, so they hold
+# no header.
+[[annotations]]
+path = ["AUTHORS", "docs/**", "**/*.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 NightDragon · ShadowGhost.NET"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# The notice quotes the license tag of the copied files in its text; its own
+# licensing comes from here alone.
+[[annotations]]
+path = "THIRD_PARTY_NOTICES.md"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 NightDragon · ShadowGhost.NET"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

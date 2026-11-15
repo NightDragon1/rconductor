@@ -37,4 +37,5 @@ SELECT profile_id, path, description, params FROM catalog_commands ORDER BY prof
 -- name: ListCatalogOfProfile :many
 SELECT path, description, params FROM catalog_commands WHERE profile_id = ? ORDER BY position;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

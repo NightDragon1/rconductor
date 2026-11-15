@@ -99,4 +99,5 @@ DELETE FROM admin_scopes WHERE server_group_id = ? RETURNING id, user_id;
 -- name: DeleteServerGroupGrants :many
 DELETE FROM grants WHERE server_group_id = ? RETURNING id, user_group_id, user_id;
 
+-- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later
