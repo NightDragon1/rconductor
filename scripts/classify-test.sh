@@ -46,6 +46,8 @@ check "stage 2 at 400" 0 "stage-2 input 400" "modified 200 100 internal/pattern/
 check "stage 2 at 401" 1 "stage-2 input 401" "modified 200 100 internal/pattern/pattern.go" \
   "modified 101 0 internal/servers/servers.go"
 check "stage 1 over 400" 0 "stage-1  5000" "modified 5000 0 internal/servers/servers.go"
+check "lockfiles not counted" 0 "stage-2 boundary 2" "modified 1 1 .github/workflows/ci.yml" \
+  "modified 600 20 web/package-lock.json" "modified 20 2 tools/go.sum" "modified 10 0 go.sum"
 check "move into generated counts" 0 "stage-2 cmd 7" "renamed 7 0 internal/api/c.go internal/commands/c.go"
 check "workflow change" 0 "stage-2 boundary 2" "modified 1 1 .github/workflows/ci.yml"
 check "class file change" 0 "stage-2 boundary 1" "modified 1 0 .github/core-paths.yml"

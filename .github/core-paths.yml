@@ -90,8 +90,14 @@ rules:
   - web/index.html
   - web/vite.config.ts
 
-# generated: output of oapi-codegen, sqlc and openapi-typescript
+# generated: output of oapi-codegen, sqlc and openapi-typescript, and the
+# lockfiles
 generated:
   - internal/api/api.gen.go
   - internal/store/sqlitedb/**
   - web/src/api/schema.d.ts
+# Lockfiles: the PR text lists the packages they add (name@version and
+# origin), which is reviewed instead of the diff.
+  - go.sum
+  - tools/go.sum
+  - web/package-lock.json
