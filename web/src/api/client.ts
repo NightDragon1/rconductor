@@ -26,11 +26,12 @@ export type VersionedPath =
   | '/command-lists/{id}'
   | '/servers/{id}/templates/{template_id}'
   | '/settings'
-  | '/settings/smtp';
+  | '/settings/smtp'
+  | '/server-groups/{id}/say-prefix';
 
-// PatchPath are the versioned writes by PATCH; /settings/smtp is a PUT
-// (putVersioned).
-type PatchPath = Exclude<VersionedPath, '/settings/smtp'>;
+// PatchPath are the versioned writes by PATCH; /settings/smtp (putVersioned)
+// and the say prefix of a group (CMD-020) are PUTs.
+type PatchPath = Exclude<VersionedPath, '/settings/smtp' | '/server-groups/{id}/say-prefix'>;
 
 type Patch<P extends PatchPath> = paths[P]['patch'];
 type PathParams<P extends PatchPath> = Patch<P>['parameters']['path'];

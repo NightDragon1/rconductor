@@ -32,6 +32,7 @@ var production = []Flag{
 	{Name: "command_palette"},    // command palette in the console (CMD-016)
 	{Name: "profile_browser", Operations: []string{"GetServerProfile"}}, // profile browser (UI-020)
 	{Name: "color_codes"}, // game formatting codes as fixed styles, frontend only (CMD-017)
+	{Name: "say_sender", Operations: []string{"GetServerGroupSayPrefix", "SetServerGroupSayPrefix"}}, // say with sender and group prefix (CMD-020)
 }
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
