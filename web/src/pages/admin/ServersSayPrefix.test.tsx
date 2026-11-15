@@ -253,15 +253,19 @@ describe('say prefix of a server group (CMD-020, D-082)', () => {
     await waitFor(() => expect(hint.textContent).toContain('survival uses the prefix of alpha.'));
   });
 
-  it('several groups: a group the caller cannot read leaves only the rule', async () => {
+  it('several groups: a server admin, who may not see every group of a server, gets only the rule', async () => {
     setLanguage('en');
-    const get = readPrefixes({ g1: { say_prefix: '[A]', version: '1' }, g2: 404 });
+    const get = readPrefixes({
+      g1: { say_prefix: '[A]', version: '1' },
+      g2: { say_prefix: '[Z]', version: '1' },
+    });
     const panel = await open('alpha', 'server_admin');
     const hint = await within(panel).findByTestId('say-prefix-several');
-    await waitFor(() => expect(prefixReads(get).length).toBeGreaterThanOrEqual(2));
     expect(hint.textContent).toBe(
       'Servers in several groups use the prefix of the first group by name.',
     );
+    // Only the prefix of the open group is read, none of the others.
+    await waitFor(() => expect(prefixReads(get).length).toBe(1));
   });
 
   it('has no text outside the language files (NFR-007)', async () => {

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { api, must, putSayPrefix } from '@/api/client';
 import type { components } from '@/api/schema';
 import type { Server, ServerGroup } from '@/api/servers';
+import { useSession } from '@/api/session';
 import { outcome } from '@/api/users';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,11 +42,14 @@ export function SayPrefixField({
   groups,
   servers,
   readOnly,
+  onVersion,
 }: {
   group: ServerGroup;
   groups: ServerGroup[];
   servers: Server[];
   readOnly: boolean;
+  // The prefix shares the version of the group: a save raises it (D-082).
+  onVersion: (version: string) => void;
 }) {
   const prefix = useQuery(sayPrefixQuery(group.id));
   const [message, setMessage] = useState<Message>(null);
@@ -60,6 +64,7 @@ export function SayPrefixField({
         readOnly={readOnly}
         message={message}
         setMessage={setMessage}
+        onVersion={onVersion}
         reload={async () => {
           await prefix.refetch();
           setMessage(null);
@@ -76,6 +81,7 @@ function Editor({
   readOnly,
   message,
   setMessage,
+  onVersion,
   reload,
 }: {
   group: ServerGroup;
@@ -83,6 +89,7 @@ function Editor({
   readOnly: boolean;
   message: Message;
   setMessage: (m: Message) => void;
+  onVersion: (version: string) => void;
   reload: () => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -119,7 +126,10 @@ function Editor({
       ok: true,
       text: t(value ? 'servers.sayPrefix.saved' : 'servers.sayPrefix.cleared'),
     });
-    if (done) qc.setQueryData(sayPrefixKey(group.id), done);
+    if (done) {
+      qc.setQueryData(sayPrefixKey(group.id), done);
+      onVersion((done as SayPrefix).version);
+    }
     return done as SayPrefix | null;
   };
   const save = async (value: string) => {
@@ -197,13 +207,26 @@ function SeveralGroups({
   servers: Server[];
 }) {
   const { t } = useTranslation();
+  // Only the RCON admin sees every group; for other roles groups of a
+  // server may be missing from the list, so only the rule shows, always.
+  const { data: session } = useSession();
+  const complete = session?.user.role === 'rcon_admin';
   const shared = group.server_ids.filter((id) =>
     groups.some((g) => g.id !== group.id && g.server_ids.includes(id)),
   );
   const others = groups.filter(
     (g) => g.id !== group.id && g.server_ids.some((id) => shared.includes(id)),
   );
-  const reads = useQueries({ queries: [group, ...others].map((g) => sayPrefixQuery(g.id)) });
+  const reads = useQueries({
+    queries: (complete ? [group, ...others] : []).map((g) => sayPrefixQuery(g.id)),
+  });
+  if (!complete) {
+    return (
+      <p className="text-xs text-muted" data-testid="say-prefix-several">
+        {t('servers.sayPrefix.several')}
+      </p>
+    );
+  }
   if (shared.length === 0) return null;
   const prefixes: Record<string, string | undefined> = {};
   [group, ...others].forEach((g, i) => {

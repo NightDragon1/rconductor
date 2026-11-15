@@ -793,7 +793,17 @@ function GroupPanel({
         </Button>
       )}
       {sayPrefix && (
-        <SayPrefixField group={group} groups={groups} servers={servers} readOnly={readOnly} />
+        <SayPrefixField
+          group={group}
+          groups={groups}
+          servers={servers}
+          readOnly={readOnly}
+          onVersion={(version) => {
+            setBase((b) => ({ ...b, version }));
+            setDraft((d) => ({ ...d, version }));
+            void qc.invalidateQueries({ queryKey: serverGroupsKey });
+          }}
+        />
       )}
       {canEdit && (
         <Button
