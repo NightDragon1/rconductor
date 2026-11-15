@@ -133,6 +133,9 @@ type Hub struct {
 	// caps keeps the capabilities of each agent's last hello, also after
 	// its session ended, for the panel's display (AGT-013).
 	caps map[string][]string
+	// hosts keeps the Docker host of each agent's last hello the same way
+	// (AGT-014).
+	hosts map[string]agentproto.DockerHost
 	// onMessage gets every message of an admitted agent except results.
 	onMessage func(agentID string, e agentproto.Envelope)
 	// onDisconnect is told when an agent's last session ends.
@@ -179,6 +182,15 @@ func (h *Hub) Capabilities(agentID string) ([]string, bool) {
 	return slices.Clone(c), ok
 }
 
+// DockerHost returns the Docker host of an agent's last hello since the
+// panel started; false when the panel has not seen it (AGT-014).
+func (h *Hub) DockerHost(agentID string) (agentproto.DockerHost, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	d, ok := h.hosts[agentID]
+	return d, ok
+}
+
 // RequestData sends an order whose answer brings data before its result,
 // such as logs.tail: those messages go to collect, not to the general
 // receiver (Design 1.5).
@@ -204,7 +216,7 @@ func New(id *keys.Identity, log *slog.Logger, opts Options) *Hub {
 	return &Hub{
 		id: id, log: log, registry: opts.Registry, throttle: newThrottle(opts.Throttle), ping: opts.Ping, hello: opts.HelloTimeout,
 		maxConns: orDefault(opts.MaxConnections, maxAgentConns), maxClientConns: orDefault(opts.MaxClientConnections, maxAgentConnsPerClient),
-		sessions: map[string]*Session{}, caps: map[string][]string{},
+		sessions: map[string]*Session{}, caps: map[string][]string{}, hosts: map[string]agentproto.DockerHost{},
 	}
 }
 
@@ -486,6 +498,11 @@ func (h *Hub) register(s *Session) {
 	old := h.sessions[s.AgentID]
 	h.sessions[s.AgentID] = s
 	h.caps[s.AgentID] = slices.Clone(s.Hello.Capabilities)
+	if s.Hello.DockerHost != nil {
+		h.hosts[s.AgentID] = *s.Hello.DockerHost
+	} else {
+		delete(h.hosts, s.AgentID)
+	}
 	h.mu.Unlock()
 	if old != nil {
 		// A reconnect replaces the older session of the same agent; the

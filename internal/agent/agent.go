@@ -45,6 +45,11 @@ type Backend interface {
 	Handle(ctx context.Context, e agentproto.Envelope, out Sender)
 }
 
+// hostReporter is a backend that names the host it runs on (AGT-014).
+type hostReporter interface {
+	Host(ctx context.Context) *agentproto.DockerHost
+}
+
 // Backoff of the reconnect (Design 1.1).
 const (
 	backoffStart  = time.Second
@@ -217,6 +222,14 @@ func (a *Agent) Run(ctx context.Context) error {
 
 // connect runs one connection and returns why it ended.
 func (a *Agent) connect(ctx context.Context, p plan) string {
+	// The host is read before the dial: the panel's hello deadline starts
+	// with the handshake, so a slow daemon must not use it up (AGT-014).
+	var host *agentproto.DockerHost
+	if r, ok := a.backend.(hostReporter); ok {
+		hctx, hcancel := context.WithTimeout(ctx, a.dialTimeout())
+		host = r.Host(hctx)
+		hcancel()
+	}
 	attrs := []any{slog.String("panel", p.addr), slog.String("fingerprint", a.Fingerprint())}
 	cfg, err := agentproto.ClientConfig(a.id, p.fingerprint)
 	if err != nil {
@@ -269,6 +282,7 @@ func (a *Agent) connect(ctx context.Context, p plan) string {
 	h.Version = buildinfo.Version
 	h.Backend = a.backend.Name()
 	h.Capabilities = a.backend.Capabilities()
+	h.DockerHost = host
 	s := &sender{conn: conn}
 	if err := s.Send(ctx, agentproto.TypeHello, "", h); err != nil {
 		return "closed"

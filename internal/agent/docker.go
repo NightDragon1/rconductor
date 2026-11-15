@@ -29,7 +29,7 @@ import (
 
 // dockerAPI is the part of the Docker API the agent uses: no create,
 // remove, exec, image or volume calls exist here (AGT-004); DiskUsage only
-// reads the used size of volumes (AGT-007).
+// reads the used size of volumes (AGT-007), Info the host (AGT-014).
 type dockerAPI interface {
 	ContainerList(ctx context.Context, options client.ContainerListOptions) (client.ContainerListResult, error)
 	ContainerInspect(ctx context.Context, id string, options client.ContainerInspectOptions) (client.ContainerInspectResult, error)
@@ -40,6 +40,8 @@ type dockerAPI interface {
 	ContainerLogs(ctx context.Context, id string, options client.ContainerLogsOptions) (client.ContainerLogsResult, error)
 	Events(ctx context.Context, options client.EventsListOptions) client.EventsResult
 	DiskUsage(ctx context.Context, options client.DiskUsageOptions) (client.DiskUsageResult, error)
+	// Info only reads the name and address of the host (AGT-014).
+	Info(ctx context.Context, options client.InfoOptions) (client.SystemInfoResult, error)
 }
 
 // Timing of the Docker backend (Design 1.5, Gesamtkonzept 4.6).
@@ -111,6 +113,23 @@ func (d *Docker) Name() string { return "docker" }
 func (d *Docker) Capabilities() []string {
 	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics, agentproto.CapRestartInfo,
 		agentproto.CapVersionDetect, agentproto.CapVolumesSize}
+}
+
+// Host returns the host of the daemon as the daemon names it (AGT-014):
+// its name, and its address only where the daemon has one (Swarm); nil
+// when the daemon gives neither or does not answer.
+func (d *Docker) Host(ctx context.Context) *agentproto.DockerHost {
+	r, err := d.api.Info(ctx, client.InfoOptions{})
+	if err != nil {
+		d.log.Warn("docker host not read", slog.Any("err", err))
+		return nil
+	}
+	h := &agentproto.DockerHost{Name: r.Info.Name, IP: r.Info.Swarm.NodeAddr}
+	h.Clean()
+	if h.Name == "" && h.IP == "" {
+		return nil
+	}
+	return h
 }
 
 func (d *Docker) labelFilter() client.Filters {

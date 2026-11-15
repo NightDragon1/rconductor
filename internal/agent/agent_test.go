@@ -90,6 +90,12 @@ type panel struct {
 
 func newPanel(t *testing.T) *panel {
 	t.Helper()
+	return newPanelHello(t, 0)
+}
+
+// newPanelHello is newPanel with the hub's hello deadline; zero keeps it.
+func newPanelHello(t *testing.T, hello time.Duration) *panel {
+	t.Helper()
 	st := storetest.New(t)
 	if err := users.EnsureAuditDefaults(context.Background(), st); err != nil {
 		t.Fatal(err)
@@ -102,7 +108,7 @@ func newPanel(t *testing.T) *panel {
 	}
 	p := &panel{t: t, st: st, logs: logs}
 	p.svc = agents.NewService(st, log, "")
-	p.hub = agenthub.New(key, log, agenthub.Options{Registry: p.svc, Throttle: agenthub.ThrottleOptions{PerMinute: 1000, Burst: 1000}})
+	p.hub = agenthub.New(key, log, agenthub.Options{Registry: p.svc, HelloTimeout: hello, Throttle: agenthub.ThrottleOptions{PerMinute: 1000, Burst: 1000}})
 	p.svc.SetHub(p.hub)
 	ctx, cancel := context.WithCancel(context.Background())
 	ready := make(chan net.Addr, 1)
@@ -394,5 +400,78 @@ func TestVersionHint(t *testing.T) {
 	}
 	for _, want := range []string{`"event":"agent.rejected"`, `"reason":"version"`, "differ in the major version", `"version":"`} {
 		logtest.Wait(t, logs, want)
+	}
+}
+
+// hostBackend is a backend that names its host (AGT-014).
+type hostBackend struct {
+	*fakeBackend
+	host *agentproto.DockerHost
+}
+
+func (b hostBackend) Host(context.Context) *agentproto.DockerHost { return b.host }
+
+// TestHelloDockerHost covers AGT-014: the agent sends the host its backend
+// names in the hello, and the panel's hub keeps it for the agent.
+func TestHelloDockerHost(t *testing.T) {
+	p := newPanel(t)
+	cfg := agentCfg(t, t.TempDir())
+	cfg.PairingToken, cfg.PanelAddr = p.token(), p.addr
+	want := agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}
+	log := logging.New(&lockedBuf{}, "agent", config.Log{Format: "json"}).Root()
+	a, err := New(cfg, log, hostBackend{&fakeBackend{}, &want})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.backoff = func(int) time.Duration { return 20 * time.Millisecond }
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- a.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Errorf("run: %v", err)
+		}
+	})
+	waitFor(t, "pairing", func() bool { return a.State().AgentID != "" })
+	id := a.State().AgentID
+	waitFor(t, "docker host", func() bool { d, ok := p.hub.DockerHost(id); return ok && d == want })
+}
+
+// slowHost is a backend whose daemon does not answer for the host.
+type slowHost struct{ *fakeBackend }
+
+func (slowHost) Host(ctx context.Context) *agentproto.DockerHost {
+	<-ctx.Done()
+	return nil
+}
+
+// TestSlowDaemonHello covers AGT-014 with AGT-013: a daemon that does not
+// answer for the host costs no session; the host is read before the
+// panel's hello deadline starts, and the hello comes without it.
+func TestSlowDaemonHello(t *testing.T) {
+	p := newPanelHello(t, 300*time.Millisecond)
+	cfg := agentCfg(t, t.TempDir())
+	cfg.PairingToken, cfg.PanelAddr, cfg.DialTimeout = p.token(), p.addr, time.Second
+	log := logging.New(&lockedBuf{}, "agent", config.Log{Format: "json"}).Root()
+	a, err := New(cfg, log, slowHost{&fakeBackend{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.backoff = func(int) time.Duration { return 20 * time.Millisecond }
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- a.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Errorf("run: %v", err)
+		}
+	})
+	waitFor(t, "pairing", func() bool { return a.State().AgentID != "" })
+	id := a.State().AgentID
+	waitFor(t, "session", func() bool { return p.hub.Connected(id) })
+	if d, ok := p.hub.DockerHost(id); ok {
+		t.Errorf("docker host of a silent daemon = %+v", d)
 	}
 }
