@@ -1028,7 +1028,7 @@
       },
       "features_docker_host": {
         "label": "Docker host",
-        "help": "Shows the host name and address of each agent's Docker daemon, as the daemon reports them, instead of the agent's internal address. Only the RCON admin sees them."
+        "help": "Shows the host name and address of each agent's Docker daemon as the daemon reports them; without an address from the daemon, the address the agent connected from. Only the RCON admin sees them."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
