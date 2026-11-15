@@ -760,7 +760,7 @@ func TestSayWithSender(t *testing.T) {
 		w.exec(`INSERT INTO server_group_members (server_group_id, server_id) VALUES (?, ?)`, g.id, w.server)
 		if g.prefix != "" {
 			w.exec(`INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES (?, ?, ?, 'server_group', ?, 't')`,
-				"p"+strconv.Itoa(i), SettingSayPrefix, g.prefix, g.id)
+				"p"+strconv.Itoa(i), servers.SettingSayPrefix, g.prefix, g.id)
 		}
 	}
 	r, err := w.send("admin", `say hi "]},{"text":"x"`)

@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/profiles"
-	"github.com/NightDragon1/rconductor/internal/servers"
 )
 
 // TestRenderTellrawGolden: the fixed form of minecraft-tellraw (D-081,
@@ -112,14 +111,5 @@ func TestMessageText(t *testing.T) {
 	// The path as the profile check normalizes it (space around it).
 	if got, ok := messageText("say hi", &profiles.MessageCommand{Path: " say ", Render: profiles.RenderMinecraftTellraw}, false); !ok || got != "hi" {
 		t.Errorf("path with space around it: %q %v", got, ok)
-	}
-}
-
-// TestSayPrefixSettingShared: the pipeline reads the prefix where the API
-// of the server groups writes it (D-082), and no longer than it allows.
-func TestSayPrefixSettingShared(t *testing.T) {
-	if SettingSayPrefix != servers.SettingSayPrefix || ScopeServerGroup != servers.ScopeServerGroup || maxPrefix != servers.MaxSayPrefix {
-		t.Errorf("commands %q %q %d, servers %q %q %d", SettingSayPrefix, ScopeServerGroup, maxPrefix,
-			servers.SettingSayPrefix, servers.ScopeServerGroup, servers.MaxSayPrefix)
 	}
 }

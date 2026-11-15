@@ -14,6 +14,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/rcon/source"
+	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
@@ -22,18 +23,8 @@ import (
 // is off, the message command is sent as typed.
 const FeatureSaySender = "say_sender"
 
-// SettingSayPrefix is the prefix of messages to the players, one per server
-// group (D-082).
-const SettingSayPrefix = "say_prefix"
-
-// ScopeServerGroup is the scope type of a setting per server group.
-const ScopeServerGroup = "server_group"
-
-// Bounds of the parts of a message (D-081, D-082).
-const (
-	maxSender = 32
-	maxPrefix = 16
-)
+// maxSender bounds the sender (D-081).
+const maxSender = 32
 
 // senderName is the pseudonym as the players see it (D-081): without §,
 // control, format (among them bidi and zero-width) characters, at most
@@ -137,13 +128,13 @@ func (s *Service) sayPrefix(ctx context.Context, serverID string) (string, error
 		return strings.Compare(a, b)
 	})
 	for _, id := range ids {
-		v, err := s.st.Queries.GetSetting(ctx, sqlitedb.GetSettingParams{Key: SettingSayPrefix, ScopeType: ScopeServerGroup, ScopeID: id})
+		v, err := s.st.Queries.GetSetting(ctx, sqlitedb.GetSettingParams{Key: servers.SettingSayPrefix, ScopeType: servers.ScopeServerGroup, ScopeID: id})
 		if err != nil {
 			continue // no prefix for this group
 		}
 		var p string
 		if json.Unmarshal([]byte(v), &p) == nil {
-			if p = cleanPart(p, maxPrefix); p != "" {
+			if p = cleanPart(p, servers.MaxSayPrefix); p != "" {
 				return p, nil
 			}
 		}
