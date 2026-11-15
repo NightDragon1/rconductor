@@ -96,14 +96,19 @@ def report_npm(path, base, head):
         seen.setdefault((name, ver), set()).add((res, integ))
     added, changed = [], []
     for key, (label, name, ver, res, integ) in new.items():
+        prev = old.get(key)
+        if prev and prev[1] != name:
+            # A key that now points at another package, also one the base
+            # has elsewhere.
+            changed.append(f"{label}@{ver} ({key}) package changed: {prev[1]}@{prev[2]} -> {name}@{ver}")
+            continue
         origins = seen.get((name, ver))
         if origins is None:
             added.append(f"{label}@{ver} ({res})")
             continue
         if (res, integ) in origins:
             continue  # the same package as somewhere in the base
-        prev = old.get(key)
-        if prev and prev[1:3] == (name, ver):
+        if prev and prev[2] == ver:
             for field, was, now in (("resolved", prev[3], res), ("integrity", prev[4], integ)):
                 if was != now:
                     changed.append(f"{label}@{ver} ({key}) {field}: {was} -> {now}")

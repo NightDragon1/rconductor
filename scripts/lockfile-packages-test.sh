@@ -151,6 +151,13 @@ EOF
 got=$(out)
 has "alias" "- x (alias of real)@3.0.0 ($R/real/-/real-3.0.0.tgz)"
 
+change "existing key becomes another base package" <<EOF
+npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 \
+  node_modules/a/node_modules/b=a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 node_modules/b 2.0.0 "$R/b/-/b-2.0.0.tgz" sha512-b2
+EOF
+got=$(out)
+has "existing key becomes another base package" "- b (alias of a)@1.0.0 (node_modules/a/node_modules/b) package changed: b@1.0.0 -> a@1.0.0"
+
 change "changed /go.mod hash" <<'EOF'
 printf '%s\n' "example.com/m v1.0.0 h1:old=" "example.com/m v1.0.0/go.mod h1:other=" >go.sum
 EOF
@@ -176,7 +183,6 @@ change "lockfileVersion 1" <<'EOF'
 echo '{"lockfileVersion": 1, "packages": {}}' >web/package-lock.json
 EOF
 fails_run "lockfileVersion 1"
-fails_run "unknown ref" 0000000000000000000000000000000000000000
 
 change "no change" <<'EOF'
 true
@@ -204,6 +210,8 @@ if [ "$got" != "$want" ]; then
   echo "$got" >&2
   fails=$((fails + 1))
 fi
+# On a valid head, so that only the check of the ref can refuse it.
+fails_run "unknown ref" 0000000000000000000000000000000000000000
 
 [ "$fails" -eq 0 ] || exit 1
 echo "lockfile packages ok"
