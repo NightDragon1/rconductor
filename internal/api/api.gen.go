@@ -672,6 +672,9 @@ type Agent struct {
 	Connected    bool      `json:"connected"`
 	CreatedAt    time.Time `json:"created_at"`
 
+	// DockerHost Host of the agent's Docker daemon as the daemon names it (AGT-014), from the agent's last hello since the panel started. Only while the feature flag docker_host is on; each field is missing when the daemon does not give it.
+	DockerHost *DockerHost `json:"docker_host,omitempty"`
+
 	// Fingerprint SHA256:<base64> of the agent key.
 	Fingerprint string             `json:"fingerprint"`
 	Id          openapi_types.UUID `json:"id"`
@@ -681,7 +684,7 @@ type Agent struct {
 	Name     string              `json:"name"`
 	PairedBy *openapi_types.UUID `json:"paired_by,omitempty"`
 
-	// Remote Source address of the last connection.
+	// Remote Source address of the agent's last connection to the agent port. While the flag docker_host is on, the interface shows it as "Connected from" when the Docker host has no address (D-084); it is never part of docker_host.
 	Remote    *string     `json:"remote,omitempty"`
 	RevokedAt *time.Time  `json:"revoked_at,omitempty"`
 	Status    AgentStatus `json:"status"`
@@ -921,6 +924,15 @@ type ContainerRuntime struct {
 
 	// Volumes Named volumes of the container (AGT-007); the size only once the agent measured it, without the capability volumes.size never.
 	Volumes *[]VolumeRuntime `json:"volumes,omitempty"`
+}
+
+// DockerHost Host of the agent's Docker daemon as the daemon names it (AGT-014), from the agent's last hello since the panel started. Only while the feature flag docker_host is on; each field is missing when the daemon does not give it.
+type DockerHost struct {
+	// Ip IPv4 or IPv6 address without zone.
+	Ip *string `json:"ip,omitempty"`
+
+	// Name Foreign data from the agent (SEC-006).
+	Name *string `json:"name,omitempty"`
 }
 
 // EffectiveCommand defines model for EffectiveCommand.

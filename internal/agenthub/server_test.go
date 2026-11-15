@@ -50,13 +50,15 @@ func (l *lockedBuf) String() string {
 
 // admitKnown admits agents whose key it knows.
 type admitKnown struct {
-	mu   sync.Mutex
-	keys map[string]string // fingerprint → agent ID
+	mu     sync.Mutex
+	keys   map[string]string // fingerprint → agent ID
+	admits int               // calls of Admit
 }
 
 func (a *admitKnown) Admit(_ context.Context, h agentproto.Hello, key ed25519.PublicKey, _ string) (Admission, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.admits++
 	id, ok := a.keys[keys.Fingerprint(key)]
 	switch {
 	case !ok && h.AgentID != "":
@@ -278,6 +280,16 @@ func TestVersionRuleUnknown(t *testing.T) {
 				t.Errorf("answer = %+v %+v", e, r)
 			}
 			logtest.Wait(t, f.logs, `"event":"agent.rejected","reason":"version"`)
+			// Refused before the registry: no admission, no session.
+			f.known.mu.Lock()
+			admits := f.known.admits
+			f.known.mu.Unlock()
+			if admits != 0 || f.hub.Connected("agent-1") {
+				t.Errorf("admits = %d, connected = %v", admits, f.hub.Connected("agent-1"))
+			}
+			if _, ok := f.hub.Capabilities("agent-1"); ok {
+				t.Error("capabilities kept for a refused hello")
+			}
 		})
 	}
 }

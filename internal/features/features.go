@@ -33,6 +33,7 @@ var production = []Flag{
 	{Name: "profile_browser", Operations: []string{"GetServerProfile"}}, // profile browser (UI-020)
 	{Name: "color_codes"}, // game formatting codes as fixed styles, frontend only (CMD-017)
 	{Name: "say_sender", Operations: []string{"GetServerGroupSayPrefix", "SetServerGroupSayPrefix"}}, // say with sender and group prefix (CMD-020)
+	{Name: "docker_host"}, // Docker host of the agents, in the agent data of the RCON admin (AGT-014)
 }
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)

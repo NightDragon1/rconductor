@@ -23,6 +23,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -50,7 +51,12 @@ type Hub interface {
 	Fingerprint() string
 	Connected(agentID string) bool
 	Revoke(agentID string)
+	DockerHost(agentID string) (agentproto.DockerHost, bool)
 }
+
+// FeatureDockerHost is the flag of the Docker host in the agent data
+// (AGT-014); while it is off the agents are shown as in 1.1.
+const FeatureDockerHost = "docker_host"
 
 // Agent is an agent as the API shows it.
 type Agent struct {
@@ -66,6 +72,9 @@ type Agent struct {
 	LastSeenAt   *time.Time
 	RevokedAt    *time.Time
 	Connected    bool
+	// DockerHost is the host of the agent's last hello, only with the
+	// flag docker_host on (AGT-014).
+	DockerHost *agentproto.DockerHost
 }
 
 // Token is a new pairing token with what the pairing dialog shows.
@@ -82,6 +91,7 @@ type Service struct {
 	st         *store.Store
 	log        *slog.Logger
 	hub        Hub
+	flags      *features.Set
 	publicAddr string
 	imageRepo  string
 	now        func() time.Time
@@ -103,6 +113,22 @@ func NewService(st *store.Store, log *slog.Logger, publicAddr string) *Service {
 // SetHub connects the agent hub, which in turn uses the service as its
 // registry.
 func (s *Service) SetHub(h Hub) { s.hub = h }
+
+// UseFeatures sets the feature flags of the panel.
+func (s *Service) UseFeatures(f *features.Set) { s.flags = f }
+
+// view is an agent as the RCON admin sees it: with the Docker host of its
+// last hello while the flag docker_host is on (AGT-014).
+func (s *Service) view(ctx context.Context, r sqlitedb.Agent) Agent {
+	a := toAgent(r, s.connected(r.ID))
+	if s.hub == nil || s.flags == nil || !s.flags.Enabled(ctx, s.st, FeatureDockerHost) {
+		return a
+	}
+	if d, ok := s.hub.DockerHost(r.ID); ok && (d.Name != "" || d.IP != "") {
+		a.DockerHost = &d
+	}
+	return a
+}
 
 func (s *Service) mustBeAdmin(ctx context.Context, req users.Request, action, target string) error {
 	if req.Actor.Role == perm.RCONAdmin {
@@ -171,7 +197,7 @@ func (s *Service) List(ctx context.Context, req users.Request) ([]Agent, error) 
 	}
 	out := make([]Agent, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, toAgent(r, s.connected(r.ID)))
+		out = append(out, s.view(ctx, r))
 	}
 	return out, nil
 }
@@ -188,7 +214,7 @@ func (s *Service) Get(ctx context.Context, req users.Request, id string) (Agent,
 	if err != nil {
 		return Agent{}, err
 	}
-	return toAgent(r, s.connected(id)), nil
+	return s.view(ctx, r), nil
 }
 
 func (s *Service) dropStale(ctx context.Context) error {
@@ -288,7 +314,7 @@ func (s *Service) Approve(ctx context.Context, req users.Request, id string) (Ag
 	}
 	s.log.Info("agent paired by fingerprint", logging.Event(logging.AgentPaired),
 		slog.String("agent_id", id), slog.String("fingerprint", r.Fingerprint), slog.String(logging.KeyRequestID, req.RequestID))
-	return toAgent(r, s.connected(id)), nil
+	return s.view(ctx, r), nil
 }
 
 // Delete revokes an active agent (Design 1.7) or turns down a pending

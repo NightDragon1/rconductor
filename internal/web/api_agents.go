@@ -22,6 +22,15 @@ func toAPIAgent(a agents.Agent) api.Agent {
 	if a.Remote != "" {
 		out.Remote = &a.Remote
 	}
+	if d := a.DockerHost; d != nil {
+		out.DockerHost = &api.DockerHost{}
+		if d.Name != "" {
+			out.DockerHost.Name = &d.Name
+		}
+		if d.IP != "" {
+			out.DockerHost.Ip = &d.IP
+		}
+	}
 	return out
 }
 

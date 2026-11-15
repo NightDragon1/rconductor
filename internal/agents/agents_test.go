@@ -23,6 +23,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
@@ -134,7 +135,13 @@ func (f *fixture) hello(a *agent, pinned string, h agentproto.Hello) agentproto.
 	}
 	f.t.Cleanup(func() { _ = c.CloseNow() })
 	a.conn = c
-	h.Name, h.Backend, h.Version = "host-1", "docker", buildinfo.Version
+	h.Name, h.Backend = "host-1", "docker"
+	switch h.Version {
+	case "":
+		h.Version = buildinfo.Version
+	case noVersion:
+		h.Version = ""
+	}
 	data, _ := agentproto.Encode(agentproto.TypeHello, "", h)
 	if err := c.Write(ctx, websocket.MessageText, data); err != nil {
 		f.t.Fatal(err)
@@ -397,5 +404,90 @@ func TestTurnDownPending(t *testing.T) {
 	}
 	if err := f.svc.Delete(ctx, f.admin, list[0].ID); !errors.Is(err, users.ErrNotFound) {
 		t.Errorf("second delete: %v", err)
+	}
+}
+
+// TestDockerHostBehindFlag covers AGT-014: the RCON admin sees the Docker
+// host of an agent's last hello, cleaned (SEC-006), only while the flag
+// docker_host is on; with the flag off the agent is shown as in 1.1, and
+// an agent whose daemon names no host has none. Other roles do not read
+// agents at all.
+func TestDockerHostBehindFlag(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	flags, err := features.New(features.Flag{Name: FeatureDockerHost})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.svc.UseFeatures(flags)
+	tok, err := f.svc.CreateToken(ctx, f.admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pt, _ := agentproto.ParsePairingToken(tok.Token)
+	a := newAgent(t)
+	e := f.hello(a, pt.Fingerprint, agentproto.Hello{Token: pt.Secret,
+		DockerHost: &agentproto.DockerHost{Name: "n\u202eas", IP: "::ffff:192.168.1.5"}})
+	w, _ := agentproto.Payload[agentproto.Welcome](e)
+	if w.AgentID == "" {
+		t.Fatalf("pairing = %+v", e)
+	}
+	if got, err := f.svc.Get(ctx, f.admin, w.AgentID); err != nil || got.DockerHost != nil {
+		t.Errorf("flag off: %+v %v", got.DockerHost, err)
+	}
+	if _, err := f.st.DB.Exec(`INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('f', ?, 'true', 'global', '', 't')`,
+		features.Key(FeatureDockerHost)); err != nil {
+		t.Fatal(err)
+	}
+	want := agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}
+	if got, err := f.svc.Get(ctx, f.admin, w.AgentID); err != nil || got.DockerHost == nil || *got.DockerHost != want {
+		t.Errorf("flag on: %+v %v", got.DockerHost, err)
+	}
+	list, err := f.svc.List(ctx, f.admin)
+	if err != nil || len(list) != 1 || list[0].DockerHost == nil || *list[0].DockerHost != want {
+		t.Errorf("list: %+v %v", list, err)
+	}
+	if _, err := f.svc.Get(ctx, f.sa, w.AgentID); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("server admin reads the agent: %v", err)
+	}
+	if _, err := f.svc.List(ctx, f.sa); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("server admin lists agents: %v", err)
+	}
+	// The agent comes back with a daemon that names no host.
+	if e := f.hello(a, pt.Fingerprint, agentproto.Hello{AgentID: w.AgentID}); e.Type != agentproto.TypeWelcome {
+		t.Fatalf("reconnect: %+v", e)
+	}
+	if got, err := f.svc.Get(ctx, f.admin, w.AgentID); err != nil || got.DockerHost != nil {
+		t.Errorf("without docker host: %+v %v", got.DockerHost, err)
+	}
+}
+
+// noVersion asks fixture.hello to send a hello without a version.
+const noVersion = "<none>"
+
+// TestRefusedHelloKeepsToken covers D-080 with AGT-011: a hello with a
+// pairing token whose version is missing or 65 characters long is refused
+// for the version before the registry sees it, so the token stays valid and
+// no agent is added.
+func TestRefusedHelloKeepsToken(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	tok, err := f.svc.CreateToken(ctx, f.admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pt, _ := agentproto.ParsePairingToken(tok.Token)
+	long := buildinfo.Version + "+" + strings.Repeat("x", agentproto.MaxHelloVersion-len(buildinfo.Version))
+	for _, v := range []string{noVersion, long} {
+		if e := f.hello(newAgent(t), pt.Fingerprint, agentproto.Hello{Token: pt.Secret, Version: v}); reason(e) != agentproto.RejectVersion {
+			t.Fatalf("version %q: %+v", v, e)
+		}
+	}
+	if list, err := f.svc.List(ctx, f.admin); err != nil || len(list) != 0 {
+		t.Fatalf("agents after refused hellos = %+v %v", list, err)
+	}
+	e := f.hello(newAgent(t), pt.Fingerprint, agentproto.Hello{Token: pt.Secret})
+	if w, _ := agentproto.Payload[agentproto.Welcome](e); e.Type != agentproto.TypeWelcome || w.AgentID == "" {
+		t.Errorf("token after refused hellos: %+v", e)
 	}
 }

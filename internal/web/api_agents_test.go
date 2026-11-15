@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NightDragon1/rconductor/internal/agentproto"
+	"github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/api"
 )
 
@@ -47,5 +49,23 @@ func TestAgentsAPI(t *testing.T) {
 	rec = f.do(t, call{method: http.MethodDelete, path: "/api/v1/agents/01a19e38-161d-712a-a6d1-f8eca4a6aacd", cookies: []*http.Cookie{admin}, origin: "http://panel.lan"})
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("delete unknown = %d", rec.Code)
+	}
+}
+
+// TestAPIAgentDockerHost: the API shows the Docker host only when the agent
+// service set it, and leaves out each field the daemon did not give
+// (AGT-014).
+func TestAPIAgentDockerHost(t *testing.T) {
+	a := agents.Agent{ID: "00000000-0000-4000-8000-000000000001"}
+	if got := toAPIAgent(a); got.DockerHost != nil {
+		t.Errorf("without host: %+v", got.DockerHost)
+	}
+	a.DockerHost = &agentproto.DockerHost{Name: "nas"}
+	if got := toAPIAgent(a).DockerHost; got == nil || got.Name == nil || *got.Name != "nas" || got.Ip != nil {
+		t.Errorf("name only: %+v", got)
+	}
+	a.DockerHost = &agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}
+	if got := toAPIAgent(a).DockerHost; got == nil || got.Ip == nil || *got.Ip != "192.168.1.5" {
+		t.Errorf("name and address: %+v", got)
 	}
 }
