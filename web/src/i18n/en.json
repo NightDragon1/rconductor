@@ -802,6 +802,7 @@
     "name": "Name",
     "version": "Version",
     "lastSeen": "Last seen",
+    "dockerHost": "Docker host",
     "none": "No agents yet.",
     "connected": "connected",
     "disconnected": "disconnected",
