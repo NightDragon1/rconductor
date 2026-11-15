@@ -167,7 +167,9 @@ paths:
       description: >-
         Needs no session. Without one the answer holds name, version,
         license and repository only; with a session also commit and build
-        date; for the RCON admin also the agents with their version. The
+        date; for the RCON admin also the paired agents with their version.
+        A session that must change its password or set up the second factor
+        first gets the answer without a session. The
         agent version is foreign data (SEC-006): at most 64 characters,
         otherwise unknown, like a missing version (agents 1.0 and 1.1).
       tags: [auth]
@@ -2868,7 +2870,9 @@ components:
           description: Build time in UTC (RFC 3339), or unknown; only with a session.
         agents:
           type: array
-          description: Paired agents with their version; only for the RCON admin.
+          description: >-
+            Paired agents (status active) with their version; only for the
+            RCON admin with an unrestricted session.
           items:
             $ref: "#/components/schemas/AboutAgent"
 

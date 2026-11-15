@@ -618,7 +618,7 @@ func (e ListAuditParamsKind) Valid() bool {
 
 // About defines model for About.
 type About struct {
-	// Agents Paired agents with their version; only for the RCON admin.
+	// Agents Paired agents (status active) with their version; only for the RCON admin with an unrestricted session.
 	Agents *[]AboutAgent `json:"agents,omitempty"`
 
 	// BuildDate Build time in UTC (RFC 3339), or unknown; only with a session.

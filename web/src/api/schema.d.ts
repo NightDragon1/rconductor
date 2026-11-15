@@ -110,7 +110,7 @@ export interface paths {
         };
         /**
          * Name, version, license and repository of the panel (UI-024, D-080).
-         * @description Needs no session. Without one the answer holds name, version, license and repository only; with a session also commit and build date; for the RCON admin also the agents with their version. The agent version is foreign data (SEC-006): at most 64 characters, otherwise unknown, like a missing version (agents 1.0 and 1.1).
+         * @description Needs no session. Without one the answer holds name, version, license and repository only; with a session also commit and build date; for the RCON admin also the paired agents with their version. A session that must change its password or set up the second factor first gets the answer without a session. The agent version is foreign data (SEC-006): at most 64 characters, otherwise unknown, like a missing version (agents 1.0 and 1.1).
          */
         get: operations["getAbout"];
         put?: never;
@@ -1509,7 +1509,7 @@ export interface components {
             commit?: string;
             /** @description Build time in UTC (RFC 3339), or unknown; only with a session. */
             build_date?: string;
-            /** @description Paired agents with their version; only for the RCON admin. */
+            /** @description Paired agents (status active) with their version; only for the RCON admin with an unrestricted session. */
             agents?: components["schemas"]["AboutAgent"][];
         };
         AboutAgent: {
