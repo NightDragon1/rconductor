@@ -23,6 +23,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
@@ -397,5 +398,60 @@ func TestTurnDownPending(t *testing.T) {
 	}
 	if err := f.svc.Delete(ctx, f.admin, list[0].ID); !errors.Is(err, users.ErrNotFound) {
 		t.Errorf("second delete: %v", err)
+	}
+}
+
+// TestDockerHostBehindFlag covers AGT-014: the RCON admin sees the Docker
+// host of an agent's last hello, cleaned (SEC-006), only while the flag
+// docker_host is on; with the flag off the agent is shown as in 1.1, and
+// an agent whose daemon names no host has none. Other roles do not read
+// agents at all.
+func TestDockerHostBehindFlag(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	flags, err := features.New(features.Flag{Name: FeatureDockerHost})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.svc.UseFeatures(flags)
+	tok, err := f.svc.CreateToken(ctx, f.admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pt, _ := agentproto.ParsePairingToken(tok.Token)
+	a := newAgent(t)
+	e := f.hello(a, pt.Fingerprint, agentproto.Hello{Token: pt.Secret,
+		DockerHost: &agentproto.DockerHost{Name: "n\u202eas", IP: "::ffff:192.168.1.5"}})
+	w, _ := agentproto.Payload[agentproto.Welcome](e)
+	if w.AgentID == "" {
+		t.Fatalf("pairing = %+v", e)
+	}
+	if got, err := f.svc.Get(ctx, f.admin, w.AgentID); err != nil || got.DockerHost != nil {
+		t.Errorf("flag off: %+v %v", got.DockerHost, err)
+	}
+	if _, err := f.st.DB.Exec(`INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('f', ?, 'true', 'global', '', 't')`,
+		features.Key(FeatureDockerHost)); err != nil {
+		t.Fatal(err)
+	}
+	want := agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}
+	if got, err := f.svc.Get(ctx, f.admin, w.AgentID); err != nil || got.DockerHost == nil || *got.DockerHost != want {
+		t.Errorf("flag on: %+v %v", got.DockerHost, err)
+	}
+	list, err := f.svc.List(ctx, f.admin)
+	if err != nil || len(list) != 1 || list[0].DockerHost == nil || *list[0].DockerHost != want {
+		t.Errorf("list: %+v %v", list, err)
+	}
+	if _, err := f.svc.Get(ctx, f.sa, w.AgentID); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("server admin reads the agent: %v", err)
+	}
+	if _, err := f.svc.List(ctx, f.sa); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("server admin lists agents: %v", err)
+	}
+	// The agent comes back with a daemon that names no host.
+	if e := f.hello(a, pt.Fingerprint, agentproto.Hello{AgentID: w.AgentID}); e.Type != agentproto.TypeWelcome {
+		t.Fatalf("reconnect: %+v", e)
+	}
+	if got, err := f.svc.Get(ctx, f.admin, w.AgentID); err != nil || got.DockerHost != nil {
+		t.Errorf("without docker host: %+v %v", got.DockerHost, err)
 	}
 }

@@ -1200,6 +1200,7 @@ export interface components {
             capabilities: string[];
             /** @description Source address of the last connection. */
             remote?: string;
+            docker_host?: components["schemas"]["DockerHost"];
             /** Format: uuid */
             paired_by?: string;
             connected: boolean;
@@ -1209,6 +1210,13 @@ export interface components {
             last_seen_at?: string;
             /** Format: date-time */
             revoked_at?: string;
+        };
+        /** @description Host of the agent's Docker daemon as the daemon names it (AGT-014), from the agent's last hello since the panel started. Only while the feature flag docker_host is on; each field is missing when the daemon does not give it. */
+        DockerHost: {
+            /** @description Foreign data from the agent (SEC-006). */
+            name?: string;
+            /** @description IPv4 or IPv6 address without zone. */
+            ip?: string;
         };
         AgentList: {
             items: components["schemas"]["Agent"][];
