@@ -42,6 +42,7 @@ const reasons = [
   'timeout',
   'busy',
   'command_failed',
+  'message_too_long',
 ];
 
 interface Active {

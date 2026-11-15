@@ -323,6 +323,7 @@ const (
 	ReasonCodeConflict               ReasonCode = "conflict"
 	ReasonCodeForbidden              ReasonCode = "forbidden"
 	ReasonCodeInvalid                ReasonCode = "invalid"
+	ReasonCodeMessageTooLong         ReasonCode = "message_too_long"
 	ReasonCodeNotFound               ReasonCode = "not_found"
 	ReasonCodeNotInList              ReasonCode = "not_in_list"
 	ReasonCodePasswordChangeRequired ReasonCode = "password_change_required"
@@ -353,6 +354,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeForbidden:
 		return true
 	case ReasonCodeInvalid:
+		return true
+	case ReasonCodeMessageTooLong:
 		return true
 	case ReasonCodeNotFound:
 		return true

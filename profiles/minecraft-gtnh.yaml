@@ -37,6 +37,9 @@ stop:
 version:
   pattern: "Starting minecraft server version (\\S+)"
 formatting: minecraft
+# Messages to the players with the sender and the group prefix (CMD-020,
+# D-081, D-083), in a form every Minecraft Java version from 1.7.10 on takes.
+message_command: { path: say, render: minecraft-tellraw }
 catalog:
   # --- Vanilla 1.7.10 ---
   - path: list

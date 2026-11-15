@@ -2020,7 +2020,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "command_failed";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "command_failed" | "message_too_long";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**

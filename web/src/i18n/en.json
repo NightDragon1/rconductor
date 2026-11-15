@@ -432,6 +432,7 @@
       "timeout": "The server did not answer in time",
       "busy": "The server is busy",
       "command_failed": "The game reported the command as failed",
+      "message_too_long": "The message is too long for the server with your name and the prefix",
       "other": "The command failed"
     },
     "preview": "› {{command}}"

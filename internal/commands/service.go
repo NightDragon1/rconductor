@@ -16,6 +16,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -137,6 +138,7 @@ type Service struct {
 	exec    Executor
 	log     *slog.Logger
 	limiter *limiter
+	flags   *features.Set
 	now     func() time.Time
 	// timeout overrides Timeout, for tests.
 	timeout time.Duration
@@ -150,6 +152,10 @@ func NewService(st *store.Store, c *perm.Checker, exec Executor, log *slog.Logge
 	return &Service{st: st, perm: c, exec: exec, log: log, limiter: newLimiter(), now: time.Now, timeout: Timeout}
 }
 
+// UseFeatures names the feature flags the pipeline checks (say_sender);
+// without, every flag counts as off.
+func (s *Service) UseFeatures(f *features.Set) { s.flags = f }
+
 // SetTimeout replaces Timeout; zero keeps it.
 func (s *Service) SetTimeout(d time.Duration) {
 	if d > 0 {
@@ -159,6 +165,9 @@ func (s *Service) SetTimeout(d time.Duration) {
 
 type payload struct {
 	Command string `json:"command"`
+	// Sent is the command that went to the game when it differs from the
+	// input (CMD-020, D-081).
+	Sent    string `json:"sent,omitempty"`
 	BatchID string `json:"batch_id,omitempty"`
 }
 
@@ -211,6 +220,7 @@ func (s *Service) syntax(ctx context.Context, serverID string) (Syntax, error) {
 		syn.MaxLength = rules.Syntax.MaxLength
 	}
 	syn.Wrappers = rules.Syntax.Wrappers
+	syn.Message = rules.MessageCommand
 	syn.Separators = rules.Syntax.Separators
 	if pp := rules.Syntax.PlayerPattern; pp != "" {
 		// The import has checked the pattern; one that does not compile
@@ -336,6 +346,14 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 			}
 		}
 	}
+	// 7c: a message to the players goes out in the fixed form of the
+	// profile, with the sender and the prefix of the server group; the
+	// checks above ran on the input, the built command is not checked
+	// against the list again (CMD-020, D-081).
+	sent, err := s.message(ctx, req, serverID, cmd, syn)
+	if err != nil {
+		return Result{}, err
+	}
 	// 8: rate limit (CMD-019).
 	if ok, wait := s.limiter.take(req.Actor.ID, serverID, s.limit(ctx, string(req.Actor.Role)), s.now()); !ok {
 		return Result{}, s.deny(ctx, req, serverID, cmd, ReasonRateLimited, wait)
@@ -343,7 +361,11 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	// 9 and 10: marked with request ID, session, user and role; audit
 	// before sending (CMD-007).
 	s.log.Info("command accepted", append(s.attrs(req, serverID), logging.Event(logging.CmdAccepted))...)
-	if err := s.entry(ctx, req, serverID, ActionSent, audit.Entry{Payload: payload{Command: cmd, BatchID: req.BatchID}, Result: audit.ResultOK}); err != nil {
+	p := payload{Command: cmd, BatchID: req.BatchID}
+	if sent != cmd {
+		p.Sent = sent
+	}
+	if err := s.entry(ctx, req, serverID, ActionSent, audit.Entry{Payload: p, Result: audit.ResultOK}); err != nil {
 		return Result{}, err
 	}
 	// 11: one connection, one queue per server.
@@ -351,7 +373,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	defer cancel()
 	s.log.Info("command sent", append(s.attrs(req, serverID), logging.Event(logging.CmdSent))...)
 	start := s.now()
-	answer, err := s.exec.Execute(ectx, serverID, cmd)
+	answer, err := s.exec.Execute(ectx, serverID, sent)
 	res := Result{RequestID: req.RequestID, TS: start.UTC(), Command: cmd}
 	outcome, reason := ResultOK, ""
 	switch {

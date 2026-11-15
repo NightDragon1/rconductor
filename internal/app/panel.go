@@ -218,6 +218,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	}
 	cmdSvc := commands.NewService(st, checker, conns, logs.Module("cmd"))
 	cmdSvc.SetTimeout(cfg.CommandTimeout)
+	cmdSvc.UseFeatures(features.Default())
 	cmdSvc.Publish = hub.PublishConsole
 
 	var wg sync.WaitGroup
