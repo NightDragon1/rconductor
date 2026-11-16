@@ -17,6 +17,7 @@ import {
   type ServerGroup,
 } from '@/api/servers';
 import { useSession } from '@/api/session';
+import { useServerNumbers } from '@/components/ServerNumber';
 import { outcome } from '@/api/users';
 import type { components } from '@/api/schema';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -850,6 +851,8 @@ export function ServersAdminPage() {
   const canEditProfiles = session?.user.role === 'server_admin' && !phone;
   // Save as New only for who may create servers (UI-017, NFR-019).
   const saveAsNew = canEdit && (session?.ui.features ?? []).includes('server_save_as_new');
+  // The number as first column ID, with the flag server_number (UI-018).
+  const numbers = useServerNumbers();
   // The say prefix of a group (CMD-020) behind the flag say_sender.
   const sayPrefix = (session?.ui.features ?? []).includes(SAY_SENDER_FLAG);
   const servers = useServers();
@@ -954,6 +957,7 @@ export function ServersAdminPage() {
             <table className="w-full text-sm">
               <thead className="text-left text-muted">
                 <tr>
+                  {numbers && <th className="p-3 font-medium">{t('servers.id')}</th>}
                   <th className="p-3 font-medium">{t('servers.name')}</th>
                   <th className="p-3 font-medium">{t('servers.profile')}</th>
                   {canSeeAgents && <th className="p-3 font-medium">{t('servers.address')}</th>}
@@ -970,6 +974,7 @@ export function ServersAdminPage() {
                       open?.id === s.id && 'bg-surface-raised',
                     )}
                   >
+                    {numbers && <td className="p-3 font-mono text-muted">{s.number}</td>}
                     <td className="p-3">
                       <button
                         type="button"

@@ -680,6 +680,8 @@
     }
   },
   "servers": {
+    "id": "ID",
+    "numberLabel": "Server number {{number}}",
     "new": "New server",
     "create": "Create server",
     "save": "Save",
