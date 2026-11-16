@@ -396,13 +396,21 @@ func (d *AgentData) Metric(agentID, name string) (MetricView, bool) {
 // of the last delivery they hold and the number of the first line.
 func (d *AgentData) Logs(agentID, name string) ([]string, uint64, uint64) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	a := d.agents[agentID]
 	if a == nil || a.containers[name] == nil {
+		d.mu.Unlock()
 		return nil, 0, 0
 	}
 	e := a.containers[name]
-	return slices.Clone(e.logs), e.logSeq, e.logTotal - uint64(len(e.logs)) + 1
+	lines, seq, first := slices.Clone(e.logs), e.logSeq, e.logTotal-uint64(len(e.logs))+1
+	mask := d.mask
+	d.mu.Unlock()
+	// Masked again on the way out: lines kept while the masking was off,
+	// or before a pattern was added, do not leave as they are (UI-022).
+	if mask != nil {
+		lines = mask(lines)
+	}
+	return lines, seq, first
 }
 
 // Connected reports whether the agent's data is live.

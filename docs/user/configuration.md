@@ -137,7 +137,8 @@ are written like `24h`, `15m`, `30s`.
 | `smtp.test_per_minute` (new in 1.1) | number | 5 | 1 to 60 | test mails per user and minute |
 | `ui.shortcuts_enabled` | boolean | off | on, off | keyboard shortcuts for everyone |
 | `logs.masking` (new in 1.2) | boolean | on | on, off | masks known secrets in container logs before the panel keeps or sends them: values of keys and flags such as `password=`, `--rcon-password`, `token`, `secret`, `api_key`, Bearer tokens and the user info of URLs, shown as `•••` |
-| `logs.mask_patterns` (new in 1.2) | list | `[]` | up to 20 RE2 expressions of up to 256 characters | own patterns, each match shown as `•••`; an invalid list is refused with 400 |
+| `logs.mask_patterns` (new in 1.2) | list | `[]` | up to 20 RE2 expressions of up to 256 characters | own patterns, each match shown as `•••`; a pattern that matches empty text or is too complex is refused, an invalid list with 400; the audit log keeps only the number of patterns |
+| `logs.mask_timeout` (new in 1.2) | duration | 1s | 100ms to 10s | longest time to mask the lines of one batch; lines left after it are shown as `•••` |
 
 Masking works on what the panel recognizes. Images that trace their start
 script (`set -x`, `bash -x`) print every command with its arguments, and

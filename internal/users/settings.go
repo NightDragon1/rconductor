@@ -177,8 +177,9 @@ var settingRules = map[string]rule{
 	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
 	SettingMultiParallel:           intRule(MinMultiParallel, 64),
 	// Masking of container logs (UI-022, D4).
-	logmask.SettingEnabled:  boolRule,
+	logmask.SettingEnabled:  flagRule,
 	logmask.SettingPatterns: logmask.CheckPatterns,
+	logmask.SettingTimeout:  durationRule(logmask.MinTimeout, 10*time.Second),
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and
@@ -216,6 +217,9 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		return err
 	}
 	if _, err := st.EnsureDefault(ctx, logmask.SettingPatterns, []string{}); err != nil {
+		return err
+	}
+	if _, err := st.EnsureDefault(ctx, logmask.SettingTimeout, logmask.DefaultTimeout.String()); err != nil {
 		return err
 	}
 	return nil
@@ -307,6 +311,11 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 		if err := q.SetGlobalSetting(ctx, sqlitedb.SetGlobalSettingParams{Value: v, UpdatedAt: store.Now(), Key: k}); err != nil {
 			return nil, err
 		}
+		if k == logmask.SettingPatterns {
+			// Patterns may hold literal secrets: only their number (SEC-012).
+			changes[k] = map[string]int{"from": patternCount(cur[k]), "to": patternCount(json.RawMessage(v))}
+			continue
+		}
 		changes[k] = map[string]json.RawMessage{"from": cur[k], "to": json.RawMessage(v)}
 	}
 	if len(changes) > 0 {
@@ -330,4 +339,11 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 	}
 	s.perm.Invalidate()
 	return s.Settings(ctx, req)
+}
+
+// patternCount is the number of masking patterns in a stored value.
+func patternCount(raw json.RawMessage) int {
+	var l []string
+	_ = json.Unmarshal(raw, &l)
+	return len(l)
 }

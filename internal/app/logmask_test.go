@@ -63,4 +63,39 @@ func TestLogMaskingUI022(t *testing.T) {
 	if err := f.db().QueryRow(`SELECT COUNT(*) FROM audit_log WHERE action = 'settings.update' AND result = 'ok' AND payload LIKE '%logs.mask%'`).Scan(&n); err != nil || n < 2 {
 		t.Errorf("audit entries of the masking = %d %v, want 2", n, err)
 	}
+	// The audit keeps the number of patterns, never their text (SEC-012).
+	if err := f.db().QueryRow(`SELECT COUNT(*) FROM audit_log WHERE payload LIKE '%steam_%'`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("audit entries with pattern text = %d %v", n, err)
+	}
+	if got := f.as(rA).call(http.MethodPatch, "/settings", map[string]any{"logs.masking": nil}, nil); got == http.StatusOK {
+		t.Error("null switched the masking")
+	}
+}
+
+// TestLogMaskingKeptLines covers UI-022: lines the cache kept while the
+// masking was off leave masked once it is on again, also in the replay of
+// a new subscription.
+func TestLogMaskingKeptLines(t *testing.T) {
+	f := newRightsFixture(t)
+	const secret = "hunter2y"
+	f.as(rA).must(http.MethodPatch, "/settings", map[string]any{"logs.masking": false}, nil, http.StatusOK)
+	pairAgent(t, f.as(rA), f.agentAddr, f.server, &hostBackend{logLine: "java --rcon-password " + secret})
+	first := recordTopics(t, f, rA, f.server)
+	wait := func(r *wsRecorder, want string) {
+		t.Helper()
+		deadline := time.Now().Add(15 * time.Second)
+		for !strings.Contains(r.all(), want) {
+			if time.Now().After(deadline) {
+				t.Fatalf("no %q over the WebSocket:\n%s", want, r.all())
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	wait(first, "--rcon-password "+secret)
+	f.as(rA).must(http.MethodPatch, "/settings", map[string]any{"logs.masking": true}, nil, http.StatusOK)
+	again := recordTopics(t, f, rA, f.server)
+	wait(again, "--rcon-password •••")
+	if strings.Contains(again.all(), secret) {
+		t.Error("a kept line left as it is")
+	}
 }
