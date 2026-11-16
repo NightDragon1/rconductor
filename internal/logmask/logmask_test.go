@@ -7,9 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
@@ -31,11 +34,14 @@ func TestBuiltin(t *testing.T) {
 		"API_KEY='k-1' TOKEN=t.2":                           "API_KEY='•••' TOKEN=•••",
 		"passwd=x&user=y":                                   "passwd=•••&user=y",
 		"Authorization: Bearer eyJhbGciOi.x-y_z":            "Authorization: Bearer •••",
-		"GET https://steve:hunter2@example.com/x":           "GET https://•••example.com/x",
-		"password=\"open quote to the end":                  "password=\"•••",
-		"[Server] Done (5.2s)! For help, type \"help\"":     "[Server] Done (5.2s)! For help, type \"help\"",
-		"wrong password for steve":                          "wrong password for steve",
-		"":                                                  "",
+		"GET https://steve:hunter2@example.com/x":           "GET https://•••@example.com/x",
+		// Shell traces (set -x) quote values with space or $ in '...'.
+		"+ exec java --rcon-password 'pa$$ word' -nogui": "+ exec java --rcon-password '•••' -nogui",
+		"+ export 'RCON_PASSWORD=a b'":                   "+ export 'RCON_PASSWORD=•••'",
+		"password=\"open quote to the end":               "password=\"•••",
+		"[Server] Done (5.2s)! For help, type \"help\"":  "[Server] Done (5.2s)! For help, type \"help\"",
+		"wrong password for steve":                       "wrong password for steve",
+		"":                                               "",
 	} {
 		if got := m.Line(in); got != want {
 			t.Errorf("%q\n got %q\nwant %q", in, got, want)
@@ -112,6 +118,27 @@ func TestLongLine(t *testing.T) {
 	}
 }
 
+// TestC139B2AdminPatternGrowth: patterns of the RCON admin cannot blow a
+// line up: they run in one pass over the input, never over earlier
+// replacements, and the result keeps the line bound.
+func TestC139B2AdminPatternGrowth(t *testing.T) {
+	dots := make([]string, MaxPatterns)
+	for i := range dots {
+		dots[i] = "."
+	}
+	m, err := Compile(dots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := strings.Repeat("a", agentproto.MaxLogLine)
+	if got := m.Line(line); len(got) > agentproto.MaxLogLine || !utf8.ValidString(got) {
+		t.Errorf("line grew to %d bytes (valid %v)", len(got), utf8.ValidString(got))
+	}
+	if got := m.Line("ab"); got != Replacement+Replacement {
+		t.Errorf("one pass: %q", got)
+	}
+}
+
 // TestService covers UI-022: the masking is on without a setting, off when
 // the RCON admin switches it off, and follows changed patterns.
 func TestService(t *testing.T) {
@@ -141,8 +168,83 @@ func TestService(t *testing.T) {
 	if got := line(); got != "password=hunter2 steam_1234" {
 		t.Errorf("switched off: %q", got)
 	}
+	// A context that ended: every line is withheld, none goes out as it
+	// is (fail closed).
+	set(SettingEnabled, `true`)
+	done, cancel := context.WithCancel(ctx)
+	cancel()
+	if got := s.Lines(done, []string{"password=hunter2", "plain"}); got[0] != Replacement || got[1] != Replacement {
+		t.Errorf("ended context: %q", got)
+	}
+	// Patterns that cannot be read keep the last ones.
+	set(SettingPatterns, `["steam_[0-9]+"]`)
+	_ = line()
+	set(SettingPatterns, `not json`)
+	if got := line(); got != "password=••• •••" {
+		t.Errorf("unreadable patterns: %q", got)
+	}
 	var nilService *Service
 	if got := nilService.Lines(ctx, []string{"password=x"}); got[0] != "password=x" {
 		t.Errorf("nil service: %q", got)
+	}
+}
+
+// TestServiceParallel: lines are masked while the patterns change, without
+// a race and never with the plain value.
+func TestServiceParallel(t *testing.T) {
+	st := storetest.New(t)
+	ctx := context.Background()
+	s := New(st)
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Go(func() {
+			for range 50 {
+				if got := s.Lines(ctx, []string{"password=hunter2"})[0]; strings.Contains(got, "hunter2") {
+					t.Errorf("plain value: %q", got)
+					return
+				}
+			}
+		})
+		wg.Go(func() {
+			v := fmt.Sprintf(`["p%d_[0-9]+"]`, i)
+			_, _ = st.DB.ExecContext(ctx, `INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('p', ?, ?, 'global', '', 't')
+				ON CONFLICT (key, scope_type, scope_id) DO UPDATE SET value = excluded.value`, SettingPatterns, v)
+		})
+	}
+	wg.Wait()
+}
+
+// TestC139B1ShellTraceQuotes: values a shell trace (set -x) puts in single
+// quotes are masked up to the closing quote.
+func TestC139B1ShellTraceQuotes(t *testing.T) {
+	m := &Masker{}
+	for in, want := range map[string]string{
+		"+ java --rcon-password 'pa$$ word' -nogui": "+ java --rcon-password '•••' -nogui",
+		"+ export 'RCON_PASSWORD=a b c'":            "+ export 'RCON_PASSWORD=•••'",
+		"+ run -token 'x;y&z'":                      "+ run -token '•••'",
+	} {
+		if got := m.Line(in); got != want {
+			t.Errorf("%q: got %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestC139B3Bounds: an admin pattern with a large program is refused, and
+// lines left when the time of a call ends are withheld, not sent as they
+// are.
+func TestC139B3Bounds(t *testing.T) {
+	if _, err := Compile([]string{`.{1000}`}); err == nil {
+		t.Error("a pattern of more than MaxPatternInsts instructions was taken")
+	}
+	if _, err := Compile([]string{`[a-z]{1,40}@[a-z]{1,40}`}); err != nil {
+		t.Errorf("a pattern of normal size: %v", err)
+	}
+	s := New(storetest.New(t))
+	done, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, got := range s.Lines(done, []string{"password=hunter2", "plain"}) {
+		if got != Replacement {
+			t.Errorf("after the end: %q", got)
+		}
 	}
 }
