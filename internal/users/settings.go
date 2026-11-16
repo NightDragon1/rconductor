@@ -4,6 +4,7 @@
 package users
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -117,12 +118,13 @@ func intRule(lo, hi int) rule {
 	}
 }
 
+// boolRule takes exactly true or false; null is refused, never stored
+// as false.
 func boolRule(raw json.RawMessage) (any, error) {
-	var b bool
-	if err := json.Unmarshal(raw, &b); err != nil {
-		return nil, fmt.Errorf("true or false")
+	if s := string(bytes.TrimSpace(raw)); s == "true" || s == "false" {
+		return s == "true", nil
 	}
-	return b, nil
+	return nil, fmt.Errorf("true or false")
 }
 
 // flagRule takes exactly true or false for a feature flag (NFR-019).

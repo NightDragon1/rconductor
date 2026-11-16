@@ -171,7 +171,7 @@ func (s *Service) policy(ctx context.Context) (idle, maxLife time.Duration) {
 	idle, maxLife = DefaultIdleTimeout, DefaultMaxLifetime
 	for key, dst := range map[string]*time.Duration{SettingIdleTimeout: &idle, SettingMaxLifetime: &maxLife} {
 		var v string
-		if err := s.st.GlobalSetting(ctx, key, &v); err != nil {
+		if err := s.st.GuardedSetting(ctx, s.log, key, &v); err != nil {
 			continue
 		}
 		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
@@ -189,7 +189,11 @@ func (s *Service) loginPolicy(ctx context.Context) loginLimits {
 	ints := map[string]*int{SettingMaxFailures: &lim.maxFailures, SettingMaxClientFailures: &lim.maxClientFailures, SettingMaxTracked: &lim.maxTracked, SettingOverflowLine: &lim.overflowLine}
 	for key, dst := range ints {
 		var n int
-		if err := s.st.GlobalSetting(ctx, key, &n); err != nil {
+		read := s.st.GlobalSetting // capacity and tuning stay at the default
+		if key == SettingMaxFailures || key == SettingMaxClientFailures {
+			read = func(ctx context.Context, key string, dst any) error { return s.st.GuardedSetting(ctx, s.log, key, dst) }
+		}
+		if err := read(ctx, key, &n); err != nil {
 			continue
 		}
 		if n >= 1 {
@@ -203,7 +207,7 @@ func (s *Service) loginPolicy(ctx context.Context) loginLimits {
 		lim.maxTracked = DefaultMaxTracked
 	}
 	var v string
-	if err := s.st.GlobalSetting(ctx, SettingLockout, &v); err == nil {
+	if err := s.st.GuardedSetting(ctx, s.log, SettingLockout, &v); err == nil {
 		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
 			lim.lockout = d
 		} else {

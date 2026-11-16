@@ -199,7 +199,9 @@ func (s *apiServer) authenticate(next api.StrictHandlerFunc, operationID string)
 			return nil, &problem{status: http.StatusForbidden, reason: api.ReasonCodePasswordChangeRequired,
 				detail: "change your password first"}
 		}
-		if ok && p.TOTPSetupRequired && !whileTOTPSetup[operationID] {
+		// A forced password change comes first; the setup of the second
+		// factor follows with the new password (AUTH-010, AUTH-008).
+		if ok && p.TOTPSetupRequired && !p.MustChangePassword && !whileTOTPSetup[operationID] {
 			perm.LogDenied(s.log, perm.Denial{
 				RequestID: RequestID(ctx), SessionRef: p.SessionRef(), User: p.Pseudonym, Role: perm.Role(p.Role),
 				Reason: string(api.ReasonCodeTotpSetupRequired), Action: operationID,

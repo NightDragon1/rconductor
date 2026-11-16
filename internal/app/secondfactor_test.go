@@ -192,3 +192,62 @@ func TestRequiredSecondFactorRestricts(t *testing.T) {
 		t.Errorf("off while required = %d", code)
 	}
 }
+
+// TestC142F1PasswordChangeBeforeSecondFactor: a session that must change
+// its password and set up the second factor changes the password first,
+// then sets up the second factor, and is free after both (AUTH-010,
+// AUTH-008).
+func TestC142F1PasswordChangeBeforeSecondFactor(t *testing.T) {
+	game, err := rcontest.Start("rconpw", rcontest.Minecraft, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(game.Close)
+	s := newStack(t, game.Addr, "rconpw")
+	admin := s.users["admin"]
+	var list struct {
+		Items []struct{ ID, Pseudonym string }
+	}
+	admin.must(http.MethodGet, "/users", nil, &list, http.StatusOK)
+	id := ""
+	for _, u := range list.Items {
+		if u.Pseudonym == "sa1" {
+			id = u.ID
+		}
+	}
+	var reset struct{ Password string }
+	admin.must(http.MethodPost, "/users/"+id+"/password-reset", nil, &reset, http.StatusOK)
+	// Required for everyone only now: the admin has no second factor either.
+	admin.must(http.MethodPatch, "/settings", map[string]any{"auth.totp_required": true}, nil, http.StatusOK)
+
+	sa := login(t, s.base, "sa1", reset.Password)
+	var sess struct {
+		Must     bool `json:"must_change_password"`
+		Required bool `json:"totp_setup_required"`
+	}
+	sa.must(http.MethodGet, "/auth/session", nil, &sess, http.StatusOK)
+	if !sess.Must || !sess.Required {
+		t.Fatalf("session = %+v, want both restrictions", sess)
+	}
+	if status, reason := problemOf(t, sa, http.MethodGet, "/servers", nil); status != http.StatusForbidden || reason != "password_change_required" {
+		t.Errorf("servers before the change = %d %s", status, reason)
+	}
+	if status, reason := problemOf(t, sa, http.MethodPost, "/me/second-factor/setup", map[string]string{"password": reset.Password}); status != http.StatusForbidden || reason != "password_change_required" {
+		t.Errorf("second factor before the change = %d %s", status, reason)
+	}
+	const pw = "the new password of sa1"
+	sa.must(http.MethodPost, "/me/password", map[string]string{"current_password": reset.Password, "new_password": pw}, nil, http.StatusNoContent)
+
+	sa = login(t, s.base, "sa1", pw)
+	sa.must(http.MethodGet, "/auth/session", nil, &sess, http.StatusOK)
+	if sess.Must || !sess.Required {
+		t.Fatalf("session after the change = %+v, want the second factor only", sess)
+	}
+	if status, reason := problemOf(t, sa, http.MethodGet, "/servers", nil); status != http.StatusForbidden || reason != "totp_setup_required" {
+		t.Errorf("servers after the change = %d %s", status, reason)
+	}
+	var setup struct{ Secret string }
+	sa.must(http.MethodPost, "/me/second-factor/setup", map[string]string{"password": pw}, &setup, http.StatusOK)
+	sa.must(http.MethodPost, "/me/second-factor/confirm", map[string]string{"code": codeAt(t, setup.Secret, 0)}, nil, http.StatusNoContent)
+	sa.must(http.MethodGet, "/servers", nil, nil, http.StatusOK)
+}
