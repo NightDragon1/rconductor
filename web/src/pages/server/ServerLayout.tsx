@@ -13,6 +13,7 @@ import {
   type Server,
 } from '@/api/servers';
 import { useSession } from '@/api/session';
+import { DOCKER_HOST_FLAG, DockerHost, dockerHostParts } from '@/components/DockerHost';
 import { useServer } from '@/api/live-servers';
 import { decimal, gib, span, useNow } from '@/lib/format';
 import { usePhone } from '@/lib/phone';
@@ -89,7 +90,11 @@ function Head({ server, role }: { server: Server; role?: string }) {
   const profile = topProfile(t, server.profile_ids, profiles.data ?? []) || undefined;
   // Only the RCON admin may read the agents; the server admin sees the
   // state alone (F10).
-  const agentName = agents.data?.find((a) => a.id === server.agent_id)?.name;
+  const agent = agents.data?.find((a) => a.id === server.agent_id);
+  const agentName = agent?.name;
+  // The Docker host of the agent with the flag docker_host (AGT-014).
+  const { data: session } = useSession();
+  const dockerHost = (session?.ui.features ?? []).includes(DOCKER_HOST_FLAG);
   const lng = i18n.language;
   return (
     <section
@@ -158,6 +163,12 @@ function Head({ server, role }: { server: Server; role?: string }) {
               <span className={c.agent_connected ? 'text-ok' : 'text-danger'}>
                 {t(c.agent_connected ? 'server.agentConnected' : 'server.agentGone')}
               </span>
+              {dockerHost && dockerHostParts(agent).any && (
+                <span className="ml-2">
+                  <span className="text-muted">{t('agents.dockerHost')}</span>{' '}
+                  <DockerHost agent={agent} />
+                </span>
+              )}
             </span>
           )}
           {!admin && commands.data && (

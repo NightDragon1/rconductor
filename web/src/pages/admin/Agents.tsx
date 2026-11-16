@@ -25,6 +25,8 @@ import { cn } from '@/lib/utils';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
 import { ForeignText } from '@/components/ForeignText';
+import { DOCKER_HOST_FLAG, DockerHost } from '@/components/DockerHost';
+import { useSession } from '@/api/session';
 
 type Token = components['schemas']['AgentToken'];
 const settingsKey = ['settings'] as const;
@@ -89,6 +91,9 @@ function PairDialog({ onClose }: { onClose: () => void }) {
 // (UI-012).
 export function AgentsPage() {
   const { t } = useTranslation();
+  const { data: session } = useSession();
+  // The Docker host with the flag docker_host (AGT-014).
+  const dockerHost = (session?.ui.features ?? []).includes(DOCKER_HOST_FLAG);
   const phone = usePhone();
   const qc = useQueryClient();
   const now = useNow(10_000);
@@ -193,6 +198,9 @@ export function AgentsPage() {
                       : t(`agents.status.${a.status}`),
                 },
                 { label: t('agents.version'), value: <bdi className="font-mono">{a.version}</bdi> },
+                ...(dockerHost
+                  ? [{ label: t('agents.dockerHost'), value: <DockerHost agent={a} /> }]
+                  : []),
                 {
                   label: t('agents.fingerprint'),
                   value: <span className="font-mono text-xs">{a.fingerprint}</span>,
@@ -213,6 +221,7 @@ export function AgentsPage() {
                 <th className="p-3 font-medium">{t('agents.name')}</th>
                 <th className="p-3 font-medium">{t('admin.statusLabel')}</th>
                 <th className="p-3 font-medium">{t('agents.version')}</th>
+                {dockerHost && <th className="p-3 font-medium">{t('agents.dockerHost')}</th>}
                 <th className="p-3 font-medium">{t('agents.fingerprint')}</th>
                 <th className="p-3 font-medium">{t('agents.lastSeen')}</th>
                 <th className="p-3" />
@@ -243,6 +252,11 @@ export function AgentsPage() {
                   <td className="p-3 font-mono">
                     <bdi>{a.version}</bdi>
                   </td>
+                  {dockerHost && (
+                    <td className="p-3">
+                      <DockerHost agent={a} />
+                    </td>
+                  )}
                   <td
                     className="max-w-56 wrap-anywhere md:truncate p-3 font-mono text-xs"
                     title={a.fingerprint}
@@ -287,7 +301,7 @@ export function AgentsPage() {
               ))}
               {all.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-6 text-center text-muted">
+                  <td colSpan={dockerHost ? 7 : 6} className="p-6 text-center text-muted">
                     {t(agents.isPending ? 'app.loading' : 'agents.none')}
                   </td>
                 </tr>

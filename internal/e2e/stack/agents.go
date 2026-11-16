@@ -55,6 +55,15 @@ func (*fakeHost) Capabilities() []string {
 		agentproto.CapVersionDetect, agentproto.CapVolumesSize}
 }
 
+// fakeDockerName is the name the fake daemon gives its host, with markup
+// and a direction override for SEC-006 (AGT-014).
+const fakeDockerName = "<b>nas</b>-1\u202e"
+
+// Host is the host the fake daemon names (AGT-014).
+func (*fakeHost) Host(context.Context) *agentproto.DockerHost {
+	return &agentproto.DockerHost{Name: fakeDockerName, IP: "192.168.1.5"}
+}
+
 func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
 	now := time.Now().UTC()
 	creativeAt := func(at time.Time, n int) agentproto.Container {
@@ -202,6 +211,9 @@ func (idleHost) Run(ctx context.Context, out agent.Sender) error {
 type legacyHost struct{ *fakeHost }
 
 func (legacyHost) Capabilities() []string { return []string{agentproto.CapRestartInfo} }
+
+// Host: an agent of 1.1 sends no host.
+func (legacyHost) Host(context.Context) *agentproto.DockerHost { return nil }
 
 func (legacyHost) Run(ctx context.Context, out agent.Sender) error {
 	snap := agentproto.Snapshot{Containers: []agentproto.Container{

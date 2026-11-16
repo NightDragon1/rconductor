@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useLiveServers } from '@/api/live-servers';
 import { useAgents, useServerGroups, type Agent, type Server } from '@/api/servers';
 import { useSession } from '@/api/session';
+import { DOCKER_HOST_FLAG, DockerHost } from '@/components/DockerHost';
 import { byGroups } from '@/lib/groups';
 import { cardStatus, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
@@ -24,10 +25,12 @@ function AgentNode({
   agent,
   connected,
   servers,
+  dockerHost,
 }: {
   agent?: Agent;
   connected?: boolean;
   servers: Server[];
+  dockerHost: boolean;
 }) {
   const { t } = useTranslation();
   const state = connected === undefined ? 'unknown' : connected ? 'connected' : 'disconnected';
@@ -36,7 +39,13 @@ function AgentNode({
     <li className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <span className="text-muted">{t('topology.host')}</span>
-        {agent?.remote && <bdi className="font-mono">{agent.remote}</bdi>}
+        {/* With the flag docker_host the host of the daemon replaces the
+            agent's own, often internal, address (AGT-014). */}
+        {dockerHost ? (
+          <DockerHost agent={agent} />
+        ) : (
+          agent?.remote && <bdi className="font-mono">{agent.remote}</bdi>
+        )}
         <span aria-hidden>→</span>
         <span className="flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5">
           <span className={cn('size-2 rounded-full', dot[tone])} aria-hidden />
@@ -81,7 +90,15 @@ function ServerNodes({ servers }: { servers: Server[] }) {
 
 // Tree lays out one group: the agents with their servers, then the
 // servers without agent.
-function Tree({ servers, agents }: { servers: Server[]; agents: Map<string, Agent> }) {
+function Tree({
+  servers,
+  agents,
+  dockerHost,
+}: {
+  servers: Server[];
+  agents: Map<string, Agent>;
+  dockerHost: boolean;
+}) {
   const { t } = useTranslation();
   const byAgent = new Map<string, Server[]>();
   const none: Server[] = [];
@@ -97,6 +114,7 @@ function Tree({ servers, agents }: { servers: Server[]; agents: Map<string, Agen
           agent={agents.get(id)}
           connected={list.find((s) => s.runtime?.container)?.runtime?.container?.agent_connected}
           servers={list}
+          dockerHost={dockerHost}
         />
       ))}
       {none.length > 0 && (
@@ -117,6 +135,7 @@ export function TopologyPage() {
   const { t } = useTranslation();
   const { data: session } = useSession();
   const rcon = session?.user.role === 'rcon_admin';
+  const dockerHost = (session?.ui.features ?? []).includes(DOCKER_HOST_FLAG);
   const servers = useLiveServers();
   const groups = useServerGroups(true);
   const agentList = useAgents(rcon);
@@ -138,7 +157,7 @@ export function TopologyPage() {
           <h2 className="mb-3 text-sm font-semibold uppercase">
             <bdi>{g.group.name}</bdi>
           </h2>
-          <Tree servers={g.servers} agents={agents} />
+          <Tree servers={g.servers} agents={agents} dockerHost={dockerHost} />
         </section>
       ))}
       {rest.length > 0 && (
@@ -147,7 +166,7 @@ export function TopologyPage() {
           className="rounded-lg border border-border bg-surface p-4"
         >
           <h2 className="mb-3 text-sm font-semibold">{t('home.ungrouped')}</h2>
-          <Tree servers={rest} agents={agents} />
+          <Tree servers={rest} agents={agents} dockerHost={dockerHost} />
         </section>
       )}
     </div>
