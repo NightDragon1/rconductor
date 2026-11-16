@@ -255,13 +255,14 @@ func (q *Queries) GetGameProfile(ctx context.Context, id string) (GetGameProfile
 }
 
 const getServer = `-- name: GetServer :one
-SELECT s.id, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
+SELECT s.id, s.number, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
 FROM servers s LEFT JOIN server_profiles sp ON sp.server_id = s.id AND sp.position = 0
 WHERE s.id = ? AND s.deleted_at IS NULL
 `
 
 type GetServerRow struct {
 	ID             string
+	Number         sql.NullInt64
 	Name           string
 	ProfileID      sql.NullString
 	Protocol       string
@@ -280,6 +281,7 @@ func (q *Queries) GetServer(ctx context.Context, id string) (GetServerRow, error
 	var i GetServerRow
 	err := row.Scan(
 		&i.ID,
+		&i.Number,
 		&i.Name,
 		&i.ProfileID,
 		&i.Protocol,
@@ -339,12 +341,13 @@ func (q *Queries) GetServerProfiles(ctx context.Context, serverID string) ([]str
 }
 
 const insertServer = `-- name: InsertServer :exec
-INSERT INTO servers (id, name, protocol, host, port, secret, game_ports, agent_id, container_name, tls_fingerprint, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO servers (id, number, name, protocol, host, port, secret, game_ports, agent_id, container_name, tls_fingerprint, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertServerParams struct {
 	ID             string
+	Number         sql.NullInt64
 	Name           string
 	Protocol       string
 	Host           string
@@ -361,6 +364,7 @@ type InsertServerParams struct {
 func (q *Queries) InsertServer(ctx context.Context, arg InsertServerParams) error {
 	_, err := q.db.ExecContext(ctx, insertServer,
 		arg.ID,
+		arg.Number,
 		arg.Name,
 		arg.Protocol,
 		arg.Host,
@@ -502,13 +506,14 @@ func (q *Queries) ListServerProfiles(ctx context.Context) ([]ServerProfile, erro
 
 const listServers = `-- name: ListServers :many
 
-SELECT s.id, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
+SELECT s.id, s.number, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
 FROM servers s LEFT JOIN server_profiles sp ON sp.server_id = s.id AND sp.position = 0
 WHERE s.deleted_at IS NULL ORDER BY s.name COLLATE NOCASE
 `
 
 type ListServersRow struct {
 	ID             string
+	Number         sql.NullInt64
 	Name           string
 	ProfileID      sql.NullString
 	Protocol       string
@@ -536,6 +541,7 @@ func (q *Queries) ListServers(ctx context.Context) ([]ListServersRow, error) {
 		var i ListServersRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.Number,
 			&i.Name,
 			&i.ProfileID,
 			&i.Protocol,
@@ -591,6 +597,19 @@ func (q *Queries) ListServersByContainer(ctx context.Context, arg ListServersByC
 		return nil, err
 	}
 	return items, nil
+}
+
+const nextServerNumber = `-- name: NextServerNumber :one
+UPDATE counters SET value = value + 1 WHERE name = 'server_number' RETURNING value
+`
+
+// The next server number (UI-018); in the transaction that inserts the
+// server, so parallel creations get distinct numbers.
+func (q *Queries) NextServerNumber(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, nextServerNumber)
+	var value int64
+	err := row.Scan(&value)
+	return value, err
 }
 
 const renameServerGroup = `-- name: RenameServerGroup :exec

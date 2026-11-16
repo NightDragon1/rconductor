@@ -1028,6 +1028,10 @@
         "label": "Messages with sender",
         "help": "Messages to the players (for example Minecraft say) show the name of the signed-in user and a prefix per server group instead of [Rcon]."
       },
+      "features_server_number": {
+        "label": "Server numbers",
+        "help": "Shows the consecutive number of each server: as the first column ID in Servers & Groups and as a badge before the name on cards and the server page."
+      },
       "features_docker_host": {
         "label": "Docker host",
         "help": "Shows the Docker host of each agent: its name, and its address from the agent setting RCD_HOST_IP or Swarm mode; without an address, the address the agent connected from if it lies outside the panel's networks. Only the RCON admin sees them."

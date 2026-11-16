@@ -3,21 +3,26 @@
 -- name: ListServers :many
 -- profile_id is the top profile of the server (SRV-008); the whole list
 -- comes from ListServerProfiles.
-SELECT s.id, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
+SELECT s.id, s.number, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
 FROM servers s LEFT JOIN server_profiles sp ON sp.server_id = s.id AND sp.position = 0
 WHERE s.deleted_at IS NULL ORDER BY s.name COLLATE NOCASE;
 
 -- name: GetServer :one
-SELECT s.id, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
+SELECT s.id, s.number, s.name, sp.profile_id, s.protocol, s.host, s.port, s.secret, s.agent_id, s.container_name, s.game_ports, s.tls_fingerprint, s.tls_not_after
 FROM servers s LEFT JOIN server_profiles sp ON sp.server_id = s.id AND sp.position = 0
 WHERE s.id = ? AND s.deleted_at IS NULL;
 
 -- name: ListServersByContainer :many
 SELECT id FROM servers WHERE agent_id = ? AND container_name = ? AND deleted_at IS NULL;
 
+-- name: NextServerNumber :one
+-- The next server number (UI-018); in the transaction that inserts the
+-- server, so parallel creations get distinct numbers.
+UPDATE counters SET value = value + 1 WHERE name = 'server_number' RETURNING value;
+
 -- name: InsertServer :exec
-INSERT INTO servers (id, name, protocol, host, port, secret, game_ports, agent_id, container_name, tls_fingerprint, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO servers (id, number, name, protocol, host, port, secret, game_ports, agent_id, container_name, tls_fingerprint, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateServer :exec
 UPDATE servers SET name = ?, protocol = ?, host = ?, port = ?, game_ports = ?, agent_id = ?, container_name = ?, tls_fingerprint = ?, tls_not_after = ?, updated_at = ?

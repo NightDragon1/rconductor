@@ -43,6 +43,7 @@ const keyTexts = [
   'features_color_codes',
   'features_say_sender',
   'features_docker_host',
+  'features_server_number',
   'features_server_save_as_new',
   'features_log_filter_split',
   'features_command_palette',

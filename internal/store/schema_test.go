@@ -264,3 +264,56 @@ func TestServerProfilesMigration(t *testing.T) {
 		t.Error("down did not bring the top profile back to servers.profile_id")
 	}
 }
+
+// TestServerNumberMigration covers UI-018: 00019 numbers existing servers,
+// deleted ones included, by creation time (ties by ID), sets the counter to
+// the highest number, refuses a number twice, and goes back.
+func TestServerNumberMigration(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "data"))
+	ctx := context.Background()
+	p, err := goose.NewProvider(goose.DialectSQLite3, s.DB, migrations.SQLite(), goose.WithGoMigrations(migrations.SQLiteGo()...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.UpTo(ctx, 18); err != nil {
+		t.Fatal(err)
+	}
+	exec := func(q string, args ...any) error {
+		_, err := s.DB.ExecContext(ctx, q, args...)
+		return err
+	}
+	for _, r := range [][3]string{
+		{"c", "2026-03-01T00:00:00Z", ""},
+		{"a", "2026-01-01T00:00:00Z", "2026-02-01T00:00:00Z"}, // deleted, keeps its place
+		{"b2", "2026-02-01T00:00:00Z", ""},
+		{"b1", "2026-02-01T00:00:00Z", ""}, // same time: by ID
+	} {
+		if err := exec(`INSERT INTO servers (id, name, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, NULLIF(?, ''))`, r[0], r[0], r[1], r[1], r[2]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int64{"a": 1, "b1": 2, "b2": 3, "c": 4}
+	for id, n := range want {
+		var got int64
+		if err := s.DB.QueryRowContext(ctx, `SELECT number FROM servers WHERE id = ?`, id).Scan(&got); err != nil || got != n {
+			t.Errorf("server %s: number %d %v, want %d", id, got, err, n)
+		}
+	}
+	var counter int64
+	if err := s.DB.QueryRowContext(ctx, `SELECT value FROM counters WHERE name = 'server_number'`).Scan(&counter); err != nil || counter != 4 {
+		t.Errorf("counter = %d %v, want 4", counter, err)
+	}
+	if err := exec(`INSERT INTO servers (id, number, name, created_at, updated_at) VALUES ('d', 4, 'd', 't', 't')`); err == nil {
+		t.Error("a number was taken twice")
+	}
+	if _, err := p.DownTo(ctx, 18); err != nil {
+		t.Fatal(err)
+	}
+	var cols int
+	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('servers') WHERE name = 'number'`).Scan(&cols); err != nil || cols != 0 {
+		t.Errorf("down left servers.number (%d, %v)", cols, err)
+	}
+}

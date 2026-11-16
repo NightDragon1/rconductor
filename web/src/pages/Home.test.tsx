@@ -42,6 +42,7 @@ const container = {
 
 const full: Server[] = [
   {
+    number: 1,
     id: 's1',
     name: 'alpha',
     profile_ids: ['p1'],
@@ -52,6 +53,7 @@ const full: Server[] = [
     runtime: { kind: 'runtime', server_id: 's1', players: 3, container },
   },
   {
+    number: 2,
     id: 's2',
     name: 'beta',
     profile_ids: ['p1'],
@@ -70,8 +72,9 @@ const full: Server[] = [
 // What the API gives a moderator: no agent data, but the game version as a
 // server datum (UI-006, AGT-006).
 const reduced: Server[] = full.map(
-  ({ id, name, profile_ids, groups, status, status_since, version }) => ({
+  ({ id, number, name, profile_ids, groups, status, status_since, version }) => ({
     id,
+    number,
     version,
     name,
     profile_ids,
@@ -135,6 +138,7 @@ describe('landing pages', () => {
   it('counts RCON offline as an error while the container state is unknown (UI-003)', async () => {
     setLanguage('en');
     const offline = (id: string, name: string, state?: string): Server => ({
+      number: 3,
       id,
       name,
       groups: [],

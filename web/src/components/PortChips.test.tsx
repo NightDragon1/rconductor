@@ -8,6 +8,7 @@ import { setLanguage } from '@/test/render';
 import { PortChips } from './PortChips';
 
 const base: Server = {
+  number: 1,
   id: 's1',
   name: 'mc',
   groups: [],
