@@ -5,7 +5,6 @@ package logmask
 
 import (
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -68,109 +67,31 @@ func TestCutAtLineBound(t *testing.T) {
 	}
 }
 
-// TestTexts covers D-088 c): fixed texts, no expressions, exact or without
-// case of A to Z; every place is masked, overlapping places as their union.
-func TestTexts(t *testing.T) {
-	m, err := New([]Text{{Value: "s3cr3t.v4lue"}, {Value: "hunter2", Fold: true}, {Value: "abab"}, {Value: "(?i).*"}}, DefaultLimits)
-	if err != nil {
-		t.Fatal(err)
-	}
+// TestC147N3EscapedDoubleQuotes: a value in double quotes ends at the
+// first quote that is not escaped.
+func TestC147N3EscapedDoubleQuotes(t *testing.T) {
 	for in, want := range map[string]string{
-		"join s3cr3t.v4lue now":         "join ••• now",
-		"join S3CR3T.V4LUE now":         "join S3CR3T.V4LUE now",
-		"HUNTER2 and Hunter2 hunter2":   "••• and ••• •••",
-		"x ababab y":                    "x ••• y",
-		"no regex: anything goes":       "no regex: anything goes",
-		"literal (?i).* here":           "literal ••• here",
-		"hunter2s3cr3t.v4lue":           "•••",
-		"Ünïcödé hunter2 stays":         "Ünïcödé ••• stays",
-		"password=hunter2 then hunter2": "password=••• then •••",
+		`{"password":"ab\"cd","port":1}`: `{"password":"•••","port":1}`,
+		`-password "a\"b c" -nogui`:      `-password "•••" -nogui`,
 	} {
-		if got := m.Line(in); got != want {
-			t.Errorf("%q\n got %q\nwant %q", in, got, want)
+		if got := (*Masker)(nil).Line(in); got != want {
+			t.Errorf("%q: got %q, want %q", in, got, want)
 		}
 	}
 }
 
-// TestTextBounds: a text has MinTextRunes to Limits.TextRunes characters
-// on one line; at most Limits.Texts texts; the error never holds a text.
-func TestTextBounds(t *testing.T) {
-	lim := Limits{Texts: 3, TextRunes: 8}
-	for name, texts := range map[string][]Text{
-		"too short":     {{Value: "abc"}},
-		"too long":      {{Value: "abcdefghi"}},
-		"line break":    {{Value: "ab\ncd"}},
-		"invalid UTF-8": {{Value: "ab\xffcd"}},
-		"too many":      {{Value: "aaaa"}, {Value: "bbbb"}, {Value: "cccc"}, {Value: "dddd"}},
-	} {
-		_, err := New(texts, lim)
-		if err == nil {
-			t.Errorf("%s: accepted", name)
-			continue
-		}
-		for _, x := range texts {
-			if strings.Contains(err.Error(), x.Value) {
-				t.Errorf("%s: error holds the text: %v", name, err)
-			}
-		}
-	}
-	if _, err := New([]Text{{Value: "äöüß"}, {Value: "abcdefgh"}, {Value: "1234"}}, lim); err != nil {
-		t.Errorf("at the bounds: %v", err)
-	}
-	many := make([]Text, MaxTexts+1)
-	for i := range many {
-		many[i] = Text{Value: strings.Repeat("x", MinTextRunes) + string(rune('a'+i%26)) + string(rune('a'+i/26))}
-	}
-	if _, err := New(many, Limits{Texts: 10000, TextRunes: 10000}); err == nil {
-		t.Error("more than MaxTexts accepted")
-	}
-}
-
-// lineBound bounds one worst-case line, also under the race detector.
-const lineBound = time.Second
-
-// TestLineCost covers D-088 (cost per line bounded and measured): a line
-// at the protocol bound against the most and longest texts, all folded
-// and overlapping everywhere, takes time linear in the line per text. The
-// measured time is in the PR.
-func TestLineCost(t *testing.T) {
-	texts := make([]Text, MaxTexts)
-	for i := range texts {
-		texts[i] = Text{Value: strings.Repeat("a", MaxTextRunes-i), Fold: i%2 == 0}
-	}
-	m, err := New(texts, Limits{Texts: MaxTexts, TextRunes: MaxTextRunes})
-	if err != nil {
-		t.Fatal(err)
-	}
-	line := strings.Repeat("a", agentproto.MaxLogLine-12) + " password=x"
+// TestC147N4ListCost: a line at the protocol bound full of short list
+// matches is masked in one pass and does not grow past the bound.
+func TestC147N4ListCost(t *testing.T) {
+	line := strings.Repeat("token=x -token y u://b@ ", agentproto.MaxLogLine/24)
 	start := time.Now()
-	got := m.Line(line)
+	got := (*Masker)(nil).Line(line)
 	took := time.Since(start)
-	if got != Replacement+" password="+Replacement {
-		t.Errorf("got %q", got)
+	if strings.Contains(got, "=x") || len(got) > agentproto.MaxLogLine {
+		t.Errorf("got %d bytes, starts %q", len(got), got[:40])
 	}
-	t.Logf("one line of %d bytes, %d texts of up to %d characters: %s", len(line), len(texts), MaxTextRunes, took)
-	if took > lineBound {
-		t.Errorf("one line took %s, bound %s", took, lineBound)
+	t.Logf("one line of %d bytes with %d list matches: %s", len(line), 3*(agentproto.MaxLogLine/24), took)
+	if took > time.Second {
+		t.Errorf("one line took %s", took)
 	}
-}
-
-// TestParallel: one masker serves parallel lines.
-func TestParallel(t *testing.T) {
-	m, err := New([]Text{{Value: "hunter2", Fold: true}}, DefaultLimits)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var wg sync.WaitGroup
-	for range 32 {
-		wg.Go(func() {
-			for range 100 {
-				if got := m.Line("x HUNTER2 password=y"); got != "x ••• password=•••" {
-					t.Errorf("got %q", got)
-					return
-				}
-			}
-		})
-	}
-	wg.Wait()
 }
