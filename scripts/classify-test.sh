@@ -70,6 +70,7 @@ check "profile rules" 0 "stage-2 cmd 2" "modified 1 0 internal/profiles/effectiv
   "modified 1 0 internal/profiles/forserver.go"
 check "pipeline query" 0 "stage-2 cmd 1" "modified 1 0 internal/store/queries/sqlite/settings.sql"
 check "session query" 0 "stage-2 authz 1" "modified 1 0 internal/store/queries/sqlite/sessions.sql"
+check "log masking" 0 "stage-2 redact 1" "added 1 0 internal/logmask/x.go"
 check "sqlc config" 0 "stage-2 rules 1" "modified 1 0 sqlc.yaml"
 check "other profile and query files" 0 "stage-1  2" "modified 1 0 internal/profiles/catalog.go" \
   "modified 1 0 internal/store/queries/sqlite/smtp.sql"

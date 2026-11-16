@@ -57,10 +57,11 @@ render:
   - web/src/lib/foreign.ts
   - web/src/lib/formatting.ts
 
-# redact: no secrets in logs (SEC-012)
+# redact: no secrets in logs (SEC-012), masking of container logs (UI-022)
 redact:
   - internal/logging/redact.go
   - internal/logging/logging.go
+  - internal/logmask/**
 
 # audit: audit log and the fixed event codes
 audit:
