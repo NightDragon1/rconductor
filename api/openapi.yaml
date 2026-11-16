@@ -1253,6 +1253,145 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /messages:
+    get:
+      operationId: listMessages
+      summary: >-
+        Messages in the panel (MSG-001 to MSG-003, D-085): those sent to me
+        and those I sent, newest first; the RCON admin sees all.
+      description: >-
+        Behind the feature flag messages (404 while off). The recipients of a
+        message are fixed when it is sent; who comes into a scope later does
+        not see older messages. Messages and comments go after
+        messages.retention_days (D-086). Paged: limit (1 to 100, default 50)
+        and before, the ID of the last message of the page before.
+      tags: [messages]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: before
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: A page of messages and the number of unread ones.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: createMessage
+      summary: >-
+        Send a message (MSG-001, MSG-002, D-085); RCON admin and server
+        admin; in the audit as message.sent, without the text (D-086).
+      description: >-
+        Behind the feature flag messages (404 while off). The RCON admin
+        sends to all, server_admins, moderators or users (user_ids); a
+        server admin to scope (moderators and supporters with at least one
+        server in his scope at sending time) or scope_moderators; another
+        audience is 403, as is a user outside his scope. Moderators and
+        supporters do not send (403). The text has 1 to messages.max_text
+        characters, user_ids 1 to messages.max_recipients entries without
+        repeats; otherwise 400, also when the audience has no recipient.
+        At most messages.per_hour messages per sender and hour (429). The
+        text is shown as text, never as markup (SEC-006).
+      tags: [messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageInput"
+      responses:
+        "201":
+          description: The message as its sender sees it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /messages/{id}:
+    parameters:
+      - $ref: "#/components/parameters/MessageID"
+    get:
+      operationId: getMessage
+      summary: >-
+        One message with its comments (MSG-003, D-085); its recipients, its
+        sender and the RCON admin.
+      description: >-
+        Behind the feature flag messages (404 while off). Anyone else gets
+        404, as for an unknown message.
+      tags: [messages]
+      responses:
+        "200":
+          description: The message and its comments, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDetail"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteMessage
+      summary: >-
+        Delete a message with its recipients and comments, at once and for
+        good (D-085, D-086); its sender and the RCON admin; in the audit
+        without the text.
+      description: >-
+        Behind the feature flag messages (404 while off). A recipient gets
+        403, anyone else 404.
+      tags: [messages]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /messages/{id}/read:
+    parameters:
+      - $ref: "#/components/parameters/MessageID"
+    post:
+      operationId: markMessageRead
+      summary: Mark a message read for me (D-085); its recipients only.
+      description: >-
+        Behind the feature flag messages (404 while off). Repeating it
+        changes nothing. Sender and RCON admin who are not recipients get
+        404.
+      tags: [messages]
+      responses:
+        "204":
+          description: Marked read.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /ws:
     get:
       operationId: openWebSocket
@@ -2187,6 +2326,13 @@ components:
       schema:
         type: string
         format: uuid
+    MessageID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     ServerGroupID:
       name: id
       in: path
@@ -2948,6 +3094,110 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ServerGroup"
+
+    MessageAudience:
+      type: string
+      enum: [all, server_admins, moderators, users, scope, scope_moderators]
+      description: >-
+        Who gets a message (D-085): all, server_admins, moderators and
+        users (user_ids) for the RCON admin; scope and scope_moderators
+        for a server admin, by his scope at sending time.
+
+    MessageInput:
+      type: object
+      required: [text, audience]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: 1 to messages.max_text characters.
+        audience:
+          $ref: "#/components/schemas/MessageAudience"
+        user_ids:
+          type: array
+          description: For audience users only; 1 to messages.max_recipients entries.
+          items:
+            type: string
+            format: uuid
+
+    MessageAuthor:
+      type: object
+      required: [pseudonym]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Missing when the user no longer exists.
+        pseudonym:
+          type: string
+
+    Message:
+      type: object
+      required: [id, sender, text, audience, created_at, comment_count, read]
+      properties:
+        id:
+          type: string
+          format: uuid
+        sender:
+          $ref: "#/components/schemas/MessageAuthor"
+        text:
+          type: string
+          x-foreign: true
+          description: Shown as text, never as markup (SEC-006).
+        audience:
+          $ref: "#/components/schemas/MessageAudience"
+        recipient_count:
+          type: integer
+          description: For the sender and the RCON admin only.
+        created_at:
+          type: string
+          format: date-time
+        comment_count:
+          type: integer
+        read:
+          type: boolean
+          description: Read by me; true for a message I sent.
+
+    MessageList:
+      type: object
+      required: [items, unread]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        unread:
+          type: integer
+          description: Unread messages to me, over all pages.
+
+    MessageComment:
+      type: object
+      required: [id, author, text, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        author:
+          $ref: "#/components/schemas/MessageAuthor"
+        text:
+          type: string
+          x-foreign: true
+          description: Shown as text, never as markup (SEC-006).
+        created_at:
+          type: string
+          format: date-time
+
+    MessageDetail:
+      allOf:
+        - $ref: "#/components/schemas/Message"
+        - type: object
+          required: [comments]
+          properties:
+            comments:
+              type: array
+              description: All comments, oldest first; every recipient, the sender and the RCON admin see them (D-085).
+              items:
+                $ref: "#/components/schemas/MessageComment"
 
     SayPrefix:
       type: object
