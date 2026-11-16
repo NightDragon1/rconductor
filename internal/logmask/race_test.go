@@ -7,5 +7,8 @@ package logmask
 
 import "time"
 
-// The race detector slows regexp down about tenfold.
-const longLineBound = 60 * time.Second
+// The race detector slows regexp down about tenfold: a shorter line.
+const (
+	longLineBytes = 128 << 10
+	longLineBound = 60 * time.Second
+)

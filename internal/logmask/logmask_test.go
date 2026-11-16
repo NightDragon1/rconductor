@@ -94,13 +94,14 @@ func TestAdminPatterns(t *testing.T) {
 }
 
 // TestLongLine: a line of 1 MiB with many candidates is masked in linear
-// time (RE2), well within a request.
+// time (RE2), well within a request; under the race detector a shorter
+// line keeps the run short.
 func TestLongLine(t *testing.T) {
 	m, err := Compile([]string{`(a|aa)+b`, `x*x*x*y`})
 	if err != nil {
 		t.Fatal(err)
 	}
-	line := strings.Repeat("password=a token=b ", (1<<20)/19)
+	line := strings.Repeat("password=a token=b ", longLineBytes/19)
 	start := time.Now()
 	got := m.Line(line + strings.Repeat("a", 1<<16) + strings.Repeat("x", 1<<16))
 	if d := time.Since(start); d > longLineBound {
