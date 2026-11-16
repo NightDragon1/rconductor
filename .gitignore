@@ -52,3 +52,8 @@ Thumbs.db
 /docs/screenshots/
 /docs/handover.md
 /web/.dist-language/
+
+# Build outputs of go build in the repository root (e.g. go build ./internal/e2e/stack)
+/stack
+/panel
+/agent
