@@ -89,7 +89,11 @@ type Agent struct {
 	// (RCD_LABEL, AGT-002).
 	LabelKey, LabelValue string
 	DockerHost           string
-	SecretsDir           string
+	// HostIP is the address of the Docker host as the operator names it
+	// (RCD_HOST_IP); it comes before the daemon's (D-084). The agent checks
+	// it and drops what no other host reaches.
+	HostIP     string
+	SecretsDir string
 	// The rest are limits; zero takes the default, for tests that build
 	// this by hand. Values below the minimum come only that way.
 	MaxBackoff, DialTimeout, MetricsInterval time.Duration
@@ -173,6 +177,7 @@ func LoadAgent(env Lookup, readFile ReadFile) (Agent, error) {
 		PanelAddr:        r.str("RCD_PANEL_ADDR", ""),
 		Name:             r.str("RCD_AGENT_NAME", ""),
 		DockerHost:       r.str("RCD_DOCKER_HOST", "unix:///var/run/docker.sock"),
+		HostIP:           r.str("RCD_HOST_IP", ""),
 		MaxBackoff:       r.seconds("RCD_AGENT_MAX_BACKOFF_SECONDS", 120, 5, 3600),
 		DialTimeout:      r.seconds("RCD_AGENT_DIAL_TIMEOUT_SECONDS", 15, 1, 120),
 		MetricsInterval:  r.seconds("RCD_METRICS_INTERVAL_SECONDS", 10, 1, 300),

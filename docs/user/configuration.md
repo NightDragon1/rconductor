@@ -80,6 +80,7 @@ These only fill in the Compose files in `deploy/compose/`; the programs do not r
 | `RCD_FOLLOWS_PER_MINUTE` | number | 60 | 1 to 600 | starts of live logs per container and minute |
 | `RCD_FOLLOWS_BURST` | number | 20 | 1 to 100 | of those in one go |
 | `RCD_DOCKER_HOST` | URL | `unix:///var/run/docker.sock` | Docker address, also a socket proxy such as `tcp://socket-proxy:2375` | Docker API |
+| `RCD_HOST_IP` | address | empty | IPv4 or IPv6 address of the host; loopback, link-local and unspecified addresses are ignored with a warning | address of the Docker host the RCON admin sees (flag `docker_host`); comes before the address Docker gives in Swarm mode |
 | `RCD_SECRETS_DIR` | path | `/secrets` | directory | agent key and pairing |
 | `RCD_LOG_LEVEL` | text | `info` | `debug`, `info`, `warn`, `error` | log level |
 | `RCD_LOG_FORMAT` | text | `text` | `text`, `json` | log format |

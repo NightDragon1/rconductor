@@ -155,15 +155,26 @@ type DockerHost struct {
 // MaxHostName bounds the host name, the length of a DNS name.
 const MaxHostName = 253
 
-// Clean bounds the name and keeps the address only when it parses as an
-// IP address, without a zone, which would be free text (SEC-006).
+// Clean bounds the name and keeps the address only when HostAddr takes it
+// (SEC-006).
 func (d *DockerHost) Clean() {
 	d.Name = foreign.Name(d.Name, MaxHostName)
-	ip := d.IP
-	d.IP = ""
-	if a, err := netip.ParseAddr(ip); err == nil {
-		d.IP = a.Unmap().WithZone("").String()
+	d.IP, _ = HostAddr(d.IP)
+}
+
+// HostAddr is s as the address of a host, without a zone, which would be
+// free text; false for anything else and for addresses no other host can
+// reach: loopback, link-local, unspecified and multicast (D-084).
+func HostAddr(s string) (string, bool) {
+	a, err := netip.ParseAddr(s)
+	if err != nil {
+		return "", false
 	}
+	a = a.Unmap().WithZone("")
+	if a.IsLoopback() || a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast() {
+		return "", false
+	}
+	return a.String(), true
 }
 
 // Welcome accepts the agent and names its ID.
