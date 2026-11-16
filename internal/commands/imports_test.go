@@ -32,7 +32,7 @@ var outsideCore = []string{
 // too, so its effect on TestCoreImports shows in the diff.
 var wholeCore = []string{
 	"internal/agentproto", "internal/audit", "internal/commands", "internal/connmgr", "internal/foreign",
-	"internal/netlimit", "internal/pattern", "internal/perm", "internal/auth", "internal/rcon",
+	"internal/logmask", "internal/netlimit", "internal/pattern", "internal/perm", "internal/auth", "internal/rcon",
 }
 
 var (
