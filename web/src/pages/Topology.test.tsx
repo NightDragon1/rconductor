@@ -29,6 +29,7 @@ const container = (connected: boolean) => ({
 
 const servers: Server[] = [
   {
+    number: 1,
     id: 's1',
     name: 'alpha',
     groups: ['g1'],
@@ -39,6 +40,7 @@ const servers: Server[] = [
     runtime: { kind: 'runtime', server_id: 's1', container: container(true) },
   },
   {
+    number: 2,
     id: 's2',
     name: 'beta',
     groups: [],
@@ -48,7 +50,15 @@ const servers: Server[] = [
     agent_id: 'a2',
     runtime: { kind: 'runtime', server_id: 's2', container: container(false) },
   },
-  { id: 's3', name: 'gamma', groups: [], status: 'offline', status_since: now, version: 'v' },
+  {
+    number: 3,
+    id: 's3',
+    name: 'gamma',
+    groups: [],
+    status: 'offline',
+    status_since: now,
+    version: 'v',
+  },
 ];
 const groups = [{ id: 'g1', name: 'main', server_ids: ['s1'] }];
 const agents = [

@@ -5,6 +5,7 @@ import type { Server } from '@/api/servers';
 import { actionMode, actionState, agentCan, defaultTab, stripCodes, tabsFor } from './serverpage';
 
 const base: Server = {
+  number: 1,
   id: 's1',
   name: 'mc',
   groups: [],

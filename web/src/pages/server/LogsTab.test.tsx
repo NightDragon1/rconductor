@@ -9,6 +9,7 @@ import { renderPage, setLanguage, unmarked } from '@/test/render';
 import { LogsView } from './LogsTab';
 
 const server: Server = {
+  number: 1,
   id: 's1',
   name: 'mc',
   groups: [],

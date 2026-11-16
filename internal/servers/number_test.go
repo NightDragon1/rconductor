@@ -5,11 +5,13 @@ package servers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
 // TestServerNumber covers UI-018 and D-087: servers get consecutive
@@ -33,6 +35,14 @@ func TestServerNumber(t *testing.T) {
 	if d := f.create("d"); d.Number != 4 {
 		t.Errorf("after the row went: number %d, want 4", d.Number)
 	}
+	// A counter set back is an error, not a name conflict.
+	f.exec(`UPDATE counters SET value = 0 WHERE name = 'server_number'`)
+	name, host, pw, profile := "e", "mc.lan", logging.Secret(rconPassword), f.ids["profile"]
+	_, err := f.svc.Create(ctx, f.as("admin"), Input{Name: &name, ProfileIDs: &[]string{profile}, Host: &host, Password: &pw})
+	if inv := (*users.InvalidError)(nil); err == nil || errors.As(err, &inv) {
+		t.Errorf("number taken twice: %v, want an internal error", err)
+	}
+	f.exec(`UPDATE counters SET value = 4 WHERE name = 'server_number'`)
 	list, err := f.svc.List(ctx, f.as("admin"))
 	if err != nil {
 		t.Fatal(err)

@@ -856,7 +856,8 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 		Host: f.host, Port: int64(f.port), Secret: sealed, GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
 		TlsFingerprint: f.fingerprint, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+		// A number taken twice is a fault of the counter, not of the input.
+		if strings.Contains(err.Error(), "UNIQUE") && !strings.Contains(err.Error(), "servers.number") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
 		}
 		return Server{}, err

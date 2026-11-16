@@ -5,6 +5,7 @@ import type { Server } from '@/api/servers';
 import { cardStatus, rconFailing, shownImage } from './status';
 
 const base: Server = {
+  number: 1,
   id: 's1',
   name: 'mc',
   groups: [],
