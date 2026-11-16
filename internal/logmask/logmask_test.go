@@ -39,7 +39,7 @@ func TestBuiltin(t *testing.T) {
 }
 
 // TestC139B1ShellTraceQuotes: values of shell traces (set -x) in single
-// quotes are masked up to the closing quote, also with '\” inside, in
+// quotes are masked up to the closing quote, also with an escaped quote inside, in
 // every quoted form of the list (C139 R2-3, R3-3).
 func TestC139B1ShellTraceQuotes(t *testing.T) {
 	var m *Masker
