@@ -24,6 +24,21 @@ type wsRecorder struct {
 
 func (r *wsRecorder) add(m string) { r.mu.Lock(); r.raw = append(r.raw, m); r.mu.Unlock() }
 
+// runtimeSince counts the runtime events from message n on.
+func (r *wsRecorder) runtimeSince(n int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c := 0
+	for _, m := range r.raw[min(n, len(r.raw)):] {
+		if strings.Contains(m, `"kind":"runtime"`) {
+			c++
+		}
+	}
+	return c
+}
+
+func (r *wsRecorder) size() int { r.mu.Lock(); defer r.mu.Unlock(); return len(r.raw) }
+
 func (r *wsRecorder) all() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -92,11 +107,19 @@ func TestDockerHostOnlyRCONAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Live data of the agent's server must have reached every viewer in
-	// scope before the topics are checked.
+	// Live data of the agent's server must reach every viewer in scope
+	// after the address is set, so a topic carrying it would show it. No
+	// topic carries agent data today, so there is nothing to find for the
+	// RCON admin either. The wait polls a real agent and hub.
+	since := map[string]int{}
+	for role, r := range rec {
+		if r != nil {
+			since[role] = r.size()
+		}
+	}
 	deadline := time.Now().Add(15 * time.Second)
 	for _, role := range []string{rA, rSI, rMR, rMN, rSU} {
-		for rec[role] != nil && !strings.Contains(rec[role].all(), `"kind":"runtime"`) {
+		for rec[role] != nil && rec[role].runtimeSince(since[role]) < 2 {
 			if time.Now().After(deadline) {
 				t.Fatalf("%s: no runtime event in servers.overview", role)
 			}
