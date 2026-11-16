@@ -38,6 +38,8 @@ func adminError(err error) error {
 		return &problem{status: http.StatusPreconditionRequired, reason: api.ReasonCodePreconditionRequired, detail: "If-Match with the version read before is required"}
 	case errors.Is(err, users.ErrForbidden):
 		return &problem{status: http.StatusForbidden, reason: api.ReasonCodeForbidden, detail: err.Error()}
+	case errors.As(err, &inv) && inv.BadRequest:
+		return &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: inv.Detail}
 	case errors.As(err, &inv):
 		return &problem{status: http.StatusUnprocessableEntity, reason: api.ReasonCodeInvalid, detail: inv.Detail}
 	}

@@ -6,11 +6,13 @@ package users
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/auth"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -174,6 +176,9 @@ var settingRules = map[string]rule{
 	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
 	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
 	SettingMultiParallel:           intRule(MinMultiParallel, 64),
+	// Masking of container logs (UI-022, D4).
+	logmask.SettingEnabled:  boolRule,
+	logmask.SettingPatterns: logmask.CheckPatterns,
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and
@@ -205,6 +210,13 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		if _, err := st.EnsureDefault(ctx, key, false); err != nil {
 			return err
 		}
+	}
+	// Masking of container logs: on, no admin patterns (UI-022).
+	if _, err := st.EnsureDefault(ctx, logmask.SettingEnabled, true); err != nil {
+		return err
+	}
+	if _, err := st.EnsureDefault(ctx, logmask.SettingPatterns, []string{}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -254,7 +266,7 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 		}
 		v, err := r(raw)
 		if err != nil {
-			return nil, &InvalidError{Detail: fmt.Sprintf("%s must be %s", k, err)}
+			return nil, &InvalidError{Detail: fmt.Sprintf("%s must be %s", k, err), BadRequest: errors.Is(err, logmask.ErrPatterns)}
 		}
 		b, _ := json.Marshal(v)
 		values[k] = string(b)

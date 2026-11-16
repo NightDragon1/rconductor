@@ -5,6 +5,8 @@ package users
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/doccheck"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 )
 
 const guide = "../../docs/user/configuration.md"
@@ -75,6 +78,11 @@ func TestSettingLimitsAreDocumented(t *testing.T) {
 			m := durationLimits.FindStringSubmatch(msg)
 			if row["Type"] != "duration" || !inGuide || !sameDuration(lo, m[1]) || !sameDuration(hi, m[2]) {
 				t.Errorf("%s: guide has %s %q, panel a duration from %s to %s", key, row["Type"], row["Allowed"], m[1], m[2])
+			}
+		case errors.Is(err, logmask.ErrPatterns):
+			want := fmt.Sprintf("up to %d RE2 expressions of up to %d characters", logmask.MaxPatterns, logmask.MaxPatternRunes)
+			if row["Type"] != "list" || row["Allowed"] != want {
+				t.Errorf("%s: guide has %s %q, panel %q", key, row["Type"], row["Allowed"], want)
 			}
 		case msg == "true or false":
 			if row["Type"] != "boolean" || row["Allowed"] != "on, off" {

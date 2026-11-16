@@ -31,6 +31,7 @@ import (
 	eventbus "github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/mail"
 	"github.com/NightDragon1/rconductor/internal/memlimit"
 	"github.com/NightDragon1/rconductor/internal/netlimit"
@@ -239,6 +240,10 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		Throttle: agenthub.ThrottleOptions{PerMinute: cfg.AgentPort.ConnectsPerMinute, Burst: cfg.AgentPort.ConnectBurst},
 	})
 	agentData := cache.NewAgentData(logs.Module("cache"))
+	// Container logs are masked before cache and delivery (UI-022).
+	masking := logmask.New(st)
+	agentData.MaskLines(func(lines []string) []string { return masking.Lines(context.Background(), lines) })
+	serverSvc.UseMasking(masking)
 	agents.OnMessage(agentData.Receive)
 	agents.OnDisconnect(agentData.Disconnected)
 	serverSvc.SetActions(agents, conns)

@@ -121,6 +121,9 @@ type AgentData struct {
 	onMetrics func(agentID string, containers []string)
 	onLines   func(agentID string, ll agentproto.LogLines, seq, first uint64)
 	onConnect func(agentID string)
+	// mask masks secrets in log lines before they are kept or sent
+	// (UI-022); nil masks nothing.
+	mask func([]string) []string
 }
 
 // OnMetrics sets the receiver of new samples.
@@ -140,6 +143,10 @@ func (d *AgentData) OnConnect(f func(agentID string)) { d.onConnect = f }
 func NewAgentData(log *slog.Logger) *AgentData {
 	return &AgentData{log: log, now: func() time.Time { return time.Now().UTC() }, agents: map[string]*agentEntry{}}
 }
+
+// MaskLines sets the masking of log lines (UI-022); set before data
+// arrives.
+func (d *AgentData) MaskLines(f func([]string) []string) { d.mask = f }
 
 // OnChange sets the receiver of container changes.
 func (d *AgentData) OnChange(f func(agentID, container string)) { d.onChange = f }
@@ -260,6 +267,9 @@ func (d *AgentData) Metrics(agentID string, m agentproto.Metrics) {
 // Lines appends log lines to the ring of the container.
 func (d *AgentData) Lines(agentID string, ll agentproto.LogLines) {
 	lines, cut := agentproto.LimitLines(ll.Lines)
+	if d.mask != nil {
+		lines = d.mask(lines)
+	}
 	d.mu.Lock()
 	e := d.agent(agentID).containers[ll.Container]
 	if e == nil {

@@ -104,6 +104,8 @@ func (s *Service) Logs(ctx context.Context, req users.Request, id string, n int)
 	if len(lines) > n {
 		lines, cut = lines[len(lines)-n:], true
 	}
+	// Known secrets are masked before the lines leave the panel (UI-022).
+	lines = s.mask.Lines(ctx, lines)
 	s.log.Info("container logs read", logging.Event(logging.LogsTail), slog.String(logging.KeyRequestID, req.RequestID),
 		slog.String(logging.KeyServer, id), slog.String("agent_id", agentID), slog.String("container", container),
 		slog.Int("lines", len(lines)))

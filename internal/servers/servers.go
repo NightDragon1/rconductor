@@ -26,6 +26,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/rcon"
@@ -130,8 +131,11 @@ type Service struct {
 	onChange func(id string)
 	// agents and rcon carry out actions (AGT-003, AGT-009).
 	agents Agents
-	rcon   Executor
-	tests  testLimiter
+	// mask masks secrets in container logs (UI-022); nil masks nothing,
+	// for tests that build the service by hand.
+	mask  *logmask.Service
+	rcon  Executor
+	tests testLimiter
 }
 
 // NewService returns the server administration; box encrypts credentials
@@ -1047,3 +1051,6 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 	s.changed(ctx, id)
 	return nil
 }
+
+// UseMasking sets the masking of container logs (UI-022).
+func (s *Service) UseMasking(m *logmask.Service) { s.mask = m }

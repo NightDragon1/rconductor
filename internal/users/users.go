@@ -38,7 +38,12 @@ var (
 )
 
 // InvalidError is a request that breaks a rule of the data.
-type InvalidError struct{ Detail string }
+type InvalidError struct {
+	Detail string
+	// BadRequest asks for 400 instead of 422, where the contract says so
+	// (UI-022).
+	BadRequest bool
+}
 
 func (e *InvalidError) Error() string { return e.Detail }
 

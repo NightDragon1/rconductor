@@ -76,6 +76,9 @@ func sameValue(kind, guide string, raw json.RawMessage) bool {
 	case "boolean":
 		var b bool
 		return json.Unmarshal(raw, &b) == nil && map[bool]string{true: "on", false: "off"}[b] == guide
+	case "list":
+		var l []string
+		return json.Unmarshal(raw, &l) == nil && len(l) == 0 && guide == "[]"
 	}
 	return false
 }

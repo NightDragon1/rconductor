@@ -39,6 +39,8 @@ type hostBackend struct {
 	state string
 	// host is the Docker host the backend names (AGT-014).
 	host *agentproto.DockerHost
+	// logLine replaces the line of logs.follow and logs.tail when set.
+	logLine string
 }
 
 func (b *hostBackend) Host(context.Context) *agentproto.DockerHost {
@@ -88,7 +90,11 @@ func (b *hostBackend) Handle(ctx context.Context, e agentproto.Envelope, out age
 	b.orders = append(b.orders, e.Type)
 	b.mu.Unlock()
 	if e.Type == agentproto.TypeLogsFollow {
-		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"[Server] <b>Done</b>"}})
+		line := "[Server] <b>Done</b>"
+		if b.logLine != "" {
+			line = b.logLine
+		}
+		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{line}})
 	}
 	if e.Type == agentproto.TypeVersionDetect {
 		_ = out.Send(ctx, agentproto.TypeVersionFound, e.ID, agentproto.VersionFound{Container: "mc", Version: "1.21.4"})
@@ -102,7 +108,11 @@ func (b *hostBackend) Handle(ctx context.Context, e agentproto.Envelope, out age
 			_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeRateLimited})
 			return
 		}
-		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"old 1", "old 2", "old \x1b[31m3\u202e"}})
+		lines := []string{"old 1", "old 2", "old \x1b[31m3\u202e"}
+		if b.logLine != "" {
+			lines = []string{b.logLine}
+		}
+		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: lines})
 	}
 	_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeOK})
 }
