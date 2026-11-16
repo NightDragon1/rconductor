@@ -41,6 +41,11 @@ func TestC142B3GuardedSettingKeepsLastValue(t *testing.T) {
 	if err := st.GuardedSetting(ctx, log, "login.max_failures", &n); err != nil || n != 3 {
 		t.Fatalf("read = %d, %v", n, err)
 	}
+	ended, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := st.GuardedSetting(ended, log, "login.max_failures", &n); err != nil || n != 3 || out.Len() != 0 {
+		t.Errorf("ended context = %d, %v, log %q; want the last value without a log", n, err, out.String())
+	}
 	if err := st.DB.Close(); err != nil {
 		t.Fatal(err)
 	}

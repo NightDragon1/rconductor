@@ -92,7 +92,8 @@ func (s *Store) GlobalSetting(ctx context.Context, key string, dst any) error {
 // default. When the database cannot be read, it decodes the last value read
 // before, if any, and returns nil; otherwise the error, so the caller takes
 // its default too. Never an extreme value: degrade, do not close (D-077).
-// The failure is logged with the key only, never a value.
+// The failure is logged with the key only, never a value; a context that
+// ended takes the same way without a log.
 func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string, dst any) error {
 	v, err := s.Queries.GetSetting(ctx, sqlitedb.GetSettingParams{Key: key, ScopeType: ScopeGlobal, ScopeID: ""})
 	switch {
@@ -100,7 +101,8 @@ func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string
 		return fmt.Errorf("read setting %s: %w", key, err)
 	case err != nil:
 		last, ok := s.kept.Load(key)
-		if log != nil {
+		// A request or job that ended is no fault of the database.
+		if ended := ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded); log != nil && !ended {
 			log.Error("setting not readable", logging.Event(logging.SettingReadFailed),
 				slog.String("setting", key), slog.Bool("kept", ok), slog.Any("err", err))
 		}
