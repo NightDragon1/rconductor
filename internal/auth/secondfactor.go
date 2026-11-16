@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -194,11 +195,24 @@ func (s *Service) durationSetting(ctx context.Context, key string, def, low time
 }
 
 // TOTPRequired reports whether the RCON admin requires the second factor
-// for everyone.
+// for everyone (AUTH-008). A setting that is not there means off; one that
+// cannot be read, or is anything but true or false (also null), means
+// required, so a fault never lowers the sign-in (fail closed).
 func (s *Service) TOTPRequired(ctx context.Context) bool {
-	var on bool
-	_ = s.st.GlobalSetting(ctx, SettingTOTPRequired, &on)
-	return on
+	var raw json.RawMessage
+	err := s.st.GlobalSetting(ctx, SettingTOTPRequired, &raw)
+	if err == nil && string(raw) != "true" && string(raw) != "false" {
+		err = errors.New("not true or false")
+	}
+	switch {
+	case err == nil:
+		return string(raw) == "true"
+	case errors.Is(err, sql.ErrNoRows):
+		return false
+	default:
+		s.log.Error("second factor setting not readable, treated as required", slog.Any("err", err))
+		return true
+	}
 }
 
 func secretContext(userID string) secret.Context {
