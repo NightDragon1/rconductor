@@ -97,6 +97,11 @@ type CommandTemplate struct {
 	DeletedAt sql.NullString
 }
 
+type Counter struct {
+	Name  string
+	Value int64
+}
+
 type GameProfile struct {
 	ID          string
 	Slug        string
@@ -160,6 +165,7 @@ type Server struct {
 	Version        int64
 	TlsFingerprint string
 	TlsNotAfter    sql.NullString
+	Number         sql.NullInt64
 }
 
 type ServerGroup struct {

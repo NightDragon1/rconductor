@@ -1341,6 +1341,11 @@ export interface components {
             next_cursor?: string;
         };
         Server: {
+            /**
+             * Format: int64
+             * @description Consecutive number of the server, given at creation and never given again, also after a delete (UI-018). Every role in scope gets it; the interface shows it with the flag server_number.
+             */
+            number: number;
             /** @description Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24). */
             version: string;
             /**

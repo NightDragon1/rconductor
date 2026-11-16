@@ -1026,6 +1026,10 @@
         "label": "Messages with sender",
         "help": "Messages to the players (for example Minecraft say) show the name of the signed-in user and a prefix per server group instead of [Rcon]."
       },
+      "features_server_number": {
+        "label": "Server numbers",
+        "help": "Shows the consecutive number of each server: as the first column ID in Servers & Groups and as a badge before the name on cards and the server page."
+      },
       "features_docker_host": {
         "label": "Docker host",
         "help": "Shows the host name and address of each agent's Docker daemon as the daemon reports them; without an address from the daemon, the address the agent connected from. Only the RCON admin sees them."

@@ -56,8 +56,11 @@ const (
 // may see them (RCON admin and server admin); host and RCON port only
 // for the RCON admin (D-056).
 type Server struct {
-	ID   string
-	Name string
+	ID string
+	// Number is the consecutive number of the server, never given twice
+	// (UI-018); everyone in scope sees it.
+	Number int64
+	Name   string
 	// Status is the reachability (SRV-004); everyone in scope sees it.
 	Status      connmgr.Status
 	StatusSince time.Time
@@ -262,7 +265,7 @@ func (s *Service) memberships(ctx context.Context) (map[string][]string, error) 
 
 func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, groups []string, role perm.Role) (Server, error) {
 	detailed := detailedFor(role)
-	srv := Server{ID: r.ID, Name: r.Name, ProfileID: r.ProfileID.String, ProfileIDs: []string{}, GroupIDs: groups, Detailed: detailed, Status: connmgr.Offline}
+	srv := Server{ID: r.ID, Number: r.Number.Int64, Name: r.Name, ProfileID: r.ProfileID.String, ProfileIDs: []string{}, GroupIDs: groups, Detailed: detailed, Status: connmgr.Offline}
 	if list, err := s.st.Queries.GetServerProfiles(ctx, r.ID); err == nil {
 		srv.ProfileIDs = list
 	}
@@ -844,8 +847,12 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 	defer func() { _ = tx.Rollback() }()
 	now := store.Now()
 	q := sqlitedb.New(tx)
+	number, err := q.NextServerNumber(ctx)
+	if err != nil {
+		return Server{}, err
+	}
 	if err := q.InsertServer(ctx, sqlitedb.InsertServerParams{
-		ID: id, Name: f.name, Protocol: f.protocol,
+		ID: id, Number: sql.NullInt64{Int64: number, Valid: true}, Name: f.name, Protocol: f.protocol,
 		Host: f.host, Port: int64(f.port), Secret: sealed, GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
 		TlsFingerprint: f.fingerprint, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {

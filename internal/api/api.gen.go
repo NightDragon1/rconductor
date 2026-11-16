@@ -1419,6 +1419,9 @@ type Server struct {
 	Id   openapi_types.UUID `json:"id"`
 	Name string             `json:"name"`
 
+	// Number Consecutive number of the server, given at creation and never given again, also after a delete (UI-018). Every role in scope gets it; the interface shows it with the flag server_number.
+	Number int64 `json:"number"`
+
 	// Port RCON port; RCON admin only (D-056).
 	Port *int `json:"port,omitempty"`
 

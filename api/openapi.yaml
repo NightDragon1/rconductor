@@ -2539,8 +2539,16 @@ components:
 
     Server:
       type: object
-      required: [id, name, groups, status, status_since, version]
+      required: [id, number, name, groups, status, status_since, version]
       properties:
+        number:
+          type: integer
+          format: int64
+          minimum: 1
+          description: >-
+            Consecutive number of the server, given at creation and never
+            given again, also after a delete (UI-018). Every role in scope
+            gets it; the interface shows it with the flag server_number.
         version:
           type: string
           description: >-
