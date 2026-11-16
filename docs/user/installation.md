@@ -177,8 +177,30 @@ socket narrows the API further (see below).
 | `RCD_AGENT_NAME` | host name | name shown in the panel |
 | `RCD_LABEL` | `rconductor.manage=true` | label that allows a container |
 | `RCD_DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker API, also a socket proxy such as `tcp://socket-proxy:2375` |
+| `RCD_HOST_IP` | empty | address of the Docker host shown in the panel (see below) |
 | `RCD_SECRETS_DIR` | `/secrets` | agent key (`agent.key`) and pairing (`panel.json`) |
 | `RCD_LOG_LEVEL`, `RCD_LOG_FORMAT` | `info`, `text` | as for the panel |
+
+### Docker host in the panel
+
+With the feature flag `docker_host` on, the RCON admin sees for each agent
+the Docker host: the name Docker gives and the host's address. Outside
+Swarm mode Docker does not know the host's address, so set it on the agent:
+
+```yaml
+    environment:
+      RCD_HOST_IP: 192.168.1.10   # the LAN address of this host
+```
+
+Without it the panel shows only the name. The address an agent connected
+from appears as "Connected from" only when it lies outside the panel's own
+networks; an agent next to the panel in the same Compose project connects
+from a Docker network address and shows none. A panel on the host network
+counts the host's LAN as its own, so agents in that LAN show none either.
+
+Alternative: run the agent with `network_mode: host` if it has a host of its
+own. It then reaches the panel and a socket proxy only over published
+ports, so this does not fit the all-in-one setup.
 
 ### Agent behind a socket proxy
 

@@ -195,7 +195,7 @@ func TestHashConcurrencyStaysMeasured(t *testing.T) {
 func TestLoadAgent(t *testing.T) {
 	c, err := LoadAgent(envOf(map[string]string{"RCD_LOG_FORMAT": "json"}), filesOf(nil))
 	if err != nil || c.Log.Format != "json" || c.LabelKey != "rconductor.manage" || c.LabelValue != "true" ||
-		c.DockerHost != "unix:///var/run/docker.sock" || c.SecretsDir != "/secrets" || c.PairingToken != "" {
+		c.DockerHost != "unix:///var/run/docker.sock" || c.SecretsDir != "/secrets" || c.PairingToken != "" || c.HostIP != "" {
 		t.Fatalf("defaults: %+v, %v", c, err)
 	}
 	// The token also comes from a file (D-033, revision 2.3 candidate 4).
@@ -203,6 +203,10 @@ func TestLoadAgent(t *testing.T) {
 		filesOf(map[string]string{"/run/secrets/token": "rcd1.abc\n"}))
 	if err != nil || c.PairingToken != "rcd1.abc" || c.LabelKey != "game" || c.LabelValue != "yes" || c.PanelAddr != "panel:8443" {
 		t.Fatalf("file token: %+v, %v", c, err)
+	}
+	// The agent checks RCD_HOST_IP itself; any value starts (D-084).
+	if c, err = LoadAgent(envOf(map[string]string{"RCD_HOST_IP": "10.3.0.101"}), filesOf(nil)); err != nil || c.HostIP != "10.3.0.101" {
+		t.Fatalf("host ip: %+v, %v", c, err)
 	}
 	for name, env := range map[string]map[string]string{
 		"label":      {"RCD_LABEL": "novalue"},
