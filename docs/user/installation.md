@@ -195,7 +195,8 @@ Swarm mode Docker does not know the host's address, so set it on the agent:
 Without it the panel shows only the name. The address an agent connected
 from appears as "Connected from" only when it lies outside the panel's own
 networks; an agent next to the panel in the same Compose project connects
-from a Docker network address and shows none.
+from a Docker network address and shows none. A panel on the host network
+counts the host's LAN as its own, so agents in that LAN show none either.
 
 Alternative: run the agent with `network_mode: host` if it has a host of its
 own. It then reaches the panel and a socket proxy only over published
