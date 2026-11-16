@@ -63,7 +63,6 @@ const agents = [
   {
     id: 'a2',
     name: 'host-2',
-    remote: '10.0.0.9',
     status: 'active',
     connected: false,
     docker_host: { name: 'box' },
@@ -119,13 +118,13 @@ describe('topology (UI-010)', () => {
     await renderPage(TopologyPage, data('rcon_admin', ['docker_host']));
     const main = screen.getByRole('region', { name: 'main' });
     expect(main.textContent).toContain('<b>nas</b> (192.168.1.5)');
-    expect(main.textContent).not.toContain('10.0.0.5');
     expect(main.querySelector('b')).toBeNull();
-    // host-2's daemon gives no address: the connection address, marked (D-084).
+    // The backend sent host-1's connection address: shown marked (D-084).
+    expect(main.textContent).toContain('Connected from 10.0.0.5');
+    // host-2 has none (inside the panel's networks): name only.
     const rest = screen.getByRole('region', { name: 'Other servers' });
     expect(rest.textContent).toContain('box');
-    expect(rest.textContent).toContain('Connected from 10.0.0.9');
-    expect(main.textContent).not.toContain('Connected from');
+    expect(rest.textContent).not.toContain('Connected from');
   });
 
   it('gives the server admin no Docker host, also with docker_host (AGT-014)', async () => {
@@ -134,7 +133,6 @@ describe('topology (UI-010)', () => {
     const page = document.body.textContent ?? '';
     expect(page).not.toContain('nas');
     expect(page).not.toContain('192.168.1.5');
-    expect(page).not.toContain('10.0.0.9');
     expect(page).not.toContain('Connected from');
   });
 

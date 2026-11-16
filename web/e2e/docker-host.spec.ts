@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
 // Docker host of the agents (AGT-014) behind the flag docker_host: the fake
@@ -24,6 +24,13 @@ const agentNode = (page: Page, agent: string) =>
     .filter({ hasText: agent })
     .first();
 
+// connectedFrom: the connection address shows, marked, exactly when the
+// backend sends one; it does so only outside the panel's networks (D-084).
+async function connectedFrom(at: Locator, remote?: string) {
+  if (remote) await expect(at).toContainText(`Connected from ${remote}`);
+  else await expect(at).not.toContainText('Connected from');
+}
+
 test.describe('docker host on', () => {
   test.use({ flags: ['docker_host'] });
 
@@ -44,9 +51,10 @@ test.describe('docker host on', () => {
     await page.goto('topology');
     const node = agentNode(page, 'host-1');
     await expect(node).toContainText(`${hostName} (${hostIP})`);
-    // Markup stays text (SEC-006); the agent's own address is gone.
+    // Markup stays text (SEC-006); a connection address only marked as
+    // such, and only when the backend sends one (D-084).
     await expect(node.locator('b')).toHaveCount(0);
-    if (host1?.remote) await expect(node).not.toContainText(host1.remote);
+    await connectedFrom(node, host1?.remote);
 
     // The server page names the host of its agent (AGT-014: each server with agent).
     await page.goto(`servers/${state.servers.survival}/overview`);
@@ -59,13 +67,9 @@ test.describe('docker host on', () => {
     await expect(page.getByRole('columnheader', { name: 'Docker host' })).toBeVisible();
     await expect(row).toContainText(`${hostName} (${hostIP})`);
     await expect(row.locator('b')).toHaveCount(0);
-    await expect(row).not.toContainText('Connected from');
-    // host-legacy names no host: the address it connected from, marked (D-084).
+    await connectedFrom(row, host1?.remote);
     const legacy = items.find((a) => a.name === 'host-legacy');
-    expect(legacy?.remote).toBeTruthy();
-    await expect(page.getByRole('row').filter({ hasText: 'host-legacy' })).toContainText(
-      `Connected from ${legacy?.remote}`,
-    );
+    await connectedFrom(page.getByRole('row').filter({ hasText: 'host-legacy' }), legacy?.remote);
   });
 
   test('a server admin gets neither name nor address', async ({ page, state }) => {
