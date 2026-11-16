@@ -152,7 +152,7 @@ func TestCodesUniqueAndWellFormed(t *testing.T) {
 	// with 1.1 (NFR-017), the four codes of the second factor with 1.1
 	// (AUTH-008), the two certificate codes with 1.1 (PROT-003),
 	// auth.recovery.dropped with D-077.
-	if len(AllCodes) != 59 {
-		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected, logs.tail, audit.entry_lost, rcon.connection_test, mail.sent, mail.failed, the four of AUTH-008, the two of PROT-003 and auth.recovery.dropped", len(AllCodes))
+	if len(AllCodes) != 60 {
+		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected, logs.tail, audit.entry_lost, rcon.connection_test, mail.sent, mail.failed, the four of AUTH-008, the two of PROT-003, auth.recovery.dropped and setting.read_failed", len(AllCodes))
 	}
 }

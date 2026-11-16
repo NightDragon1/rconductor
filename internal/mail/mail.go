@@ -349,7 +349,7 @@ func (s *Service) duration(ctx context.Context) time.Duration {
 func (s *Service) take(ctx context.Context, user string) bool {
 	limit := DefaultTestPerMinute
 	var v int
-	if err := s.st.GlobalSetting(ctx, SettingTestPerMinute, &v); err == nil {
+	if err := s.st.GuardedSetting(ctx, s.log, SettingTestPerMinute, &v); err == nil {
 		limit = max(v, MinTestPerMinute)
 	}
 	now := s.now()

@@ -184,7 +184,7 @@ func EnsureSecondFactorDefaults(ctx context.Context, st *store.Store) error {
 
 func (s *Service) durationSetting(ctx context.Context, key string, def, low time.Duration) time.Duration {
 	var v string
-	if err := s.st.GlobalSetting(ctx, key, &v); err != nil {
+	if err := s.st.GuardedSetting(ctx, s.log, key, &v); err != nil {
 		return def
 	}
 	d, err := time.ParseDuration(v)
@@ -642,7 +642,7 @@ func (s *Service) SetEmail(ctx context.Context, p Principal, c Client, email, pw
 // recoveryLimit is auth.recovery_per_hour.
 func (s *Service) recoveryLimit(ctx context.Context) int {
 	var v int
-	if err := s.st.GlobalSetting(ctx, SettingRecoveryPerHour, &v); err == nil {
+	if err := s.st.GuardedSetting(ctx, s.log, SettingRecoveryPerHour, &v); err == nil {
 		return max(v, MinRecoveryPerHour)
 	}
 	return DefaultRecoveryPerHour

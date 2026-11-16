@@ -5,12 +5,16 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 )
 
@@ -79,5 +83,35 @@ func (s *Store) GlobalSetting(ctx context.Context, key string, dst any) error {
 	if err := json.Unmarshal([]byte(v), dst); err != nil {
 		return fmt.Errorf("decode setting %s: %w", key, err)
 	}
+	return nil
+}
+
+// GuardedSetting decodes the global setting key into dst, for a number
+// that guards something, such as a time limit or a failure limit (F-93): a
+// missing row is an error as in GlobalSetting, so the caller takes its
+// default. When the database cannot be read, it decodes the last value read
+// before, if any, and returns nil; otherwise the error, so the caller takes
+// its default too. Never an extreme value: degrade, do not close (D-077).
+// The failure is logged with the key only, never a value.
+func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string, dst any) error {
+	v, err := s.Queries.GetSetting(ctx, sqlitedb.GetSettingParams{Key: key, ScopeType: ScopeGlobal, ScopeID: ""})
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("read setting %s: %w", key, err)
+	case err != nil:
+		last, ok := s.kept.Load(key)
+		if log != nil {
+			log.Error("setting not readable", logging.Event(logging.SettingReadFailed),
+				slog.String("setting", key), slog.Bool("kept", ok), slog.Any("err", err))
+		}
+		if !ok {
+			return fmt.Errorf("read setting %s: %w", key, err)
+		}
+		v = last.(string)
+	}
+	if err := json.Unmarshal([]byte(v), dst); err != nil {
+		return fmt.Errorf("decode setting %s: %w", key, err)
+	}
+	s.kept.Store(key, v)
 	return nil
 }

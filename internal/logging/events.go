@@ -20,6 +20,9 @@ const (
 	BackupFailed    Code = "backup.failed"
 	AuditPurge      Code = "audit.purge"
 	AuditLost       Code = "audit.entry_lost"
+	// SettingReadFailed: a setting that guards something could not be
+	// read; the key and whether the last value read is kept, never a value.
+	SettingReadFailed Code = "setting.read_failed"
 )
 
 // Authentication.
@@ -124,7 +127,7 @@ const (
 // AllCodes lists every defined code, in the order of Design 8.3.
 var AllCodes = []Code{
 	AppStart, AppReady, DBMigrateStart, DBMigrateDone, DBMigrateLockWt,
-	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge, AuditLost,
+	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge, AuditLost, SettingReadFailed,
 	AuthLoginOK, AuthLoginFailed, AuthLockout, AuthLogout, AuthSessionRevoked,
 	AuthInitialPassword, AuthInviteUsed, AuthEmergencyReset,
 	AuthTOTPEnabled, AuthTOTPDisabled, AuthRecoveryRequested, AuthRecoveryUsed, AuthRecoveryDropped,
