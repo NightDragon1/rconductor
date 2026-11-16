@@ -672,7 +672,7 @@ type Agent struct {
 	Connected    bool      `json:"connected"`
 	CreatedAt    time.Time `json:"created_at"`
 
-	// DockerHost Host of the agent's Docker daemon as the daemon names it (AGT-014), from the agent's last hello since the panel started. Only while the feature flag docker_host is on; each field is missing when the daemon does not give it.
+	// DockerHost Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Only while the feature flag docker_host is on; each field is missing when the agent does not give it.
 	DockerHost *DockerHost `json:"docker_host,omitempty"`
 
 	// Fingerprint SHA256:<base64> of the agent key.
@@ -684,7 +684,7 @@ type Agent struct {
 	Name     string              `json:"name"`
 	PairedBy *openapi_types.UUID `json:"paired_by,omitempty"`
 
-	// Remote Source address of the agent's last connection to the agent port. While the flag docker_host is on, the interface shows it as "Connected from" when the Docker host has no address (D-084); it is never part of docker_host.
+	// Remote Source address of the agent's last connection to the agent port. While the flag docker_host is on, it is set only when it lies outside the panel's own networks and is shown as "Connected from" (D-084); it is never part of docker_host.
 	Remote    *string     `json:"remote,omitempty"`
 	RevokedAt *time.Time  `json:"revoked_at,omitempty"`
 	Status    AgentStatus `json:"status"`
@@ -926,9 +926,9 @@ type ContainerRuntime struct {
 	Volumes *[]VolumeRuntime `json:"volumes,omitempty"`
 }
 
-// DockerHost Host of the agent's Docker daemon as the daemon names it (AGT-014), from the agent's last hello since the panel started. Only while the feature flag docker_host is on; each field is missing when the daemon does not give it.
+// DockerHost Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Only while the feature flag docker_host is on; each field is missing when the agent does not give it.
 type DockerHost struct {
-	// Ip IPv4 or IPv6 address without zone.
+	// Ip IPv4 or IPv6 address without zone; never loopback, link-local, unspecified or multicast.
 	Ip *string `json:"ip,omitempty"`
 
 	// Name Foreign data from the agent (SEC-006).

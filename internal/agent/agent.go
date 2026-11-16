@@ -82,6 +82,9 @@ type Agent struct {
 	backend Backend
 	id      *keys.Identity
 
+	// hostIP is RCD_HOST_IP once checked, "" without a usable one (D-084).
+	hostIP string
+
 	mu    sync.Mutex
 	state State
 	// backoff overrides the reconnect waits, for tests.
@@ -100,6 +103,15 @@ func New(cfg config.Agent, log *slog.Logger, backend Backend) (*Agent, error) {
 		return nil, err
 	}
 	a := &Agent{cfg: cfg, log: log, backend: backend, id: id, state: st}
+	if v := strings.TrimSpace(cfg.HostIP); v != "" {
+		// Invalid means empty (D-084): the agent still runs, the panel then
+		// shows the address of the daemon, if any.
+		ip, ok := agentproto.HostAddr(v)
+		if !ok {
+			log.Warn("RCD_HOST_IP ignored: not an IP address other hosts can reach")
+		}
+		a.hostIP = ip
+	}
 	a.backoff = func(attempt int) time.Duration { return backoff(attempt, a.maxBackoff()) }
 	return a, nil
 }
@@ -229,6 +241,14 @@ func (a *Agent) connect(ctx context.Context, p plan) string {
 		hctx, hcancel := context.WithTimeout(ctx, a.dialTimeout())
 		host = r.Host(hctx)
 		hcancel()
+	}
+	// The address the operator set comes before the daemon's (D-084).
+	if a.hostIP != "" {
+		h := agentproto.DockerHost{IP: a.hostIP}
+		if host != nil {
+			h.Name = host.Name
+		}
+		host = &h
 	}
 	attrs := []any{slog.String("panel", p.addr), slog.String("fingerprint", a.Fingerprint())}
 	cfg, err := agentproto.ClientConfig(a.id, p.fingerprint)

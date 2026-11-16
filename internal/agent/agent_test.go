@@ -411,31 +411,58 @@ type hostBackend struct {
 
 func (b hostBackend) Host(context.Context) *agentproto.DockerHost { return b.host }
 
-// TestHelloDockerHost covers AGT-014: the agent sends the host its backend
-// names in the hello, and the panel's hub keeps it for the agent.
+// TestHelloDockerHost covers AGT-014 and D-084: the agent sends the host
+// its backend names in the hello, RCD_HOST_IP before the daemon's address,
+// and the panel's hub keeps it for the agent. An RCD_HOST_IP no other host
+// reaches is dropped with a log hint, and the daemon's address stays.
 func TestHelloDockerHost(t *testing.T) {
-	p := newPanel(t)
-	cfg := agentCfg(t, t.TempDir())
-	cfg.PairingToken, cfg.PanelAddr = p.token(), p.addr
-	want := agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}
-	log := logging.New(&lockedBuf{}, "agent", config.Log{Format: "json"}).Root()
-	a, err := New(cfg, log, hostBackend{&fakeBackend{}, &want})
-	if err != nil {
-		t.Fatal(err)
+	daemon := agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}
+	for name, tc := range map[string]struct {
+		hostIP string
+		host   *agentproto.DockerHost
+		want   agentproto.DockerHost
+		hint   bool
+	}{
+		"daemon only":       {"", &daemon, daemon, false},
+		"setting first":     {" 10.3.0.101 ", &daemon, agentproto.DockerHost{Name: "nas", IP: "10.3.0.101"}, false},
+		"setting, no host":  {"2001:db8::7", nil, agentproto.DockerHost{IP: "2001:db8::7"}, false},
+		"loopback":          {"127.0.0.1", &daemon, daemon, true},
+		"link-local":        {"169.254.1.1", &daemon, daemon, true},
+		"unspecified":       {"::", &daemon, daemon, true},
+		"not an address":    {"nas.lan", &daemon, daemon, true},
+		"address with port": {"10.3.0.101:8443", &daemon, daemon, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := newPanel(t)
+			cfg := agentCfg(t, t.TempDir())
+			cfg.PairingToken, cfg.PanelAddr, cfg.HostIP = p.token(), p.addr, tc.hostIP
+			var logs lockedBuf
+			log := logging.New(&logs, "agent", config.Log{Format: "json"}).Root()
+			a, err := New(cfg, log, hostBackend{&fakeBackend{}, tc.host})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(logs.String(), "RCD_HOST_IP ignored"); got != tc.hint {
+				t.Errorf("log hint = %v, want %v:\n%s", got, tc.hint, logs.String())
+			}
+			a.backoff = func(int) time.Duration { return 20 * time.Millisecond }
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan error, 1)
+			go func() { done <- a.Run(ctx) }()
+			t.Cleanup(func() {
+				cancel()
+				if err := <-done; err != nil {
+					t.Errorf("run: %v", err)
+				}
+			})
+			waitFor(t, "pairing", func() bool { return a.State().AgentID != "" })
+			id := a.State().AgentID
+			waitFor(t, "docker host", func() bool { d, ok := p.hub.DockerHost(id); return ok && d == tc.want })
+		})
 	}
-	a.backoff = func(int) time.Duration { return 20 * time.Millisecond }
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- a.Run(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		if err := <-done; err != nil {
-			t.Errorf("run: %v", err)
-		}
-	})
-	waitFor(t, "pairing", func() bool { return a.State().AgentID != "" })
-	id := a.State().AgentID
-	waitFor(t, "docker host", func() bool { d, ok := p.hub.DockerHost(id); return ok && d == want })
+	if daemon != (agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}) {
+		t.Errorf("the backend's host was changed: %+v", daemon)
+	}
 }
 
 // slowHost is a backend whose daemon does not answer for the host.

@@ -156,10 +156,19 @@ func TestCleanDockerHost(t *testing.T) {
 		"long name": {DockerHost{Name: strings.Repeat("h", 300)}, DockerHost{Name: strings.Repeat("h", MaxHostName)}},
 		"ipv6":      {DockerHost{IP: "fd00::1"}, DockerHost{IP: "fd00::1"}},
 		"mapped":    {DockerHost{IP: "::ffff:10.0.0.1"}, DockerHost{IP: "10.0.0.1"}},
-		"zone":      {DockerHost{IP: "fe80::1%<b>eth0</b>"}, DockerHost{IP: "fe80::1"}},
-		"with port": {DockerHost{IP: "10.0.0.1:2377"}, DockerHost{}},
-		"not an ip": {DockerHost{IP: "<script>"}, DockerHost{}},
-		"long junk": {DockerHost{IP: strings.Repeat("1", 10000)}, DockerHost{}},
+		"zone":      {DockerHost{IP: "fd00::1%<b>eth0</b>"}, DockerHost{IP: "fd00::1"}},
+		// No other host reaches these (D-084).
+		"loopback":     {DockerHost{IP: "127.0.1.1"}, DockerHost{}},
+		"loopback v6":  {DockerHost{IP: "::1"}, DockerHost{}},
+		"link-local":   {DockerHost{IP: "169.254.10.1"}, DockerHost{}},
+		"link-local6":  {DockerHost{IP: "fe80::1%eth0"}, DockerHost{}},
+		"unspecified":  {DockerHost{IP: "0.0.0.0"}, DockerHost{}},
+		"multicast":    {DockerHost{IP: "224.0.0.1"}, DockerHost{}},
+		"this network": {DockerHost{IP: "0.1.2.3"}, DockerHost{}},
+		"broadcast":    {DockerHost{IP: "255.255.255.255"}, DockerHost{}},
+		"with port":    {DockerHost{IP: "10.0.0.1:2377"}, DockerHost{}},
+		"not an ip":    {DockerHost{IP: "<script>"}, DockerHost{}},
+		"long junk":    {DockerHost{IP: strings.Repeat("1", 10000)}, DockerHost{}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			h := Hello{Name: "host", Version: "1.0.0", Backend: "docker", DockerHost: &tc.in}

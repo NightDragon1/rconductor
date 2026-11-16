@@ -17,6 +17,8 @@ services:
     environment:
       # Pairing token from the panel; without it the agent waits.
       RCD_PAIRING_TOKEN: "${RCD_PAIRING_TOKEN:-}"
+      # Address of this host, shown to the RCON admin (flag docker_host).
+      RCD_HOST_IP: "${RCD_HOST_IP:-}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - agent-secrets:/secrets
