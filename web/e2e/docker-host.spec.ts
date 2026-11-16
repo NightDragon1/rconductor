@@ -25,8 +25,10 @@ const agentNode = (page: Page, agent: string) =>
     .first();
 
 // connectedFrom: the connection address shows, marked, exactly when the
-// backend sends one; it does so only outside the panel's networks (D-084).
-async function connectedFrom(at: Locator, remote?: string) {
+// agent has no host address and the backend sends one; it does so only
+// outside the panel's networks (AGT-014, D-084).
+async function connectedFrom(at: Locator, a?: { remote?: string; docker_host?: { ip?: string } }) {
+  const remote = a?.docker_host?.ip ? undefined : a?.remote;
   if (remote) await expect(at).toContainText(`Connected from ${remote}`);
   else await expect(at).not.toContainText('Connected from');
 }
@@ -54,7 +56,7 @@ test.describe('docker host on', () => {
     // Markup stays text (SEC-006); a connection address only marked as
     // such, and only when the backend sends one (D-084).
     await expect(node.locator('b')).toHaveCount(0);
-    await connectedFrom(node, host1?.remote);
+    await connectedFrom(node, host1);
 
     // The server page names the host of its agent (AGT-014: each server with agent).
     await page.goto(`servers/${state.servers.survival}/overview`);
@@ -67,9 +69,9 @@ test.describe('docker host on', () => {
     await expect(page.getByRole('columnheader', { name: 'Docker host' })).toBeVisible();
     await expect(row).toContainText(`${hostName} (${hostIP})`);
     await expect(row.locator('b')).toHaveCount(0);
-    await connectedFrom(row, host1?.remote);
+    await connectedFrom(row, host1);
     const legacy = items.find((a) => a.name === 'host-legacy');
-    await connectedFrom(page.getByRole('row').filter({ hasText: 'host-legacy' }), legacy?.remote);
+    await connectedFrom(page.getByRole('row').filter({ hasText: 'host-legacy' }), legacy);
   });
 
   test('a server admin gets neither name nor address', async ({ page, state }) => {

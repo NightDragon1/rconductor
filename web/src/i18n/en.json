@@ -1030,7 +1030,7 @@
       },
       "features_docker_host": {
         "label": "Docker host",
-        "help": "Shows the host name and address of each agent's Docker daemon as the daemon reports them; without an address from the daemon, the address the agent connected from. Only the RCON admin sees them."
+        "help": "Shows the Docker host of each agent: its name, and its address from the agent setting RCD_HOST_IP or Swarm mode; without an address, the address the agent connected from if it lies outside the panel's networks. Only the RCON admin sees them."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."

@@ -221,7 +221,7 @@ services:
     environment:
       CONTAINERS: "1"      # list, inspect, logs and stats of containers
       EVENTS: "1"          # status changes
-      INFO: "1"            # name of the Docker host (shown with the flag docker_host);
+      INFO: "1"            # name of the Docker host, shown to the RCON admin;
                            # /info also tells the agent the OS, kernel and daemon settings
       ALLOW_START: "1"
       ALLOW_STOP: "1"

@@ -13,7 +13,7 @@ import {
   type Server,
 } from '@/api/servers';
 import { useSession } from '@/api/session';
-import { DOCKER_HOST_FLAG, DockerHost } from '@/components/DockerHost';
+import { DOCKER_HOST_FLAG, DockerHost, dockerHostParts } from '@/components/DockerHost';
 import { useServer } from '@/api/live-servers';
 import { decimal, gib, span, useNow } from '@/lib/format';
 import { usePhone } from '@/lib/phone';
@@ -163,7 +163,7 @@ function Head({ server, role }: { server: Server; role?: string }) {
               <span className={c.agent_connected ? 'text-ok' : 'text-danger'}>
                 {t(c.agent_connected ? 'server.agentConnected' : 'server.agentGone')}
               </span>
-              {dockerHost && agent && (
+              {dockerHost && dockerHostParts(agent).any && (
                 <span className="ml-2">
                   <span className="text-muted">{t('agents.dockerHost')}</span>{' '}
                   <DockerHost agent={agent} />

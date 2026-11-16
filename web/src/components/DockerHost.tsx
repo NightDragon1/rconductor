@@ -9,17 +9,25 @@ import { ForeignText } from '@/components/ForeignText';
 // address (AGT-014).
 export const DOCKER_HOST_FLAG = 'docker_host';
 
-// DockerHost shows the host of an agent's Docker daemon: the name as
-// foreign text (SEC-006) and the address, each only if the agent gave it,
-// and the address the agent connected from, marked as such. The backend
+// dockerHostParts are the parts of an agent's Docker host the interface
+// shows: name and address as the agent gave them, and the address the agent
+// connected from only when there is no host address (AGT-014). The backend
 // sends that one only outside the panel's own networks, and all of it to
 // the RCON admin only (D-084).
-export function DockerHost({ agent }: { agent?: Agent }) {
-  const { t } = useTranslation();
+export function dockerHostParts(agent?: Agent) {
   const name = agent?.docker_host?.name;
   const ip = agent?.docker_host?.ip;
-  const from = agent?.remote;
-  if (!name && !ip && !from) return null;
+  const from = ip ? undefined : agent?.remote;
+  return { name, ip, from, any: !!(name || ip || from) };
+}
+
+// DockerHost shows the host of an agent's Docker daemon: the name as
+// foreign text (SEC-006), the address, or the connection address marked
+// as such.
+export function DockerHost({ agent }: { agent?: Agent }) {
+  const { t } = useTranslation();
+  const { name, ip, from, any } = dockerHostParts(agent);
+  if (!any) return null;
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-2">
       {(name || ip) && (
