@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { ServerNumber } from '@/components/ServerNumber';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { PortChips } from '@/components/PortChips';
@@ -98,6 +99,7 @@ export function ServerCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="wrap-anywhere md:truncate font-mono font-semibold">
+            <ServerNumber number={server.number} />
             <Link
               to="/servers/$serverId"
               params={{ serverId: server.id }}

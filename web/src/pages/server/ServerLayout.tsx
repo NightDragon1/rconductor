@@ -14,6 +14,7 @@ import {
 } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { DOCKER_HOST_FLAG, DockerHost, dockerHostParts } from '@/components/DockerHost';
+import { ServerNumber } from '@/components/ServerNumber';
 import { useServer } from '@/api/live-servers';
 import { decimal, gib, span, useNow } from '@/lib/format';
 import { usePhone } from '@/lib/phone';
@@ -117,6 +118,7 @@ function Head({ server, role }: { server: Server; role?: string }) {
       <div className="flex min-w-0 flex-col gap-2 max-md:flex-1">
         <div className="flex flex-wrap items-center gap-3 max-md:gap-x-2 max-md:gap-y-0">
           <h1 className="max-w-full wrap-anywhere md:truncate font-mono text-2xl font-semibold max-md:text-lg">
+            <ServerNumber number={server.number} />
             <bdi>{server.name}</bdi>
           </h1>
           {admin && <FavoriteStar id={server.id} />}
