@@ -1305,8 +1305,8 @@ paths:
         server admin to scope (moderators and supporters with at least one
         server in his scope at sending time) or scope_moderators; another
         audience, users among them, is 403. Moderators and supporters do
-        not send (403). The text has at most 8 KiB in UTF-8 and 1 to
-        messages.max_text characters (code points); user_ids belongs to
+        not send (403). The text has at most 8 KiB in UTF-8 (first) and 1
+        to messages.max_text code points, the smaller applies; user_ids is for
         audience users only and has 1 to messages.max_recipients entries
         without repeats; otherwise 400, also when the audience has no
         recipient. An audience that resolves to more than
@@ -3126,8 +3126,8 @@ components:
           minLength: 1
           maxLength: 8192
           description: >-
-            At most 8 KiB in UTF-8, checked first, and 1 to
-            messages.max_text characters (code points).
+            At most 8 KiB in UTF-8, checked first, then 1 to
+            messages.max_text characters (code points); the smaller applies.
         audience:
           $ref: "#/components/schemas/MessageAudience"
         user_ids:

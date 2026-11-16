@@ -1209,7 +1209,7 @@ type MessageInput struct {
 	// Audience Who gets a message (D-085): all, server_admins, moderators and users (user_ids) for the RCON admin; scope and scope_moderators for a server admin, by his scope at sending time.
 	Audience MessageAudience `json:"audience"`
 
-	// Text At most 8 KiB in UTF-8, checked first, and 1 to messages.max_text characters (code points).
+	// Text At most 8 KiB in UTF-8, checked first, then 1 to messages.max_text characters (code points); the smaller applies.
 	Text string `json:"text"`
 
 	// UserIds For audience users only (400 with any other audience, and missing with users); 1 to messages.max_recipients entries.

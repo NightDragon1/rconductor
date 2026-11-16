@@ -724,7 +724,7 @@ export interface paths {
         put?: never;
         /**
          * Send a message (MSG-001, MSG-002, D-085); RCON admin and server admin; in the audit as message.sent, without the text (D-086).
-         * @description Behind the feature flag messages (404 while off). The RCON admin sends to all, server_admins, moderators or users (user_ids); a server admin to scope (moderators and supporters with at least one server in his scope at sending time) or scope_moderators; another audience, users among them, is 403. Moderators and supporters do not send (403). The text has at most 8 KiB in UTF-8 and 1 to messages.max_text characters (code points); user_ids belongs to audience users only and has 1 to messages.max_recipients entries without repeats; otherwise 400, also when the audience has no recipient. An audience that resolves to more than messages.max_resolved_recipients users is 400 with reason too_many_recipients; it is never cut. At most messages.per_hour messages per sender and hour (429). The text is shown as text, never as markup (SEC-006).
+         * @description Behind the feature flag messages (404 while off). The RCON admin sends to all, server_admins, moderators or users (user_ids); a server admin to scope (moderators and supporters with at least one server in his scope at sending time) or scope_moderators; another audience, users among them, is 403. Moderators and supporters do not send (403). The text has at most 8 KiB in UTF-8 (first) and 1 to messages.max_text code points, the smaller applies; user_ids is for audience users only and has 1 to messages.max_recipients entries without repeats; otherwise 400, also when the audience has no recipient. An audience that resolves to more than messages.max_resolved_recipients users is 400 with reason too_many_recipients; it is never cut. At most messages.per_hour messages per sender and hour (429). The text is shown as text, never as markup (SEC-006).
          */
         post: operations["createMessage"];
         delete?: never;
@@ -1615,7 +1615,7 @@ export interface components {
          */
         MessageAudience: "all" | "server_admins" | "moderators" | "users" | "scope" | "scope_moderators";
         MessageInput: {
-            /** @description At most 8 KiB in UTF-8, checked first, and 1 to messages.max_text characters (code points). */
+            /** @description At most 8 KiB in UTF-8, checked first, then 1 to messages.max_text characters (code points); the smaller applies. */
             text: string;
             audience: components["schemas"]["MessageAudience"];
             /** @description For audience users only (400 with any other audience, and missing with users); 1 to messages.max_recipients entries. */
