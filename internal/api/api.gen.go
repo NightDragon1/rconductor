@@ -226,6 +226,36 @@ func (e HistoryEntryResult) Valid() bool {
 	}
 }
 
+// Defines values for MessageAudience.
+const (
+	All             MessageAudience = "all"
+	Moderators      MessageAudience = "moderators"
+	Scope           MessageAudience = "scope"
+	ScopeModerators MessageAudience = "scope_moderators"
+	ServerAdmins    MessageAudience = "server_admins"
+	Users           MessageAudience = "users"
+)
+
+// Valid indicates whether the value is a known member of the MessageAudience enum.
+func (e MessageAudience) Valid() bool {
+	switch e {
+	case All:
+		return true
+	case Moderators:
+		return true
+	case Scope:
+		return true
+	case ScopeModerators:
+		return true
+	case ServerAdmins:
+		return true
+	case Users:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageCommandRender.
 const (
 	MinecraftTellraw MessageCommandRender = "minecraft-tellraw"
@@ -331,6 +361,7 @@ const (
 	ReasonCodeRateLimited            ReasonCode = "rate_limited"
 	ReasonCodeServerUnavailable      ReasonCode = "server_unavailable"
 	ReasonCodeTimeout                ReasonCode = "timeout"
+	ReasonCodeTooManyRecipients      ReasonCode = "too_many_recipients"
 	ReasonCodeTotpSetupRequired      ReasonCode = "totp_setup_required"
 	ReasonCodeUnauthenticated        ReasonCode = "unauthenticated"
 	ReasonCodeWrapperBlocked         ReasonCode = "wrapper_blocked"
@@ -370,6 +401,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeServerUnavailable:
 		return true
 	case ReasonCodeTimeout:
+		return true
+	case ReasonCodeTooManyRecipients:
 		return true
 	case ReasonCodeTotpSetupRequired:
 		return true
@@ -1132,6 +1165,35 @@ type LoginRequest struct {
 	Pseudonym string `json:"pseudonym"`
 }
 
+// Message defines model for Message.
+type Message struct {
+	// Audience Who gets a message (D-085): all, server_admins, moderators and users (user_ids) for the RCON admin; scope and scope_moderators for a server admin, by his scope at sending time.
+	Audience     MessageAudience    `json:"audience"`
+	CommentCount int                `json:"comment_count"`
+	CreatedAt    time.Time          `json:"created_at"`
+	Id           openapi_types.UUID `json:"id"`
+
+	// Read Read by me; true for a message I sent.
+	Read bool `json:"read"`
+
+	// RecipientCount For the sender and the RCON admin only.
+	RecipientCount *int          `json:"recipient_count,omitempty"`
+	Sender         MessageAuthor `json:"sender"`
+
+	// Text Shown as text, never as markup (SEC-006).
+	Text string `json:"text"`
+}
+
+// MessageAudience Who gets a message (D-085): all, server_admins, moderators and users (user_ids) for the RCON admin; scope and scope_moderators for a server admin, by his scope at sending time.
+type MessageAudience string
+
+// MessageAuthor defines model for MessageAuthor.
+type MessageAuthor struct {
+	// Id Missing when the user no longer exists.
+	Id        *openapi_types.UUID `json:"id,omitempty"`
+	Pseudonym string              `json:"pseudonym"`
+}
+
 // MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped; while the flag say_sender is off it is sent unchanged.
 type MessageCommand struct {
 	// Path Command path that is rewritten, e.g. say.
@@ -1141,6 +1203,26 @@ type MessageCommand struct {
 
 // MessageCommandRender defines model for MessageCommand.Render.
 type MessageCommandRender string
+
+// MessageInput defines model for MessageInput.
+type MessageInput struct {
+	// Audience Who gets a message (D-085): all, server_admins, moderators and users (user_ids) for the RCON admin; scope and scope_moderators for a server admin, by his scope at sending time.
+	Audience MessageAudience `json:"audience"`
+
+	// Text At most 8 KiB in UTF-8, checked first, then 1 to messages.max_text characters (code points); the smaller applies.
+	Text string `json:"text"`
+
+	// UserIds For audience users only (400 with any other audience, and missing with users); 1 to messages.max_recipients entries.
+	UserIds *[]openapi_types.UUID `json:"user_ids,omitempty"`
+}
+
+// MessageList defines model for MessageList.
+type MessageList struct {
+	Items []Message `json:"items"`
+
+	// Unread Unread messages to me, over all pages.
+	Unread int `json:"unread"`
+}
 
 // MultiCommandInput defines model for MultiCommandInput.
 type MultiCommandInput struct {
@@ -1739,6 +1821,9 @@ type IfMatch = string
 // InviteID defines model for InviteID.
 type InviteID = openapi_types.UUID
 
+// MessageID defines model for MessageID.
+type MessageID = openapi_types.UUID
+
 // ServerGroupID defines model for ServerGroupID.
 type ServerGroupID = openapi_types.UUID
 
@@ -1793,6 +1878,12 @@ type ListAuditParamsKind string
 type UpdateCommandListParams struct {
 	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// ListMessagesParams defines parameters for ListMessages.
+type ListMessagesParams struct {
+	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
 }
 
 // UpdateServerGroupParams defines parameters for UpdateServerGroup.
@@ -1904,6 +1995,9 @@ type DisableSecondFactorJSONRequestBody = PasswordConfirm
 
 // SetupSecondFactorJSONRequestBody defines body for SetupSecondFactor for application/json ContentType.
 type SetupSecondFactorJSONRequestBody = PasswordConfirm
+
+// CreateMessageJSONRequestBody defines body for CreateMessage for application/json ContentType.
+type CreateMessageJSONRequestBody = MessageInput
 
 // CreateServerGroupJSONRequestBody defines body for CreateServerGroup for application/json ContentType.
 type CreateServerGroupJSONRequestBody = ServerGroupInput
@@ -2066,6 +2160,21 @@ type ServerInterface interface {
 	// SetupSecondFactor Start the own second factor; needs the password (AUTH-008).
 	// (POST /me/second-factor/setup)
 	SetupSecondFactor(w http.ResponseWriter, r *http.Request)
+	// ListMessages Messages in the panel (MSG-001 to MSG-003, D-085): those sent to me and those I sent, newest first; the RCON admin sees all.
+	// (GET /messages)
+	ListMessages(w http.ResponseWriter, r *http.Request, params ListMessagesParams)
+	// CreateMessage Send a message (MSG-001, MSG-002, D-085); RCON admin and server admin; in the audit as message.sent, without the text (D-086).
+	// (POST /messages)
+	CreateMessage(w http.ResponseWriter, r *http.Request)
+	// DeleteMessage Delete a message with its recipients and comments, at once and for good (D-085, D-086); its sender and the RCON admin; in the audit without the text.
+	// (DELETE /messages/{id})
+	DeleteMessage(w http.ResponseWriter, r *http.Request, id MessageID)
+	// GetMessage One message (MSG-003, D-085); its recipients, its sender and the RCON admin.
+	// (GET /messages/{id})
+	GetMessage(w http.ResponseWriter, r *http.Request, id MessageID)
+	// MarkMessageRead Mark a message read for me (D-085); its recipients only.
+	// (POST /messages/{id}/read)
+	MarkMessageRead(w http.ResponseWriter, r *http.Request, id MessageID)
 	// ListProfiles Game profiles with their command catalog (CAT-001, CAT-002).
 	// (GET /profiles)
 	ListProfiles(w http.ResponseWriter, r *http.Request)
@@ -2891,6 +3000,144 @@ func (siw *ServerInterfaceWrapper) SetupSecondFactor(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetupSecondFactor(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMessages operation middleware
+func (siw *ServerInterfaceWrapper) ListMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMessagesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMessages(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMessage operation middleware
+func (siw *ServerInterfaceWrapper) CreateMessage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMessage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMessage operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMessage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMessage operation middleware
+func (siw *ServerInterfaceWrapper) GetMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMessage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MarkMessageRead operation middleware
+func (siw *ServerInterfaceWrapper) MarkMessageRead(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MarkMessageRead(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4399,6 +4646,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{id}", wrapper.GetAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{id}/containers", wrapper.ListAgentContainers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{id}/approve", wrapper.ApproveAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/messages", wrapper.ListMessages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.CreateMessage)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/messages/{id}", wrapper.DeleteMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/messages/{id}", wrapper.GetMessage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{id}/read", wrapper.MarkMessageRead)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/ws", wrapper.OpenWebSocket)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}", wrapper.DeleteUser)
@@ -6948,6 +7200,411 @@ func (response SetupSecondFactor503ApplicationProblemPlusJSONResponse) VisitSetu
 		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
 	}
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessagesRequestObject struct {
+	Params ListMessagesParams
+}
+
+type ListMessagesResponseObject interface {
+	VisitListMessagesResponse(w http.ResponseWriter) error
+}
+
+type ListMessages200JSONResponse MessageList
+
+func (response ListMessages200JSONResponse) VisitListMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessages400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListMessages400ApplicationProblemPlusJSONResponse) VisitListMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessages401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListMessages401ApplicationProblemPlusJSONResponse) VisitListMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessages404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListMessages404ApplicationProblemPlusJSONResponse) VisitListMessagesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessageRequestObject struct {
+	Body *CreateMessageJSONRequestBody
+}
+
+type CreateMessageResponseObject interface {
+	VisitCreateMessageResponse(w http.ResponseWriter) error
+}
+
+type CreateMessage201JSONResponse Message
+
+func (response CreateMessage201JSONResponse) VisitCreateMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessage400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessage400ApplicationProblemPlusJSONResponse) VisitCreateMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessage401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessage401ApplicationProblemPlusJSONResponse) VisitCreateMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessage403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessage403ApplicationProblemPlusJSONResponse) VisitCreateMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessage404ApplicationProblemPlusJSONResponse) VisitCreateMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessage429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessage429ApplicationProblemPlusJSONResponse) VisitCreateMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMessageRequestObject struct {
+	Id MessageID `json:"id"`
+}
+
+type DeleteMessageResponseObject interface {
+	VisitDeleteMessageResponse(w http.ResponseWriter) error
+}
+
+type DeleteMessage204Response struct {
+}
+
+func (response DeleteMessage204Response) VisitDeleteMessageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMessage400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMessage400ApplicationProblemPlusJSONResponse) VisitDeleteMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMessage401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMessage401ApplicationProblemPlusJSONResponse) VisitDeleteMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMessage403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMessage403ApplicationProblemPlusJSONResponse) VisitDeleteMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMessage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMessage404ApplicationProblemPlusJSONResponse) VisitDeleteMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessageRequestObject struct {
+	Id MessageID `json:"id"`
+}
+
+type GetMessageResponseObject interface {
+	VisitGetMessageResponse(w http.ResponseWriter) error
+}
+
+type GetMessage200JSONResponse Message
+
+func (response GetMessage200JSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessage400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessage400ApplicationProblemPlusJSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessage401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessage401ApplicationProblemPlusJSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessage404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessage404ApplicationProblemPlusJSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkMessageReadRequestObject struct {
+	Id MessageID `json:"id"`
+}
+
+type MarkMessageReadResponseObject interface {
+	VisitMarkMessageReadResponse(w http.ResponseWriter) error
+}
+
+type MarkMessageRead204Response struct {
+}
+
+func (response MarkMessageRead204Response) VisitMarkMessageReadResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type MarkMessageRead400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response MarkMessageRead400ApplicationProblemPlusJSONResponse) VisitMarkMessageReadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkMessageRead401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response MarkMessageRead401ApplicationProblemPlusJSONResponse) VisitMarkMessageReadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkMessageRead403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response MarkMessageRead403ApplicationProblemPlusJSONResponse) VisitMarkMessageReadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkMessageRead404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response MarkMessageRead404ApplicationProblemPlusJSONResponse) VisitMarkMessageReadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -10883,6 +11540,21 @@ type StrictServerInterface interface {
 	// SetupSecondFactor Start the own second factor; needs the password (AUTH-008).
 	// (POST /me/second-factor/setup)
 	SetupSecondFactor(ctx context.Context, request SetupSecondFactorRequestObject) (SetupSecondFactorResponseObject, error)
+	// ListMessages Messages in the panel (MSG-001 to MSG-003, D-085): those sent to me and those I sent, newest first; the RCON admin sees all.
+	// (GET /messages)
+	ListMessages(ctx context.Context, request ListMessagesRequestObject) (ListMessagesResponseObject, error)
+	// CreateMessage Send a message (MSG-001, MSG-002, D-085); RCON admin and server admin; in the audit as message.sent, without the text (D-086).
+	// (POST /messages)
+	CreateMessage(ctx context.Context, request CreateMessageRequestObject) (CreateMessageResponseObject, error)
+	// DeleteMessage Delete a message with its recipients and comments, at once and for good (D-085, D-086); its sender and the RCON admin; in the audit without the text.
+	// (DELETE /messages/{id})
+	DeleteMessage(ctx context.Context, request DeleteMessageRequestObject) (DeleteMessageResponseObject, error)
+	// GetMessage One message (MSG-003, D-085); its recipients, its sender and the RCON admin.
+	// (GET /messages/{id})
+	GetMessage(ctx context.Context, request GetMessageRequestObject) (GetMessageResponseObject, error)
+	// MarkMessageRead Mark a message read for me (D-085); its recipients only.
+	// (POST /messages/{id}/read)
+	MarkMessageRead(ctx context.Context, request MarkMessageReadRequestObject) (MarkMessageReadResponseObject, error)
 	// ListProfiles Game profiles with their command catalog (CAT-001, CAT-002).
 	// (GET /profiles)
 	ListProfiles(ctx context.Context, request ListProfilesRequestObject) (ListProfilesResponseObject, error)
@@ -12057,6 +12729,141 @@ func (sh *strictHandler) SetupSecondFactor(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetupSecondFactorResponseObject); ok {
 		if err := validResponse.VisitSetupSecondFactorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMessages operation middleware
+func (sh *strictHandler) ListMessages(w http.ResponseWriter, r *http.Request, params ListMessagesParams) {
+	var request ListMessagesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMessages(ctx, request.(ListMessagesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMessages")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMessagesResponseObject); ok {
+		if err := validResponse.VisitListMessagesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMessage operation middleware
+func (sh *strictHandler) CreateMessage(w http.ResponseWriter, r *http.Request) {
+	var request CreateMessageRequestObject
+
+	var body CreateMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMessage(ctx, request.(CreateMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMessageResponseObject); ok {
+		if err := validResponse.VisitCreateMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMessage operation middleware
+func (sh *strictHandler) DeleteMessage(w http.ResponseWriter, r *http.Request, id MessageID) {
+	var request DeleteMessageRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMessage(ctx, request.(DeleteMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMessageResponseObject); ok {
+		if err := validResponse.VisitDeleteMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMessage operation middleware
+func (sh *strictHandler) GetMessage(w http.ResponseWriter, r *http.Request, id MessageID) {
+	var request GetMessageRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMessage(ctx, request.(GetMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMessageResponseObject); ok {
+		if err := validResponse.VisitGetMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MarkMessageRead operation middleware
+func (sh *strictHandler) MarkMessageRead(w http.ResponseWriter, r *http.Request, id MessageID) {
+	var request MarkMessageReadRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MarkMessageRead(ctx, request.(MarkMessageReadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MarkMessageRead")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MarkMessageReadResponseObject); ok {
+		if err := validResponse.VisitMarkMessageReadResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
