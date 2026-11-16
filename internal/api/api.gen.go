@@ -361,6 +361,7 @@ const (
 	ReasonCodeRateLimited            ReasonCode = "rate_limited"
 	ReasonCodeServerUnavailable      ReasonCode = "server_unavailable"
 	ReasonCodeTimeout                ReasonCode = "timeout"
+	ReasonCodeTooManyRecipients      ReasonCode = "too_many_recipients"
 	ReasonCodeTotpSetupRequired      ReasonCode = "totp_setup_required"
 	ReasonCodeUnauthenticated        ReasonCode = "unauthenticated"
 	ReasonCodeWrapperBlocked         ReasonCode = "wrapper_blocked"
@@ -400,6 +401,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeServerUnavailable:
 		return true
 	case ReasonCodeTimeout:
+		return true
+	case ReasonCodeTooManyRecipients:
 		return true
 	case ReasonCodeTotpSetupRequired:
 		return true
@@ -1201,47 +1204,15 @@ type MessageCommand struct {
 // MessageCommandRender defines model for MessageCommand.Render.
 type MessageCommandRender string
 
-// MessageComment defines model for MessageComment.
-type MessageComment struct {
-	Author    MessageAuthor      `json:"author"`
-	CreatedAt time.Time          `json:"created_at"`
-	Id        openapi_types.UUID `json:"id"`
-
-	// Text Shown as text, never as markup (SEC-006).
-	Text string `json:"text"`
-}
-
-// MessageDetail defines model for MessageDetail.
-type MessageDetail struct {
-	// Audience Who gets a message (D-085): all, server_admins, moderators and users (user_ids) for the RCON admin; scope and scope_moderators for a server admin, by his scope at sending time.
-	Audience     MessageAudience `json:"audience"`
-	CommentCount int             `json:"comment_count"`
-
-	// Comments All comments, oldest first; every recipient, the sender and the RCON admin see them (D-085).
-	Comments  []MessageComment   `json:"comments"`
-	CreatedAt time.Time          `json:"created_at"`
-	Id        openapi_types.UUID `json:"id"`
-
-	// Read Read by me; true for a message I sent.
-	Read bool `json:"read"`
-
-	// RecipientCount For the sender and the RCON admin only.
-	RecipientCount *int          `json:"recipient_count,omitempty"`
-	Sender         MessageAuthor `json:"sender"`
-
-	// Text Shown as text, never as markup (SEC-006).
-	Text string `json:"text"`
-}
-
 // MessageInput defines model for MessageInput.
 type MessageInput struct {
 	// Audience Who gets a message (D-085): all, server_admins, moderators and users (user_ids) for the RCON admin; scope and scope_moderators for a server admin, by his scope at sending time.
 	Audience MessageAudience `json:"audience"`
 
-	// Text 1 to messages.max_text characters.
+	// Text At most 8 KiB in UTF-8, checked first, and 1 to messages.max_text characters (code points).
 	Text string `json:"text"`
 
-	// UserIds For audience users only; 1 to messages.max_recipients entries.
+	// UserIds For audience users only (400 with any other audience, and missing with users); 1 to messages.max_recipients entries.
 	UserIds *[]openapi_types.UUID `json:"user_ids,omitempty"`
 }
 
@@ -2198,7 +2169,7 @@ type ServerInterface interface {
 	// DeleteMessage Delete a message with its recipients and comments, at once and for good (D-085, D-086); its sender and the RCON admin; in the audit without the text.
 	// (DELETE /messages/{id})
 	DeleteMessage(w http.ResponseWriter, r *http.Request, id MessageID)
-	// GetMessage One message with its comments (MSG-003, D-085); its recipients, its sender and the RCON admin.
+	// GetMessage One message (MSG-003, D-085); its recipients, its sender and the RCON admin.
 	// (GET /messages/{id})
 	GetMessage(w http.ResponseWriter, r *http.Request, id MessageID)
 	// MarkMessageRead Mark a message read for me (D-085); its recipients only.
@@ -7424,6 +7395,22 @@ func (response DeleteMessage204Response) VisitDeleteMessageResponse(w http.Respo
 	return nil
 }
 
+type DeleteMessage400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMessage400ApplicationProblemPlusJSONResponse) VisitDeleteMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteMessage401ApplicationProblemPlusJSONResponse struct {
 	UnauthenticatedApplicationProblemPlusJSONResponse
 }
@@ -7480,7 +7467,7 @@ type GetMessageResponseObject interface {
 	VisitGetMessageResponse(w http.ResponseWriter) error
 }
 
-type GetMessage200JSONResponse MessageDetail
+type GetMessage200JSONResponse Message
 
 func (response GetMessage200JSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
 
@@ -7490,6 +7477,22 @@ func (response GetMessage200JSONResponse) VisitGetMessageResponse(w http.Respons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMessage400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetMessage400ApplicationProblemPlusJSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7542,6 +7545,22 @@ func (response MarkMessageRead204Response) VisitMarkMessageReadResponse(w http.R
 	return nil
 }
 
+type MarkMessageRead400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response MarkMessageRead400ApplicationProblemPlusJSONResponse) VisitMarkMessageReadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type MarkMessageRead401ApplicationProblemPlusJSONResponse struct {
 	UnauthenticatedApplicationProblemPlusJSONResponse
 }
@@ -7554,6 +7573,22 @@ func (response MarkMessageRead401ApplicationProblemPlusJSONResponse) VisitMarkMe
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkMessageRead403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response MarkMessageRead403ApplicationProblemPlusJSONResponse) VisitMarkMessageReadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -11514,7 +11549,7 @@ type StrictServerInterface interface {
 	// DeleteMessage Delete a message with its recipients and comments, at once and for good (D-085, D-086); its sender and the RCON admin; in the audit without the text.
 	// (DELETE /messages/{id})
 	DeleteMessage(ctx context.Context, request DeleteMessageRequestObject) (DeleteMessageResponseObject, error)
-	// GetMessage One message with its comments (MSG-003, D-085); its recipients, its sender and the RCON admin.
+	// GetMessage One message (MSG-003, D-085); its recipients, its sender and the RCON admin.
 	// (GET /messages/{id})
 	GetMessage(ctx context.Context, request GetMessageRequestObject) (GetMessageResponseObject, error)
 	// MarkMessageRead Mark a message read for me (D-085); its recipients only.

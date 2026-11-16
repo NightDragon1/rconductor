@@ -718,13 +718,13 @@ export interface paths {
         };
         /**
          * Messages in the panel (MSG-001 to MSG-003, D-085): those sent to me and those I sent, newest first; the RCON admin sees all.
-         * @description Behind the feature flag messages (404 while off). The recipients of a message are fixed when it is sent; who comes into a scope later does not see older messages. Messages and comments go after messages.retention_days (D-086). Paged: limit (1 to 100, default 50) and before, the ID of the last message of the page before.
+         * @description Behind the feature flag messages (404 while off). The recipients of a message are fixed when it is sent; who comes into a scope later does not see older messages. Messages and comments go after messages.retention_days (D-086). Paged: limit (1 to 100, default 50) and before, the ID of the last message of the page before. before is only compared with the IDs of my view, never looked up: every valid UUID behaves the same.
          */
         get: operations["listMessages"];
         put?: never;
         /**
          * Send a message (MSG-001, MSG-002, D-085); RCON admin and server admin; in the audit as message.sent, without the text (D-086).
-         * @description Behind the feature flag messages (404 while off). The RCON admin sends to all, server_admins, moderators or users (user_ids); a server admin to scope (moderators and supporters with at least one server in his scope at sending time) or scope_moderators; another audience is 403, as is a user outside his scope. Moderators and supporters do not send (403). The text has 1 to messages.max_text characters, user_ids 1 to messages.max_recipients entries without repeats; otherwise 400, also when the audience has no recipient. At most messages.per_hour messages per sender and hour (429). The text is shown as text, never as markup (SEC-006).
+         * @description Behind the feature flag messages (404 while off). The RCON admin sends to all, server_admins, moderators or users (user_ids); a server admin to scope (moderators and supporters with at least one server in his scope at sending time) or scope_moderators; another audience, users among them, is 403. Moderators and supporters do not send (403). The text has at most 8 KiB in UTF-8 and 1 to messages.max_text characters (code points); user_ids belongs to audience users only and has 1 to messages.max_recipients entries without repeats; otherwise 400, also when the audience has no recipient. An audience that resolves to more than messages.max_resolved_recipients users is 400 with reason too_many_recipients; it is never cut. At most messages.per_hour messages per sender and hour (429). The text is shown as text, never as markup (SEC-006).
          */
         post: operations["createMessage"];
         delete?: never;
@@ -743,7 +743,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * One message with its comments (MSG-003, D-085); its recipients, its sender and the RCON admin.
+         * One message (MSG-003, D-085); its recipients, its sender and the RCON admin.
          * @description Behind the feature flag messages (404 while off). Anyone else gets 404, as for an unknown message.
          */
         get: operations["getMessage"];
@@ -772,7 +772,7 @@ export interface paths {
         put?: never;
         /**
          * Mark a message read for me (D-085); its recipients only.
-         * @description Behind the feature flag messages (404 while off). Repeating it changes nothing. Sender and RCON admin who are not recipients get 404.
+         * @description Behind the feature flag messages (404 while off). Repeating it changes nothing. Sender and RCON admin who are not recipients get 403 (they see the message), anyone else 404.
          */
         post: operations["markMessageRead"];
         delete?: never;
@@ -1615,10 +1615,10 @@ export interface components {
          */
         MessageAudience: "all" | "server_admins" | "moderators" | "users" | "scope" | "scope_moderators";
         MessageInput: {
-            /** @description 1 to messages.max_text characters. */
+            /** @description At most 8 KiB in UTF-8, checked first, and 1 to messages.max_text characters (code points). */
             text: string;
             audience: components["schemas"]["MessageAudience"];
-            /** @description For audience users only; 1 to messages.max_recipients entries. */
+            /** @description For audience users only (400 with any other audience, and missing with users); 1 to messages.max_recipients entries. */
             user_ids?: string[];
         };
         MessageAuthor: {
@@ -1648,19 +1648,6 @@ export interface components {
             items: components["schemas"]["Message"][];
             /** @description Unread messages to me, over all pages. */
             unread: number;
-        };
-        MessageComment: {
-            /** Format: uuid */
-            id: string;
-            author: components["schemas"]["MessageAuthor"];
-            /** @description Shown as text, never as markup (SEC-006). */
-            text: string;
-            /** Format: date-time */
-            created_at: string;
-        };
-        MessageDetail: components["schemas"]["Message"] & {
-            /** @description All comments, oldest first; every recipient, the sender and the RCON admin see them (D-085). */
-            comments: components["schemas"]["MessageComment"][];
         };
         SayPrefix: {
             /** @description Prefix before the sender, e.g. "[R]"; empty when none is set. */
@@ -2158,7 +2145,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "command_failed" | "message_too_long";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "command_failed" | "message_too_long" | "too_many_recipients";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
@@ -3640,15 +3627,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The message and its comments, oldest first. */
+            /** @description The message. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MessageDetail"];
+                    "application/json": components["schemas"]["Message"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
         };
@@ -3671,6 +3659,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
@@ -3694,7 +3683,9 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

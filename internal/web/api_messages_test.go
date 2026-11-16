@@ -8,42 +8,62 @@ import (
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/features"
+	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
 // TestMessagesBehindFlag: the message operations (MSG-001 to MSG-003) are
-// 404 while the flag messages is off, 401 without a session, and answer 501
-// with the flag on until the backend is built (contract first).
+// 404 while the flag messages is off and 401 without a session. With the
+// flag on, the skeleton checks role and audience (403), then the input
+// (400), as in D-051, and answers 501 for the rest (contract first).
 func TestMessagesBehindFlag(t *testing.T) {
 	flags, err := features.New(features.Flag{Name: "messages", Operations: []string{"ListMessages", "CreateMessage", "GetMessage", "DeleteMessage", "MarkMessageRead"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := newAPIFixtureFeatures(t, Proxies{}, flags)
-	admin := f.login(t, "Boss")
-	const origin, id = "http://panel.lan", "00000000-0000-4000-8000-000000000001"
+	var hash string
+	if err := f.st.DB.QueryRow(`SELECT password_hash FROM users WHERE id = ?`, f.userID).Scan(&hash); err != nil {
+		t.Fatal(err)
+	}
+	storetest.CreateUser(t, f.st, storetest.User{Pseudonym: "SA", Role: "server_admin", PasswordHash: hash, CreatedBy: f.adminID})
+	admin, sa, mod := f.login(t, "Boss"), f.login(t, "SA"), f.login(t, "Mod")
+	const origin, id, uid = "http://panel.lan", "00000000-0000-4000-8000-000000000001", `"00000000-0000-4000-8000-000000000002"`
+	send := func(body string) call {
+		return call{method: http.MethodPost, path: "/api/v1/messages", body: body, origin: origin}
+	}
 	ops := []call{
 		{method: http.MethodGet, path: "/api/v1/messages"},
-		{method: http.MethodPost, path: "/api/v1/messages", body: `{"text":"hi","audience":"all"}`, origin: origin},
+		send(`{"text":"hi","audience":"all"}`),
 		{method: http.MethodGet, path: "/api/v1/messages/" + id},
 		{method: http.MethodDelete, path: "/api/v1/messages/" + id, origin: origin},
 		{method: http.MethodPost, path: "/api/v1/messages/" + id + "/read", origin: origin},
 	}
-	check := func(want int, session bool) {
+	check := func(want int, who *http.Cookie, calls ...call) {
 		t.Helper()
-		for _, c := range ops {
-			if session {
-				c.cookies = []*http.Cookie{admin}
+		for _, c := range calls {
+			if who != nil {
+				c.cookies = []*http.Cookie{who}
 			}
 			if got := f.do(t, c).Code; got != want {
-				t.Errorf("%s %s (session %v) = %d, want %d", c.method, c.path, session, got, want)
+				t.Errorf("%s %s %s = %d, want %d", c.method, c.path, c.body, got, want)
 			}
 		}
 	}
-	check(http.StatusNotFound, true)
+	check(http.StatusNotFound, admin, ops...)
 	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
 		body: `{"features.messages":true}`}).Code; got != http.StatusOK {
 		t.Fatalf("switch flag on = %d", got)
 	}
-	check(http.StatusUnauthorized, false)
-	check(http.StatusNotImplemented, true)
+	check(http.StatusUnauthorized, nil, ops...)
+	check(http.StatusNotImplemented, admin, ops...)
+	check(http.StatusNotImplemented, sa, send(`{"text":"hi","audience":"scope"}`))
+	check(http.StatusForbidden, mod, send(`{"text":"hi","audience":"all"}`))
+	check(http.StatusForbidden, sa, send(`{"text":"hi","audience":"all"}`), send(`{"text":"hi","audience":"users","user_ids":[`+uid+`]}`))
+	check(http.StatusBadRequest, admin, send(`{"text":"hi","audience":"users"}`), send(`{"text":"hi","audience":"all","user_ids":[`+uid+`]}`),
+		send(`{"text":"hi","audience":"users","user_ids":[`+uid+`,`+uid+`]}`))
+	check(http.StatusBadRequest, mod, call{method: http.MethodGet, path: "/api/v1/messages/x"})
+	var refused int
+	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'message.send' AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
+		t.Errorf("audited refusals = %d (%v), want 3", refused, err)
+	}
 }

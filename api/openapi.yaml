@@ -1264,7 +1264,9 @@ paths:
         message are fixed when it is sent; who comes into a scope later does
         not see older messages. Messages and comments go after
         messages.retention_days (D-086). Paged: limit (1 to 100, default 50)
-        and before, the ID of the last message of the page before.
+        and before, the ID of the last message of the page before. before
+        is only compared with the IDs of my view, never looked up: every
+        valid UUID behaves the same.
       tags: [messages]
       parameters:
         - name: limit
@@ -1302,12 +1304,16 @@ paths:
         sends to all, server_admins, moderators or users (user_ids); a
         server admin to scope (moderators and supporters with at least one
         server in his scope at sending time) or scope_moderators; another
-        audience is 403, as is a user outside his scope. Moderators and
-        supporters do not send (403). The text has 1 to messages.max_text
-        characters, user_ids 1 to messages.max_recipients entries without
-        repeats; otherwise 400, also when the audience has no recipient.
-        At most messages.per_hour messages per sender and hour (429). The
-        text is shown as text, never as markup (SEC-006).
+        audience, users among them, is 403. Moderators and supporters do
+        not send (403). The text has at most 8 KiB in UTF-8 and 1 to
+        messages.max_text characters (code points); user_ids belongs to
+        audience users only and has 1 to messages.max_recipients entries
+        without repeats; otherwise 400, also when the audience has no
+        recipient. An audience that resolves to more than
+        messages.max_resolved_recipients users is 400 with reason
+        too_many_recipients; it is never cut. At most messages.per_hour
+        messages per sender and hour (429). The text is shown as text,
+        never as markup (SEC-006).
       tags: [messages]
       requestBody:
         required: true
@@ -1338,19 +1344,21 @@ paths:
     get:
       operationId: getMessage
       summary: >-
-        One message with its comments (MSG-003, D-085); its recipients, its
-        sender and the RCON admin.
+        One message (MSG-003, D-085); its recipients, its sender and the
+        RCON admin.
       description: >-
         Behind the feature flag messages (404 while off). Anyone else gets
         404, as for an unknown message.
       tags: [messages]
       responses:
         "200":
-          description: The message and its comments, oldest first.
+          description: The message.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MessageDetail"
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "404":
@@ -1368,6 +1376,8 @@ paths:
       responses:
         "204":
           description: Deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
@@ -1383,13 +1393,17 @@ paths:
       description: >-
         Behind the feature flag messages (404 while off). Repeating it
         changes nothing. Sender and RCON admin who are not recipients get
-        404.
+        403 (they see the message), anyone else 404.
       tags: [messages]
       responses:
         "204":
           description: Marked read.
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
   /ws:
@@ -3110,12 +3124,20 @@ components:
         text:
           type: string
           minLength: 1
-          description: 1 to messages.max_text characters.
+          maxLength: 8192
+          description: >-
+            At most 8 KiB in UTF-8, checked first, and 1 to
+            messages.max_text characters (code points).
         audience:
           $ref: "#/components/schemas/MessageAudience"
         user_ids:
           type: array
-          description: For audience users only; 1 to messages.max_recipients entries.
+          description: >-
+            For audience users only (400 with any other audience, and
+            missing with users); 1 to messages.max_recipients entries.
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
           items:
             type: string
             format: uuid
@@ -3169,35 +3191,6 @@ components:
         unread:
           type: integer
           description: Unread messages to me, over all pages.
-
-    MessageComment:
-      type: object
-      required: [id, author, text, created_at]
-      properties:
-        id:
-          type: string
-          format: uuid
-        author:
-          $ref: "#/components/schemas/MessageAuthor"
-        text:
-          type: string
-          x-foreign: true
-          description: Shown as text, never as markup (SEC-006).
-        created_at:
-          type: string
-          format: date-time
-
-    MessageDetail:
-      allOf:
-        - $ref: "#/components/schemas/Message"
-        - type: object
-          required: [comments]
-          properties:
-            comments:
-              type: array
-              description: All comments, oldest first; every recipient, the sender and the RCON admin see them (D-085).
-              items:
-                $ref: "#/components/schemas/MessageComment"
 
     SayPrefix:
       type: object
@@ -4311,6 +4304,7 @@ components:
         - totp_setup_required
         - command_failed
         - message_too_long
+        - too_many_recipients
 
     Problem:
       type: object
