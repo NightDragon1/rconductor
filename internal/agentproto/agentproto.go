@@ -164,14 +164,16 @@ func (d *DockerHost) Clean() {
 
 // HostAddr is s as the address of a host, without a zone, which would be
 // free text; false for anything else and for addresses no other host can
-// reach: loopback, link-local, unspecified and multicast (D-084).
+// reach: loopback, link-local, unspecified, 0.0.0.0/8, multicast and the
+// broadcast address (D-084).
 func HostAddr(s string) (string, bool) {
 	a, err := netip.ParseAddr(s)
 	if err != nil {
 		return "", false
 	}
 	a = a.Unmap().WithZone("")
-	if a.IsLoopback() || a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast() {
+	if a.IsLoopback() || a.IsLinkLocalUnicast() || a.IsLinkLocalMulticast() || a.IsUnspecified() || a.IsMulticast() ||
+		a.Is4() && (a.As4()[0] == 0 || a == netip.AddrFrom4([4]byte{255, 255, 255, 255})) {
 		return "", false
 	}
 	return a.String(), true
