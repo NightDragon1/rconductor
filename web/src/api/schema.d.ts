@@ -1198,7 +1198,7 @@ export interface components {
             status: "pending" | "active" | "revoked";
             version: string;
             capabilities: string[];
-            /** @description Source address of the agent's last connection to the agent port. While the flag docker_host is on, the interface shows it as "Connected from" when the Docker host has no address (D-084); it is never part of docker_host. */
+            /** @description Source address of the agent's last connection to the agent port. While the flag docker_host is on, it is set only when it lies outside the panel's own networks and is shown as "Connected from" (D-084); it is never part of docker_host. */
             remote?: string;
             docker_host?: components["schemas"]["DockerHost"];
             /** Format: uuid */
@@ -1211,11 +1211,11 @@ export interface components {
             /** Format: date-time */
             revoked_at?: string;
         };
-        /** @description Host of the agent's Docker daemon as the daemon names it (AGT-014), from the agent's last hello since the panel started. Only while the feature flag docker_host is on; each field is missing when the daemon does not give it. */
+        /** @description Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Only while the feature flag docker_host is on; each field is missing when the agent does not give it. */
         DockerHost: {
             /** @description Foreign data from the agent (SEC-006). */
             name?: string;
-            /** @description IPv4 or IPv6 address without zone. */
+            /** @description IPv4 or IPv6 address without zone; never loopback, link-local, unspecified or multicast. */
             ip?: string;
         };
         AgentList: {

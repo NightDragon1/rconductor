@@ -11,7 +11,9 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -489,5 +491,86 @@ func TestRefusedHelloKeepsToken(t *testing.T) {
 	e := f.hello(newAgent(t), pt.Fingerprint, agentproto.Hello{Token: pt.Secret})
 	if w, _ := agentproto.Payload[agentproto.Welcome](e); e.Type != agentproto.TypeWelcome || w.AgentID == "" {
 		t.Errorf("token after refused hellos: %+v", e)
+	}
+}
+
+// TestConnectedFromOutsidePanel covers D-084: while the flag docker_host is
+// on, the RCON admin gets the address an agent connected from only when it
+// lies outside the panel's own networks, taken from its interfaces and not
+// from the private ranges: an agent in the panel's Docker network or on
+// loopback has none, one in another 172.x network keeps it. Without the
+// networks no address is shown; with the flag off nothing changes.
+func TestConnectedFromOutsidePanel(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	flags, err := features.New(features.Flag{Name: FeatureDockerHost})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.svc.UseFeatures(flags)
+	tok, err := f.svc.CreateToken(ctx, f.admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pt, _ := agentproto.ParsePairingToken(tok.Token)
+	w, _ := agentproto.Payload[agentproto.Welcome](f.hello(newAgent(t), pt.Fingerprint, agentproto.Hello{Token: pt.Secret}))
+	if w.AgentID == "" {
+		t.Fatal("not paired")
+	}
+	var netsErr error
+	f.svc.networks = func() ([]netip.Prefix, error) {
+		return []netip.Prefix{netip.MustParsePrefix("172.18.0.0/16"), netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("fd00:1::/64")}, netsErr
+	}
+	remoteOf := func(remote string) string {
+		t.Helper()
+		if _, err := f.st.DB.Exec(`UPDATE agents SET remote = ? WHERE id = ?`, remote, w.AgentID); err != nil {
+			t.Fatal(err)
+		}
+		got, err := f.svc.Get(ctx, f.admin, w.AgentID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		list, err := f.svc.List(ctx, f.admin)
+		if err != nil || len(list) != 1 || list[0].Remote != got.Remote {
+			t.Fatalf("list = %+v %v, get %q", list, err, got.Remote)
+		}
+		return got.Remote
+	}
+	if got := remoteOf("172.18.0.5"); got != "172.18.0.5" {
+		t.Errorf("flag off: remote = %q, want unchanged", got)
+	}
+	if _, err := f.st.DB.Exec(`INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('f', ?, 'true', 'global', '', 't')`,
+		features.Key(FeatureDockerHost)); err != nil {
+		t.Fatal(err)
+	}
+	for remote, want := range map[string]string{
+		"172.18.0.5":     "",            // the panel's Docker network
+		"127.0.0.1":      "",            // loopback
+		"fd00:1::9":      "",            // the panel's IPv6 network
+		"169.254.0.3":    "",            // link-local, reaches no other host
+		"not an address": "",            // never shown as is
+		"172.20.0.9":     "172.20.0.9",  // another network, though private
+		"203.0.113.7":    "203.0.113.7", // another host
+		"2001:db8::7":    "2001:db8::7", // another host, IPv6
+	} {
+		if got := remoteOf(remote); got != want {
+			t.Errorf("flag on, remote %q = %q, want %q", remote, got, want)
+		}
+	}
+	netsErr = errors.New("no interfaces")
+	if got := remoteOf("203.0.113.7"); got != "" {
+		t.Errorf("networks not read: remote = %q, want none", got)
+	}
+}
+
+// TestPanelNetworks: the panel's networks come from its interfaces and
+// hold loopback (D-084).
+func TestPanelNetworks(t *testing.T) {
+	nets, err := panelNetworks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(nets, func(p netip.Prefix) bool { return p.Contains(netip.MustParseAddr("127.0.0.1")) }) {
+		t.Errorf("networks %v miss loopback", nets)
 	}
 }

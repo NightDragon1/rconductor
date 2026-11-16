@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -95,6 +96,8 @@ type Service struct {
 	publicAddr string
 	imageRepo  string
 	now        func() time.Time
+	// networks are the panel's own networks (D-084); tests set their own.
+	networks func() ([]netip.Prefix, error)
 }
 
 // SetImageRepo names the registry of the pairing dialog (RCD_IMAGE_REPO).
@@ -107,7 +110,7 @@ func (s *Service) SetImageRepo(repo string) {
 // NewService returns the agent administration; publicAddr is
 // RCD_AGENT_PUBLIC_ADDR.
 func NewService(st *store.Store, log *slog.Logger, publicAddr string) *Service {
-	return &Service{st: st, log: log, publicAddr: publicAddr, imageRepo: "docker.io/nightdragon1", now: time.Now}
+	return &Service{st: st, log: log, publicAddr: publicAddr, imageRepo: "docker.io/nightdragon1", now: time.Now, networks: panelNetworks}
 }
 
 // SetHub connects the agent hub, which in turn uses the service as its
@@ -117,12 +120,16 @@ func (s *Service) SetHub(h Hub) { s.hub = h }
 // UseFeatures sets the feature flags of the panel.
 func (s *Service) UseFeatures(f *features.Set) { s.flags = f }
 
-// view is an agent as the RCON admin sees it: with the Docker host of its
-// last hello while the flag docker_host is on (AGT-014).
+// view is an agent as the RCON admin sees it. While the flag docker_host
+// is on, it has the Docker host of its last hello (AGT-014), and the
+// address it connected from only outside the panel's networks (D-084).
 func (s *Service) view(ctx context.Context, r sqlitedb.Agent) Agent {
 	a := toAgent(r, s.connected(r.ID))
 	if s.hub == nil || s.flags == nil || !s.flags.Enabled(ctx, s.st, FeatureDockerHost) {
 		return a
+	}
+	if !s.outsidePanel(a.Remote) {
+		a.Remote = ""
 	}
 	if d, ok := s.hub.DockerHost(r.ID); ok && (d.Name != "" || d.IP != "") {
 		a.DockerHost = &d

@@ -37,6 +37,16 @@ type hostBackend struct {
 	ports []agentproto.Port
 	// state is the state of mc in the snapshot; empty means running.
 	state string
+	// host is the Docker host the backend names (AGT-014).
+	host *agentproto.DockerHost
+}
+
+func (b *hostBackend) Host(context.Context) *agentproto.DockerHost {
+	if b.host == nil {
+		return nil
+	}
+	h := *b.host
+	return &h
 }
 
 func (b *hostBackend) Name() string { return "docker" }
