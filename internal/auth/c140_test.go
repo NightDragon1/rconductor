@@ -21,13 +21,18 @@ func TestC140N1RequiredFailsClosed(t *testing.T) {
 	f := newSFFixture(t)
 	f.user(t, storetest.User{Pseudonym: "kiwi"})
 	ctx := context.Background()
-	f.set(t, SettingTOTPRequired, "not json")
-	_, p, err := f.svc.Login(ctx, "kiwi", testPassword, client)
-	if err != nil || !p.TOTPSetupRequired {
-		t.Fatalf("login with an unreadable setting = %+v %v", p, err)
-	}
-	if f.svc.SessionValid(ctx, p.SessionHash) {
-		t.Error("session valid for the WebSocket while the setting is unreadable")
+	for _, bad := range []string{"not json", "null", `"true"`, "1"} {
+		f.set(t, SettingTOTPRequired, bad)
+		token, p, err := f.svc.Login(ctx, "kiwi", testPassword, client)
+		if err != nil || !p.TOTPSetupRequired {
+			t.Fatalf("login with setting %s = %+v %v", bad, p, err)
+		}
+		if q, err := f.svc.Authenticate(ctx, token); err != nil || !q.TOTPSetupRequired {
+			t.Errorf("request with setting %s = %+v %v", bad, q, err)
+		}
+		if f.svc.SessionValid(ctx, p.SessionHash) {
+			t.Errorf("session valid for the WebSocket with setting %s", bad)
+		}
 	}
 	if !strings.Contains(f.logs.String(), "second factor setting not readable") {
 		t.Error("fault not logged")
