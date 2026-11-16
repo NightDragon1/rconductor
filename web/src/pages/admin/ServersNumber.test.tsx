@@ -68,9 +68,10 @@ describe('server number (UI-018)', () => {
   it('shows the badge for every role with the flag, nothing without', async () => {
     setLanguage('en');
     await renderPage(() => <ServerNumber number={7} />, data('supporter', ['server_number']));
-    expect(screen.getByLabelText('Server number 7').textContent).toBe('#7');
+    expect(screen.getByText('Server number 7')).toBeTruthy();
+    expect(screen.getByText('#7').getAttribute('aria-hidden')).toBe('true');
     cleanup();
     await renderPage(() => <ServerNumber number={7} />, data('supporter', []));
-    expect(screen.queryByLabelText('Server number 7')).toBeNull();
+    expect(screen.queryByText('Server number 7')).toBeNull();
   });
 });

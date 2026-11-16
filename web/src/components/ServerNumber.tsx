@@ -19,12 +19,12 @@ export function ServerNumber({ number }: { number?: number }) {
   const { t } = useTranslation();
   const on = useServerNumbers();
   if (!on || !number) return null;
+  // The visible "#n" is hidden from screen readers, which read the label
+  // instead: aria-label on a span without role is not allowed (ARIA 1.2).
   return (
-    <span
-      className="mr-2 inline-block rounded border border-border px-1.5 align-middle font-mono text-xs font-normal text-muted"
-      aria-label={t('servers.numberLabel', { number })}
-    >
-      #{number}
+    <span className="mr-2 inline-block rounded border border-border px-1.5 align-middle font-mono text-xs font-normal text-muted">
+      <span aria-hidden>#{number}</span>
+      <span className="sr-only">{t('servers.numberLabel', { number })}</span>
     </span>
   );
 }

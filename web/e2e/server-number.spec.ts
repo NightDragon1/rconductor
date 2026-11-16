@@ -26,11 +26,13 @@ test.describe('server number on', () => {
     expect(survival.number).toBeGreaterThan(0);
     const badge = `Server number ${survival.number}`;
 
-    await expect(page.getByRole('article', { name: 'survival' }).getByLabel(badge)).toHaveText(
-      `#${survival.number}`,
-    );
+    const card = page.getByRole('article', { name: 'survival' });
+    await expect(card.getByText(badge)).toBeAttached();
+    await expect(card.getByText(`#${survival.number}`, { exact: true })).toBeVisible();
     await page.goto(`servers/${state.servers.survival}/overview`);
-    await expect(page.getByRole('heading', { level: 1 }).getByLabel(badge)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 1, name: new RegExp(`^${badge}`) }),
+    ).toBeVisible();
     await page.goto('admin/servers');
     await expect(page.getByRole('columnheader').first()).toHaveText('ID');
     await expect(
@@ -67,8 +69,8 @@ test.describe('server number on', () => {
     await as(page, state, 'mod');
     const s = await (await page.request.get(`api/v1/servers/${state.servers.survival}`)).json();
     await expect(
-      page.getByRole('article', { name: 'survival' }).getByLabel(`Server number ${s.number}`),
-    ).toBeVisible();
+      page.getByRole('article', { name: 'survival' }).getByText(`Server number ${s.number}`),
+    ).toBeAttached();
   });
 });
 
@@ -77,4 +79,7 @@ test('server number off: no column ID and no badge', async ({ page, state }) => 
   await expect(page.getByRole('article', { name: 'survival' }).getByText(/^#\d+$/)).toHaveCount(0);
   await page.goto('admin/servers');
   await expect(page.getByRole('columnheader', { name: 'ID', exact: true })).toHaveCount(0);
+  await page.goto(`servers/${state.servers.survival}/overview`);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 }).getByText(/Server number/)).toHaveCount(0);
 });
