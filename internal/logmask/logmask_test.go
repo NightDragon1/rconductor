@@ -207,8 +207,10 @@ func TestServiceParallel(t *testing.T) {
 		})
 		wg.Go(func() {
 			v := fmt.Sprintf(`["p%d_[0-9]+"]`, i)
-			_, _ = st.DB.ExecContext(ctx, `INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('p', ?, ?, 'global', '', 't')
-				ON CONFLICT (key, scope_type, scope_id) DO UPDATE SET value = excluded.value`, SettingPatterns, v)
+			if _, err := st.DB.ExecContext(ctx, `INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('p', ?, ?, 'global', '', 't')
+				ON CONFLICT (key, scope_type, scope_id) DO UPDATE SET value = excluded.value`, SettingPatterns, v); err != nil {
+				t.Errorf("set patterns: %v", err)
+			}
 		})
 	}
 	wg.Wait()
@@ -246,5 +248,65 @@ func TestC139B3Bounds(t *testing.T) {
 		if got != Replacement {
 			t.Errorf("after the end: %q", got)
 		}
+	}
+}
+
+// TestC139R2LineCost: a pattern that searches to the line end for every
+// match cannot make one line expensive: past MaxAdminMatches matches the
+// line is withheld as a whole.
+func TestC139R2LineCost(t *testing.T) {
+	m, err := Compile([]string{`x(?:.*y)?`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	got := m.Line(strings.Repeat("x", agentproto.MaxLogLine))
+	if d := time.Since(start); d > DefaultTimeout {
+		t.Errorf("one line took %s", d)
+	}
+	if got != Replacement {
+		t.Errorf("line with many matches = %.40q", got)
+	}
+	if got := m.Line("x1 x2"); got != "•••1 •••2" {
+		t.Errorf("few matches: %q", got)
+	}
+}
+
+// TestC139R2PatternForms: patterns are checked in the form they run in, so
+// \Q without \E is refused without a panic and without the pattern text in
+// the error; patterns with empty matches inside a line are refused.
+func TestC139R2PatternForms(t *testing.T) {
+	for _, list := range [][]string{{`\Qhunter2`}, {`\Qhunter2`, `b`}, {`b`, `\Qhunter2`}} {
+		_, err := Compile(list)
+		if err == nil || strings.Contains(err.Error(), "hunter2") {
+			t.Errorf("%q: %v", list, err)
+		}
+	}
+	for _, p := range []string{`\b`, `\bfoo|\b`, `(?m)$`} {
+		if _, err := Compile([]string{p}); err == nil {
+			t.Errorf("%q: empty matches taken", p)
+		}
+	}
+	if got := (&Masker{}).Line("+ export 'RCON_PASSWORD=it'\\''s'"); got != "+ export 'RCON_PASSWORD=•••'" {
+		t.Errorf("quote inside the value: %q", got)
+	}
+}
+
+// TestC139R2Deadline: lines left after the time limit are withheld; a
+// limit below MinTimeout counts as the default.
+func TestC139R2Deadline(t *testing.T) {
+	st := storetest.New(t)
+	ctx := context.Background()
+	s := New(st)
+	clock := time.Unix(0, 0)
+	s.now = func() time.Time { clock = clock.Add(300 * time.Millisecond); return clock }
+	if _, err := st.DB.ExecContext(ctx, `INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('t', ?, '"50ms"', 'global', '', 't')`, SettingTimeout); err != nil {
+		t.Fatal(err)
+	}
+	got := s.Lines(ctx, []string{"a", "b", "c", "d", "e"})
+	// Deadline 1s after the first reading; lines at 0.3 s steps after it.
+	want := []string{"a", "b", "c", Replacement, Replacement}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("lines = %q, want %q", got, want)
 	}
 }

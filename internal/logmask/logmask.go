@@ -37,13 +37,16 @@ const (
 	MinTimeout     = 100 * time.Millisecond
 )
 
-// Bounds of the admin patterns (D4); MaxPatternInsts bounds the compiled
-// program of one pattern, so a line costs at most that many steps per
-// byte.
+// Bounds of the admin patterns (D4). MaxPatternInsts bounds the program of
+// one pattern and MaxTotalInsts that of all together; a line with more
+// than MaxAdminMatches matches is withheld as a whole, so the searches of
+// one line stay bounded.
 const (
 	MaxPatterns     = 20
 	MaxPatternRunes = 256
 	MaxPatternInsts = 1000
+	MaxTotalInsts   = 4000
+	MaxAdminMatches = 64
 )
 
 // Replacement stands for every masked value (D4).
@@ -58,7 +61,7 @@ const secretKey = `[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key)[A
 // form of shell traces (set -x).
 var builtin = []*regexp.Regexp{
 	// 'KEY=value' as a whole in single quotes: up to the closing quote.
-	regexp.MustCompile(`(?i)('` + secretKey + `\s*[=:]\s*)[^']*`),
+	regexp.MustCompile(`(?i)('` + secretKey + `\s*[=:]\s*)(?:[^']|'\\'')*`),
 	// KEY=value, key: value, "key": "value", also with prefixes such as
 	// RCON_PASSWORD or db_password.
 	regexp.MustCompile(`(?i)(\b` + secretKey + `"?\s*[=:]\s*")[^"]*`),
@@ -67,7 +70,7 @@ var builtin = []*regexp.Regexp{
 	// Command-line flags: --rcon-password value, -password "value",
 	// --rcon-password 'value'.
 	regexp.MustCompile(`(?i)(-` + secretKey + `\s+")[^"]*`),
-	regexp.MustCompile(`(?i)(-` + secretKey + `\s+')[^']*`),
+	regexp.MustCompile(`(?i)(-` + secretKey + `\s+')(?:[^']|'\\'')*`),
 	regexp.MustCompile(`(?i)(-` + secretKey + `\s+)[^\s"']+`),
 	// Authorization: Bearer <token>.
 	regexp.MustCompile(`(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+`),
@@ -87,27 +90,50 @@ func Compile(patterns []string) (*Masker, error) {
 		return nil, fmt.Errorf("at most %d patterns", MaxPatterns)
 	}
 	parts := make([]string, 0, len(patterns))
+	total := 0
 	for i, p := range patterns {
 		if p == "" || utf8.RuneCountInString(p) > MaxPatternRunes {
 			return nil, fmt.Errorf("pattern %d: 1 to %d characters", i+1, MaxPatternRunes)
 		}
-		re, err := regexp.Compile(p)
+		// Checked in the form it runs in: \Q without \E would swallow the
+		// closing parenthesis. The error never holds the pattern (SEC-012).
+		part := "(?:" + p + ")"
+		re, err := regexp.Compile(part)
 		if err != nil {
 			return nil, fmt.Errorf("pattern %d: not a valid RE2 expression", i+1)
 		}
-		if re.MatchString("") {
-			return nil, fmt.Errorf("pattern %d: matches the empty text", i+1)
+		if re.MatchString("") || emptyMatch(re) {
+			return nil, fmt.Errorf("pattern %d: matches empty text", i+1)
 		}
-		if n, err := insts(p); err != nil || n > MaxPatternInsts {
+		n, err := insts(part)
+		if err != nil || n > MaxPatternInsts {
 			return nil, fmt.Errorf("pattern %d: too complex", i+1)
 		}
-		parts = append(parts, "(?:"+p+")")
+		if total += n; total > MaxTotalInsts {
+			return nil, fmt.Errorf("patterns together too complex")
+		}
+		parts = append(parts, part)
 	}
 	m := &Masker{}
 	if len(parts) > 0 {
-		m.admin = regexp.MustCompile(strings.Join(parts, "|"))
+		re, err := regexp.Compile(strings.Join(parts, "|"))
+		if err != nil {
+			return nil, fmt.Errorf("patterns do not combine")
+		}
+		m.admin = re
 	}
 	return m, nil
+}
+
+// emptyMatch tells whether re matches empty text somewhere in a probe,
+// such as at a word boundary.
+func emptyMatch(re *regexp.Regexp) bool {
+	for _, loc := range re.FindAllStringIndex("a b-c_1.\n\tz", -1) {
+		if loc[0] == loc[1] {
+			return true
+		}
+	}
+	return false
 }
 
 // insts is the size of the compiled program of p.
@@ -127,11 +153,25 @@ func insts(p string) (int, error) {
 // is replaced as a whole. The result is cut to the line bound of the
 // protocol.
 func (m *Masker) Line(s string) string {
+	s = cut(s, agentproto.MaxLogLine)
 	for _, re := range builtin {
 		s = re.ReplaceAllString(s, "${1}"+Replacement+"${2}")
 	}
 	if m.admin != nil {
-		s = m.admin.ReplaceAllLiteralString(s, Replacement)
+		// At most MaxAdminMatches searches: a line with more is withheld.
+		locs := m.admin.FindAllStringIndex(s, MaxAdminMatches+1)
+		if len(locs) > MaxAdminMatches {
+			return Replacement
+		}
+		var b strings.Builder
+		last := 0
+		for _, l := range locs {
+			b.WriteString(s[last:l[0]])
+			b.WriteString(Replacement)
+			last = l[1]
+		}
+		b.WriteString(s[last:])
+		s = b.String()
 	}
 	return cut(s, agentproto.MaxLogLine)
 }
@@ -151,6 +191,8 @@ func cut(s string, n int) string {
 // patterns again only when they change.
 type Service struct {
 	st *store.Store
+	// now is the clock of the time limit; tests set their own.
+	now func() time.Time
 
 	mu   sync.Mutex
 	raw  string
@@ -158,7 +200,7 @@ type Service struct {
 }
 
 // New returns the masking of the panel.
-func New(st *store.Store) *Service { return &Service{st: st, last: &Masker{}} }
+func New(st *store.Store) *Service { return &Service{st: st, now: time.Now, last: &Masker{}} }
 
 // Lines masks the lines in place and returns them, unless the RCON admin
 // switched the masking off. It fails closed: without a readable switch it
@@ -183,9 +225,9 @@ func (s *Service) Lines(ctx context.Context, lines []string) []string {
 		}
 	}
 	m := s.masker(ctx)
-	deadline := time.Now().Add(timeout)
+	deadline := s.now().Add(timeout)
 	for i, l := range lines {
-		if ctx.Err() != nil || time.Now().After(deadline) {
+		if ctx.Err() != nil || s.now().After(deadline) {
 			lines[i] = Replacement
 			continue
 		}
