@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,6 +36,9 @@ func checkLogMasks(dir string, b budget) ([]finding, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "profiles", "*.yaml"))
 	if err != nil {
 		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no profiles in %s", filepath.Join(dir, "profiles"))
 	}
 	type pat struct {
 		profile, src string
@@ -76,24 +80,25 @@ func checkLogMasks(dir string, b budget) ([]finding, error) {
 				found = append(found, finding{"logmask", p.profile + " " + p.src, fmt.Sprintf("%s per line, budget %s", d, b.pattern)})
 			}
 		}
-		costs := slices.Collect(func(yield func(time.Duration) bool) {
-			for _, d := range perProfile {
-				if !yield(d) {
-					return
-				}
-			}
-		})
-		slices.Sort(costs)
-		slices.Reverse(costs)
-		var sum time.Duration
-		for _, d := range costs[:min(len(costs), maxStack)] {
-			sum += d
-		}
+		sum := stackSum(perProfile)
 		if sum > b.stack {
 			found = append(found, finding{"logmask", "stack", fmt.Sprintf("%s per line for the costliest %d profiles, budget %s", sum, maxStack, b.stack)})
 		}
 	}
 	return found, nil
+}
+
+// stackSum is the cost of the costliest stack: the maxStack profiles that
+// cost most on the line.
+func stackSum(perProfile map[string]time.Duration) time.Duration {
+	costs := slices.Collect(maps.Values(perProfile))
+	slices.Sort(costs)
+	slices.Reverse(costs)
+	var sum time.Duration
+	for _, d := range costs[:min(len(costs), maxStack)] {
+		sum += d
+	}
+	return sum
 }
 
 // spend is the least of three runs of the search the masker makes.
@@ -128,20 +133,32 @@ func patternLines(pattern string) []string {
 		return nil
 	}
 	re = re.Simplify()
-	var lits []string
+	var lits, triggers []string
 	var walk func(*syntax.Regexp)
 	walk = func(r *syntax.Regexp) {
-		if r.Op == syntax.OpLiteral {
+		switch r.Op {
+		case syntax.OpLiteral:
 			lits = append(lits, literal(r))
+			triggers = append(triggers, string([]rune(literal(r))[:1]))
+		case syntax.OpCharClass, syntax.OpAnyChar, syntax.OpAnyCharNotNL:
+			triggers = append(triggers, shortest(r))
 		}
 		for _, s := range r.Sub {
 			walk(s)
 		}
 	}
 	walk(re)
-	lines := []string{fill(shortest(re) + " "), fill(strings.Join(lits, "") + "x ")}
+	short := shortest(re)
+	lines := []string{fill(short + " "), fill(strings.Join(lits, "") + "x ")}
 	for _, l := range lits {
 		lines = append(lines, fill(l+" "))
+	}
+	// The shortest match followed by each character the pattern names,
+	// also in optional parts, so that an optional part that searches to
+	// the end of the line starts after every match.
+	slices.Sort(triggers)
+	for _, t := range slices.Compact(triggers) {
+		lines = append(lines, fill(short+t))
 	}
 	return lines
 }

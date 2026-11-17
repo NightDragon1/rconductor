@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -55,7 +56,7 @@ func TestLogMasksBudget(t *testing.T) {
 
 func TestPatternLines(t *testing.T) {
 	lines := patternLines(`(?i)(adminpass\s*=\s*)\S+`)
-	if len(lines) != 4 || !strings.HasPrefix(lines[0], "adminpass=! adminpass=! ") || !strings.HasPrefix(lines[1], "adminpass=x ") {
+	if len(lines) < 4 || !strings.HasPrefix(lines[0], "adminpass=! adminpass=! ") || !strings.HasPrefix(lines[1], "adminpass=x ") {
 		t.Errorf("lines start %q", []string{lines[0][:30], lines[1][:30]})
 	}
 	for _, l := range lines {
@@ -70,7 +71,7 @@ func TestPatternLines(t *testing.T) {
 // of the line; its own shortest match over and over finds that within the
 // budget of the CI (about 130 ms against 10 ms).
 func TestLogMasksRestartingSearch(t *testing.T) {
-	for _, p := range []string{`(pw=)\S+(?: .*END)?`, `(pw\s+)\d+(?: .*END)?`} {
+	for _, p := range []string{`(pw=)\S+(?: .*END)?`, `(pw\s+)\d+(?: .*END)?`, `(pw=)\d+(?:;.*END)?`} {
 		dir := maskDir(t, map[string]string{"q": `['` + p + `']`})
 		found, err := checkLogMasks(dir, budget{patternSpend, time.Hour})
 		if err != nil || len(found) == 0 || found[0].symbol != "q "+p {
@@ -89,5 +90,35 @@ func TestShortestMatches(t *testing.T) {
 		if l := patternLines(p)[0]; !regexp.MustCompile(p).MatchString(l) {
 			t.Errorf("%s does not match %q", p, l[:20])
 		}
+	}
+}
+
+// TestStackSum: the stack sums the 16 costliest profiles only.
+func TestStackSum(t *testing.T) {
+	per := map[string]time.Duration{}
+	for i := range maxStack + 1 {
+		per[fmt.Sprintf("p%02d", i)] = time.Duration(i+1) * time.Millisecond
+	}
+	// 2 + 3 + … + 17 ms: the cheapest profile is left out.
+	if got, want := stackSum(per), 152*time.Millisecond; got != want {
+		t.Errorf("got %s, want %s", got, want)
+	}
+	if got := stackSum(map[string]time.Duration{"a": time.Millisecond}); got != time.Millisecond {
+		t.Errorf("one profile: %s", got)
+	}
+}
+
+// TestLogMasksErrors: a broken profile file and a missing profiles
+// directory are errors, so the rule never passes on nothing.
+func TestLogMasksErrors(t *testing.T) {
+	dir := maskDir(t, map[string]string{"a": `['(k=)\S+']`})
+	if err := os.WriteFile(filepath.Join(dir, "profiles", "bad.yaml"), []byte("log_masks: [unclosed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := checkLogMasks(dir, budget{time.Hour, time.Hour}); err == nil {
+		t.Error("broken profile file passes")
+	}
+	if _, err := checkLogMasks(t.TempDir(), budget{time.Hour, time.Hour}); err == nil {
+		t.Error("no profiles directory passes")
 	}
 }
