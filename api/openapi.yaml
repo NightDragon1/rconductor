@@ -1455,10 +1455,13 @@ paths:
         Behind the feature flag messages (404 while off). The RCON admin
         who is neither recipient nor sender gets 403 (he sees the message),
         anyone else 404. The text has at most 4 KiB in UTF-8 (first) and 1
-        to messages.max_comment code points, the smaller applies; otherwise
-        400. At most messages.comments_per_hour comments per author and
-        hour (429). No editing. The text is shown as text, never as markup
-        (SEC-006).
+        to messages.max_comment code points (setting, default 2000, 1 to
+        4096), the smaller applies; otherwise 400. At most
+        messages.comments_per_hour comments per author and hour (setting,
+        default 60, 1 to 3600; counted in the same transaction as the
+        comment, so parallel requests cannot pass it): 429. Order: 404 and
+        403 first, then 400, then 429. No editing. The text is shown as
+        text, never as markup (SEC-006).
       tags: [messages]
       requestBody:
         required: true
@@ -1522,9 +1525,12 @@ paths:
         servers.overview, server.{id}.status, server.{id}.console,
         server.{id}.metrics, server.{id}.logs and messages. messages is
         behind the feature flag messages for every role that can receive a
-        message; its events name only kind (message, comment, deleted,
-        read) and IDs of what changed in my view, the texts come from the
-        API. Metrics and logs are
+        message; data is {"kind":...,"message_id":...} with kind one of
+        message (new to me), comment (new comment), deleted (message gone),
+        comment_deleted and read (read on another socket), and comment_id
+        with comment and comment_deleted; never a text, only
+        what changed in my view; the texts come from the API. While the
+        flag is off, messages is an unknown topic. Metrics and logs are
         agent functions for RCON admin and server admin only; a new
         subscription first gets the current value (last sample or the last
         50 log lines), and logs stream from the agent only while someone
