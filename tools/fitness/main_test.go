@@ -22,7 +22,7 @@ func TestEachRuleFindsItsViolation(t *testing.T) {
 		keys = append(keys, f.key())
 	}
 	slices.Sort(keys)
-	want := []string{"audit PostB", "authz GetC", "cmd internal/other", "redact internal/other", "redact internal/pointer", "redact internal/printer", "redact internal/printer", "redact internal/printer"}
+	want := []string{"audit PostB", "authz GetC", "cmd internal/other", "redact internal/deep", "redact internal/other", "redact internal/pointer", "redact internal/printer", "redact internal/printer", "redact internal/printer"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("findings = %v, want %v", keys, want)
 	}

@@ -84,10 +84,10 @@ func secretConversions(funcs map[*ssa.Function]bool, mod string, dests map[strin
 	return found
 }
 
-// secretOrPointer is a Secret or a pointer to one, so that (*string)(&s)
-// counts as a conversion too.
+// secretOrPointer is a Secret or a pointer to one at any depth, so that
+// (*string)(&s) and unsafe.Pointer(&s) or unsafe.Pointer(&p) count too.
 func secretOrPointer(t types.Type, mod string) bool {
-	if p, ok := t.(*types.Pointer); ok {
+	for p, ok := t.(*types.Pointer); ok; p, ok = t.(*types.Pointer) {
 		t = p.Elem()
 	}
 	return isSecret(t, mod)
