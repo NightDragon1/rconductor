@@ -48,6 +48,21 @@ func (s *apiServer) MarkMessageRead(ctx context.Context, req api.MarkMessageRead
 	return nil, messageError(s.messages.MarkRead(ctx, adminRequest(ctx), req.Id.String()), "markMessageRead")
 }
 
+func (s *apiServer) ListMessageComments(ctx context.Context, req api.ListMessageCommentsRequestObject) (api.ListMessageCommentsResponseObject, error) {
+	return nil, messageError(s.messages.Comments(ctx, adminRequest(ctx), req.Id.String()), "listMessageComments")
+}
+
+func (s *apiServer) CreateMessageComment(ctx context.Context, req api.CreateMessageCommentRequestObject) (api.CreateMessageCommentResponseObject, error) {
+	if req.Body == nil {
+		return nil, bodyRequired()
+	}
+	return nil, messageError(s.messages.Comment(ctx, adminRequest(ctx), req.Id.String(), req.Body.Text), "createMessageComment")
+}
+
+func (s *apiServer) DeleteMessageComment(ctx context.Context, req api.DeleteMessageCommentRequestObject) (api.DeleteMessageCommentResponseObject, error) {
+	return nil, messageError(s.messages.DeleteComment(ctx, adminRequest(ctx), req.Id.String(), req.CommentId.String()), "deleteMessageComment")
+}
+
 // messageError maps the answers of the skeleton; invalid input is 400.
 func messageError(err error, operationID string) error {
 	if errors.Is(err, messages.ErrNotImplemented) {

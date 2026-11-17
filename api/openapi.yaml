@@ -1406,6 +1406,108 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /messages/{id}/comments:
+    parameters:
+      - $ref: "#/components/parameters/MessageID"
+    get:
+      operationId: listMessageComments
+      summary: >-
+        The comments of a message, oldest first (MSG-003, D-085); its
+        recipients, its sender and the RCON admin.
+      description: >-
+        Behind the feature flag messages (404 while off). Anyone else gets
+        404, as for an unknown message. Paged: limit (1 to 100, default 50)
+        and after, the ID of the last comment of the page before; after is
+        only compared with the comments of this message, never looked up.
+      tags: [messages]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: after
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: A page of comments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageCommentList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: createMessageComment
+      summary: >-
+        Comment on a message (MSG-003, D-085); its recipients and its
+        sender; in the audit as message.commented, without the text (D-086).
+      description: >-
+        Behind the feature flag messages (404 while off). The RCON admin
+        who is neither recipient nor sender gets 403 (he sees the message),
+        anyone else 404. The text has at most 4 KiB in UTF-8 (first) and 1
+        to messages.max_comment code points, the smaller applies; otherwise
+        400. At most messages.comments_per_hour comments per author and
+        hour (429). No editing. The text is shown as text, never as markup
+        (SEC-006).
+      tags: [messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageCommentInput"
+      responses:
+        "201":
+          description: The comment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageComment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /messages/{id}/comments/{comment_id}:
+    parameters:
+      - $ref: "#/components/parameters/MessageID"
+      - $ref: "#/components/parameters/CommentID"
+    delete:
+      operationId: deleteMessageComment
+      summary: >-
+        Delete a comment at once and for good (D-085, D-086); its author,
+        the sender of the message and the RCON admin; in the audit as
+        message.comment_deleted, without the text.
+      description: >-
+        Behind the feature flag messages (404 while off). Another recipient
+        gets 403, anyone else 404, also for a comment of another message.
+      tags: [messages]
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /ws:
     get:
       operationId: openWebSocket
@@ -1418,7 +1520,11 @@ paths:
         {"type":"event","topic":...,"data":...} and
         {"type":"error","topic":...,"reason":...}. Topics:
         servers.overview, server.{id}.status, server.{id}.console,
-        server.{id}.metrics and server.{id}.logs. Metrics and logs are
+        server.{id}.metrics, server.{id}.logs and messages. messages is
+        behind the feature flag messages for every role that can receive a
+        message; its events name only kind (message, comment, deleted,
+        read) and IDs of what changed in my view, the texts come from the
+        API. Metrics and logs are
         agent functions for RCON admin and server admin only; a new
         subscription first gets the current value (last sample or the last
         50 log lines), and logs stream from the agent only while someone
@@ -2347,6 +2453,13 @@ components:
       schema:
         type: string
         format: uuid
+    CommentID:
+      name: comment_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     ServerGroupID:
       name: id
       in: path
@@ -3191,6 +3304,45 @@ components:
         unread:
           type: integer
           description: Unread messages to me, over all pages.
+
+    MessageCommentInput:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: >-
+            At most 4 KiB in UTF-8, checked first, then 1 to
+            messages.max_comment characters (code points); the smaller
+            applies.
+
+    MessageComment:
+      type: object
+      required: [id, author, text, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        author:
+          $ref: "#/components/schemas/MessageAuthor"
+        text:
+          type: string
+          x-foreign: true
+          description: Shown as text, never as markup (SEC-006).
+        created_at:
+          type: string
+          format: date-time
+
+    MessageCommentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MessageComment"
 
     SayPrefix:
       type: object

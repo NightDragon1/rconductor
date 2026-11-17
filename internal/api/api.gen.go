@@ -1204,6 +1204,27 @@ type MessageCommand struct {
 // MessageCommandRender defines model for MessageCommand.Render.
 type MessageCommandRender string
 
+// MessageComment defines model for MessageComment.
+type MessageComment struct {
+	Author    MessageAuthor      `json:"author"`
+	CreatedAt time.Time          `json:"created_at"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Text Shown as text, never as markup (SEC-006).
+	Text string `json:"text"`
+}
+
+// MessageCommentInput defines model for MessageCommentInput.
+type MessageCommentInput struct {
+	// Text At most 4 KiB in UTF-8, checked first, then 1 to messages.max_comment characters (code points); the smaller applies.
+	Text string `json:"text"`
+}
+
+// MessageCommentList defines model for MessageCommentList.
+type MessageCommentList struct {
+	Items []MessageComment `json:"items"`
+}
+
 // MessageInput defines model for MessageInput.
 type MessageInput struct {
 	// Audience Who gets a message (D-085): all, server_admins, moderators and users (user_ids) for the RCON admin; scope and scope_moderators for a server admin, by his scope at sending time.
@@ -1812,6 +1833,9 @@ type AgentID = openapi_types.UUID
 // CommandListID defines model for CommandListID.
 type CommandListID = openapi_types.UUID
 
+// CommentID defines model for CommentID.
+type CommentID = openapi_types.UUID
+
 // GroupID defines model for GroupID.
 type GroupID = openapi_types.UUID
 
@@ -1884,6 +1908,12 @@ type UpdateCommandListParams struct {
 type ListMessagesParams struct {
 	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
 	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
+}
+
+// ListMessageCommentsParams defines parameters for ListMessageComments.
+type ListMessageCommentsParams struct {
+	Limit *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	After *openapi_types.UUID `form:"after,omitempty" json:"after,omitempty"`
 }
 
 // UpdateServerGroupParams defines parameters for UpdateServerGroup.
@@ -1998,6 +2028,9 @@ type SetupSecondFactorJSONRequestBody = PasswordConfirm
 
 // CreateMessageJSONRequestBody defines body for CreateMessage for application/json ContentType.
 type CreateMessageJSONRequestBody = MessageInput
+
+// CreateMessageCommentJSONRequestBody defines body for CreateMessageComment for application/json ContentType.
+type CreateMessageCommentJSONRequestBody = MessageCommentInput
 
 // CreateServerGroupJSONRequestBody defines body for CreateServerGroup for application/json ContentType.
 type CreateServerGroupJSONRequestBody = ServerGroupInput
@@ -2172,6 +2205,15 @@ type ServerInterface interface {
 	// GetMessage One message (MSG-003, D-085); its recipients, its sender and the RCON admin.
 	// (GET /messages/{id})
 	GetMessage(w http.ResponseWriter, r *http.Request, id MessageID)
+	// ListMessageComments The comments of a message, oldest first (MSG-003, D-085); its recipients, its sender and the RCON admin.
+	// (GET /messages/{id}/comments)
+	ListMessageComments(w http.ResponseWriter, r *http.Request, id MessageID, params ListMessageCommentsParams)
+	// CreateMessageComment Comment on a message (MSG-003, D-085); its recipients and its sender; in the audit as message.commented, without the text (D-086).
+	// (POST /messages/{id}/comments)
+	CreateMessageComment(w http.ResponseWriter, r *http.Request, id MessageID)
+	// DeleteMessageComment Delete a comment at once and for good (D-085, D-086); its author, the sender of the message and the RCON admin; in the audit as message.comment_deleted, without the text.
+	// (DELETE /messages/{id}/comments/{comment_id})
+	DeleteMessageComment(w http.ResponseWriter, r *http.Request, id MessageID, commentId CommentID)
 	// MarkMessageRead Mark a message read for me (D-085); its recipients only.
 	// (POST /messages/{id}/read)
 	MarkMessageRead(w http.ResponseWriter, r *http.Request, id MessageID)
@@ -3112,6 +3154,122 @@ func (siw *ServerInterfaceWrapper) GetMessage(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMessage(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMessageComments operation middleware
+func (siw *ServerInterfaceWrapper) ListMessageComments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMessageCommentsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMessageComments(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMessageComment operation middleware
+func (siw *ServerInterfaceWrapper) CreateMessageComment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMessageComment(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMessageComment operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMessageComment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "comment_id" -------------
+	var commentId CommentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "comment_id", r.PathValue("comment_id"), &commentId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "comment_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMessageComment(w, r, id, commentId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4651,6 +4809,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/messages/{id}", wrapper.DeleteMessage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/messages/{id}", wrapper.GetMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{id}/read", wrapper.MarkMessageRead)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/messages/{id}/comments", wrapper.ListMessageComments)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages/{id}/comments", wrapper.CreateMessageComment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/messages/{id}/comments/{comment_id}", wrapper.DeleteMessageComment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/ws", wrapper.OpenWebSocket)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/users/{id}", wrapper.DeleteUser)
@@ -7518,6 +7679,264 @@ type GetMessage404ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetMessage404ApplicationProblemPlusJSONResponse) VisitGetMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessageCommentsRequestObject struct {
+	Id     MessageID `json:"id"`
+	Params ListMessageCommentsParams
+}
+
+type ListMessageCommentsResponseObject interface {
+	VisitListMessageCommentsResponse(w http.ResponseWriter) error
+}
+
+type ListMessageComments200JSONResponse MessageCommentList
+
+func (response ListMessageComments200JSONResponse) VisitListMessageCommentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessageComments400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListMessageComments400ApplicationProblemPlusJSONResponse) VisitListMessageCommentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessageComments401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListMessageComments401ApplicationProblemPlusJSONResponse) VisitListMessageCommentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMessageComments404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListMessageComments404ApplicationProblemPlusJSONResponse) VisitListMessageCommentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessageCommentRequestObject struct {
+	Id   MessageID `json:"id"`
+	Body *CreateMessageCommentJSONRequestBody
+}
+
+type CreateMessageCommentResponseObject interface {
+	VisitCreateMessageCommentResponse(w http.ResponseWriter) error
+}
+
+type CreateMessageComment201JSONResponse MessageComment
+
+func (response CreateMessageComment201JSONResponse) VisitCreateMessageCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessageComment400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessageComment400ApplicationProblemPlusJSONResponse) VisitCreateMessageCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessageComment401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessageComment401ApplicationProblemPlusJSONResponse) VisitCreateMessageCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessageComment403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessageComment403ApplicationProblemPlusJSONResponse) VisitCreateMessageCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessageComment404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessageComment404ApplicationProblemPlusJSONResponse) VisitCreateMessageCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMessageComment429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMessageComment429ApplicationProblemPlusJSONResponse) VisitCreateMessageCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMessageCommentRequestObject struct {
+	Id        MessageID `json:"id"`
+	CommentId CommentID `json:"comment_id"`
+}
+
+type DeleteMessageCommentResponseObject interface {
+	VisitDeleteMessageCommentResponse(w http.ResponseWriter) error
+}
+
+type DeleteMessageComment204Response struct {
+}
+
+func (response DeleteMessageComment204Response) VisitDeleteMessageCommentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMessageComment400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMessageComment400ApplicationProblemPlusJSONResponse) VisitDeleteMessageCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMessageComment401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMessageComment401ApplicationProblemPlusJSONResponse) VisitDeleteMessageCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMessageComment403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMessageComment403ApplicationProblemPlusJSONResponse) VisitDeleteMessageCommentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMessageComment404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMessageComment404ApplicationProblemPlusJSONResponse) VisitDeleteMessageCommentResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -11552,6 +11971,15 @@ type StrictServerInterface interface {
 	// GetMessage One message (MSG-003, D-085); its recipients, its sender and the RCON admin.
 	// (GET /messages/{id})
 	GetMessage(ctx context.Context, request GetMessageRequestObject) (GetMessageResponseObject, error)
+	// ListMessageComments The comments of a message, oldest first (MSG-003, D-085); its recipients, its sender and the RCON admin.
+	// (GET /messages/{id}/comments)
+	ListMessageComments(ctx context.Context, request ListMessageCommentsRequestObject) (ListMessageCommentsResponseObject, error)
+	// CreateMessageComment Comment on a message (MSG-003, D-085); its recipients and its sender; in the audit as message.commented, without the text (D-086).
+	// (POST /messages/{id}/comments)
+	CreateMessageComment(ctx context.Context, request CreateMessageCommentRequestObject) (CreateMessageCommentResponseObject, error)
+	// DeleteMessageComment Delete a comment at once and for good (D-085, D-086); its author, the sender of the message and the RCON admin; in the audit as message.comment_deleted, without the text.
+	// (DELETE /messages/{id}/comments/{comment_id})
+	DeleteMessageComment(ctx context.Context, request DeleteMessageCommentRequestObject) (DeleteMessageCommentResponseObject, error)
 	// MarkMessageRead Mark a message read for me (D-085); its recipients only.
 	// (POST /messages/{id}/read)
 	MarkMessageRead(ctx context.Context, request MarkMessageReadRequestObject) (MarkMessageReadResponseObject, error)
@@ -12838,6 +13266,93 @@ func (sh *strictHandler) GetMessage(w http.ResponseWriter, r *http.Request, id M
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMessageResponseObject); ok {
 		if err := validResponse.VisitGetMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMessageComments operation middleware
+func (sh *strictHandler) ListMessageComments(w http.ResponseWriter, r *http.Request, id MessageID, params ListMessageCommentsParams) {
+	var request ListMessageCommentsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMessageComments(ctx, request.(ListMessageCommentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMessageComments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMessageCommentsResponseObject); ok {
+		if err := validResponse.VisitListMessageCommentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMessageComment operation middleware
+func (sh *strictHandler) CreateMessageComment(w http.ResponseWriter, r *http.Request, id MessageID) {
+	var request CreateMessageCommentRequestObject
+
+	request.Id = id
+
+	var body CreateMessageCommentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMessageComment(ctx, request.(CreateMessageCommentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMessageComment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMessageCommentResponseObject); ok {
+		if err := validResponse.VisitCreateMessageCommentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMessageComment operation middleware
+func (sh *strictHandler) DeleteMessageComment(w http.ResponseWriter, r *http.Request, id MessageID, commentId CommentID) {
+	var request DeleteMessageCommentRequestObject
+
+	request.Id = id
+	request.CommentId = commentId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMessageComment(ctx, request.(DeleteMessageCommentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMessageComment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMessageCommentResponseObject); ok {
+		if err := validResponse.VisitDeleteMessageCommentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

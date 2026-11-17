@@ -133,10 +133,13 @@ func TestReadRoles(t *testing.T) {
 	ctx := context.Background()
 	const id = "00000000-0000-4000-8000-000000000001"
 	ops := map[string]func(users.Request) error{
-		"message.list":      func(r users.Request) error { return s.List(ctx, r) },
-		"message.read":      func(r users.Request) error { return s.Get(ctx, r, id) },
-		"message.delete":    func(r users.Request) error { return s.Delete(ctx, r, id) },
-		"message.mark_read": func(r users.Request) error { return s.MarkRead(ctx, r, id) },
+		"message.list":            func(r users.Request) error { return s.List(ctx, r) },
+		"message.read":            func(r users.Request) error { return s.Get(ctx, r, id) },
+		"message.delete":          func(r users.Request) error { return s.Delete(ctx, r, id) },
+		"message.mark_read":       func(r users.Request) error { return s.MarkRead(ctx, r, id) },
+		"message.comment_list":    func(r users.Request) error { return s.Comments(ctx, r, id) },
+		"message.commented":       func(r users.Request) error { return s.Comment(ctx, r, id, "ok") },
+		"message.comment_deleted": func(r users.Request) error { return s.DeleteComment(ctx, r, id, id) },
 	}
 	for _, role := range []perm.Role{perm.RCONAdmin, perm.ServerAdmin, perm.Moderator, perm.Supporter} {
 		req := request(t, s, role)
@@ -158,6 +161,27 @@ func TestReadRoles(t *testing.T) {
 		if n := denials(t, s, action); n != 2 {
 			t.Errorf("audited refusals of %s = %d, want 2", action, n)
 		}
+	}
+}
+
+// TestCommentInput: the role comes first (D-051), then the text: required
+// and at most MaxCommentBytes bytes.
+func TestCommentInput(t *testing.T) {
+	s := NewService(storetest.New(t), nil)
+	ctx := context.Background()
+	const id = "00000000-0000-4000-8000-000000000001"
+	mod := request(t, s, perm.Moderator)
+	var inv *users.InvalidError
+	for _, text := range []string{"", strings.Repeat("a", MaxCommentBytes+1), strings.Repeat("é", MaxCommentBytes/2+1)} {
+		if err := s.Comment(ctx, mod, id, text); !errors.As(err, &inv) {
+			t.Errorf("%d bytes: %v", len(text), err)
+		}
+	}
+	if err := s.Comment(ctx, mod, id, strings.Repeat("a", MaxCommentBytes)); !errors.Is(err, ErrNotImplemented) {
+		t.Errorf("at the bound: %v", err)
+	}
+	if err := s.Comment(ctx, request(t, s, "unknown"), id, ""); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("unknown role with empty text: %v", err)
 	}
 }
 

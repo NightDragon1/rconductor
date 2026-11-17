@@ -36,7 +36,7 @@ var production = []Flag{
 	{Name: "docker_host"},   // Docker host of the agents, in the agent data of the RCON admin (AGT-014)
 	{Name: "server_number"}, // server number as ID column and badge, frontend only (UI-018)
 	// Messages in the panel (MSG-001 to MSG-003, D-085).
-	{Name: "messages", Operations: []string{"ListMessages", "CreateMessage", "GetMessage", "DeleteMessage", "MarkMessageRead"}},
+	{Name: "messages", Operations: []string{"ListMessages", "CreateMessage", "GetMessage", "DeleteMessage", "MarkMessageRead", "ListMessageComments", "CreateMessageComment", "DeleteMessageComment"}},
 }
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
