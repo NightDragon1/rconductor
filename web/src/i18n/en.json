@@ -1030,6 +1030,10 @@
         "label": "Messages with sender",
         "help": "Messages to the players (for example Minecraft say) show the name of the signed-in user and a prefix per server group instead of [Rcon]."
       },
+      "features_log_masking_ui": {
+        "label": "Log masking settings",
+        "help": "Settings for the masking of container logs: switch it off or add fixed texts that are masked. Masking itself is on without this flag."
+      },
       "features_messages": {
         "label": "Messages",
         "help": "Messages from the RCON admin and server admins to users in the panel, with comments of the recipients."

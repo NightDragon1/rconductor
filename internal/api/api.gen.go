@@ -1144,6 +1144,39 @@ type InviteRedeem struct {
 	Token     string `json:"token"`
 }
 
+// LogMaskText defines model for LogMaskText.
+type LogMaskText struct {
+	// IgnoreCase Ignore the case of A to Z.
+	IgnoreCase *bool `json:"ignore_case,omitempty"`
+
+	// Value A fixed text; maxLength bounds the bytes in UTF-8.
+	Value *string `json:"value,omitempty"`
+}
+
+// LogMasking defines model for LogMasking.
+type LogMasking struct {
+	// Enabled Masking on (default; unreadable counts as on).
+	Enabled      bool `json:"enabled"`
+	MaxTextChars int  `json:"max_text_chars"`
+	MaxTexts     int  `json:"max_texts"`
+
+	// TextCount Number of stored texts; never the texts.
+	TextCount int `json:"text_count"`
+
+	// Version Version for If-Match.
+	Version string `json:"version"`
+}
+
+// LogMaskingInput defines model for LogMaskingInput.
+type LogMaskingInput struct {
+	Enabled      *bool `json:"enabled,omitempty"`
+	MaxTextChars *int  `json:"max_text_chars,omitempty"`
+	MaxTexts     *int  `json:"max_texts,omitempty"`
+
+	// Texts Replaces all texts; write-only.
+	Texts *[]LogMaskText `json:"texts,omitempty"`
+}
+
 // LogTail defines model for LogTail.
 type LogTail struct {
 	Container string `json:"container"`
@@ -1958,6 +1991,12 @@ type UpdateSettingsParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
+// UpdateLogMaskingParams defines parameters for UpdateLogMasking.
+type UpdateLogMaskingParams struct {
+	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
+	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
 // UpdateSMTPSettingsParams defines parameters for UpdateSMTPSettings.
 type UpdateSMTPSettingsParams struct {
 	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
@@ -2064,6 +2103,9 @@ type UpdateTemplateJSONRequestBody = TemplateUpdate
 
 // UpdateSettingsJSONRequestBody defines body for UpdateSettings for application/json ContentType.
 type UpdateSettingsJSONRequestBody = Settings
+
+// UpdateLogMaskingJSONRequestBody defines body for UpdateLogMasking for application/json ContentType.
+type UpdateLogMaskingJSONRequestBody = LogMaskingInput
 
 // UpdateSMTPSettingsJSONRequestBody defines body for UpdateSMTPSettings for application/json ContentType.
 type UpdateSMTPSettingsJSONRequestBody = SMTPSettingsInput
@@ -2301,6 +2343,12 @@ type ServerInterface interface {
 	// UpdateSettings Change global settings; RCON admin only (AUD-003).
 	// (PATCH /settings)
 	UpdateSettings(w http.ResponseWriter, r *http.Request, params UpdateSettingsParams)
+	// GetLogMasking Masking of container logs (UI-022, D-088); RCON admin only.
+	// (GET /settings/log-masking)
+	GetLogMasking(w http.ResponseWriter, r *http.Request)
+	// UpdateLogMasking Change the masking of container logs (UI-022, D-088); RCON admin only; in the audit as log_masking.updated with the switch and the number of texts, never a text.
+	// (PUT /settings/log-masking)
+	UpdateLogMasking(w http.ResponseWriter, r *http.Request, params UpdateLogMaskingParams)
 	// GetSMTPSettings The SMTP server for the panel's mail (NFR-017); RCON admin only.
 	// (GET /settings/smtp)
 	GetSMTPSettings(w http.ResponseWriter, r *http.Request)
@@ -4145,6 +4193,61 @@ func (siw *ServerInterfaceWrapper) UpdateSettings(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetLogMasking operation middleware
+func (siw *ServerInterfaceWrapper) GetLogMasking(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLogMasking(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateLogMasking operation middleware
+func (siw *ServerInterfaceWrapper) UpdateLogMasking(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateLogMaskingParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateLogMasking(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSMTPSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetSMTPSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -4846,6 +4949,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/audit", wrapper.ListAudit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings", wrapper.GetSettings)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/settings", wrapper.UpdateSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings/log-masking", wrapper.GetLogMasking)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/log-masking", wrapper.UpdateLogMasking)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings/smtp", wrapper.GetSMTPSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/settings/smtp", wrapper.UpdateSMTPSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/settings/smtp/test", wrapper.TestSMTP)
@@ -10467,6 +10572,194 @@ func (response UpdateSettings428ApplicationProblemPlusJSONResponse) VisitUpdateS
 	return err
 }
 
+type GetLogMaskingRequestObject struct {
+}
+
+type GetLogMaskingResponseObject interface {
+	VisitGetLogMaskingResponse(w http.ResponseWriter) error
+}
+
+type GetLogMasking200JSONResponse LogMasking
+
+func (response GetLogMasking200JSONResponse) VisitGetLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLogMasking401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetLogMasking401ApplicationProblemPlusJSONResponse) VisitGetLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLogMasking403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetLogMasking403ApplicationProblemPlusJSONResponse) VisitGetLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLogMasking404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetLogMasking404ApplicationProblemPlusJSONResponse) VisitGetLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLogMaskingRequestObject struct {
+	Params UpdateLogMaskingParams
+	Body   *UpdateLogMaskingJSONRequestBody
+}
+
+type UpdateLogMaskingResponseObject interface {
+	VisitUpdateLogMaskingResponse(w http.ResponseWriter) error
+}
+
+type UpdateLogMasking200JSONResponse LogMasking
+
+func (response UpdateLogMasking200JSONResponse) VisitUpdateLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLogMasking400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateLogMasking400ApplicationProblemPlusJSONResponse) VisitUpdateLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLogMasking401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateLogMasking401ApplicationProblemPlusJSONResponse) VisitUpdateLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLogMasking403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateLogMasking403ApplicationProblemPlusJSONResponse) VisitUpdateLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLogMasking404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateLogMasking404ApplicationProblemPlusJSONResponse) VisitUpdateLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLogMasking409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateLogMasking409ApplicationProblemPlusJSONResponse) VisitUpdateLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLogMasking428ApplicationProblemPlusJSONResponse struct {
+	PreconditionRequiredApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateLogMasking428ApplicationProblemPlusJSONResponse) VisitUpdateLogMaskingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSMTPSettingsRequestObject struct {
 }
 
@@ -12067,6 +12360,12 @@ type StrictServerInterface interface {
 	// UpdateSettings Change global settings; RCON admin only (AUD-003).
 	// (PATCH /settings)
 	UpdateSettings(ctx context.Context, request UpdateSettingsRequestObject) (UpdateSettingsResponseObject, error)
+	// GetLogMasking Masking of container logs (UI-022, D-088); RCON admin only.
+	// (GET /settings/log-masking)
+	GetLogMasking(ctx context.Context, request GetLogMaskingRequestObject) (GetLogMaskingResponseObject, error)
+	// UpdateLogMasking Change the masking of container logs (UI-022, D-088); RCON admin only; in the audit as log_masking.updated with the switch and the number of texts, never a text.
+	// (PUT /settings/log-masking)
+	UpdateLogMasking(ctx context.Context, request UpdateLogMaskingRequestObject) (UpdateLogMaskingResponseObject, error)
 	// GetSMTPSettings The SMTP server for the panel's mail (NFR-017); RCON admin only.
 	// (GET /settings/smtp)
 	GetSMTPSettings(ctx context.Context, request GetSMTPSettingsRequestObject) (GetSMTPSettingsResponseObject, error)
@@ -14179,6 +14478,63 @@ func (sh *strictHandler) UpdateSettings(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateSettingsResponseObject); ok {
 		if err := validResponse.VisitUpdateSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetLogMasking operation middleware
+func (sh *strictHandler) GetLogMasking(w http.ResponseWriter, r *http.Request) {
+	var request GetLogMaskingRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetLogMasking(ctx, request.(GetLogMaskingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetLogMasking")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetLogMaskingResponseObject); ok {
+		if err := validResponse.VisitGetLogMaskingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateLogMasking operation middleware
+func (sh *strictHandler) UpdateLogMasking(w http.ResponseWriter, r *http.Request, params UpdateLogMaskingParams) {
+	var request UpdateLogMaskingRequestObject
+
+	request.Params = params
+
+	var body UpdateLogMaskingJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateLogMasking(ctx, request.(UpdateLogMaskingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateLogMasking")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateLogMaskingResponseObject); ok {
+		if err := validResponse.VisitUpdateLogMaskingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

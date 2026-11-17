@@ -2324,6 +2324,70 @@ paths:
         "422":
           $ref: "#/components/responses/Invalid"
 
+  /settings/log-masking:
+    get:
+      operationId: getLogMasking
+      summary: >-
+        Masking of container logs (UI-022, D-088); RCON admin only.
+      description: >-
+        Behind the feature flag log_masking_ui (404 while off); the masking
+        itself runs without it. Texts are never returned, only their number.
+      tags: [settings]
+      responses:
+        "200":
+          description: The masking setup.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogMasking"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateLogMasking
+      summary: >-
+        Change the masking of container logs (UI-022, D-088); RCON admin
+        only; in the audit as log_masking.updated with the switch and the
+        number of texts, never a text.
+      description: >-
+        Behind the flag log_masking_ui (404 while off). Missing fields
+        stay; texts replaces all, [] removes them. Fixed texts, no
+        expressions, sealed with the master key (D-058): each 4 to
+        max_text_chars characters on one line, at most max_texts (1 to 200,
+        default 50; max_text_chars 4 to 1024, default 256); new limits must
+        fit the texts sent and stored. Errors name a position, never a
+        text (SEC-012): 400.
+      tags: [settings]
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogMaskingInput"
+      responses:
+        "200":
+          description: The masking setup after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogMasking"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
   /settings/smtp:
     get:
       operationId: getSMTPSettings
@@ -3858,6 +3922,58 @@ components:
           format: password
           writeOnly: true
           maxLength: 512
+
+    LogMasking:
+      type: object
+      required: [enabled, text_count, max_texts, max_text_chars, version]
+      properties:
+        enabled:
+          type: boolean
+          description: Masking on (default; unreadable counts as on).
+        text_count:
+          type: integer
+          description: Number of stored texts; never the texts.
+        max_texts:
+          type: integer
+        max_text_chars:
+          type: integer
+        version:
+          type: string
+          description: Version for If-Match.
+
+    LogMaskingInput:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        texts:
+          type: array
+          maxItems: 200
+          description: Replaces all texts; write-only.
+          items:
+            $ref: "#/components/schemas/LogMaskText"
+        max_texts:
+          type: integer
+          minimum: 1
+          maximum: 200
+        max_text_chars:
+          type: integer
+          minimum: 4
+          maximum: 1024
+
+    LogMaskText:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 4096
+          description: A fixed text; maxLength bounds the bytes in UTF-8.
+        ignore_case:
+          type: boolean
+          description: Ignore the case of A to Z.
 
     SMTPSettings:
       type: object

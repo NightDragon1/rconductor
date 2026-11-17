@@ -1260,6 +1260,30 @@ export interface paths {
         patch: operations["updateSettings"];
         trace?: never;
     };
+    "/settings/log-masking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Masking of container logs (UI-022, D-088); RCON admin only.
+         * @description Behind the feature flag log_masking_ui (404 while off); the masking itself runs without it. Texts are never returned, only their number.
+         */
+        get: operations["getLogMasking"];
+        /**
+         * Change the masking of container logs (UI-022, D-088); RCON admin only; in the audit as log_masking.updated with the switch and the number of texts, never a text.
+         * @description Behind the flag log_masking_ui (404 while off). Missing fields stay; texts replaces all, [] removes them. Fixed texts, no expressions, sealed with the master key (D-058): each 4 to max_text_chars characters on one line, at most max_texts (1 to 200, default 50; max_text_chars 4 to 1024, default 256); new limits must fit the texts sent and stored. Errors name a position, never a text (SEC-012): 400.
+         */
+        put: operations["updateLogMasking"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/smtp": {
         parameters: {
             query?: never;
@@ -1949,6 +1973,32 @@ export interface components {
             token: string;
             /** Format: password */
             password: string;
+        };
+        LogMasking: {
+            /** @description Masking on (default; unreadable counts as on). */
+            enabled: boolean;
+            /** @description Number of stored texts; never the texts. */
+            text_count: number;
+            max_texts: number;
+            max_text_chars: number;
+            /** @description Version for If-Match. */
+            version: string;
+        };
+        LogMaskingInput: {
+            enabled?: boolean;
+            /** @description Replaces all texts; write-only. */
+            texts?: components["schemas"]["LogMaskText"][];
+            max_texts?: number;
+            max_text_chars?: number;
+        };
+        LogMaskText: {
+            /**
+             * Format: password
+             * @description A fixed text; maxLength bounds the bytes in UTF-8.
+             */
+            value: string;
+            /** @description Ignore the case of A to Z. */
+            ignore_case?: boolean;
         };
         SMTPSettings: {
             host: string;
@@ -4705,6 +4755,62 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
+            428: components["responses"]["PreconditionRequired"];
+        };
+    };
+    getLogMasking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The masking setup. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogMasking"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateLogMasking: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogMaskingInput"];
+            };
+        };
+        responses: {
+            /** @description The masking setup after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogMasking"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             428: components["responses"]["PreconditionRequired"];
         };
     };
