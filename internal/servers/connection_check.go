@@ -116,7 +116,7 @@ func (l *testLimiter) take(user string, limit int, now time.Time) bool {
 func (s *Service) testLimit(ctx context.Context) int {
 	n := users.DefaultConnectionTests
 	var v int
-	if err := s.st.GlobalSetting(ctx, users.SettingConnectionTests, &v); err == nil && v > 0 {
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingConnectionTests, &v); err == nil && v > 0 {
 		n = v
 	}
 	return n

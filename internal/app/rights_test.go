@@ -456,6 +456,15 @@ func matrix() []matrixOp {
 		{"GET", "/server-groups/{id}", "OONFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/server-groups/" + f.serverGroup}
 		}, false},
+		// Behind the flag messages, off by default: 404 for every role
+		// (MSG-001 to MSG-003).
+		{"GET", "/messages", "NNNNNNUP", at("/messages"), false},
+		{"POST", "/messages", "NNNNNNUP", func(*rightsFixture, string) request {
+			return request{path: "/messages", body: map[string]any{"text": "hi", "audience": "all"}}
+		}, false},
+		{"GET", "/messages/{id}", "NNNNNNUP", at("/messages/00000000-0000-4000-8000-000000000001"), false},
+		{"DELETE", "/messages/{id}", "NNNNNNUP", at("/messages/00000000-0000-4000-8000-000000000001"), false},
+		{"POST", "/messages/{id}/read", "NNNNNNUP", at("/messages/00000000-0000-4000-8000-000000000001/read"), false},
 		// Behind the flag say_sender, off by default: 404 for every role.
 		{"GET", "/server-groups/{id}/say-prefix", "NNNNNNUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/server-groups/" + f.serverGroup + "/say-prefix"}

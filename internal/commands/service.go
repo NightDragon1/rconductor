@@ -182,10 +182,10 @@ type resultPayload struct {
 func (s *Service) limit(ctx context.Context, role string) Limit {
 	lim := DefaultLimits[role]
 	var n int
-	if err := s.st.GlobalSetting(ctx, settingPerMinute(role), &n); err == nil && n > 0 {
+	if err := s.st.GuardedSetting(ctx, s.log, settingPerMinute(role), &n); err == nil && n > 0 {
 		lim.PerMinute = n
 	}
-	if err := s.st.GlobalSetting(ctx, settingBurst(role), &n); err == nil && n > 0 {
+	if err := s.st.GuardedSetting(ctx, s.log, settingBurst(role), &n); err == nil && n > 0 {
 		lim.Burst = n
 	}
 	return lim

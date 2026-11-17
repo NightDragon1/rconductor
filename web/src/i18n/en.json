@@ -1030,6 +1030,10 @@
         "label": "Messages with sender",
         "help": "Messages to the players (for example Minecraft say) show the name of the signed-in user and a prefix per server group instead of [Rcon]."
       },
+      "features_messages": {
+        "label": "Messages",
+        "help": "Messages from the RCON admin and server admins to users in the panel, with comments of the recipients."
+      },
       "features_server_number": {
         "label": "Server numbers",
         "help": "Shows the consecutive number of each server: as the first column ID in Servers & Groups and as a badge before the name on cards and the server page."

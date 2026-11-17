@@ -709,6 +709,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Messages in the panel (MSG-001 to MSG-003, D-085): those sent to me and those I sent, newest first; the RCON admin sees all.
+         * @description Behind the feature flag messages (404 while off). The recipients of a message are fixed when it is sent; who comes into a scope later does not see older messages. Messages and comments go after messages.retention_days (D-086). Paged: limit (1 to 100, default 50) and before, the ID of the last message of the page before. before is only compared with the IDs of my view, never looked up: every valid UUID behaves the same.
+         */
+        get: operations["listMessages"];
+        put?: never;
+        /**
+         * Send a message (MSG-001, MSG-002, D-085); RCON admin and server admin; in the audit as message.sent, without the text (D-086).
+         * @description Behind the feature flag messages (404 while off). The RCON admin sends to all, server_admins, moderators or users (user_ids); a server admin to scope (moderators and supporters with at least one server in his scope at sending time) or scope_moderators; another audience, users among them, is 403. Moderators and supporters do not send (403). The text has at most 8 KiB in UTF-8 (first) and 1 to messages.max_text code points, the smaller applies; user_ids is for audience users only and has 1 to messages.max_recipients entries without repeats; otherwise 400, also when the audience has no recipient. An audience that resolves to more than messages.max_resolved_recipients users is 400 with reason too_many_recipients; it is never cut. At most messages.per_hour messages per sender and hour (429). The text is shown as text, never as markup (SEC-006).
+         */
+        post: operations["createMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One message (MSG-003, D-085); its recipients, its sender and the RCON admin.
+         * @description Behind the feature flag messages (404 while off). Anyone else gets 404, as for an unknown message.
+         */
+        get: operations["getMessage"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a message with its recipients and comments, at once and for good (D-085, D-086); its sender and the RCON admin; in the audit without the text.
+         * @description Behind the feature flag messages (404 while off). A recipient gets 403, anyone else 404.
+         */
+        delete: operations["deleteMessage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a message read for me (D-085); its recipients only.
+         * @description Behind the feature flag messages (404 while off). Repeating it changes nothing. Sender and RCON admin who are not recipients get 403 (they see the message), anyone else 404.
+         */
+        post: operations["markMessageRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ws": {
         parameters: {
             query?: never;
@@ -1537,6 +1609,46 @@ export interface components {
         ServerGroupList: {
             items: components["schemas"]["ServerGroup"][];
         };
+        /**
+         * @description Who gets a message (D-085): all, server_admins, moderators and users (user_ids) for the RCON admin; scope and scope_moderators for a server admin, by his scope at sending time.
+         * @enum {string}
+         */
+        MessageAudience: "all" | "server_admins" | "moderators" | "users" | "scope" | "scope_moderators";
+        MessageInput: {
+            /** @description At most 8 KiB in UTF-8, checked first, then 1 to messages.max_text characters (code points); the smaller applies. */
+            text: string;
+            audience: components["schemas"]["MessageAudience"];
+            /** @description For audience users only (400 with any other audience, and missing with users); 1 to messages.max_recipients entries. */
+            user_ids?: string[];
+        };
+        MessageAuthor: {
+            /**
+             * Format: uuid
+             * @description Missing when the user no longer exists.
+             */
+            id?: string;
+            pseudonym: string;
+        };
+        Message: {
+            /** Format: uuid */
+            id: string;
+            sender: components["schemas"]["MessageAuthor"];
+            /** @description Shown as text, never as markup (SEC-006). */
+            text: string;
+            audience: components["schemas"]["MessageAudience"];
+            /** @description For the sender and the RCON admin only. */
+            recipient_count?: number;
+            /** Format: date-time */
+            created_at: string;
+            comment_count: number;
+            /** @description Read by me; true for a message I sent. */
+            read: boolean;
+        };
+        MessageList: {
+            items: components["schemas"]["Message"][];
+            /** @description Unread messages to me, over all pages. */
+            unread: number;
+        };
         SayPrefix: {
             /** @description Prefix before the sender, e.g. "[R]"; empty when none is set. */
             say_prefix: string;
@@ -2033,7 +2145,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "command_failed" | "message_too_long";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "command_failed" | "message_too_long" | "too_many_recipients";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
@@ -2144,6 +2256,7 @@ export interface components {
         AgentID: string;
         ServerID: string;
         TemplateID: string;
+        MessageID: string;
         ServerGroupID: string;
         InviteID: string;
         CommandListID: string;
@@ -3443,6 +3556,134 @@ export interface operations {
                     "application/json": components["schemas"]["Agent"];
                 };
             };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listMessages: {
+        parameters: {
+            query?: {
+                limit?: number;
+                before?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of messages and the number of unread ones. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageInput"];
+            };
+        };
+        responses: {
+            /** @description The message as its sender sees it. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The message. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    markMessageRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marked read. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

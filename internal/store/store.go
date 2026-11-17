@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"modernc.org/sqlite" // registers the pure-Go "sqlite" driver (D-038)
 	sqlite3 "modernc.org/sqlite/lib"
@@ -41,6 +42,8 @@ type Store struct {
 	// Path is the file path of the SQLite database.
 	Path    string
 	Queries *sqlitedb.Queries
+	// kept holds the last value read of each guarded setting (GuardedSetting).
+	kept sync.Map
 }
 
 // Open creates the data directory if needed and opens (or creates) the

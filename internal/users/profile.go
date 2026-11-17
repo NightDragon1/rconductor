@@ -249,7 +249,7 @@ func (p *Profiles) ChangePassword(ctx context.Context, req Request, current, nex
 func (p *Profiles) maxTries(ctx context.Context) int {
 	n := 5
 	var v int
-	if err := p.users.st.GlobalSetting(ctx, "login.max_failures", &v); err == nil && v > 0 {
+	if err := p.users.st.GuardedSetting(ctx, p.users.log, "login.max_failures", &v); err == nil && v > 0 {
 		n = v
 	}
 	return n
@@ -257,7 +257,7 @@ func (p *Profiles) maxTries(ctx context.Context) int {
 
 func (p *Profiles) triesWindow(ctx context.Context) time.Duration {
 	var v string
-	if err := p.users.st.GlobalSetting(ctx, "login.lockout_duration", &v); err == nil {
+	if err := p.users.st.GuardedSetting(ctx, p.users.log, "login.lockout_duration", &v); err == nil {
 		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
 			return d
 		}

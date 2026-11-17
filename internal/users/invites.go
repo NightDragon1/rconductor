@@ -75,7 +75,7 @@ func EnsureDefaults(ctx context.Context, st *store.Store) error {
 
 func (iv *Invites) lifetime(ctx context.Context) time.Duration {
 	var v string
-	if err := iv.users.st.GlobalSetting(ctx, SettingInviteLifetime, &v); err == nil {
+	if err := iv.users.st.GuardedSetting(ctx, iv.users.log, SettingInviteLifetime, &v); err == nil {
 		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
 			return d
 		}

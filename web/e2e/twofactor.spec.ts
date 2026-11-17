@@ -107,7 +107,7 @@ test('two-factor sign-in: set up, sign in with the code, reset by the admin (AUT
   await adminCtx.close();
 });
 
-test('a required second factor allows only its setup (AUTH-008)', async ({
+test('a required second factor allows only its setup, after a forced password change (AUTH-008, AUTH-010)', async ({
   page,
   browser,
   state,
@@ -155,6 +155,28 @@ test('a required second factor allows only its setup (AUTH-008)', async ({
     const r = await page.request.get('api/v1/servers');
     expect(r.status()).toBe(403);
     expect((await r.json()).reason).toBe('totp_setup_required');
+
+    // Both at once (AUTH-010, AUTH-008): first the new password, then the
+    // second factor.
+    const users = await (await req.get('api/v1/users')).json();
+    const id = users.items.find((u: { pseudonym: string }) => u.pseudonym === name).id;
+    const reset = await req.post(`api/v1/users/${id}/password-reset`, { headers });
+    expect(reset.status()).toBe(200);
+    const temp = (await reset.json()).password;
+    const both = await browser.newContext({ baseURL: state.base_url });
+    const p2 = await both.newPage();
+    await login(p2, name, temp);
+    await expect(p2.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
+    await p2.getByLabel('Current password').fill(temp);
+    await p2
+      .getByLabel('New password', { exact: true })
+      .fill('the second password of the 2fa user');
+    await p2.getByLabel('Repeat the new password').fill('the second password of the 2fa user');
+    await p2.getByRole('button', { name: 'Change password' }).click();
+    await expect(p2.getByRole('heading', { name: 'Set up two-factor sign-in' })).toBeVisible();
+    const r2 = await p2.request.get('api/v1/servers');
+    expect((await r2.json()).reason).toBe('totp_setup_required');
+    await both.close();
   } finally {
     await setRequired(false);
     expect(

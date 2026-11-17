@@ -21,6 +21,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/mail"
+	"github.com/NightDragon1/rconductor/internal/messages"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -49,6 +50,7 @@ type apiServer struct {
 	perm     *perm.Checker
 	users    *users.Service
 	mail     *mail.Service
+	messages *messages.Service
 	invites  *users.Invites
 	profiles *users.Profiles
 	log      *slog.Logger
@@ -199,7 +201,9 @@ func (s *apiServer) authenticate(next api.StrictHandlerFunc, operationID string)
 			return nil, &problem{status: http.StatusForbidden, reason: api.ReasonCodePasswordChangeRequired,
 				detail: "change your password first"}
 		}
-		if ok && p.TOTPSetupRequired && !whileTOTPSetup[operationID] {
+		// A forced password change comes first; the setup of the second
+		// factor follows with the new password (AUTH-010, AUTH-008).
+		if ok && p.TOTPSetupRequired && !p.MustChangePassword && !whileTOTPSetup[operationID] {
 			perm.LogDenied(s.log, perm.Denial{
 				RequestID: RequestID(ctx), SessionRef: p.SessionRef(), User: p.Pseudonym, Role: perm.Role(p.Role),
 				Reason: string(api.ReasonCodeTotpSetupRequired), Action: operationID,

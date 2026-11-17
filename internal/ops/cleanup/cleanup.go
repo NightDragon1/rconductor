@@ -33,12 +33,12 @@ func Run(ctx context.Context, st *store.Store, log *slog.Logger, now time.Time) 
 	q := st.Queries
 	var res Result
 	days := users.DefaultAuditRetentionDays
-	if err := st.GlobalSetting(ctx, users.SettingAuditRetentionDays, &days); err != nil || days < users.MinAuditRetentionDays {
+	if err := st.GuardedSetting(ctx, log, users.SettingAuditRetentionDays, &days); err != nil || days < users.MinAuditRetentionDays {
 		days = users.DefaultAuditRetentionDays
 	}
 	idle := auth.DefaultIdleTimeout
 	var v string
-	if err := st.GlobalSetting(ctx, auth.SettingIdleTimeout, &v); err == nil {
+	if err := st.GuardedSetting(ctx, log, auth.SettingIdleTimeout, &v); err == nil {
 		if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
 			idle = d
 		}
