@@ -13,7 +13,7 @@ import (
 // TestEachRuleFindsItsViolation runs the checks on a module that breaks
 // every rule once.
 func TestEachRuleFindsItsViolation(t *testing.T) {
-	found, err := check("testdata/bad")
+	found, err := check("testdata/bad", map[string]string{"internal/printer": "test: a destination without a conversion"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +22,7 @@ func TestEachRuleFindsItsViolation(t *testing.T) {
 		keys = append(keys, f.key())
 	}
 	slices.Sort(keys)
-	want := []string{"audit PostB", "authz GetC", "cmd internal/other", "redact internal/printer", "redact internal/printer"}
+	want := []string{"audit PostB", "authz GetC", "cmd internal/other", "redact internal/other", "redact internal/printer", "redact internal/printer", "redact internal/printer"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("findings = %v, want %v", keys, want)
 	}

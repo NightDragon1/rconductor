@@ -4,7 +4,13 @@
 // Package other sends a command outside the pipeline.
 package other
 
-import "example.invalid/bad/internal/rcon"
+import (
+	"example.invalid/bad/internal/logging"
+	"example.invalid/bad/internal/rcon"
+)
 
 // X sends.
 func X() { rcon.Conn{}.Execute("stop") }
+
+// Y converts a secret outside its destinations.
+func Y(s logging.Secret) []byte { return []byte(s) }
