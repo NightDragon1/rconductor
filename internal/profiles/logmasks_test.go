@@ -104,3 +104,15 @@ func TestLogMasksHoldFromEveryProfile(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// TestCompileLogMasks: stored patterns are checked again before they are
+// compiled; a pattern the import would refuse is left out by position.
+func TestCompileLogMasks(t *testing.T) {
+	res, bad := CompileLogMasks([]string{`(k=)\S+`, `k=\S+`, "(k=)a\u202eb", `(a`, `(?i)(pw\s*=\s*)\S+`})
+	if len(res) != 2 || !slices.Equal(bad, []int{1, 2, 3}) {
+		t.Errorf("got %d patterns, bad %v", len(res), bad)
+	}
+	if res, bad := CompileLogMasks(nil); res != nil || bad != nil {
+		t.Errorf("nil: %v %v", res, bad)
+	}
+}

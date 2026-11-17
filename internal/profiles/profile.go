@@ -676,6 +676,28 @@ func groupTwoAtEnd(re *syntax.Regexp) bool {
 // which would make a pattern look other than it works.
 func hidden(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }
 
+// CompileLogMasks compiles the masking patterns of stored rules, each
+// checked again as at the import, since stored rules may come from an
+// older check. A pattern that fails is left out; its position comes back
+// for the log. The time bound of the masker limits what is left.
+func CompileLogMasks(masks []string) ([]*regexp.Regexp, []int) {
+	var res []*regexp.Regexp
+	var bad []int
+	for i, m := range masks {
+		if len(checkLogMasks([]string{m})) > 0 {
+			bad = append(bad, i)
+			continue
+		}
+		re, err := regexp.Compile(m)
+		if err != nil {
+			bad = append(bad, i)
+			continue
+		}
+		res = append(res, re)
+	}
+	return res, bad
+}
+
 // LogMaskInsts is the size of the RE2 program of a pattern, as package
 // regexp builds it.
 func LogMaskInsts(pattern string) (int, error) {

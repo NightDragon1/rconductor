@@ -3,8 +3,9 @@
 
 // Package logmask masks known secrets in container log lines before the
 // panel keeps or sends them (UI-022, D-088). Sources in this order: a
-// built-in list of RE2 expressions, fixed in the code; then the fixed texts
-// of the RCON admin, no expressions. Each source takes time linear in the
+// built-in list of RE2 expressions, fixed in the code; the RE2 patterns of
+// the profiles of the server; then the fixed texts of the RCON admin, no
+// expressions. Each source takes time linear in the
 // length of the line, so the cost of a line is bounded by the number of
 // sources and texts.
 package logmask
@@ -60,21 +61,9 @@ var builtin = []*regexp.Regexp{
 func (m *Masker) Line(s string) string {
 	s = cut(s, agentproto.MaxLogLine)
 	cover := make([]int32, len(s)+1)
-	found := false
-	for _, re := range builtin {
-		for _, l := range re.FindAllStringSubmatchIndex(s, -1) {
-			from, to := l[3], l[1]
-			if len(l) > 4 && l[4] >= 0 {
-				to = l[4]
-			}
-			if from < to {
-				cover[from]++
-				cover[to]--
-				found = true
-			}
-		}
-	}
+	found := markPatterns(builtin, s, cover)
 	if m != nil {
+		found = markPatterns(m.patterns, s, cover) || found
 		found = m.markTexts(s, cover) || found
 	}
 	if !found {
@@ -94,6 +83,31 @@ func (m *Masker) Line(s string) string {
 		}
 	}
 	return cut(b.String(), agentproto.MaxLogLine)
+}
+
+// markPatterns counts every match of the patterns in cover: from the end
+// of group 1 to the start of group 2 or the end of the match. A match
+// without group 1, which the profile check rules out, is masked as a
+// whole; a group 2 before the end of group 1 counts as missing.
+func markPatterns(res []*regexp.Regexp, s string, cover []int32) bool {
+	found := false
+	for _, re := range res {
+		for _, l := range re.FindAllStringSubmatchIndex(s, -1) {
+			from, to := l[0], l[1]
+			if len(l) > 3 && l[3] >= 0 {
+				from = l[3]
+			}
+			if len(l) > 5 && l[4] >= from {
+				to = l[4]
+			}
+			if from < to {
+				cover[from]++
+				cover[to]--
+				found = true
+			}
+		}
+	}
+	return found
 }
 
 // cut bounds s to n bytes on a rune boundary.
