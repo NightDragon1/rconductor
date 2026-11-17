@@ -91,7 +91,7 @@ func TestC147N4ListCost(t *testing.T) {
 		t.Errorf("got %d bytes, starts %q", len(got), got[:40])
 	}
 	t.Logf("one line of %d bytes with %d list matches: %s", len(line), 3*(agentproto.MaxLogLine/24), took)
-	if took > time.Second {
+	if took > lineBound {
 		t.Errorf("one line took %s", took)
 	}
 }

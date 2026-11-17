@@ -5,6 +5,7 @@ package logmask
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -38,8 +39,11 @@ type Limits struct {
 // DefaultLimits are the limits without settings.
 var DefaultLimits = Limits{Texts: DefaultTexts, TextRunes: DefaultTextRunes}
 
-// Masker masks lines with the built-in list and the texts of the admin.
+// Masker masks lines with the built-in list, the patterns of the
+// profiles of a server and the texts of the admin; it does not change
+// after it is built.
 type Masker struct {
+	patterns    []*regexp.Regexp
 	exact, fold []needle // fold holds the texts in lower case
 }
 
