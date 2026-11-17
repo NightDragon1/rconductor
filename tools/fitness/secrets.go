@@ -39,8 +39,8 @@ func readDestinations(path string) (map[string]string, error) {
 	return out, sc.Err()
 }
 
-// secretConversions finds conversions of logging.Secret to another type
-// (string(s), []byte(s)) outside the revealers and the destinations; a
+// secretConversions finds conversions of logging.Secret, or a pointer to
+// one, to another type (string(s), []byte(s), (*string)(&s)) outside the revealers and the destinations; a
 // destination without a conversion is a finding too, so the list stays
 // true.
 func secretConversions(funcs map[*ssa.Function]bool, mod string, dests map[string]string) []finding {
@@ -64,7 +64,7 @@ func secretConversions(funcs map[*ssa.Function]bool, mod string, dests map[strin
 				default:
 					continue
 				}
-				if !isSecret(x.Type(), mod) || isSecret(in.(ssa.Value).Type(), mod) {
+				if !secretOrPointer(x.Type(), mod) || secretOrPointer(in.(ssa.Value).Type(), mod) {
 					continue
 				}
 				if _, ok := dests[rel]; ok {
@@ -82,6 +82,15 @@ func secretConversions(funcs map[*ssa.Function]bool, mod string, dests map[strin
 		}
 	}
 	return found
+}
+
+// secretOrPointer is a Secret or a pointer to one, so that (*string)(&s)
+// counts as a conversion too.
+func secretOrPointer(t types.Type, mod string) bool {
+	if p, ok := t.(*types.Pointer); ok {
+		t = p.Elem()
+	}
+	return isSecret(t, mod)
 }
 
 func isSecret(t types.Type, mod string) bool {
