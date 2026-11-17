@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -18,6 +19,13 @@ import (
 	"github.com/NightDragon1/rconductor/internal/store/secret"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
+)
+
+// Bounds of the time budget of one batch of lines, a setting (UI-022).
+const (
+	MinBudgetMS     = 50
+	DefaultBudgetMS = 250
+	MaxBudgetMS     = 2000
 )
 
 // ErrUnreadable means the stored settings or texts cannot be read; the
@@ -46,23 +54,24 @@ type State struct {
 	Enabled   bool   `json:"enabled"`
 	MaxTexts  int    `json:"max_texts"`
 	TextRunes int    `json:"max_text_chars"`
+	BudgetMS  int    `json:"budget_ms"`
 	TextCount int    `json:"text_count"`
 	Texts     []byte `json:"texts,omitempty"`
 }
 
 // DefaultState is the setup before the first change: masking on.
 func DefaultState() State {
-	return State{Enabled: true, MaxTexts: DefaultTexts, TextRunes: DefaultTextRunes}
+	return State{Enabled: true, MaxTexts: DefaultTexts, TextRunes: DefaultTextRunes, BudgetMS: DefaultBudgetMS}
 }
 
 func (st State) valid() bool {
 	return st.MaxTexts >= 1 && st.MaxTexts <= MaxTexts && st.TextRunes >= MinTextRunes && st.TextRunes <= MaxTextRunes &&
-		st.TextCount >= 0 && st.Version >= 0
+		st.BudgetMS >= MinBudgetMS && st.BudgetMS <= MaxBudgetMS && st.TextCount >= 0 && st.Version >= 0
 }
 
 // sameSetup reports whether a and b differ in nothing but their texts.
 func sameSetup(a, b State) bool {
-	return a.Enabled == b.Enabled && a.MaxTexts == b.MaxTexts && a.TextRunes == b.TextRunes
+	return a.Enabled == b.Enabled && a.MaxTexts == b.MaxTexts && a.TextRunes == b.TextRunes && a.BudgetMS == b.BudgetMS
 }
 
 // SettingsInput is a change; nil fields stay, SetTexts replaces all texts.
@@ -74,6 +83,18 @@ type SettingsInput struct {
 	Texts     []Text
 	MaxTexts  *int
 	TextRunes *int
+	BudgetMS  *int
+}
+
+// complete reports whether the input sets every field and the texts.
+func (in SettingsInput) complete() bool {
+	return in.Enabled != nil && in.MaxTexts != nil && in.TextRunes != nil && in.BudgetMS != nil && in.SetTexts
+}
+
+// sealedText is a Text as it is sealed; Text itself never shows in JSON.
+type sealedText struct {
+	Value string
+	Fold  bool
 }
 
 func textsContext() secret.Context {
@@ -88,11 +109,31 @@ func (s *Settings) load(ctx context.Context, q *sqlitedb.Queries) (State, error)
 	if errors.Is(err, sql.ErrNoRows) {
 		return DefaultState(), nil
 	}
+	if ctx.Err() != nil {
+		return DefaultState(), ctx.Err() // ended by the caller, not a read error
+	}
 	st := DefaultState()
 	if err != nil || json.Unmarshal([]byte(v), &st) != nil || !st.valid() {
+		s.readFailed()
 		return DefaultState(), ErrUnreadable // protection on, never the zero value
 	}
 	return st, nil
+}
+
+// brokenVersion is the version of an unreadable row as far as it can be
+// read, 0 otherwise, so that a repair never lowers it.
+func brokenVersion(ctx context.Context, q *sqlitedb.Queries) int64 {
+	v, err := q.GetSetting(ctx, sqlitedb.GetSettingParams{Key: users.SettingLogMasking, ScopeType: "global"})
+	var head struct{ Version int64 }
+	if err != nil || json.Unmarshal([]byte(v), &head) != nil || head.Version < 0 || head.Version >= math.MaxInt64-1 {
+		return 0
+	}
+	return head.Version
+}
+
+// readFailed logs a read error of the settings, never their content (F-93).
+func (s *Settings) readFailed() {
+	s.log.Error("masking settings unreadable", logging.Event(logging.SettingReadFailed), slog.String("key", users.SettingLogMasking))
 }
 
 // OpenTexts opens the sealed texts of st; another master key or a broken
@@ -105,9 +146,14 @@ func (s *Settings) OpenTexts(st State) ([]Text, error) {
 		return nil, ErrUnreadable
 	}
 	plain, err := s.box.Open(st.Texts, textsContext())
-	var texts []Text // the opened value is converted, as for the second factor
-	if err != nil || json.Unmarshal([]byte(plain), &texts) != nil {
+	var sealed []sealedText // the opened value is converted, as for the second factor
+	if err != nil || json.Unmarshal([]byte(plain), &sealed) != nil {
+		s.readFailed()
 		return nil, ErrUnreadable
+	}
+	texts := make([]Text, len(sealed))
+	for i, t := range sealed {
+		texts[i] = Text(t)
 	}
 	return texts, nil
 }
@@ -117,11 +163,7 @@ func (s *Settings) Read(ctx context.Context, req users.Request) (State, error) {
 	if req.Actor.Role != perm.RCONAdmin {
 		return State{}, s.denied(ctx, req, "log_masking.read")
 	}
-	st, err := s.Load(ctx)
-	if err != nil {
-		s.log.Error("masking settings unreadable", logging.Event(logging.SettingReadFailed), slog.String("key", users.SettingLogMasking))
-	}
-	return st, err
+	return s.Load(ctx)
 }
 
 // Write changes the setup: the role (403), the version (428), the input
@@ -141,6 +183,16 @@ func (s *Settings) Write(ctx context.Context, req users.Request, in SettingsInpu
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	cur, err := s.load(ctx, q)
+	repaired := false
+	if errors.Is(err, ErrUnreadable) && in.complete() {
+		// A write that sets every field repairs an unreadable row; it
+		// needs a real version and never goes below the one stored.
+		if *in.IfMatch < 0 || *in.IfMatch >= math.MaxInt64-1 {
+			return State{}, users.ErrConflict
+		}
+		cur, repaired, err = DefaultState(), true, nil
+		cur.Version = max(brokenVersion(ctx, q), *in.IfMatch)
+	}
 	if err != nil {
 		return State{}, err
 	}
@@ -148,7 +200,7 @@ func (s *Settings) Write(ctx context.Context, req users.Request, in SettingsInpu
 	if err != nil {
 		return State{}, err
 	}
-	if *in.IfMatch != cur.Version {
+	if *in.IfMatch != cur.Version && !repaired {
 		return State{}, users.ErrConflict
 	}
 	if !replaced && sameSetup(cur, next) {
@@ -175,7 +227,7 @@ func (s *Settings) Write(ctx context.Context, req users.Request, in SettingsInpu
 		Payload: map[string]any{
 			"enabled": fromTo(cur.Enabled, next.Enabled), "text_count": fromTo(cur.TextCount, next.TextCount),
 			"max_texts": fromTo(cur.MaxTexts, next.MaxTexts), "max_text_chars": fromTo(cur.TextRunes, next.TextRunes),
-			"texts_replaced": replaced,
+			"budget_ms": fromTo(cur.BudgetMS, next.BudgetMS), "texts_replaced": replaced, "repaired": repaired,
 		},
 	}); err != nil {
 		return State{}, err
@@ -197,6 +249,7 @@ func (s *Settings) apply(cur State, in SettingsInput) (State, bool, error) {
 	}{
 		{in.MaxTexts, &next.MaxTexts, 1, MaxTexts, "max_texts"},
 		{in.TextRunes, &next.TextRunes, MinTextRunes, MaxTextRunes, "max_text_chars"},
+		{in.BudgetMS, &next.BudgetMS, MinBudgetMS, MaxBudgetMS, "budget_ms"},
 	} {
 		if b.v == nil {
 			continue
@@ -225,56 +278,21 @@ func (s *Settings) apply(cur State, in SettingsInput) (State, bool, error) {
 		if s.box == nil {
 			return State{}, false, ErrUnreadable
 		}
-		plain, err := json.Marshal(texts)
+		sealed := make([]sealedText, len(texts))
+		for i, t := range texts {
+			sealed[i] = sealedText(t)
+		}
+		plain, err := json.Marshal(sealed)
 		if err != nil {
 			return State{}, false, err
 		}
-		sealed, err := s.box.Seal(logging.Secret(plain), textsContext())
+		box, err := s.box.Seal(logging.Secret(plain), textsContext())
 		if err != nil {
 			return State{}, false, err
 		}
-		next.Texts = sealed
+		next.Texts = box
 	}
 	return next, true, nil
-}
-
-// ErrNotImplemented answers an operation that passed its checks but is not built yet.
-var ErrNotImplemented = errors.New("not implemented yet")
-
-// Get returns the setup.
-func (s *Settings) Get(ctx context.Context, req users.Request) error {
-	if req.Actor.Role != perm.RCONAdmin {
-		return s.denied(ctx, req, "log_masking.read")
-	}
-	return ErrNotImplemented
-}
-
-// Update changes the setup: the role (403), the version (428), then the
-// input (400), as in D-051 and D-058. Errors name a text by its position only (SEC-012).
-func (s *Settings) Update(ctx context.Context, req users.Request, in SettingsInput) error {
-	if req.Actor.Role != perm.RCONAdmin {
-		return s.denied(ctx, req, "log_masking.updated")
-	}
-	if in.IfMatch == nil {
-		return users.ErrPreconditionRequired
-	}
-	lim := Limits{Texts: MaxTexts, TextRunes: MaxTextRunes}
-	if in.MaxTexts != nil {
-		if *in.MaxTexts < 1 || *in.MaxTexts > MaxTexts {
-			return &users.InvalidError{Detail: fmt.Sprintf("max_texts must be 1 to %d", MaxTexts)}
-		}
-		lim.Texts = *in.MaxTexts
-	}
-	if in.TextRunes != nil {
-		if *in.TextRunes < MinTextRunes || *in.TextRunes > MaxTextRunes {
-			return &users.InvalidError{Detail: fmt.Sprintf("max_text_chars must be %d to %d", MinTextRunes, MaxTextRunes)}
-		}
-		lim.TextRunes = *in.TextRunes
-	}
-	if _, err := New(in.Texts, lim); in.SetTexts && err != nil {
-		return &users.InvalidError{Detail: err.Error()}
-	}
-	return ErrNotImplemented
 }
 
 func (s *Settings) denied(ctx context.Context, req users.Request, action string) error {

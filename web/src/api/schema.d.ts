@@ -1274,7 +1274,7 @@ export interface paths {
         get: operations["getLogMasking"];
         /**
          * Change the masking (UI-022, D-088); RCON admin only; audit log_masking.updated.
-         * @description Behind the flag log_masking_ui (404 while off). Order: 403, 428, 400, 409. Missing fields stay; texts replaces all, [] removes them; {} only checks the version. Fixed texts, no expressions, sealed with the master key in their own row, never in /settings (D-058): each 4 to max_text_chars characters on one line, at most max_texts (1 to 200, default 50; max_text_chars 4 to 1024, default 256), checked against the limits after the change, for texts sent and stored. Errors name a position, never a text (SEC-012). Audit: enabled, text_count and both limits as from and to, texts_replaced; never a text. Unreadable texts keep the last masker read; unreadable limits their last value or default; always with a log (F-93).
+         * @description Behind the flag log_masking_ui (404 while off). Order for a decodable request: 403, 428, 400, 409 (a body that cannot be read is 400 first; over 256 KiB 413). Missing fields stay; texts replaces all, [] removes them; {} changes nothing: same version, no audit entry. Off, nothing is masked: list, profiles and texts. Fixed texts, no expressions, sealed with the master key in their own row, never in /settings (D-058): each 4 to max_text_chars characters on one line, at most max_texts (1 to 200, default 50; max_text_chars 4 to 1024, default 256), checked against the limits after the change, for texts sent and stored. Errors name a position, never a text (SEC-012). Audit: enabled, text_count, both limits and budget_ms as from and to, texts_replaced, repaired; never a text. An unreadable stored state is 500 for reads and partial writes; a write that sets every field and the texts repairs it, with a version above the stored one. Unreadable texts keep the last masker read; unreadable limits their last value or default; always with a log (F-93). Stored texts are not checked against the limits when they are loaded, only when written. Without any readable state since the start, list and profiles mask and the texts are missing, with a log. budget_ms (50 to 2000, default 250) bounds the masking of one batch of lines; lines left after it are withheld.
          */
         put: operations["updateLogMasking"];
         post?: never;
@@ -1981,6 +1981,7 @@ export interface components {
             text_count: number;
             max_texts: number;
             max_text_chars: number;
+            budget_ms: number;
             /** @description Version for If-Match. */
             version: string;
         };
@@ -1990,6 +1991,7 @@ export interface components {
             texts?: components["schemas"]["LogMaskText"][];
             max_texts?: number;
             max_text_chars?: number;
+            budget_ms?: number;
         };
         LogMaskText: {
             /**
