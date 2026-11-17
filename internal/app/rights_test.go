@@ -625,6 +625,11 @@ func matrix() []matrixOp {
 		{"PATCH", "/settings", "OFFFFFUP", func(*rightsFixture, string) request {
 			return request{path: "/settings", body: map[string]any{"ui.shortcuts_enabled": false}}
 		}, false},
+		// Behind the flag log_masking_ui (UI-022): 404 for every role.
+		{"GET", "/settings/log-masking", "NNNNNNUP", at("/settings/log-masking"), false},
+		{"PUT", "/settings/log-masking", "NNNNNNUP", func(*rightsFixture, string) request {
+			return request{path: "/settings/log-masking", body: map[string]any{"enabled": true}}
+		}, false},
 		// SMTP (NFR-017): RCON admin only; the test mail needs a set-up
 		// server, which the fixture has not, so the RCON admin gets 422.
 		{"GET", "/settings/smtp", "OFFFFFUP", at("/settings/smtp"), false},

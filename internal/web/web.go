@@ -24,6 +24,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/features"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/mail"
 	"github.com/NightDragon1/rconductor/internal/messages"
 	"github.com/NightDragon1/rconductor/internal/netlimit"
@@ -95,7 +96,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, mail: opts.Mail, messages: messages.NewService(opts.Store, opts.Log), invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, features: opts.Features, proxies: opts.Proxies, decode: semaphore.NewWeighted(decodeBudget), pictures: semaphore.NewWeighted(pictureBudget)}
+	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, mail: opts.Mail, messages: messages.NewService(opts.Store, opts.Log), masking: logmask.NewSettings(opts.Store, opts.Log), invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, features: opts.Features, proxies: opts.Proxies, decode: semaphore.NewWeighted(decodeBudget), pictures: semaphore.NewWeighted(pictureBudget)}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,

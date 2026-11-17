@@ -35,6 +35,9 @@ var production = []Flag{
 	{Name: "say_sender", Operations: []string{"GetServerGroupSayPrefix", "SetServerGroupSayPrefix"}}, // say with sender and group prefix (CMD-020)
 	{Name: "docker_host"},   // Docker host of the agents, in the agent data of the RCON admin (AGT-014)
 	{Name: "server_number"}, // server number as ID column and badge, frontend only (UI-018)
+	// Settings of the masking of container logs (UI-022, D-088); the
+	// masking itself runs without the flag.
+	{Name: "log_masking_ui", Operations: []string{"GetLogMasking", "UpdateLogMasking"}},
 	// Messages in the panel (MSG-001 to MSG-003, D-085).
 	{Name: "messages", Operations: []string{"ListMessages", "CreateMessage", "GetMessage", "DeleteMessage", "MarkMessageRead", "ListMessageComments", "CreateMessageComment", "DeleteMessageComment"}},
 }
