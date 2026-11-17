@@ -2359,8 +2359,10 @@ paths:
         200, default 50; max_text_chars 4 to 1024, default 256), checked
         against the limits after the change, for texts sent and stored.
         Errors name a position, never a text (SEC-012). Audit: enabled,
-        text_count and both limits as from and to, texts_replaced; never a
-        text. Unreadable texts keep the last masker read; unreadable limits
+        text_count, both limits and budget_ms as from and to,
+        texts_replaced, repaired; never a text. An unreadable stored state
+        is 500 for reads and partial writes; a write that sets every field
+        and the texts repairs it, with a version above the stored one. Unreadable texts keep the last masker read; unreadable limits
         their last value or default; always with a log (F-93). Stored texts
         are not checked against the limits when they are loaded, only when
         written. Without any readable state since the start, list and

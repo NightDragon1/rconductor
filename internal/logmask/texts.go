@@ -43,6 +43,12 @@ func (t Text) MarshalJSON() ([]byte, error) { return []byte(`"` + logging.Redact
 // Format keeps a text out of fmt output, with every verb.
 func (t Text) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, logging.Redacted) }
 
+// LogValue keeps the texts of a masker out of logs (SEC-012).
+func (m Masker) LogValue() slog.Value { return slog.StringValue(logging.Redacted) }
+
+// Format keeps the texts of a masker out of fmt output.
+func (m Masker) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, logging.Redacted) }
+
 // Limits are the bounds of the texts from the settings.
 type Limits struct {
 	Texts     int // at most this many texts, 1 to MaxTexts

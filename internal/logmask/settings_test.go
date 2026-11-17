@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -217,6 +218,26 @@ func TestSettingsRepair(t *testing.T) {
 	if err != nil || st.Version != 8 || st.BudgetMS != 80 || st.TextCount != 1 {
 		t.Fatalf("repair: %+v %v", st, err)
 	}
+	// A complete write on a readable row is no repair: the version counts.
+	full := func(v int64) SettingsInput {
+		return SettingsInput{IfMatch: version(v), Enabled: &on, MaxTexts: num(5), TextRunes: num(64), BudgetMS: num(90), SetTexts: true, Texts: []Text{}}
+	}
+	if _, err := s.Write(ctx, admin, full(3)); !errors.Is(err, users.ErrConflict) {
+		t.Errorf("complete write with a stale version: %v", err)
+	}
+	// A repair never goes below the version of the broken row, and needs
+	// a real version.
+	if _, err := s.st.DB.Exec(`UPDATE settings SET value = '{"version":20,"max_texts":0}' WHERE key = ?`, users.SettingLogMasking); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []int64{-1, math.MaxInt64} {
+		if _, err := s.Write(ctx, admin, full(v)); !errors.Is(err, users.ErrConflict) {
+			t.Errorf("repair with version %d: %v", v, err)
+		}
+	}
+	if st, err := s.Write(ctx, admin, full(2)); err != nil || st.Version != 21 {
+		t.Errorf("repair under the stored version: %+v %v", st, err)
+	}
 	var payload string
 	_ = s.st.DB.QueryRow(`SELECT payload FROM audit_log WHERE action = 'log_masking.updated' ORDER BY rowid DESC LIMIT 1`).Scan(&payload)
 	if !strings.Contains(payload, `"repaired":true`) {
@@ -230,13 +251,18 @@ func TestSettingsRepair(t *testing.T) {
 	}
 }
 
-// TestTextsRedacted: a text never shows in logs or fmt output, with any
-// verb.
+// TestTextsRedacted: a text never shows in logs or fmt output of a text or
+// a masker; %p of a text is the one verb fmt prints without Format.
 func TestTextsRedacted(t *testing.T) {
 	var logs bytes.Buffer
 	texts := []Text{{Value: secretText, Fold: true}}
-	slog.New(slog.NewJSONHandler(&logs, nil)).Info("x", slog.Any("texts", texts), slog.Any("one", texts[0]))
-	out := logs.String() + fmt.Sprintf("%v %+v %#v %d %s %q", texts, texts[0], texts[0], texts[0], texts, texts[0])
+	m, err := New(texts, DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slog.New(slog.NewJSONHandler(&logs, nil)).Info("x", slog.Any("texts", texts), slog.Any("one", texts[0]), slog.Any("masker", m))
+	slog.New(slog.NewTextHandler(&logs, nil)).Info("x", slog.Any("masker", m))
+	out := logs.String() + fmt.Sprintf("%v %+v %#v %d %s %q %+v %v", texts, texts[0], texts[0], texts[0], texts, texts[0], m, *m)
 	if strings.Contains(out, "s3cr3t") {
 		t.Errorf("text shows: %s", out)
 	}

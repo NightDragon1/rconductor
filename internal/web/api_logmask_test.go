@@ -75,6 +75,11 @@ func TestLogMaskingBehindFlag(t *testing.T) {
 			t.Errorf("GET %s: %s", path, body)
 		}
 	}
+	// An unreadable row: 500 without content for reads and partial writes.
+	if _, err := f.st.DB.Exec(`UPDATE settings SET value = '{"version":3,"texts":"s3cr3t"}' WHERE key = 'logs.masking'`); err != nil {
+		t.Fatal(err)
+	}
+	check(http.StatusInternalServerError, admin, call{method: http.MethodGet, path: "/api/v1/settings/log-masking"}, put(`{"enabled":false}`))
 	var refused int
 	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action LIKE 'log_masking.%' AND result = 'denied'`).Scan(&refused); err != nil || refused != 4 {
 		t.Errorf("audited refusals = %d (%v), want 4", refused, err)

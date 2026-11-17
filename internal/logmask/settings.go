@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -119,6 +120,17 @@ func (s *Settings) load(ctx context.Context, q *sqlitedb.Queries) (State, error)
 	return st, nil
 }
 
+// brokenVersion is the version of an unreadable row as far as it can be
+// read, 0 otherwise, so that a repair never lowers it.
+func brokenVersion(ctx context.Context, q *sqlitedb.Queries) int64 {
+	v, err := q.GetSetting(ctx, sqlitedb.GetSettingParams{Key: users.SettingLogMasking, ScopeType: "global"})
+	var head struct{ Version int64 }
+	if err != nil || json.Unmarshal([]byte(v), &head) != nil || head.Version < 0 || head.Version >= math.MaxInt64-1 {
+		return 0
+	}
+	return head.Version
+}
+
 // readFailed logs a read error of the settings, never their content (F-93).
 func (s *Settings) readFailed() {
 	s.log.Error("masking settings unreadable", logging.Event(logging.SettingReadFailed), slog.String("key", users.SettingLogMasking))
@@ -173,9 +185,13 @@ func (s *Settings) Write(ctx context.Context, req users.Request, in SettingsInpu
 	cur, err := s.load(ctx, q)
 	repaired := false
 	if errors.Is(err, ErrUnreadable) && in.complete() {
-		// A write that sets every field repairs an unreadable row; its
-		// version is unknown, so any version passes.
+		// A write that sets every field repairs an unreadable row; it
+		// needs a real version and never goes below the one stored.
+		if *in.IfMatch < 0 || *in.IfMatch >= math.MaxInt64-1 {
+			return State{}, users.ErrConflict
+		}
 		cur, repaired, err = DefaultState(), true, nil
+		cur.Version = max(brokenVersion(ctx, q), *in.IfMatch)
 	}
 	if err != nil {
 		return State{}, err
@@ -191,9 +207,6 @@ func (s *Settings) Write(ctx context.Context, req users.Request, in SettingsInpu
 		return cur, nil // {} or no change: same version, no audit entry
 	}
 	next.Version = cur.Version + 1
-	if repaired {
-		next.Version = max(*in.IfMatch, 0) + 1
-	}
 	value, err := json.Marshal(next)
 	if err != nil {
 		return State{}, err
