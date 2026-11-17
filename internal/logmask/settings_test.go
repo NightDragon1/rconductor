@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -76,7 +77,7 @@ func TestSettingsFlow(t *testing.T) {
 	s, logs := newSettings(t)
 	ctx := context.Background()
 	admin := settingsRequest(t, s, perm.RCONAdmin)
-	if st, err := s.Read(ctx, admin); err != nil || st.Version != 0 || !st.Enabled || st.MaxTexts != 50 || st.TextRunes != 256 {
+	if st, err := s.Read(ctx, admin); err != nil || st.Version != 0 || !st.Enabled || st.MaxTexts != 50 || st.TextRunes != 256 || st.BudgetMS != 250 {
 		t.Fatalf("defaults: %+v %v", st, err)
 	}
 	if _, err := s.Write(ctx, admin, SettingsInput{}); !errors.Is(err, users.ErrPreconditionRequired) {
@@ -132,6 +133,8 @@ func TestSettingsInput(t *testing.T) {
 		"empty value": {SetTexts: true, Texts: []Text{{}}},
 		"CR":          {SetTexts: true, Texts: []Text{{Value: secretText + "\r"}}},
 		"max_texts 0": {MaxTexts: num(0)},
+		"budget low":  {BudgetMS: num(MinBudgetMS - 1)},
+		"budget high": {BudgetMS: num(MaxBudgetMS + 1)},
 	} {
 		in.IfMatch = version(0)
 		_, err := s.Write(context.Background(), admin, in)
@@ -188,5 +191,53 @@ func TestSettingsParallel(t *testing.T) {
 	wg.Wait()
 	if ok != 1 || conflict != 15 {
 		t.Errorf("ok %d, conflict %d", ok, conflict)
+	}
+}
+
+// TestSettingsRepair: a broken row blocks every partial write, also when
+// read for one (logged); a write that sets every field repairs it, in the
+// audit as repaired. A canceled read is no read error and is not logged.
+func TestSettingsRepair(t *testing.T) {
+	s, logs := newSettings(t)
+	ctx := context.Background()
+	admin := settingsRequest(t, s, perm.RCONAdmin)
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), BudgetMS: num(100)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.st.DB.Exec(`UPDATE settings SET value = 'broken' WHERE key = ?`, users.SettingLogMasking); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(1), BudgetMS: num(60)}); !errors.Is(err, ErrUnreadable) ||
+		!strings.Contains(logs.String(), "setting.read_failed") {
+		t.Errorf("partial write on a broken row: %v", err)
+	}
+	on := true
+	st, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(7), Enabled: &on, MaxTexts: num(5), TextRunes: num(64), BudgetMS: num(80),
+		SetTexts: true, Texts: []Text{{Value: secretText}}})
+	if err != nil || st.Version != 8 || st.BudgetMS != 80 || st.TextCount != 1 {
+		t.Fatalf("repair: %+v %v", st, err)
+	}
+	var payload string
+	_ = s.st.DB.QueryRow(`SELECT payload FROM audit_log WHERE action = 'log_masking.updated' ORDER BY rowid DESC LIMIT 1`).Scan(&payload)
+	if !strings.Contains(payload, `"repaired":true`) {
+		t.Errorf("audit: %s", payload)
+	}
+	logs.Reset()
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := s.Load(canceled); err == nil || strings.Contains(logs.String(), "setting.read_failed") {
+		t.Errorf("canceled: %v, log %s", err, logs.String())
+	}
+}
+
+// TestTextsRedacted: a text never shows in logs or fmt output, with any
+// verb.
+func TestTextsRedacted(t *testing.T) {
+	var logs bytes.Buffer
+	texts := []Text{{Value: secretText, Fold: true}}
+	slog.New(slog.NewJSONHandler(&logs, nil)).Info("x", slog.Any("texts", texts), slog.Any("one", texts[0]))
+	out := logs.String() + fmt.Sprintf("%v %+v %#v %d %s %q", texts, texts[0], texts[0], texts[0], texts, texts[0])
+	if strings.Contains(out, "s3cr3t") {
+		t.Errorf("text shows: %s", out)
 	}
 }

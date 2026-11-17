@@ -5,11 +5,14 @@ package logmask
 
 import (
 	"fmt"
+	"io"
+	"log/slog"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
+	"github.com/NightDragon1/rconductor/internal/logging"
 )
 
 // Bounds of the fixed texts of the RCON admin (D-088): a text has at least
@@ -29,6 +32,16 @@ type Text struct {
 	Value string
 	Fold  bool
 }
+
+// LogValue keeps a text out of logs (SEC-012).
+func (t Text) LogValue() slog.Value { return slog.StringValue(logging.Redacted) }
+
+// MarshalJSON keeps a text out of JSON output, such as a JSON log of a
+// slice; the settings seal texts through their own type.
+func (t Text) MarshalJSON() ([]byte, error) { return []byte(`"` + logging.Redacted + `"`), nil }
+
+// Format keeps a text out of fmt output, with every verb.
+func (t Text) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, logging.Redacted) }
 
 // Limits are the bounds of the texts from the settings.
 type Limits struct {

@@ -1155,6 +1155,8 @@ type LogMaskText struct {
 
 // LogMasking defines model for LogMasking.
 type LogMasking struct {
+	BudgetMs int `json:"budget_ms"`
+
 	// Enabled Masking on (default; unreadable counts as on).
 	Enabled      bool `json:"enabled"`
 	MaxTextChars int  `json:"max_text_chars"`
@@ -1169,6 +1171,7 @@ type LogMasking struct {
 
 // LogMaskingInput defines model for LogMaskingInput.
 type LogMaskingInput struct {
+	BudgetMs     *int  `json:"budget_ms,omitempty"`
 	Enabled      *bool `json:"enabled,omitempty"`
 	MaxTextChars *int  `json:"max_text_chars,omitempty"`
 	MaxTexts     *int  `json:"max_texts,omitempty"`
