@@ -10,6 +10,7 @@ package profiles
 import (
 	"fmt"
 	"regexp"
+	"regexp/syntax"
 	"slices"
 	"strings"
 	"unicode"
@@ -46,6 +47,18 @@ const (
 	// not keep the import busy.
 	maxAliases = 100
 	maxDepth   = 64
+)
+
+// Limits of the masking patterns of a profile (D-088 b), measured on 8 KiB
+// lines that are hard for a pattern: an RE2 program costs about 50 to
+// 100 µs per instruction and line, the built-in list of internal/logmask
+// about 350 instructions in all. A profile adds at most that much; the
+// fitness function in tools/fitness times the shipped profiles.
+const (
+	MaxLogMasks           = 8
+	MaxLogMaskLen         = 256
+	MaxLogMaskInsts       = 128
+	MaxLogMaskProfileInst = 256
 )
 
 // Protocols are the adapters of this release (PROT-001); others follow
@@ -93,7 +106,11 @@ type Profile struct {
 	// MessageCommand names the command whose text goes to the players with
 	// the sender and the prefix of the server group (CMD-020, D-081).
 	MessageCommand *MessageCommand `yaml:"message_command" json:"message_command,omitempty"`
-	Catalog        []Command       `yaml:"catalog" json:"-"`
+	// LogMasks are RE2 patterns of secrets in the container log of the
+	// game (UI-022, D-088 b); group 1 and any group 2 stay, the rest of a
+	// match is masked. They hold from every profile of a server.
+	LogMasks []string  `yaml:"log_masks" json:"log_masks,omitempty"`
+	Catalog  []Command `yaml:"catalog" json:"-"`
 	// ResearchedVersion, Sources and Status describe where the profile
 	// comes from (D-072): the game version the commands were researched
 	// for, the sources, and whether a run with a real server confirmed it.
@@ -465,6 +482,7 @@ func (p *Profile) check() []string {
 			bad("message_command.render must be one of %s", strings.Join(Renders, ", "))
 		}
 	}
+	probs = append(probs, checkLogMasks(p.LogMasks)...)
 	if p.Protocol.DefaultPort < 1 || p.Protocol.DefaultPort > 65535 {
 		bad("protocol.default_port is required, 1 to 65535")
 	}
@@ -568,6 +586,46 @@ func checkParams(i int, params []Param) []string {
 }
 
 // hasControl reports whether s has a control character.
+// checkLogMasks checks the masking patterns: RE2, bounded in number,
+// length and program size, so that a profile bounds the cost of a line.
+func checkLogMasks(masks []string) []string {
+	var probs []string
+	if len(masks) > MaxLogMasks {
+		probs = append(probs, fmt.Sprintf("at most %d log_masks", MaxLogMasks))
+	}
+	total := 0
+	for i, m := range masks {
+		n, err := LogMaskInsts(m)
+		switch {
+		case m == "" || len(m) > MaxLogMaskLen || hasControl(m):
+			probs = append(probs, fmt.Sprintf("log_masks[%d] must be 1 to %d printable characters", i, MaxLogMaskLen))
+		case err != nil:
+			probs = append(probs, fmt.Sprintf("log_masks[%d] must be an RE2 pattern", i))
+		case n > MaxLogMaskInsts:
+			probs = append(probs, fmt.Sprintf("log_masks[%d] compiles to %d instructions, at most %d", i, n, MaxLogMaskInsts))
+		}
+		total += n
+	}
+	if total > MaxLogMaskProfileInst {
+		probs = append(probs, fmt.Sprintf("log_masks compile to %d instructions in all, at most %d", total, MaxLogMaskProfileInst))
+	}
+	return probs
+}
+
+// LogMaskInsts is the size of the RE2 program of a pattern, as package
+// regexp builds it.
+func LogMaskInsts(pattern string) (int, error) {
+	re, err := syntax.Parse(pattern, syntax.Perl)
+	if err != nil {
+		return 0, err
+	}
+	prog, err := syntax.Compile(re.Simplify())
+	if err != nil {
+		return 0, err
+	}
+	return len(prog.Inst), nil
+}
+
 func hasControl(s string) bool { return strings.ContainsFunc(s, unicode.IsControl) }
 
 // Formattings are the known values of the field formatting (CMD-017): how

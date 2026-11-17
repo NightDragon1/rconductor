@@ -79,6 +79,19 @@ func Effective(list []*Profile) *Profile {
 			}
 		}
 	}
+	// Masking patterns hold from every profile too (D-088 b).
+	maskSeen := map[string]bool{}
+	for _, p := range list {
+		if p == nil {
+			continue
+		}
+		for _, m := range p.LogMasks {
+			if !maskSeen[m] {
+				maskSeen[m] = true
+				out.LogMasks = append(out.LogMasks, m)
+			}
+		}
+	}
 	seen := map[string]bool{}
 	for _, p := range list {
 		if p == nil {
