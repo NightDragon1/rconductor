@@ -72,6 +72,8 @@ type Options struct {
 	Users *users.Service
 	// Mail is the SMTP setup and the test mail (NFR-017).
 	Mail *mail.Service
+	// Masking holds the masking settings of the RCON admin (UI-022).
+	Masking *logmask.Settings
 	// Invites creates and redeems invitations.
 	Invites *users.Invites
 	// Profiles maintains the caller's own profile and password.
@@ -96,7 +98,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, mail: opts.Mail, messages: messages.NewService(opts.Store, opts.Log), masking: logmask.NewSettings(opts.Store, opts.Log), invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, features: opts.Features, proxies: opts.Proxies, decode: semaphore.NewWeighted(decodeBudget), pictures: semaphore.NewWeighted(pictureBudget)}
+	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, mail: opts.Mail, messages: messages.NewService(opts.Store, opts.Log), masking: opts.Masking, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, features: opts.Features, proxies: opts.Proxies, decode: semaphore.NewWeighted(decodeBudget), pictures: semaphore.NewWeighted(pictureBudget)}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,

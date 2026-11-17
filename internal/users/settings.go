@@ -55,6 +55,11 @@ const (
 	PairingWindow             = 30 * time.Minute
 )
 
+// SettingLogMasking holds the masking settings with the sealed texts of
+// the RCON admin (UI-022, D-088); it has its own API and never shows in
+// the global settings.
+const SettingLogMasking = "logs.masking"
+
 // Settings key of the audit retention and its default (AUD-003).
 const (
 	SettingAuditRetentionDays = "audit.retention_days"
@@ -223,7 +228,9 @@ func (s *Service) Settings(ctx context.Context, req Request) (map[string]json.Ra
 	}
 	out := map[string]json.RawMessage{}
 	for _, r := range rows {
-		out[r.Key] = json.RawMessage(r.Value)
+		if r.Key != SettingLogMasking {
+			out[r.Key] = json.RawMessage(r.Value)
+		}
 	}
 	return out, nil
 }
