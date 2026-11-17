@@ -90,7 +90,7 @@ func (s *Settings) load(ctx context.Context, q *sqlitedb.Queries) (State, error)
 	}
 	st := DefaultState()
 	if err != nil || json.Unmarshal([]byte(v), &st) != nil || !st.valid() {
-		return State{}, ErrUnreadable
+		return DefaultState(), ErrUnreadable // protection on, never the zero value
 	}
 	return st, nil
 }

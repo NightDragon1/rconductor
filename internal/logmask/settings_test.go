@@ -158,7 +158,7 @@ func TestSettingsUnreadable(t *testing.T) {
 	if _, err := s.st.DB.Exec(`UPDATE settings SET value = '{"version":1,"max_texts":0}' WHERE key = ?`, users.SettingLogMasking); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Read(ctx, admin); !errors.Is(err, ErrUnreadable) || !strings.Contains(logs.String(), "setting.read_failed") {
+	if st, err := s.Read(ctx, admin); !errors.Is(err, ErrUnreadable) || !st.Enabled || !strings.Contains(logs.String(), "setting.read_failed") {
 		t.Errorf("broken row: %v, log %s", err, logs.String())
 	}
 }

@@ -7,6 +7,7 @@
 package web
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -98,7 +99,7 @@ func NewHandler(opts Options) http.Handler {
 	for _, p := range reservedPaths {
 		mux.HandleFunc(p, notFound)
 	}
-	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, mail: opts.Mail, messages: messages.NewService(opts.Store, opts.Log), masking: opts.Masking, invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, features: opts.Features, proxies: opts.Proxies, decode: semaphore.NewWeighted(decodeBudget), pictures: semaphore.NewWeighted(pictureBudget)}
+	srv := &apiServer{agents: opts.Agents, runtime: opts.Runtime, hub: opts.Hub, cache: opts.Cache, commands: opts.Commands, servers: opts.Servers, store: opts.Store, auth: opts.Auth, perm: opts.Perm, users: opts.Users, mail: opts.Mail, messages: messages.NewService(opts.Store, opts.Log), masking: cmp.Or(opts.Masking, logmask.NewSettings(opts.Store, nil, opts.Log)), invites: opts.Invites, profiles: opts.Profiles, log: opts.Log, features: opts.Features, proxies: opts.Proxies, decode: semaphore.NewWeighted(decodeBudget), pictures: semaphore.NewWeighted(pictureBudget)}
 	api.HandlerWithOptions(srv.handler(), api.StdHTTPServerOptions{
 		BaseURL:     APIBase,
 		BaseRouter:  mux,
