@@ -92,6 +92,32 @@ func (s *Service) MarkRead(ctx context.Context, req users.Request, _ string) err
 	return s.read(ctx, req, "message.mark_read")
 }
 
+// Comments lists the comments of a message.
+func (s *Service) Comments(ctx context.Context, req users.Request, _ string) error {
+	return s.read(ctx, req, "message.comment_list")
+}
+
+// Comment comments on a message: first the role (403), then the input
+// (400), as in D-051. Whether the caller is a recipient or the sender is
+// decided on the message itself.
+func (s *Service) Comment(ctx context.Context, req users.Request, _, text string) error {
+	if err := s.read(ctx, req, "message.commented"); !errors.Is(err, ErrNotImplemented) {
+		return err
+	}
+	switch {
+	case text == "":
+		return &users.InvalidError{Detail: "text is required"}
+	case len(text) > MaxCommentBytes:
+		return &users.InvalidError{Detail: "text is too long"}
+	}
+	return ErrNotImplemented
+}
+
+// DeleteComment deletes a comment of a message.
+func (s *Service) DeleteComment(ctx context.Context, req users.Request, _, _ string) error {
+	return s.read(ctx, req, "message.comment_deleted")
+}
+
 // Send sends a message: first the role and the audience (403), then the
 // input (400), as in D-051.
 func (s *Service) Send(ctx context.Context, req users.Request, in Input) error {

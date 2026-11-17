@@ -724,7 +724,7 @@ export interface paths {
         put?: never;
         /**
          * Send a message (MSG-001, MSG-002, D-085); RCON admin and server admin; in the audit as message.sent, without the text (D-086).
-         * @description Behind the feature flag messages (404 while off). The RCON admin sends to all, server_admins, moderators or users (user_ids); a server admin to scope (moderators and supporters with at least one server in his scope at sending time) or scope_moderators; another audience, users among them, is 403. Moderators and supporters do not send (403). The text has at most 8 KiB in UTF-8 (first) and 1 to messages.max_text code points, the smaller applies; user_ids is for audience users only and has 1 to messages.max_recipients entries without repeats; otherwise 400, also when the audience has no recipient. An audience that resolves to more than messages.max_resolved_recipients users is 400 with reason too_many_recipients; it is never cut. At most messages.per_hour messages per sender and hour (429). The text is shown as text, never as markup (SEC-006).
+         * @description Behind the feature flag messages (404 while off). The RCON admin sends to all, server_admins, moderators or users (user_ids); a server admin to scope (moderators and supporters with at least one server in his scope at sending time) or scope_moderators; another audience, users among them, is 403. Moderators and supporters do not send (403). The text has at most 8 KiB in UTF-8 (first) and 1 to messages.max_text code points, the smaller applies; user_ids is for audience users only and has 1 to messages.max_recipients entries without repeats; otherwise 400, also when the audience has no recipient. An audience that resolves to more than messages.max_resolved_recipients users is 400 with reason too_many_recipients; it is never cut. At most messages.per_hour messages per sender and hour (429); deleting a message does not lower the count. The text is shown as text, never as markup (SEC-006).
          */
         post: operations["createMessage"];
         delete?: never;
@@ -781,6 +781,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/{id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The comments of a message, oldest first (MSG-003, D-085); its recipients, its sender and the RCON admin.
+         * @description Behind the feature flag messages (404 while off). Anyone else gets 404, as for an unknown message. Paged: limit (1 to 100, default 50) and after, the ID of the last comment of the page before; after is only compared with the comments of this message, never looked up.
+         */
+        get: operations["listMessageComments"];
+        put?: never;
+        /**
+         * Comment on a message (MSG-003, D-085); its recipients and its sender; in the audit as message.commented, without the text (D-086).
+         * @description Behind the feature flag messages (404 while off). The RCON admin who is neither recipient nor sender gets 403 (he sees the message), anyone else 404. The text has at most 4 KiB in UTF-8 (first) and 1 to messages.max_comment code points (setting, default 2000, 1 to 4096), the smaller applies; otherwise 400. At most messages.comments_per_hour comments per author and hour (setting, default 60, 1 to 3600; counted in the same transaction as the comment, so parallel requests cannot pass it, and deleting a comment does not lower the count): 429. Order: 404 and 403 first, then 400, then 429. No editing. The text is shown as text, never as markup (SEC-006).
+         */
+        post: operations["createMessageComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{id}/comments/{comment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+                comment_id: components["parameters"]["CommentID"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a comment at once and for good (D-085, D-086); its author, the sender of the message and the RCON admin; in the audit as message.comment_deleted, without the text.
+         * @description Behind the feature flag messages (404 while off). Another recipient gets 403, anyone else 404, also for a comment of another message.
+         */
+        delete: operations["deleteMessageComment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ws": {
         parameters: {
             query?: never;
@@ -790,7 +839,7 @@ export interface paths {
         };
         /**
          * WebSocket for live data (Design 2.3).
-         * @description Upgrade with the session cookie; the Origin is checked. Messages from the browser: {"type":"subscribe"|"unsubscribe","topic":...}. Messages from the panel: {"type":"subscribed","topic":...} once a subscription is in place, before its first event; {"type":"event","topic":...,"data":...} and {"type":"error","topic":...,"reason":...}. Topics: servers.overview, server.{id}.status, server.{id}.console, server.{id}.metrics and server.{id}.logs. Metrics and logs are agent functions for RCON admin and server admin only; a new subscription first gets the current value (last sample or the last 50 log lines), and logs stream from the agent only while someone subscribes (UI-009). Metrics carry their time and a stale mark (NFR-005). Rights are checked on subscribe and after every change; withdrawn subscriptions end with reason revoked. Ended sessions close the socket. Limits (SEC-008): ws.max_sockets_per_session sockets per session (default 20); a socket over the limit closes the oldest one with reason replaced. ws.max_subscriptions_per_socket subscriptions per socket (default 16); more get reason limit. Ping every 30 s.
+         * @description Upgrade with the session cookie; the Origin is checked. Messages from the browser: {"type":"subscribe"|"unsubscribe","topic":...}. Messages from the panel: {"type":"subscribed","topic":...} once a subscription is in place, before its first event; {"type":"event","topic":...,"data":...} and {"type":"error","topic":...,"reason":...}. Topics: servers.overview, server.{id}.status, server.{id}.console, server.{id}.metrics, server.{id}.logs and messages. messages is behind the feature flag messages for every role that can receive a message; data is {"kind":...,"message_id":...} with kind one of message (new to me), comment (new comment), deleted (message gone), comment_deleted and read (read on another socket), and comment_id with comment and comment_deleted; never a text. Events come only for messages I sent or received, also for the RCON admin, who sees the others through the list; the texts come from the API. While the flag is off, messages is an unknown topic. Metrics and logs are agent functions for RCON admin and server admin only; a new subscription first gets the current value (last sample or the last 50 log lines), and logs stream from the agent only while someone subscribes (UI-009). Metrics carry their time and a stale mark (NFR-005). Rights are checked on subscribe and after every change; withdrawn subscriptions end with reason revoked. Ended sessions close the socket. Limits (SEC-008): ws.max_sockets_per_session sockets per session (default 20); a socket over the limit closes the oldest one with reason replaced. ws.max_subscriptions_per_socket subscriptions per socket (default 16); more get reason limit. Ping every 30 s.
          */
         get: operations["openWebSocket"];
         put?: never;
@@ -1649,6 +1698,22 @@ export interface components {
             /** @description Unread messages to me, over all pages. */
             unread: number;
         };
+        MessageCommentInput: {
+            /** @description At most 4 KiB in UTF-8, checked first, then 1 to messages.max_comment characters (code points); the smaller applies. */
+            text: string;
+        };
+        MessageComment: {
+            /** Format: uuid */
+            id: string;
+            author: components["schemas"]["MessageAuthor"];
+            /** @description Shown as text, never as markup (SEC-006). */
+            text: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        MessageCommentList: {
+            items: components["schemas"]["MessageComment"][];
+        };
         SayPrefix: {
             /** @description Prefix before the sender, e.g. "[R]"; empty when none is set. */
             say_prefix: string;
@@ -2257,6 +2322,7 @@ export interface components {
         ServerID: string;
         TemplateID: string;
         MessageID: string;
+        CommentID: string;
         ServerGroupID: string;
         InviteID: string;
         CommandListID: string;
@@ -3677,6 +3743,90 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Marked read. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listMessageComments: {
+        parameters: {
+            query?: {
+                limit?: number;
+                after?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of comments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageCommentList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createMessageComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageCommentInput"];
+            };
+        };
+        responses: {
+            /** @description The comment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageComment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    deleteMessageComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["MessageID"];
+                comment_id: components["parameters"]["CommentID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
             204: {
                 headers: {
                     [name: string]: unknown;
