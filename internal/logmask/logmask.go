@@ -103,7 +103,8 @@ func (m *Masker) line(s string, over func() bool) (out string, stopped bool) {
 // markPatterns counts every match of the patterns in cover: from the end
 // of group 1 to the start of group 2 or the end of the match. A match the
 // profile check rules out masks as a whole: without group 1, with text
-// before it, or with nothing left between group 1 and group 2 or the end.
+// before it, or with nothing between group 1 and a group 2 that follows;
+// an empty value after group 1 masks nothing, so its name stays.
 // over is asked before each pattern; stopped reports that it said true.
 func markPatterns(res []*regexp.Regexp, s string, cover []int32, over func() bool) (found, stopped bool) {
 	for _, re := range res {
@@ -118,7 +119,8 @@ func markPatterns(res []*regexp.Regexp, s string, cover []int32, over func() boo
 			if len(l) > 5 && l[4] >= from {
 				to = l[4]
 			}
-			if from >= to {
+			if from >= to && l[1] > from {
+				// Something after group 1 but nothing to mask: whole match.
 				from, to = l[0], l[1]
 			}
 			if from < to {

@@ -18,8 +18,9 @@ const Withheld = "••• (line withheld: masking took too long)"
 const DefaultBudget = 250 * time.Millisecond
 
 // WithPatterns returns a masker that also masks the patterns of the
-// profiles of a server (D-088 b), compiled after the profile check; m
-// stays as it is.
+// profiles of a server (D-088 b), as profiles.CompileLogMasks gives them;
+// m stays as it is. A pattern of group 1 alone, which that check refuses,
+// would mask nothing.
 func (m *Masker) WithPatterns(res []*regexp.Regexp) *Masker {
 	out := &Masker{}
 	if m != nil {

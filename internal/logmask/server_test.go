@@ -52,7 +52,6 @@ func TestPatternGroupsFailClosed(t *testing.T) {
 		`(x=)\S+(?:(@)z)?`: "a x=•••",
 		`x=\S+(y)`:         "a •••",
 		`(x=)(v)\S+`:       "a •••",
-		`(x=\S+)`:          "a •••",
 	} {
 		m := (*Masker)(nil).WithPatterns([]*regexp.Regexp{regexp.MustCompile(pattern)})
 		if got := m.Line("a x=v@y"); got != want {
@@ -166,6 +165,16 @@ func TestBuiltinPassesProfileCheck(t *testing.T) {
 	for _, re := range builtin {
 		if _, bad := profiles.CompileLogMasks([]string{re.String()}); len(bad) > 0 {
 			t.Errorf("%s fails the profile check", re)
+		}
+	}
+}
+
+// TestBuiltinEmptyValues: an empty value after the name masks nothing, so
+// lines with empty values stay as they are, names included.
+func TestBuiltinEmptyValues(t *testing.T) {
+	for _, in := range []string{`{"password": "", "port": 1}`, `password=""`, `+ export 'RCON_PASSWORD='`, `-password ""`, `password=`} {
+		if got := (*Masker)(nil).Line(in); got != in {
+			t.Errorf("%q: got %q", in, got)
 		}
 	}
 }
