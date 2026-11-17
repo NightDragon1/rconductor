@@ -8,7 +8,8 @@
 //	       the caller's principal (internal/web.principal) or internal/perm
 //	audit  every operation that is not a read reaches internal/audit.Write
 //	cmd    only the command pipeline calls Execute of the RCON packages
-//	redact secrets are revealed only at their destinations; nothing in
+//	redact secrets are revealed or converted to their plain value only at
+//	       their destinations (secret-destinations.txt); nothing in
 //	       internal/ prints past the redacting log handler (fmt.Print, log)
 //	logmask the masking patterns of the shipped profiles stay within a time
 //	       budget per line, alone and as the costliest stack (D-088 b)
@@ -56,8 +57,13 @@ func (f finding) key() string { return f.rule + " " + f.symbol }
 func main() {
 	dir := flag.String("dir", "..", "root of the module to check")
 	exc := flag.String("exceptions", "fitness/exceptions.txt", "exception file")
+	dst := flag.String("destinations", "fitness/secret-destinations.txt", "packages that may convert a secret")
 	flag.Parse()
-	found, err := check(*dir)
+	dests, err := readDestinations(*dst)
+	var found []finding
+	if err == nil {
+		found, err = check(*dir, dests)
+	}
 	if err == nil {
 		var masks []finding
 		masks, err = checkLogMasks(*dir, budget{patternSpend, stackSpend})
@@ -149,7 +155,7 @@ func operations(dir string) (map[string]operation, error) {
 	return out, nil
 }
 
-func check(dir string) ([]finding, error) {
+func check(dir string, dests map[string]string) ([]finding, error) {
 	ops, err := operations(dir)
 	if err != nil {
 		return nil, err
@@ -198,6 +204,9 @@ func check(dir string) ([]finding, error) {
 				edges[finding{"redact", rel, "prints past the redacting log handler"}] = true
 			}
 		}
+	}
+	for _, f := range secretConversions(funcs, mod, dests) {
+		edges[f] = true
 	}
 	found = append(found, slices.SortedFunc(maps.Keys(edges), func(a, b finding) int { return strings.Compare(a.key(), b.key()) })...)
 	authz := func(f *ssa.Function) bool {
