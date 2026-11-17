@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
+	"github.com/NightDragon1/rconductor/internal/profiles"
 )
 
 // TestProfilePatterns covers D-088 b): the patterns of the profiles mask
@@ -40,14 +41,18 @@ func TestProfilePatterns(t *testing.T) {
 }
 
 // TestPatternGroupsFailClosed: a pattern the profile check would refuse
-// still masks: without group 1 the whole match, with a group 2 inside
-// group 1 up to the end of the match.
+// still masks: the whole match without group 1, with text before it or
+// with nothing between group 1 and group 2 or the end; a group 2 inside
+// group 1 counts as missing.
 func TestPatternGroupsFailClosed(t *testing.T) {
 	for pattern, want := range map[string]string{
 		`x=\S+`:            "a •••",
 		`(k=)?x=\S+`:       "a •••",
 		`(x(=))\S+`:        "a x=•••",
 		`(x=)\S+(?:(@)z)?`: "a x=•••",
+		`x=\S+(y)`:         "a •••",
+		`(x=)(v)\S+`:       "a •••",
+		`(x=\S+)`:          "a •••",
 	} {
 		m := (*Masker)(nil).WithPatterns([]*regexp.Regexp{regexp.MustCompile(pattern)})
 		if got := m.Line("a x=v@y"); got != want {
@@ -56,26 +61,76 @@ func TestPatternGroupsFailClosed(t *testing.T) {
 	}
 }
 
-// TestLinesBudget: once the budget of a batch is spent, every line left
-// is withheld, never passed unmasked; the clock is injected.
-func TestLinesBudget(t *testing.T) {
+// stepClock is an injected clock: every call is one step later.
+func stepClock(step time.Duration) func() time.Time {
 	var mu sync.Mutex
 	now := time.Unix(0, 0)
-	clock := func() time.Time { // every call is 10 ms later
+	return func() time.Time {
 		mu.Lock()
 		defer mu.Unlock()
-		now = now.Add(10 * time.Millisecond)
+		now = now.Add(step)
 		return now
 	}
+}
+
+// TestLinesBudget: once the budget of a batch is spent, every line left
+// is withheld, never passed unmasked. A line asks the clock once and once
+// per built-in pattern.
+func TestLinesBudget(t *testing.T) {
+	perLine := time.Duration(1+len(builtin)) * time.Millisecond
 	lines := []string{"token=a", "token=b", "token=c", "token=d", "token=e"}
-	got, withheld := (*Masker)(nil).Lines(lines, Budget{Max: 25 * time.Millisecond, Now: clock})
+	got, withheld := (*Masker)(nil).Lines(lines, Budget{Max: 2*perLine + 5*time.Millisecond, Now: stepClock(time.Millisecond)})
 	want := []string{"token=•••", "token=•••", Withheld, Withheld, Withheld}
 	if withheld != 3 || strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Errorf("got %q, %d withheld", got, withheld)
 	}
-	if got, withheld := (*Masker)(nil).Lines(lines, Budget{Max: time.Hour, Now: clock}); withheld != 0 || got[4] != "token=•••" {
-		t.Errorf("within the budget: %q, %d", got, withheld)
+	for name, b := range map[string]Budget{
+		"within":       {Max: time.Hour, Now: stepClock(time.Millisecond)},
+		"no budget":    {Max: 0, Now: stepClock(time.Millisecond)},
+		"clock behind": {Max: time.Millisecond, Now: stepClock(-time.Second)},
+	} {
+		if got, withheld := (*Masker)(nil).Lines(lines, b); withheld != 0 || got[4] != "token=•••" {
+			t.Errorf("%s: %q, %d", name, got, withheld)
+		}
 	}
+	if got, withheld := (*Masker)(nil).Lines(nil, Budget{}); len(got) != 0 || withheld != 0 {
+		t.Errorf("empty batch: %q, %d", got, withheld)
+	}
+}
+
+// TestLinesBudgetInsideLine: the budget is asked between the patterns of
+// one line, so a line with many patterns stops in the middle and is
+// withheld as a whole.
+func TestLinesBudgetInsideLine(t *testing.T) {
+	res := make([]*regexp.Regexp, 50)
+	for i := range res {
+		res[i] = regexp.MustCompile(`(k=)\S+`)
+	}
+	m := (*Masker)(nil).WithPatterns(res)
+	got, withheld := m.Lines([]string{"k=v1", "k=v2"}, Budget{Max: 20 * time.Millisecond, Now: stepClock(time.Millisecond)})
+	if withheld != 2 || got[0] != Withheld || got[1] != Withheld {
+		t.Errorf("got %q, %d withheld", got, withheld)
+	}
+}
+
+// TestWithPatternsShared: two maskers made from the same one with
+// patterns stay apart, also used in parallel.
+func TestWithPatternsShared(t *testing.T) {
+	b1 := (*Masker)(nil).WithPatterns([]*regexp.Regexp{regexp.MustCompile(`(a=)\S+`)})
+	b2 := b1.WithPatterns([]*regexp.Regexp{regexp.MustCompile(`(b=)\S+`)})
+	b3 := b1.WithPatterns([]*regexp.Regexp{regexp.MustCompile(`(c=)\S+`)})
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Go(func() {
+			if got := b2.Line("a=1 b=2 c=3"); got != "a=••• b=••• c=3" {
+				t.Errorf("b2: %q", got)
+			}
+			if got, _ := b3.Lines([]string{"a=1 b=2 c=3"}, Budget{Max: time.Hour}); got[0] != "a=••• b=2 c=•••" {
+				t.Errorf("b3: %q", got[0])
+			}
+		})
+	}
+	wg.Wait()
 }
 
 // TestLinesFlood measures a batch at the byte bound of the agent (64 lines
@@ -94,12 +149,23 @@ func TestLinesFlood(t *testing.T) {
 	got, withheld := m.Lines(lines, Budget{Max: budget})
 	took := time.Since(start)
 	t.Logf("%d lines of %d bytes: %s, %d withheld", len(lines), len(line), took, withheld)
-	if withheld == 0 {
-		t.Errorf("no line withheld after %s", took)
+	if withheld < len(lines)-2 {
+		t.Errorf("%d withheld after %s, want at least %d", withheld, took, len(lines)-2)
 	}
 	for i, l := range got {
 		if strings.Contains(l, "=a") {
 			t.Fatalf("line %d left unmasked", i)
+		}
+	}
+}
+
+// TestBuiltinPassesProfileCheck: every expression of the built-in list
+// would pass the check of profile patterns, so list and profiles follow one
+// rule of groups.
+func TestBuiltinPassesProfileCheck(t *testing.T) {
+	for _, re := range builtin {
+		if _, bad := profiles.CompileLogMasks([]string{re.String()}); len(bad) > 0 {
+			t.Errorf("%s fails the profile check", re)
 		}
 	}
 }

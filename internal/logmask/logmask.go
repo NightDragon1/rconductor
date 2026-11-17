@@ -5,9 +5,9 @@
 // panel keeps or sends them (UI-022, D-088). Sources in this order: a
 // built-in list of RE2 expressions, fixed in the code; the RE2 patterns of
 // the profiles of the server; then the fixed texts of the RCON admin, no
-// expressions. Each source takes time linear in the
-// length of the line, so the cost of a line is bounded by the number of
-// sources and texts.
+// expressions. The list and the texts take time linear in the length of
+// the line; a profile pattern can take more, so Lines bounds a batch in
+// time, also between the patterns of one line.
 package logmask
 
 import (
@@ -59,15 +59,30 @@ var builtin = []*regexp.Regexp{
 // bytes becomes one Replacement, so no source misses what another one
 // changed. The result is cut to the line bound of the protocol.
 func (m *Masker) Line(s string) string {
+	out, _ := m.line(s, nil)
+	return out
+}
+
+// line is Line; over, if set, is asked between the sources and patterns,
+// and once it reports true the line is not finished: stopped is true and
+// the line must not leave.
+func (m *Masker) line(s string, over func() bool) (out string, stopped bool) {
 	s = cut(s, agentproto.MaxLogLine)
 	cover := make([]int32, len(s)+1)
-	found := markPatterns(builtin, s, cover)
-	if m != nil {
-		found = markPatterns(m.patterns, s, cover) || found
-		found = m.markTexts(s, cover) || found
+	found, stopped := markPatterns(builtin, s, cover, over)
+	if m != nil && !stopped {
+		var more bool
+		more, stopped = markPatterns(m.patterns, s, cover, over)
+		found = more || found
+		if !stopped {
+			found = m.markTexts(s, cover) || found
+		}
+	}
+	if stopped {
+		return "", true
 	}
 	if !found {
-		return s
+		return s, false
 	}
 	var b strings.Builder
 	depth, hidden := int32(0), false
@@ -82,23 +97,29 @@ func (m *Masker) Line(s string) string {
 			hidden = true
 		}
 	}
-	return cut(b.String(), agentproto.MaxLogLine)
+	return cut(b.String(), agentproto.MaxLogLine), false
 }
 
 // markPatterns counts every match of the patterns in cover: from the end
-// of group 1 to the start of group 2 or the end of the match. A match
-// without group 1, which the profile check rules out, is masked as a
-// whole; a group 2 before the end of group 1 counts as missing.
-func markPatterns(res []*regexp.Regexp, s string, cover []int32) bool {
-	found := false
+// of group 1 to the start of group 2 or the end of the match. A match the
+// profile check rules out masks as a whole: without group 1, with text
+// before it, or with nothing left between group 1 and group 2 or the end.
+// over is asked before each pattern; stopped reports that it said true.
+func markPatterns(res []*regexp.Regexp, s string, cover []int32, over func() bool) (found, stopped bool) {
 	for _, re := range res {
+		if over != nil && over() {
+			return found, true
+		}
 		for _, l := range re.FindAllStringSubmatchIndex(s, -1) {
 			from, to := l[0], l[1]
-			if len(l) > 3 && l[3] >= 0 {
+			if len(l) > 3 && l[2] == l[0] && l[3] >= 0 {
 				from = l[3]
 			}
 			if len(l) > 5 && l[4] >= from {
 				to = l[4]
+			}
+			if from >= to {
+				from, to = l[0], l[1]
 			}
 			if from < to {
 				cover[from]++
@@ -107,7 +128,7 @@ func markPatterns(res []*regexp.Regexp, s string, cover []int32) bool {
 			}
 		}
 	}
-	return found
+	return found, false
 }
 
 // cut bounds s to n bytes on a rune boundary.

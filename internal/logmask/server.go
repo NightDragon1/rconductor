@@ -37,9 +37,10 @@ type Budget struct {
 }
 
 // Lines masks a batch of lines, as the agent sends them, in order. Once
-// the budget is spent, every line left is replaced by Withheld; the
-// number of these comes back for the log. One line may run past the
-// budget by its own cost, which the profile check and the line bound limit.
+// the budget is spent, the line in work and every line left are replaced
+// by Withheld; the number of these comes back for the log. The budget is
+// asked between lines and between the patterns of a line, so one search
+// of one pattern on one line is the most it can run over.
 func (m *Masker) Lines(lines []string, b Budget) ([]string, int) {
 	if b.Now == nil {
 		b.Now = time.Now
@@ -49,14 +50,19 @@ func (m *Masker) Lines(lines []string, b Budget) ([]string, int) {
 	}
 	out := make([]string, len(lines))
 	start := b.Now()
+	over := func() bool { return b.Now().Sub(start) > b.Max }
 	for i, l := range lines {
-		if b.Now().Sub(start) > b.Max {
+		masked, stopped := "", over()
+		if !stopped {
+			masked, stopped = m.line(l, over)
+		}
+		if stopped {
 			for j := i; j < len(lines); j++ {
 				out[j] = Withheld
 			}
 			return out, len(lines) - i
 		}
-		out[i] = m.Line(l)
+		out[i] = masked
 	}
 	return out, 0
 }

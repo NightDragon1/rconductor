@@ -63,6 +63,8 @@ func TestLogMasks(t *testing.T) {
 		"group 1 nested":      {[]string{`(?:a(k=))+\S+`}, "start with group 1"},
 		"group 1 not first":   {[]string{`[0-9a-f]{32}( is your token)`}, "start with group 1"},
 		"group 1 after text":  {[]string{`\S+(@host)`}, "start with group 1"},
+		"only group 1":        {[]string{`(k=\S+)`}, "start with group 1"},
+		"group 1 alone":       {[]string{`(k=)`}, "start with group 1"},
 		"group 2 optional":    {[]string{`(k=)\S+(@)?`}, "group 2 last"},
 		"group in group 1":    {[]string{`(pass(word)?=)\S+`}, "no group in group 1"},
 		"group 2 right after": {[]string{`(k=)(\S+)`}, "not right after"},
@@ -111,6 +113,14 @@ func TestCompileLogMasks(t *testing.T) {
 	res, bad := CompileLogMasks([]string{`(k=)\S+`, `k=\S+`, "(k=)a\u202eb", `(a`, `(?i)(pw\s*=\s*)\S+`})
 	if len(res) != 2 || !slices.Equal(bad, []int{1, 2, 3}) {
 		t.Errorf("got %d patterns, bad %v", len(res), bad)
+	}
+	nine := slices.Repeat([]string{`(k=)\S+`}, MaxLogMasks+1)
+	if res, bad := CompileLogMasks(nine); len(res) != MaxLogMasks || !slices.Equal(bad, []int{MaxLogMasks}) {
+		t.Errorf("over the count: %d, %v", len(res), bad)
+	}
+	wide := "(k=)" + strings.Repeat(`\w`, 120)
+	if res, bad := CompileLogMasks([]string{wide, wide, wide, `(j=)\S+`}); len(res) != 2 || !slices.Equal(bad, []int{2, 3}) {
+		t.Errorf("over the instructions: %d, %v", len(res), bad)
 	}
 	if res, bad := CompileLogMasks(nil); res != nil || bad != nil {
 		t.Errorf("nil: %v %v", res, bad)

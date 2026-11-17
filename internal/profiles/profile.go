@@ -640,7 +640,8 @@ func groupOneFirst(re *syntax.Regexp) bool {
 		case syntax.OpBeginLine, syntax.OpBeginText, syntax.OpWordBoundary:
 			continue
 		case syntax.OpCapture:
-			return p.Cap == 1
+			// Something must follow group 1, or nothing is left to mask.
+			return p.Cap == 1 && p != parts[len(parts)-1]
 		}
 		return false
 	}
@@ -676,15 +677,18 @@ func groupTwoAtEnd(re *syntax.Regexp) bool {
 // which would make a pattern look other than it works.
 func hidden(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }
 
-// CompileLogMasks compiles the masking patterns of stored rules, each
+// CompileLogMasks compiles the masking patterns of one stored profile,
 // checked again as at the import, since stored rules may come from an
-// older check. A pattern that fails is left out; its position comes back
-// for the log. The time bound of the masker limits what is left.
+// older check: each pattern, then the number and the instructions of the
+// profile. A pattern that fails or comes past a bound is left out; its
+// position comes back for the log.
 func CompileLogMasks(masks []string) ([]*regexp.Regexp, []int) {
 	var res []*regexp.Regexp
 	var bad []int
+	total := 0
 	for i, m := range masks {
-		if len(checkLogMasks([]string{m})) > 0 {
+		n, _ := LogMaskInsts(m)
+		if len(res) == MaxLogMasks || total+n > MaxLogMaskProfileInst || len(checkLogMasks([]string{m})) > 0 {
 			bad = append(bad, i)
 			continue
 		}
@@ -693,7 +697,7 @@ func CompileLogMasks(masks []string) ([]*regexp.Regexp, []int) {
 			bad = append(bad, i)
 			continue
 		}
-		res = append(res, re)
+		res, total = append(res, re), total+n
 	}
 	return res, bad
 }
