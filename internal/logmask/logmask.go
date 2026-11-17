@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package logmask masks known secrets in container log lines before the
-// panel keeps or sends them (UI-022, D-088). Every source takes time
-// linear in the length of the line; this part holds the built-in list of
-// RE2 expressions, fixed in the code.
+// panel keeps or sends them (UI-022, D-088). Sources in this order: a
+// built-in list of RE2 expressions, fixed in the code; then the fixed texts
+// of the RCON admin, no expressions. Each source takes time linear in the
+// length of the line, so the cost of a line is bounded by the number of
+// sources and texts.
 package logmask
 
 import (
@@ -50,10 +52,8 @@ var builtin = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(\b[a-z][a-z0-9+.-]*://)[^\s/@]+(@)`),
 }
 
-// Masker masks lines; it holds what the settings add to the built-in list.
-type Masker struct{}
-
-// Line masks one line: built-in values keep their name. Every source
+// Line masks one line: built-in values keep their name, a text of the
+// admin is replaced as a whole. Every source
 // searches the line as it came, into one cover, and each run of covered
 // bytes becomes one Replacement, so no source misses what another one
 // changed. The result is cut to the line bound of the protocol.
@@ -73,6 +73,9 @@ func (m *Masker) Line(s string) string {
 				found = true
 			}
 		}
+	}
+	if m != nil {
+		found = m.markTexts(s, cover) || found
 	}
 	if !found {
 		return s
