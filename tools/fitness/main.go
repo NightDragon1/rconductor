@@ -10,6 +10,8 @@
 //	cmd    only the command pipeline calls Execute of the RCON packages
 //	redact secrets are revealed only at their destinations; nothing in
 //	       internal/ prints past the redacting log handler (fmt.Print, log)
+//	logmask the masking patterns of the shipped profiles stay within a time
+//	       budget per line, alone and as the costliest stack (D-088 b)
 //
 // Excepted findings pass (rule symbol # reason); a stale exception fails.
 package main
@@ -56,6 +58,11 @@ func main() {
 	exc := flag.String("exceptions", "fitness/exceptions.txt", "exception file")
 	flag.Parse()
 	found, err := check(*dir)
+	if err == nil {
+		var masks []finding
+		masks, err = checkLogMasks(*dir, budget{patternSpend, stackSpend})
+		found = append(found, masks...)
+	}
 	var allowed map[string]bool
 	if err == nil {
 		allowed, err = readExceptions(*exc)
