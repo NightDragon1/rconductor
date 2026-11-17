@@ -1312,7 +1312,8 @@ paths:
         recipient. An audience that resolves to more than
         messages.max_resolved_recipients users is 400 with reason
         too_many_recipients; it is never cut. At most messages.per_hour
-        messages per sender and hour (429). The text is shown as text,
+        messages per sender and hour (429); deleting a message does not
+        lower the count. The text is shown as text,
         never as markup (SEC-006).
       tags: [messages]
       requestBody:
@@ -1459,7 +1460,8 @@ paths:
         4096), the smaller applies; otherwise 400. At most
         messages.comments_per_hour comments per author and hour (setting,
         default 60, 1 to 3600; counted in the same transaction as the
-        comment, so parallel requests cannot pass it): 429. Order: 404 and
+        comment, so parallel requests cannot pass it, and deleting a
+        comment does not lower the count): 429. Order: 404 and
         403 first, then 400, then 429. No editing. The text is shown as
         text, never as markup (SEC-006).
       tags: [messages]
@@ -1528,8 +1530,9 @@ paths:
         message; data is {"kind":...,"message_id":...} with kind one of
         message (new to me), comment (new comment), deleted (message gone),
         comment_deleted and read (read on another socket), and comment_id
-        with comment and comment_deleted; never a text, only
-        what changed in my view; the texts come from the API. While the
+        with comment and comment_deleted; never a text. Events come only
+        for messages I sent or received, also for the RCON admin, who sees
+        the others through the list; the texts come from the API. While the
         flag is off, messages is an unknown topic. Metrics and logs are
         agent functions for RCON admin and server admin only; a new
         subscription first gets the current value (last sample or the last
