@@ -7,7 +7,8 @@ package profiles
 // that hold for it (SRV-008, D-074): for each field the topmost profile
 // that sets it wins, a field no profile sets keeps its default (also the
 // Source RCON end marker, so a specific profile keeps that of its game);
-// wrappers are the union of all profiles, no profile lifts one. Protocol, dialect
+// wrappers and masking patterns are the union of all profiles, no profile
+// lifts one. Protocol, dialect
 // and default port come from the top profile; all profiles of a server
 // have the same protocol and dialect. The catalog is merged by
 // MergeCatalogs. An empty list gives nil.

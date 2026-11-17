@@ -49,11 +49,14 @@ const (
 	maxDepth   = 64
 )
 
-// Limits of the masking patterns of a profile (D-088 b), measured on 8 KiB
-// lines that are hard for a pattern: an RE2 program costs about 50 to
-// 100 µs per instruction and line, the built-in list of internal/logmask
-// about 350 instructions in all. A profile adds at most that much; the
-// fitness function in tools/fitness times the shipped profiles.
+// Limits of the masking patterns of a profile (D-088 b). They bound the
+// size of the RE2 programs; the time of a line also grows with its
+// matches. Measured on hard 8 KiB lines: a pattern near MaxLogMaskInsts
+// about 4 to 5 ms, a profile at MaxLogMaskProfileInst about 9 ms, the
+// built-in list of internal/logmask (about 350 instructions) about 7 ms;
+// but a pattern of 16 instructions whose short matches each start a search
+// to the end of the line about 130 ms. The fitness function in tools/fitness
+// times the shipped profiles on such lines.
 const (
 	MaxLogMasks           = 8
 	MaxLogMaskLen         = 256
@@ -585,23 +588,32 @@ func checkParams(i int, params []Param) []string {
 	return probs
 }
 
-// hasControl reports whether s has a control character.
-// checkLogMasks checks the masking patterns: RE2, bounded in number,
-// length and program size, so that a profile bounds the cost of a line.
+// checkLogMasks checks the masking patterns: count and length first, then
+// RE2 with a group 1 that every match holds, bounded in program size. The
+// size bounds the work of one search, not of a line with many matches; the
+// fitness function times the shipped profiles on such lines.
 func checkLogMasks(masks []string) []string {
 	var probs []string
 	if len(masks) > MaxLogMasks {
 		probs = append(probs, fmt.Sprintf("at most %d log_masks", MaxLogMasks))
+		masks = masks[:MaxLogMasks]
 	}
 	total := 0
 	for i, m := range masks {
-		n, err := LogMaskInsts(m)
-		switch {
-		case m == "" || len(m) > MaxLogMaskLen || hasControl(m):
+		if m == "" || len(m) > MaxLogMaskLen || strings.ContainsFunc(m, hidden) {
 			probs = append(probs, fmt.Sprintf("log_masks[%d] must be 1 to %d printable characters", i, MaxLogMaskLen))
-		case err != nil:
+			continue
+		}
+		re, err := syntax.Parse(m, syntax.Perl)
+		if err != nil {
 			probs = append(probs, fmt.Sprintf("log_masks[%d] must be an RE2 pattern", i))
-		case n > MaxLogMaskInsts:
+			continue
+		}
+		if !holdsGroupOne(re.Simplify()) {
+			probs = append(probs, fmt.Sprintf("log_masks[%d] needs a group 1 that every match holds", i))
+		}
+		n, _ := LogMaskInsts(m)
+		if n > MaxLogMaskInsts {
 			probs = append(probs, fmt.Sprintf("log_masks[%d] compiles to %d instructions, at most %d", i, n, MaxLogMaskInsts))
 		}
 		total += n
@@ -611,6 +623,33 @@ func checkLogMasks(masks []string) []string {
 	}
 	return probs
 }
+
+// holdsGroupOne reports whether group 1 is outside every repetition and
+// alternative, so that every match of the pattern holds it.
+func holdsGroupOne(re *syntax.Regexp) bool {
+	switch re.Op {
+	case syntax.OpCapture:
+		if re.Cap == 1 {
+			return true
+		}
+	case syntax.OpStar, syntax.OpQuest, syntax.OpAlternate:
+		return false
+	case syntax.OpRepeat:
+		if re.Min == 0 {
+			return false
+		}
+	}
+	for _, sub := range re.Sub {
+		if holdsGroupOne(sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// hidden reports control and format characters (such as bidi marks),
+// which would make a pattern look other than it works.
+func hidden(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }
 
 // LogMaskInsts is the size of the RE2 program of a pattern, as package
 // regexp builds it.
@@ -626,6 +665,7 @@ func LogMaskInsts(pattern string) (int, error) {
 	return len(prog.Inst), nil
 }
 
+// hasControl reports whether s has a control character.
 func hasControl(s string) bool { return strings.ContainsFunc(s, unicode.IsControl) }
 
 // Formattings are the known values of the field formatting (CMD-017): how

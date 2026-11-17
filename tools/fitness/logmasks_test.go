@@ -52,9 +52,26 @@ func TestLogMasksBudget(t *testing.T) {
 	}
 }
 
-func TestLiteralLine(t *testing.T) {
-	l := literalLine(`(?i)(adminpass\s*=\s*)\S+`)
-	if len(l) != lineLen || !strings.HasPrefix(l, "adminpass=x adminpass") {
-		t.Errorf("line starts %q, %d bytes", l[:30], len(l))
+func TestPatternLines(t *testing.T) {
+	lines := patternLines(`(?i)(adminpass\s*=\s*)\S+`)
+	if len(lines) != 4 || !strings.HasPrefix(lines[0], "adminpass=! adminpass=! ") || !strings.HasPrefix(lines[1], "adminpass=x ") {
+		t.Errorf("lines start %q", []string{lines[0][:30], lines[1][:30]})
+	}
+	for _, l := range lines {
+		if len(l) != lineLen {
+			t.Errorf("%d bytes", len(l))
+		}
+	}
+}
+
+// TestLogMasksRestartingSearch: a pattern whose short matches each start a
+// search that runs to the end of the line takes time square in the length
+// of the line; its own shortest match over and over finds that within the
+// budget of the CI (about 130 ms against 10 ms).
+func TestLogMasksRestartingSearch(t *testing.T) {
+	dir := maskDir(t, map[string]string{"q": `['(pw=)\S+(?: .*END)?']`})
+	found, err := checkLogMasks(dir, budget{patternSpend, time.Hour})
+	if err != nil || len(found) == 0 || found[0].symbol != `q (pw=)\S+(?: .*END)?` {
+		t.Errorf("got %v %v", found, err)
 	}
 }
