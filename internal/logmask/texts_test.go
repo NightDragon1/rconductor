@@ -4,6 +4,8 @@
 package logmask
 
 import (
+	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -70,8 +72,14 @@ func TestTextBounds(t *testing.T) {
 	}
 }
 
-// lineBound bounds one worst-case line, also under the race detector.
-const lineBound = time.Second
+// lineBound bounds one worst-case line: 1 s, and 5 s under the race
+// detector, which slowed it past 1 s on a loaded CI runner.
+var lineBound = func() time.Duration {
+	if bi, ok := debug.ReadBuildInfo(); ok && slices.Contains(bi.Settings, debug.BuildSetting{Key: "-race", Value: "true"}) {
+		return 5 * time.Second
+	}
+	return time.Second
+}()
 
 // TestLineCost covers D-088 (cost per line bounded and measured) and
 // C147 N4: a line at the protocol bound full of short list matches and of
