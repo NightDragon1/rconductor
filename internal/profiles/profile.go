@@ -10,6 +10,7 @@ package profiles
 import (
 	"fmt"
 	"regexp"
+	"regexp/syntax"
 	"slices"
 	"strings"
 	"unicode"
@@ -46,6 +47,21 @@ const (
 	// not keep the import busy.
 	maxAliases = 100
 	maxDepth   = 64
+)
+
+// Limits of the masking patterns of a profile (D-088 b). They bound the
+// size of the RE2 programs; the time of a line also grows with its
+// matches. Measured on hard 8 KiB lines: a pattern near MaxLogMaskInsts
+// about 4 to 5 ms, a profile at MaxLogMaskProfileInst about 9 ms, the
+// built-in list of internal/logmask (about 350 instructions) about 7 ms;
+// but a pattern of 16 instructions whose short matches each start a search
+// to the end of the line about 130 ms. The fitness function in tools/fitness
+// times the shipped profiles on such lines.
+const (
+	MaxLogMasks           = 8
+	MaxLogMaskLen         = 256
+	MaxLogMaskInsts       = 128
+	MaxLogMaskProfileInst = 256
 )
 
 // Protocols are the adapters of this release (PROT-001); others follow
@@ -93,7 +109,11 @@ type Profile struct {
 	// MessageCommand names the command whose text goes to the players with
 	// the sender and the prefix of the server group (CMD-020, D-081).
 	MessageCommand *MessageCommand `yaml:"message_command" json:"message_command,omitempty"`
-	Catalog        []Command       `yaml:"catalog" json:"-"`
+	// LogMasks are RE2 patterns of secrets in the container log of the
+	// game (UI-022, D-088 b); group 1 and any group 2 stay, the rest of a
+	// match is masked. They hold from every profile of a server.
+	LogMasks []string  `yaml:"log_masks" json:"log_masks,omitempty"`
+	Catalog  []Command `yaml:"catalog" json:"-"`
 	// ResearchedVersion, Sources and Status describe where the profile
 	// comes from (D-072): the game version the commands were researched
 	// for, the sources, and whether a run with a real server confirmed it.
@@ -465,6 +485,7 @@ func (p *Profile) check() []string {
 			bad("message_command.render must be one of %s", strings.Join(Renders, ", "))
 		}
 	}
+	probs = append(probs, checkLogMasks(p.LogMasks)...)
 	if p.Protocol.DefaultPort < 1 || p.Protocol.DefaultPort > 65535 {
 		bad("protocol.default_port is required, 1 to 65535")
 	}
@@ -565,6 +586,108 @@ func checkParams(i int, params []Param) []string {
 		}
 	}
 	return probs
+}
+
+// checkLogMasks checks the masking patterns: count and length first, then
+// RE2 that starts with group 1, bounded in program size. The
+// size bounds the work of one search, not of a line with many matches; the
+// fitness function times the shipped profiles on such lines.
+func checkLogMasks(masks []string) []string {
+	var probs []string
+	if len(masks) > MaxLogMasks {
+		probs = append(probs, fmt.Sprintf("at most %d log_masks", MaxLogMasks))
+		masks = masks[:MaxLogMasks]
+	}
+	total := 0
+	for i, m := range masks {
+		if m == "" || len(m) > MaxLogMaskLen || strings.ContainsFunc(m, hidden) {
+			probs = append(probs, fmt.Sprintf("log_masks[%d] must be 1 to %d printable characters", i, MaxLogMaskLen))
+			continue
+		}
+		re, err := syntax.Parse(m, syntax.Perl)
+		if err != nil {
+			probs = append(probs, fmt.Sprintf("log_masks[%d] must be an RE2 pattern", i))
+			continue
+		}
+		if re = re.Simplify(); !groupOneFirst(re) {
+			probs = append(probs, fmt.Sprintf("log_masks[%d] must start with group 1, once and not repeated", i))
+		} else if !groupTwoAtEnd(re) {
+			probs = append(probs, fmt.Sprintf("log_masks[%d] has at most groups 1 and 2, no group in group 1, group 2 last and not right after group 1", i))
+		}
+		n, _ := LogMaskInsts(m)
+		if n > MaxLogMaskInsts {
+			probs = append(probs, fmt.Sprintf("log_masks[%d] compiles to %d instructions, at most %d", i, n, MaxLogMaskInsts))
+		}
+		total += n
+	}
+	if total > MaxLogMaskProfileInst {
+		probs = append(probs, fmt.Sprintf("log_masks compile to %d instructions in all, at most %d", total, MaxLogMaskProfileInst))
+	}
+	return probs
+}
+
+// groupOneFirst reports whether group 1 is the first part of the pattern,
+// after anchors or word boundaries only, once and outside any repetition,
+// alternative or optional part: then every match holds it, and the masker,
+// which masks from its end, leaves nothing of the match before it.
+func groupOneFirst(re *syntax.Regexp) bool {
+	parts := []*syntax.Regexp{re}
+	if re.Op == syntax.OpConcat {
+		parts = re.Sub
+	}
+	for _, p := range parts {
+		switch p.Op {
+		case syntax.OpBeginLine, syntax.OpBeginText, syntax.OpWordBoundary:
+			continue
+		case syntax.OpCapture:
+			return p.Cap == 1
+		}
+		return false
+	}
+	return false
+}
+
+// groupTwoAtEnd reports whether the groups leave something to mask: at
+// most groups 1 and 2, none inside group 1, and group 2, if any, the last
+// part of the pattern with something between it and group 1.
+func groupTwoAtEnd(re *syntax.Regexp) bool {
+	if re.MaxCap() > 2 {
+		return false
+	}
+	var inOne func(*syntax.Regexp) bool
+	inOne = func(r *syntax.Regexp) bool {
+		if r.Op == syntax.OpCapture && r.Cap == 1 {
+			return r.Sub[0].MaxCap() > 0
+		}
+		return slices.ContainsFunc(r.Sub, inOne)
+	}
+	if inOne(re) {
+		return false
+	}
+	if re.MaxCap() < 2 {
+		return true
+	}
+	n := len(re.Sub)
+	return re.Op == syntax.OpConcat && n >= 3 && re.Sub[n-1].Op == syntax.OpCapture && re.Sub[n-1].Cap == 2 &&
+		(re.Sub[n-2].Op != syntax.OpCapture || re.Sub[n-2].Cap != 1)
+}
+
+// hidden reports control and format characters (such as bidi marks),
+// which would make a pattern look other than it works.
+func hidden(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }
+
+// LogMaskInsts is the size of the RE2 program of a pattern, as package
+// regexp builds it.
+func LogMaskInsts(pattern string) (int, error) {
+	re, err := syntax.Parse(pattern, syntax.Perl)
+	if err != nil {
+		return 0, err
+	}
+	prog, err := syntax.Compile(re.Simplify())
+	if err != nil {
+		return 0, err
+	}
+	return len(prog.Inst), nil
 }
 
 // hasControl reports whether s has a control character.

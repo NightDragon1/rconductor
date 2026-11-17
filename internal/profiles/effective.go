@@ -7,7 +7,8 @@ package profiles
 // that hold for it (SRV-008, D-074): for each field the topmost profile
 // that sets it wins, a field no profile sets keeps its default (also the
 // Source RCON end marker, so a specific profile keeps that of its game);
-// wrappers are the union of all profiles, no profile lifts one. Protocol, dialect
+// wrappers and masking patterns are the union of all profiles, no profile
+// lifts one. Protocol, dialect
 // and default port come from the top profile; all profiles of a server
 // have the same protocol and dialect. The catalog is merged by
 // MergeCatalogs. An empty list gives nil.
@@ -76,6 +77,19 @@ func Effective(list []*Profile) *Profile {
 			if sep != "" && !sepSeen[sep] {
 				sepSeen[sep] = true
 				out.Syntax.Separators = append(out.Syntax.Separators, sep)
+			}
+		}
+	}
+	// Masking patterns hold from every profile too (D-088 b).
+	maskSeen := map[string]bool{}
+	for _, p := range list {
+		if p == nil {
+			continue
+		}
+		for _, m := range p.LogMasks {
+			if !maskSeen[m] {
+				maskSeen[m] = true
+				out.LogMasks = append(out.LogMasks, m)
 			}
 		}
 	}
