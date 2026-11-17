@@ -75,10 +75,8 @@ func (s *Settings) Update(ctx context.Context, req users.Request, in SettingsInp
 		}
 		lim.TextRunes = *in.TextRunes
 	}
-	if in.SetTexts {
-		if _, err := New(in.Texts, lim); err != nil {
-			return &users.InvalidError{Detail: err.Error()}
-		}
+	if _, err := New(in.Texts, lim); in.SetTexts && err != nil {
+		return &users.InvalidError{Detail: err.Error()}
 	}
 	return ErrNotImplemented
 }
