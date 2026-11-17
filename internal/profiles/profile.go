@@ -589,7 +589,7 @@ func checkParams(i int, params []Param) []string {
 }
 
 // checkLogMasks checks the masking patterns: count and length first, then
-// RE2 with a group 1 that every match holds, bounded in program size. The
+// RE2 that starts with group 1, bounded in program size. The
 // size bounds the work of one search, not of a line with many matches; the
 // fitness function times the shipped profiles on such lines.
 func checkLogMasks(masks []string) []string {
@@ -609,8 +609,8 @@ func checkLogMasks(masks []string) []string {
 			probs = append(probs, fmt.Sprintf("log_masks[%d] must be an RE2 pattern", i))
 			continue
 		}
-		if re = re.Simplify(); !holdsGroupOne(re) {
-			probs = append(probs, fmt.Sprintf("log_masks[%d] needs a group 1 that every match holds", i))
+		if re = re.Simplify(); !groupOneFirst(re) {
+			probs = append(probs, fmt.Sprintf("log_masks[%d] must start with group 1, once and not repeated", i))
 		} else if !groupTwoAtEnd(re) {
 			probs = append(probs, fmt.Sprintf("log_masks[%d] has at most groups 1 and 2, no group in group 1, group 2 last and not right after group 1", i))
 		}
@@ -626,25 +626,23 @@ func checkLogMasks(masks []string) []string {
 	return probs
 }
 
-// holdsGroupOne reports whether group 1 is outside every repetition and
-// alternative, so that every match of the pattern holds it.
-func holdsGroupOne(re *syntax.Regexp) bool {
-	switch re.Op {
-	case syntax.OpCapture:
-		if re.Cap == 1 {
-			return true
-		}
-	case syntax.OpStar, syntax.OpQuest, syntax.OpAlternate:
-		return false
-	case syntax.OpRepeat:
-		if re.Min == 0 {
-			return false
-		}
+// groupOneFirst reports whether group 1 is the first part of the pattern,
+// after anchors or word boundaries only, once and outside any repetition,
+// alternative or optional part: then every match holds it, and the masker,
+// which masks from its end, leaves nothing of the match before it.
+func groupOneFirst(re *syntax.Regexp) bool {
+	parts := []*syntax.Regexp{re}
+	if re.Op == syntax.OpConcat {
+		parts = re.Sub
 	}
-	for _, sub := range re.Sub {
-		if holdsGroupOne(sub) {
-			return true
+	for _, p := range parts {
+		switch p.Op {
+		case syntax.OpBeginLine, syntax.OpBeginText, syntax.OpWordBoundary:
+			continue
+		case syntax.OpCapture:
+			return p.Cap == 1
 		}
+		return false
 	}
 	return false
 }
