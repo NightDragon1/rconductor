@@ -609,8 +609,10 @@ func checkLogMasks(masks []string) []string {
 			probs = append(probs, fmt.Sprintf("log_masks[%d] must be an RE2 pattern", i))
 			continue
 		}
-		if !holdsGroupOne(re.Simplify()) {
+		if re = re.Simplify(); !holdsGroupOne(re) {
 			probs = append(probs, fmt.Sprintf("log_masks[%d] needs a group 1 that every match holds", i))
+		} else if !groupTwoAtEnd(re) {
+			probs = append(probs, fmt.Sprintf("log_masks[%d] has at most groups 1 and 2, no group in group 1, group 2 last and not right after group 1", i))
 		}
 		n, _ := LogMaskInsts(m)
 		if n > MaxLogMaskInsts {
@@ -645,6 +647,31 @@ func holdsGroupOne(re *syntax.Regexp) bool {
 		}
 	}
 	return false
+}
+
+// groupTwoAtEnd reports whether the groups leave something to mask: at
+// most groups 1 and 2, none inside group 1, and group 2, if any, the last
+// part of the pattern with something between it and group 1.
+func groupTwoAtEnd(re *syntax.Regexp) bool {
+	if re.MaxCap() > 2 {
+		return false
+	}
+	var inOne func(*syntax.Regexp) bool
+	inOne = func(r *syntax.Regexp) bool {
+		if r.Op == syntax.OpCapture && r.Cap == 1 {
+			return r.Sub[0].MaxCap() > 0
+		}
+		return slices.ContainsFunc(r.Sub, inOne)
+	}
+	if inOne(re) {
+		return false
+	}
+	if re.MaxCap() < 2 {
+		return true
+	}
+	n := len(re.Sub)
+	return re.Op == syntax.OpConcat && n >= 3 && re.Sub[n-1].Op == syntax.OpCapture && re.Sub[n-1].Cap == 2 &&
+		(re.Sub[n-2].Op != syntax.OpCapture || re.Sub[n-2].Cap != 1)
 }
 
 // hidden reports control and format characters (such as bidi marks),

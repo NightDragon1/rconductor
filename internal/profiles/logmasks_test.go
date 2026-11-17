@@ -57,6 +57,11 @@ func TestLogMasks(t *testing.T) {
 		"optional group":      {[]string{`(k=)?\S+`}, "group 1"},
 		"group in a choice":   {[]string{`(k=)\S+|x`}, "group 1"},
 		"group in repetition": {[]string{`(?:(k=)\S+)*`}, "group 1"},
+		"group 1 never":       {[]string{`(?:(k=)\S+){0}x`}, "group 1"},
+		"group in group 1":    {[]string{`(pass(word)?=)\S+`}, "no group in group 1"},
+		"group 2 right after": {[]string{`(k=)(\S+)`}, "not right after"},
+		"group 2 not last":    {[]string{`(k=)\S+(@)x`}, "group 2 last"},
+		"group 3":             {[]string{`(k=)\S+(@)(x)`}, "at most groups"},
 		"program too big":     {[]string{overInsts}, "instructions, at most"},
 		"too many":            {slices.Repeat([]string{`(k=)\S+`}, MaxLogMasks+1), "at most 8"},
 		"profile too big":     {[]string{half, half, `(j=)\S+`}, "in all"},
@@ -73,6 +78,10 @@ func TestLogMasks(t *testing.T) {
 		"instructions": {atInsts},
 		"in all":       {half, half},
 		"group 2":      {`(k=)\S+(@)`},
+		"repeated":     {`(?:(k=)\S+){1,3}`},
+		"plus":         {`(k=)+\S+`},
+		"nested":       {`(?:a(k=))+\S+`},
+		"no capture":   {`(k=)(?:word)?\S+`},
 	} {
 		if _, err := Parse(withMasks(masks...)); err != nil {
 			t.Errorf("at the bound %s: %v", name, err)
