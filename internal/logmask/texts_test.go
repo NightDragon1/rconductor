@@ -145,3 +145,38 @@ func TestC147N2TextAtTheLineBound(t *testing.T) {
 		t.Errorf("line ends %q", got[len(got)-20:])
 	}
 }
+
+// TestC147N5MessageCost measures one log.lines message of the agent at its
+// byte bound (MaxLogBytes in lines of MaxLogLine bytes), worst-case lines,
+// with the default and with the highest limits for the texts. The panel
+// masks a message once before the cache; the time per message bounds the
+// throughput of one agent connection.
+func TestC147N5MessageCost(t *testing.T) {
+	n := agentproto.MaxLogBytes / agentproto.MaxLogLine
+	line := strings.Repeat("token=x -token y u://b@ ", 170) + strings.Repeat("a", agentproto.MaxLogLine-170*24-1)
+	lines := make([]string, n)
+	for i := range lines {
+		lines[i] = line
+	}
+	for _, lim := range []Limits{DefaultLimits, {Texts: MaxTexts, TextRunes: MaxTextRunes}} {
+		texts := make([]Text, lim.Texts)
+		for i := range texts {
+			texts[i] = Text{Value: strings.Repeat("a", lim.TextRunes-i%(lim.TextRunes-MinTextRunes)), Fold: i%2 == 0}
+		}
+		m, err := New(texts, lim)
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := time.Now()
+		for _, l := range lines {
+			if got := m.Line(l); strings.Contains(got, "aaaa") {
+				t.Fatalf("texts %d: line not masked", lim.Texts)
+			}
+		}
+		took := time.Since(start)
+		t.Logf("one message of %d lines of %d bytes, %d texts of up to %d characters: %s", n, len(line), lim.Texts, lim.TextRunes, took)
+		if took > time.Duration(n)*lineBound {
+			t.Errorf("one message took %s, bound %s", took, time.Duration(n)*lineBound)
+		}
+	}
+}
