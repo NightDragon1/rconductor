@@ -24,16 +24,12 @@ func (s *apiServer) UpdateLogMasking(ctx context.Context, req api.UpdateLogMaski
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	in := logmask.SettingsInput{Enabled: req.Body.Enabled, MaxTexts: req.Body.MaxTexts, TextRunes: req.Body.MaxTextChars}
+	in := logmask.SettingsInput{IfMatch: ifMatch(req.Params.IfMatch), Enabled: req.Body.Enabled, MaxTexts: req.Body.MaxTexts, TextRunes: req.Body.MaxTextChars}
 	if req.Body.Texts != nil {
 		in.SetTexts = true
 		in.Texts = make([]logmask.Text, 0, len(*req.Body.Texts))
 		for _, t := range *req.Body.Texts {
-			var v string
-			if t.Value != nil {
-				v = *t.Value
-			}
-			in.Texts = append(in.Texts, logmask.Text{Value: v, Fold: t.IgnoreCase != nil && *t.IgnoreCase})
+			in.Texts = append(in.Texts, logmask.Text{Value: deref(t.Value), Fold: t.IgnoreCase != nil && *t.IgnoreCase})
 		}
 	}
 	return nil, maskingError(s.masking.Update(ctx, adminRequest(ctx), in), "updateLogMasking")

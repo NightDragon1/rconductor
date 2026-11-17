@@ -1149,7 +1149,7 @@ type LogMaskText struct {
 	// IgnoreCase Ignore the case of A to Z.
 	IgnoreCase *bool `json:"ignore_case,omitempty"`
 
-	// Value A fixed text; maxLength bounds the bytes in UTF-8.
+	// Value A fixed text of up to max_text_chars characters.
 	Value *string `json:"value,omitempty"`
 }
 
@@ -2346,7 +2346,7 @@ type ServerInterface interface {
 	// GetLogMasking Masking of container logs (UI-022, D-088); RCON admin only.
 	// (GET /settings/log-masking)
 	GetLogMasking(w http.ResponseWriter, r *http.Request)
-	// UpdateLogMasking Change the masking of container logs (UI-022, D-088); RCON admin only; in the audit as log_masking.updated with the switch and the number of texts, never a text.
+	// UpdateLogMasking Change the masking (UI-022, D-088); RCON admin only; audit log_masking.updated.
 	// (PUT /settings/log-masking)
 	UpdateLogMasking(w http.ResponseWriter, r *http.Request, params UpdateLogMaskingParams)
 	// GetSMTPSettings The SMTP server for the panel's mail (NFR-017); RCON admin only.
@@ -12363,7 +12363,7 @@ type StrictServerInterface interface {
 	// GetLogMasking Masking of container logs (UI-022, D-088); RCON admin only.
 	// (GET /settings/log-masking)
 	GetLogMasking(ctx context.Context, request GetLogMaskingRequestObject) (GetLogMaskingResponseObject, error)
-	// UpdateLogMasking Change the masking of container logs (UI-022, D-088); RCON admin only; in the audit as log_masking.updated with the switch and the number of texts, never a text.
+	// UpdateLogMasking Change the masking (UI-022, D-088); RCON admin only; audit log_masking.updated.
 	// (PUT /settings/log-masking)
 	UpdateLogMasking(ctx context.Context, request UpdateLogMaskingRequestObject) (UpdateLogMaskingResponseObject, error)
 	// GetSMTPSettings The SMTP server for the panel's mail (NFR-017); RCON admin only.

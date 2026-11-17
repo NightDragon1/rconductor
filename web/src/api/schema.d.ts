@@ -1269,12 +1269,12 @@ export interface paths {
         };
         /**
          * Masking of container logs (UI-022, D-088); RCON admin only.
-         * @description Behind the feature flag log_masking_ui (404 while off); the masking itself runs without it. Texts are never returned, only their number.
+         * @description Behind the flag log_masking_ui (404 while off); masking runs without it. Texts are never returned, only their number.
          */
         get: operations["getLogMasking"];
         /**
-         * Change the masking of container logs (UI-022, D-088); RCON admin only; in the audit as log_masking.updated with the switch and the number of texts, never a text.
-         * @description Behind the flag log_masking_ui (404 while off). Missing fields stay; texts replaces all, [] removes them. Fixed texts, no expressions, sealed with the master key (D-058): each 4 to max_text_chars characters on one line, at most max_texts (1 to 200, default 50; max_text_chars 4 to 1024, default 256); new limits must fit the texts sent and stored. Errors name a position, never a text (SEC-012): 400.
+         * Change the masking (UI-022, D-088); RCON admin only; audit log_masking.updated.
+         * @description Behind the flag log_masking_ui (404 while off). Order: 403, 428, 400, 409. Missing fields stay; texts replaces all, [] removes them; {} only checks the version. Fixed texts, no expressions, sealed with the master key in their own row, never in /settings (D-058): each 4 to max_text_chars characters on one line, at most max_texts (1 to 200, default 50; max_text_chars 4 to 1024, default 256), checked against the limits after the change, for texts sent and stored. Errors name a position, never a text (SEC-012). Audit: enabled, text_count and both limits as from and to, texts_replaced; never a text. Unreadable texts keep the last masker read; unreadable limits their last value or default; always with a log (F-93).
          */
         put: operations["updateLogMasking"];
         post?: never;
@@ -1994,7 +1994,7 @@ export interface components {
         LogMaskText: {
             /**
              * Format: password
-             * @description A fixed text; maxLength bounds the bytes in UTF-8.
+             * @description A fixed text of up to max_text_chars characters.
              */
             value: string;
             /** @description Ignore the case of A to Z. */

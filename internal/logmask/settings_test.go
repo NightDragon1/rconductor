@@ -17,15 +17,14 @@ func settingsRequest(t *testing.T, s *Settings, role perm.Role) users.Request {
 	t.Helper()
 	stored := role
 	if role != perm.RCONAdmin && role != perm.ServerAdmin && role != perm.Moderator && role != perm.Supporter {
-		stored = perm.Supporter // a session whose role is not known, on a stored user
+		stored = perm.Supporter // unknown role of a session, on a stored user
 	}
 	id := storetest.CreateUser(t, s.st, storetest.User{Pseudonym: "u" + string(role), Role: string(stored)})
 	return users.Request{Actor: perm.Actor{ID: id, Role: role}, Pseudonym: string(role)}
 }
 
-// TestSettingsRoles: only the RCON admin reads or changes the masking
-// (UI-022); every other role is refused before the input is looked at,
-// and each refusal is in the audit.
+// TestSettingsRoles: only the RCON admin passes (UI-022); every other role
+// is refused before the input, each refusal in the audit.
 func TestSettingsRoles(t *testing.T) {
 	s := NewSettings(storetest.New(t), nil)
 	ctx := context.Background()

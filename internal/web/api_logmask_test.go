@@ -48,14 +48,17 @@ func TestLogMaskingBehindFlag(t *testing.T) {
 	}
 	check(http.StatusUnauthorized, nil, ops...)
 	check(http.StatusNotImplemented, admin, append(ops, put(`{"texts":[{"value":"s3cr3t-1","ignore_case":true}],"max_texts":1}`), put(`{"texts":[]}`))...)
-	check(http.StatusForbidden, mod, append(ops, put(`{"texts":[{"value":"s3c"}]}`))...)
+	noVersion := put(`{"texts":[{"value":"s3c"}]}`)
+	noVersion.headers = nil
+	check(http.StatusForbidden, mod, append(ops, put(`{"texts":[{"value":"s3c"}]}`), noVersion)...)
+	check(http.StatusPreconditionRequired, admin, noVersion)
 	check(http.StatusBadRequest, admin,
 		put(`{"texts":[{"value":"s3c"}]}`), put(`{"texts":[{"value":"s3cr3t\nx"}]}`),
 		put(`{"texts":[{"value":"s3cr3t-1"},{"value":"s3cr3t-2"}],"max_texts":1}`),
 		put(`{"texts":[{"value":"s3cr3t-long"}],"max_text_chars":4}`),
 		put(`{"max_texts":0}`), put(`{"max_texts":201}`), put(`{"max_text_chars":3}`), put(`{"max_text_chars":1025}`))
 	var refused int
-	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action LIKE 'log_masking.%' AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
-		t.Errorf("audited refusals = %d (%v), want 3", refused, err)
+	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action LIKE 'log_masking.%' AND result = 'denied'`).Scan(&refused); err != nil || refused != 4 {
+		t.Errorf("audited refusals = %d (%v), want 4", refused, err)
 	}
 }

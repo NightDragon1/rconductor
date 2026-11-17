@@ -35,7 +35,9 @@ func NewSettings(st *store.Store, log *slog.Logger) *Settings {
 }
 
 // SettingsInput is a change; nil fields stay, SetTexts replaces all texts.
+// IfMatch is the version read before, nil without If-Match.
 type SettingsInput struct {
+	IfMatch   *int64
 	Enabled   *bool
 	SetTexts  bool
 	Texts     []Text
@@ -51,11 +53,14 @@ func (s *Settings) Get(ctx context.Context, req users.Request) error {
 	return ErrNotImplemented
 }
 
-// Update changes the setup: first the role (403), then the input (400),
-// as in D-051. Errors name a text by its position only (SEC-012).
+// Update changes the setup: the role (403), the version (428), then the
+// input (400), as in D-051 and D-058. Errors name a text by its position only (SEC-012).
 func (s *Settings) Update(ctx context.Context, req users.Request, in SettingsInput) error {
 	if req.Actor.Role != perm.RCONAdmin {
 		return s.denied(ctx, req, "log_masking.updated")
+	}
+	if in.IfMatch == nil {
+		return users.ErrPreconditionRequired
 	}
 	lim := Limits{Texts: MaxTexts, TextRunes: MaxTextRunes}
 	if in.MaxTexts != nil {
