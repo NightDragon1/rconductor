@@ -32,6 +32,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
@@ -137,6 +138,7 @@ func newAPIFixtureFeatures(t *testing.T, proxies Proxies, flags *features.Set) *
 	h := NewHandler(Options{
 		Log: log, Features: flags, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies, Hub: hub, Agents: agentSvc,
 		Servers:  servers.NewService(st, checker, box, log),
+		Masking:  logmask.NewSettings(st, box, log),
 		Profiles: users.NewProfiles(us, hasher, svc.RevokeOtherSessions),
 	})
 	return &apiFixture{h: h, userID: id, adminID: adminID, proxies: proxies, logs: logs, st: st, checker: checker, hub: hub}
