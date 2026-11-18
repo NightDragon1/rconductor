@@ -9,6 +9,7 @@ package agentview
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 )
@@ -40,9 +41,12 @@ type Masking interface {
 	ServerLines(ctx context.Context, serverID string, lines []string) []string
 }
 
-// maxMaskQueue bounds the deliveries of log lines that wait for the
-// masking; one is at most agentproto.MaxLogBytes.
+// maxMaskQueue bounds the deliveries of log lines of one agent that wait
+// for the masking; one is at most agentproto.MaxLogBytes.
 const maxMaskQueue = 64
+
+// dropWarnEvery spaces the warnings about dropped deliveries of an agent.
+const dropWarnEvery = time.Minute
 
 type delivery struct {
 	agentID    string
@@ -50,23 +54,37 @@ type delivery struct {
 	seq, first uint64
 }
 
+// agentQueue holds the deliveries of one agent for the masking, so a flood
+// of one agent never drops the lines of another.
+type agentQueue struct {
+	ch                    chan delivery
+	dropped, droppedLines int // since the last warning
+	total                 uint64
+	warned                time.Time
+}
+
 // UseMasking masks every delivery and every replay of log lines (UI-022).
-// Live lines are masked apart from the read loop of the agent, so a flood
-// of lines does not hold its answers; a delivery that finds the queue full
-// is dropped, never sent unmasked, and the client sees the gap in the
-// numbers. Set before the agents connect.
+// Live lines are masked apart from the read loop of the agent, in order,
+// one queue per agent, so a flood of lines holds neither the answers of
+// the agent nor the lines of other agents; a delivery that finds its
+// queue full is dropped, never sent unmasked, and the client sees the gap
+// in the numbers. Set before the agents connect.
 func (v *View) UseMasking(ctx context.Context, m Masking) {
-	v.mask, v.queue = m, make(chan delivery, maxMaskQueue)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case d := <-v.queue:
-				v.publishLines(ctx, d)
-			}
+	v.mask, v.maskCtx, v.queues = m, ctx, map[string]*agentQueue{}
+	if v.now == nil {
+		v.now = time.Now
+	}
+}
+
+func (v *View) maskLoop(q *agentQueue) {
+	for {
+		select {
+		case <-v.maskCtx.Done():
+			return
+		case d := <-q.ch:
+			v.publishLines(v.maskCtx, d)
 		}
-	}()
+	}
 }
 
 func (v *View) masked(ctx context.Context, serverID string, lines []string) []string {
@@ -92,16 +110,45 @@ func (v *View) currentLogs(ctx context.Context, serverID, agentID, container str
 
 func (v *View) lines(agentID string, ll agentproto.LogLines, seq, first uint64) {
 	d := delivery{agentID: agentID, ll: ll, seq: seq, first: first}
-	if v.queue == nil {
+	if v.queues == nil {
 		v.publishLines(context.Background(), d)
 		return
 	}
-	select {
-	case v.queue <- d:
-	default:
-		v.log.Warn("log lines dropped: masking is behind", slog.String("agent_id", agentID),
-			slog.String("container", ll.Container), slog.Int("lines", len(ll.Lines)))
+	v.qmu.Lock()
+	q := v.queues[agentID]
+	if q == nil {
+		q = &agentQueue{ch: make(chan delivery, maxMaskQueue)}
+		v.queues[agentID] = q // one per admitted agent
+		go v.maskLoop(q)
 	}
+	select {
+	case q.ch <- d:
+		v.qmu.Unlock()
+		return
+	default:
+	}
+	q.dropped, q.droppedLines, q.total = q.dropped+1, q.droppedLines+len(ll.Lines), q.total+1
+	now := v.now()
+	warn := q.warned.IsZero() || now.Sub(q.warned) >= dropWarnEvery
+	n, lines := q.dropped, q.droppedLines
+	if warn {
+		q.dropped, q.droppedLines, q.warned = 0, 0, now
+	}
+	v.qmu.Unlock()
+	if warn {
+		v.log.Warn("log lines dropped: masking is behind", slog.String("agent_id", agentID),
+			slog.Int("deliveries", n), slog.Int("lines", lines))
+	}
+}
+
+// droppedDeliveries is the number of deliveries of an agent dropped so far.
+func (v *View) droppedDeliveries(agentID string) uint64 {
+	v.qmu.Lock()
+	defer v.qmu.Unlock()
+	if q := v.queues[agentID]; q != nil {
+		return q.total
+	}
+	return 0
 }
 
 func (v *View) publishLines(ctx context.Context, d delivery) {

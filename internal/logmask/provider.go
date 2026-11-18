@@ -38,8 +38,11 @@ type Provider struct {
 	budget   time.Duration
 	base     *Masker // the texts of the admin; nil masks the list only
 	compiled map[string]*Masker
-	// servers holds the profile patterns of each server as last read.
-	servers map[string][][]string
+	// servers holds the profile patterns of each server as last read;
+	// gen counts the changes of servers and profiles, so an entry read
+	// before the last change is read again.
+	servers map[string]*serverPatterns
+	gen     uint64
 }
 
 // NewProvider reads the settings once and again after every change.
@@ -47,7 +50,7 @@ func NewProvider(ctx context.Context, s *Settings, log *slog.Logger) *Provider {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	p := &Provider{settings: s, log: log, enabled: true, budget: DefaultBudget, compiled: map[string]*Masker{}, servers: map[string][][]string{}}
+	p := &Provider{settings: s, log: log, enabled: true, budget: DefaultBudget, compiled: map[string]*Masker{}, servers: map[string]*serverPatterns{}}
 	s.OnChange(func() { p.Reload(context.Background()) }) // before the first read: no change is missed
 	p.Reload(ctx)
 	return p
@@ -100,29 +103,72 @@ func (p *Provider) Lines(lines []string, profilePatterns [][]string) ([]string, 
 	return p.masker(profilePatterns).Lines(lines, Budget{Max: budget})
 }
 
-// ServerLines masks one batch of lines of a server with the patterns of
-// its profiles; when they cannot be read, the patterns as last read hold,
-// without any, list and texts (F-93). Withheld lines are logged.
-func (p *Provider) ServerLines(ctx context.Context, serverID string, lines []string) []string {
-	patterns, err := profiles.LogMasksForServer(ctx, p.settings.st.Queries, serverID)
+type serverPatterns struct {
+	patterns [][]string
+	gen      uint64 // the change count the patterns were read at
+	read     bool
+	failing  bool // the last read failed and was logged
+}
+
+// ProfilesChanged marks the profile patterns of every server to be read
+// again: a server or a profile changed.
+func (p *Provider) ProfilesChanged() {
 	p.mu.Lock()
-	if err != nil {
-		patterns = p.servers[serverID]
-	} else {
-		if len(p.servers) >= maxCompiled {
-			clear(p.servers)
-		}
-		p.servers[serverID] = patterns
-	}
+	p.gen++
 	p.mu.Unlock()
-	if err != nil && ctx.Err() == nil {
-		p.log.Error("profile masking patterns not readable", logging.Event(logging.SettingReadFailed), slog.String(logging.KeyServer, serverID))
+}
+
+// ServerLines masks one batch of lines of a server with the patterns of
+// its profiles, read again only after a change; when they cannot be read,
+// the patterns as last read hold, without any, list and texts (F-93). A
+// read error is logged once until a read succeeds; withheld lines are
+// logged.
+func (p *Provider) ServerLines(ctx context.Context, serverID string, lines []string) []string {
+	p.mu.RLock()
+	e, gen := p.servers[serverID], p.gen
+	fresh := e != nil && e.read && e.gen == gen
+	var patterns [][]string
+	if e != nil {
+		patterns = e.patterns
+	}
+	p.mu.RUnlock()
+	if !fresh {
+		patterns = p.readPatterns(ctx, serverID, gen, patterns)
 	}
 	out, withheld := p.Lines(lines, patterns)
 	if withheld > 0 {
 		p.log.Warn("log lines withheld: masking took too long", slog.String(logging.KeyServer, serverID), slog.Int("lines", withheld))
 	}
 	return out
+}
+
+func (p *Provider) readPatterns(ctx context.Context, serverID string, gen uint64, last [][]string) [][]string {
+	read, err := profiles.LogMasksForServer(ctx, p.settings.st.Queries, serverID)
+	p.mu.Lock()
+	e := p.servers[serverID]
+	if e == nil {
+		if len(p.servers) >= maxCompiled {
+			for k := range p.servers { // one entry goes, the others keep their last state
+				delete(p.servers, k)
+				break
+			}
+		}
+		e = &serverPatterns{}
+		p.servers[serverID] = e
+	}
+	report := false
+	switch {
+	case err == nil:
+		e.patterns, e.gen, e.read, e.failing = read, gen, true, false
+		last = read
+	case ctx.Err() == nil:
+		report, e.failing = !e.failing, true
+	}
+	p.mu.Unlock()
+	if report {
+		p.log.Error("profile masking patterns not readable", logging.Event(logging.SettingReadFailed), slog.String(logging.KeyServer, serverID))
+	}
+	return last
 }
 
 // ListLines masks with the built-in list alone, for a way out of the panel
