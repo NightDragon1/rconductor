@@ -135,6 +135,52 @@ type View struct {
 	orders  map[string]*logOrders
 	// run names this count of log lines, see Logs.
 	run string
+
+	// mask masks log lines before they leave the panel; queue carries the
+	// live deliveries to it (UI-022).
+	mask  Masking
+	queue chan delivery
+}
+
+// Masking masks the log lines of a server (UI-022, D-088).
+type Masking interface {
+	ServerLines(ctx context.Context, serverID string, lines []string) []string
+}
+
+// maxMaskQueue bounds the deliveries of log lines that wait for the
+// masking; one is at most agentproto.MaxLogBytes.
+const maxMaskQueue = 64
+
+type delivery struct {
+	agentID    string
+	ll         agentproto.LogLines
+	seq, first uint64
+}
+
+// UseMasking masks every delivery and every replay of log lines (UI-022).
+// Live lines are masked apart from the read loop of the agent, so a flood
+// of lines does not hold its answers; a delivery that finds the queue full
+// is dropped, never sent unmasked, and the client sees the gap in the
+// numbers. Set before the agents connect.
+func (v *View) UseMasking(ctx context.Context, m Masking) {
+	v.mask, v.queue = m, make(chan delivery, maxMaskQueue)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case d := <-v.queue:
+				v.publishLines(ctx, d)
+			}
+		}
+	}()
+}
+
+func (v *View) masked(ctx context.Context, serverID string, lines []string) []string {
+	if v.mask == nil {
+		return lines
+	}
+	return v.mask.ServerLines(ctx, serverID, lines)
 }
 
 // SetPlayers adds the player counts to the runtime data.
@@ -284,7 +330,7 @@ func (v *View) Current(ctx context.Context, serverID, kind string) (any, bool) {
 		return v.metricsOf(serverID, agentID, container)
 	case "logs":
 		lines, seq, first := v.data.Logs(agentID, container)
-		return Logs{ServerID: serverID, Container: container, Lines: lines, Current: true, First: first, Run: v.run, Seq: seq}, true
+		return Logs{ServerID: serverID, Container: container, Lines: v.masked(ctx, serverID, lines), Current: true, First: first, Run: v.run, Seq: seq}, true
 	}
 	return nil, false
 }
@@ -304,8 +350,23 @@ func (v *View) metrics(agentID string, containers []string) {
 }
 
 func (v *View) lines(agentID string, ll agentproto.LogLines, seq, first uint64) {
-	for _, id := range v.servers(agentID, ll.Container) {
-		v.bus.PublishAgentData(id, "logs", Logs{ServerID: id, Container: ll.Container, Lines: ll.Lines, Truncated: ll.Truncated, First: first, Run: v.run, Seq: seq})
+	d := delivery{agentID: agentID, ll: ll, seq: seq, first: first}
+	if v.queue == nil {
+		v.publishLines(context.Background(), d)
+		return
+	}
+	select {
+	case v.queue <- d:
+	default:
+		v.log.Warn("log lines dropped: masking is behind", slog.String("agent_id", agentID),
+			slog.String("container", ll.Container), slog.Int("lines", len(ll.Lines)))
+	}
+}
+
+func (v *View) publishLines(ctx context.Context, d delivery) {
+	for _, id := range v.servers(d.agentID, d.ll.Container) {
+		v.bus.PublishAgentData(id, "logs", Logs{ServerID: id, Container: d.ll.Container, Lines: v.masked(ctx, id, d.ll.Lines),
+			Truncated: d.ll.Truncated, First: d.first, Run: v.run, Seq: d.seq})
 	}
 }
 

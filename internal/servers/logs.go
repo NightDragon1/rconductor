@@ -104,8 +104,19 @@ func (s *Service) Logs(ctx context.Context, req users.Request, id string, n int)
 	if len(lines) > n {
 		lines, cut = lines[len(lines)-n:], true
 	}
+	if s.mask != nil {
+		lines = s.mask.ServerLines(ctx, id, lines)
+	}
 	s.log.Info("container logs read", logging.Event(logging.LogsTail), slog.String(logging.KeyRequestID, req.RequestID),
 		slog.String(logging.KeyServer, id), slog.String("agent_id", agentID), slog.String("container", container),
 		slog.Int("lines", len(lines)))
 	return LogTail{ServerID: id, Container: container, Lines: lines, Truncated: cut || got.Truncated}, nil
 }
+
+// Masking masks the log lines of a server (UI-022, D-088).
+type Masking interface {
+	ServerLines(ctx context.Context, serverID string, lines []string) []string
+}
+
+// UseMasking sets the masking of container logs (UI-022).
+func (s *Service) UseMasking(m Masking) { s.mask = m }
