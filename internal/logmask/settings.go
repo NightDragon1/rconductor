@@ -35,10 +35,14 @@ var ErrUnreadable = errors.New("masking settings cannot be read")
 // Settings holds the masking settings of the RCON admin (UI-022, D-088 c):
 // one row of its own, its texts sealed with the master key (D-058).
 type Settings struct {
-	st  *store.Store
-	box *secret.Box
-	log *slog.Logger
+	st       *store.Store
+	box      *secret.Box
+	log      *slog.Logger
+	onChange func()
 }
+
+// OnChange sets what runs after every committed change; set before use.
+func (s *Settings) OnChange(f func()) { s.onChange = f }
 
 // NewSettings returns the settings service; without a log it logs nothing.
 func NewSettings(st *store.Store, box *secret.Box, log *slog.Logger) *Settings {
@@ -232,7 +236,13 @@ func (s *Settings) Write(ctx context.Context, req users.Request, in SettingsInpu
 	}); err != nil {
 		return State{}, err
 	}
-	return next, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return State{}, err
+	}
+	if s.onChange != nil {
+		s.onChange()
+	}
+	return next, nil
 }
 
 // apply checks the input against the limits after the change, for texts
