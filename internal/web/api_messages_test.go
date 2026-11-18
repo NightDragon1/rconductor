@@ -63,7 +63,8 @@ func TestMessagesBehindFlag(t *testing.T) {
 	}
 	check(http.StatusUnauthorized, nil, ops...)
 	check(http.StatusNotImplemented, admin, ops...)
-	check(http.StatusNotImplemented, sa, send(`{"text":"hi","audience":"scope"}`))
+	// Recipients are resolved: a scope without any is 400.
+	check(http.StatusBadRequest, sa, send(`{"text":"hi","audience":"scope"}`))
 	check(http.StatusForbidden, mod, send(`{"text":"hi","audience":"all"}`))
 	check(http.StatusForbidden, sa, send(`{"text":"hi","audience":"all"}`), send(`{"text":"hi","audience":"users","user_ids":[`+uid+`]}`))
 	check(http.StatusBadRequest, admin, send(`{"text":"hi","audience":"users"}`), send(`{"text":"hi","audience":"all","user_ids":[`+uid+`]}`),

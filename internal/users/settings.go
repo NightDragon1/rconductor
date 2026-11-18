@@ -78,6 +78,21 @@ const (
 	MinSMTPTestPerMinute     = 1
 )
 
+// Messages (MSG-001 to MSG-003, D-085): length of a text in characters,
+// user IDs of one message, users an audience may resolve to, and messages
+// per sender and hour.
+const (
+	SettingMessagesMaxText       = "messages.max_text"
+	DefaultMessagesMaxText       = 2000
+	MinMessagesMaxText           = 100
+	SettingMessagesMaxRecipients = "messages.max_recipients"
+	DefaultMessagesMaxRecipients = 100
+	SettingMessagesMaxResolved   = "messages.max_resolved_recipients"
+	DefaultMessagesMaxResolved   = 5000
+	SettingMessagesPerHour       = "messages.per_hour"
+	DefaultMessagesPerHour       = 20
+)
+
 // Command templates per server (CMD-008, D-068).
 const (
 	SettingTemplatesPerServer = "commands.templates_per_server"
@@ -178,6 +193,10 @@ var settingRules = map[string]rule{
 	auth.SettingRecoveryQueue:      intRule(auth.MinRecoveryQueue, 10000),
 	SettingSMTPTimeout:             durationRule(MinSMTPTimeout, 5*time.Minute),
 	SettingSMTPTestPerMinute:       intRule(MinSMTPTestPerMinute, 60),
+	SettingMessagesMaxText:         intRule(MinMessagesMaxText, 8192),
+	SettingMessagesMaxRecipients:   intRule(1, 500),
+	SettingMessagesMaxResolved:     intRule(1, 100000),
+	SettingMessagesPerHour:         intRule(1, 1000),
 	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
 	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
 	SettingMultiParallel:           intRule(MinMultiParallel, 64),
