@@ -57,6 +57,19 @@ func TestProviderReadErrors(t *testing.T) {
 	}
 	p := NewProvider(ctx, s, nil)
 	other := NewProvider(ctx, NewSettings(s.st, newBox(t), nil), nil)
+	off := false
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(1), Enabled: &off}); err != nil {
+		t.Fatal(err)
+	}
+	other.Reload(ctx)
+	if got := line(other, "token=a"); got != "token=a" {
+		t.Errorf("other master key, stored off: %q", got)
+	}
+	on := true
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(2), Enabled: &on}); err != nil {
+		t.Fatal(err)
+	}
+	other.Reload(ctx)
 	if _, err := s.st.DB.Exec(`UPDATE settings SET value = 'broken' WHERE key = ?`, users.SettingLogMasking); err != nil {
 		t.Fatal(err)
 	}
@@ -132,8 +145,38 @@ func TestProviderParallel(t *testing.T) {
 	}
 	wg.Go(func() {
 		for v := range int64(10) {
-			_, _ = s.Write(ctx, admin, SettingsInput{IfMatch: version(v), MaxTexts: num(int(v) + 1)})
+			if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(v), MaxTexts: num(int(v) + 1)}); err != nil {
+				t.Errorf("write %d: %v", v, err)
+			}
 		}
 	})
 	wg.Wait()
+	if p.version != 10 {
+		t.Errorf("provider holds version %d, want 10", p.version)
+	}
+}
+
+// TestProviderOrder: an older state never replaces a newer one, and two
+// providers on the same settings both follow every change.
+func TestProviderOrder(t *testing.T) {
+	s, _ := newSettings(t)
+	ctx := context.Background()
+	p, q := NewProvider(ctx, s, nil), NewProvider(ctx, s, nil)
+	admin := settingsRequest(t, s, perm.RCONAdmin)
+	off := false
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), Enabled: &off}); err != nil {
+		t.Fatal(err)
+	}
+	for name, pr := range map[string]*Provider{"first": p, "second": q} {
+		if got := line(pr, "token=a"); got != "token=a" {
+			t.Errorf("%s provider: %q", name, got)
+		}
+	}
+	p.mu.Lock()
+	p.version, p.enabled = 5, true // as if a newer state had been taken over
+	p.mu.Unlock()
+	p.Reload(ctx)
+	if got := line(p, "token=a"); got != "token=•••" {
+		t.Errorf("older state taken over: %q", got)
+	}
 }

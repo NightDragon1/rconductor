@@ -6,10 +6,12 @@ package logmask
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 )
 
@@ -25,7 +27,10 @@ type Provider struct {
 	settings *Settings
 	log      *slog.Logger
 
+	reload sync.Mutex // one reload at a time, from read to taking over
+
 	mu       sync.RWMutex
+	version  int64 // of the state taken over; an older one never replaces it
 	enabled  bool
 	budget   time.Duration
 	base     *Masker // the texts of the admin; nil masks the list only
@@ -37,37 +42,38 @@ func NewProvider(ctx context.Context, s *Settings, log *slog.Logger) *Provider {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	p := &Provider{settings: s, log: log, enabled: true, budget: DefaultBudget, compiled: map[string]*Masker{}}
+	p := &Provider{settings: s, log: log, enabled: true, budget: DefaultBudget, compiled: map[string]*Masker{}, version: -1}
+	s.OnChange(func() { p.Reload(context.Background()) }) // before the first read: no change is missed
 	p.Reload(ctx)
-	s.OnChange(func() { p.Reload(context.Background()) })
 	return p
 }
 
 // Reload reads the settings; on a read error the last state stays, and
 // Load or OpenTexts has logged it.
 func (p *Provider) Reload(ctx context.Context) {
+	p.reload.Lock()
+	defer p.reload.Unlock()
 	st, err := p.settings.Load(ctx)
 	if err != nil {
 		return
 	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if st.Version < p.version {
+		return
+	}
+	p.version, p.enabled, p.budget = st.Version, st.Enabled, time.Duration(st.BudgetMS)*time.Millisecond
 	texts, err := p.settings.OpenTexts(st)
 	if err != nil {
-		// The switch and the budget are readable: protection on as stored,
-		// the texts as last read.
-		p.mu.Lock()
-		p.enabled, p.budget = st.Enabled, time.Duration(st.BudgetMS)*time.Millisecond
-		p.mu.Unlock()
-		return
+		return // switch and budget as stored, the texts as last read
 	}
 	// Stored texts are not checked against the limits when loaded.
 	base, err := New(texts, Limits{Texts: MaxTexts, TextRunes: MaxTextRunes})
 	if err != nil {
-		p.log.Error("masking texts not usable", slog.Int("texts", len(texts)))
+		p.log.Error("masking texts not usable", logging.Event(logging.SettingReadFailed), slog.Int("texts", len(texts)))
 		return
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.enabled, p.budget, p.base = st.Enabled, time.Duration(st.BudgetMS)*time.Millisecond, base
+	p.base = base
 	clear(p.compiled)
 }
 
@@ -87,13 +93,14 @@ func (p *Provider) Lines(lines []string, profilePatterns [][]string) ([]string, 
 // masker is the masker of the texts with the patterns of the profiles,
 // compiled once per set of patterns.
 func (p *Provider) masker(profilePatterns [][]string) *Masker {
-	var key strings.Builder
+	var key strings.Builder // each pattern with its length, so no two sets meet
 	for _, ps := range profilePatterns {
 		for _, pat := range ps {
+			key.WriteString(strconv.Itoa(len(pat)))
+			key.WriteByte(':')
 			key.WriteString(pat)
-			key.WriteByte(0)
 		}
-		key.WriteByte(1)
+		key.WriteByte('|')
 	}
 	p.mu.RLock()
 	m, ok := p.compiled[key.String()]
@@ -103,10 +110,10 @@ func (p *Provider) masker(profilePatterns [][]string) *Masker {
 		return m
 	}
 	m = base
-	for _, ps := range profilePatterns {
+	for i, ps := range profilePatterns {
 		res, bad := profiles.CompileLogMasks(ps)
 		if len(bad) > 0 {
-			p.log.Warn("profile masking patterns left out", slog.Any("positions", bad))
+			p.log.Warn("profile masking patterns left out", logging.Event(logging.SettingReadFailed), slog.Int("profile", i), slog.Any("positions", bad))
 		}
 		m = m.WithPatterns(res)
 	}
