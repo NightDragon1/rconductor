@@ -21,9 +21,9 @@ import (
 const maxCompiled = 1024
 
 // Provider masks batches of log lines with the settings of the RCON admin
-// as last read (UI-022, D-088, F-93): a read error keeps the last state;
-// without any readable state since the start, list and profiles mask and
-// the texts are missing.
+// as last read (UI-022, D-088, F-93): on a read error masking is on and
+// budget and texts stay as last read; without any readable state since the
+// start, list and profiles mask and the texts are missing.
 type Provider struct {
 	settings *Settings
 	log      *slog.Logger
@@ -38,6 +38,8 @@ type Provider struct {
 	budget   time.Duration
 	base     *Masker // the texts of the admin; nil masks the list only
 	compiled map[string]*Masker
+	// servers holds the profile patterns of each server as last read.
+	servers map[string][][]string
 }
 
 // NewProvider reads the settings once and again after every change.
@@ -45,7 +47,7 @@ func NewProvider(ctx context.Context, s *Settings, log *slog.Logger) *Provider {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	p := &Provider{settings: s, log: log, enabled: true, budget: DefaultBudget, compiled: map[string]*Masker{}}
+	p := &Provider{settings: s, log: log, enabled: true, budget: DefaultBudget, compiled: map[string]*Masker{}, servers: map[string][][]string{}}
 	s.OnChange(func() { p.Reload(context.Background()) }) // before the first read: no change is missed
 	p.Reload(ctx)
 	return p
@@ -96,6 +98,38 @@ func (p *Provider) Lines(lines []string, profilePatterns [][]string) ([]string, 
 		return lines, 0
 	}
 	return p.masker(profilePatterns).Lines(lines, Budget{Max: budget})
+}
+
+// ServerLines masks one batch of lines of a server with the patterns of
+// its profiles; when they cannot be read, the patterns as last read hold,
+// without any, list and texts (F-93). Withheld lines are logged.
+func (p *Provider) ServerLines(ctx context.Context, serverID string, lines []string) []string {
+	patterns, err := profiles.LogMasksForServer(ctx, p.settings.st.Queries, serverID)
+	p.mu.Lock()
+	if err != nil {
+		patterns = p.servers[serverID]
+	} else {
+		if len(p.servers) >= maxCompiled {
+			clear(p.servers)
+		}
+		p.servers[serverID] = patterns
+	}
+	p.mu.Unlock()
+	if err != nil && ctx.Err() == nil {
+		p.log.Error("profile masking patterns not readable", logging.Event(logging.SettingReadFailed), slog.String(logging.KeyServer, serverID))
+	}
+	out, withheld := p.Lines(lines, patterns)
+	if withheld > 0 {
+		p.log.Warn("log lines withheld: masking took too long", slog.String(logging.KeyServer, serverID), slog.Int("lines", withheld))
+	}
+	return out
+}
+
+// ListLines masks with the built-in list alone, for a way out of the panel
+// that has no provider (fail closed).
+func ListLines(lines []string) []string {
+	out, _ := (*Masker)(nil).WithPatterns(nil).Lines(lines, Budget{Max: DefaultBudget})
+	return out
 }
 
 // masker is the masker of the texts with the patterns of the profiles,

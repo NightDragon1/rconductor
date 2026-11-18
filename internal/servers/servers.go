@@ -135,6 +135,9 @@ type Service struct {
 	agents Agents
 	rcon   Executor
 	tests  testLimiter
+	// mask masks container logs before they leave the panel (UI-022);
+	// without it the built-in list masks (logs.go).
+	mask Masking
 }
 
 // NewService returns the server administration; box encrypts credentials

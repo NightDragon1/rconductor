@@ -46,9 +46,10 @@ func TestProviderFollowsSettings(t *testing.T) {
 	}
 }
 
-// TestProviderReadErrors (F-93): a broken row keeps the last state; a
-// start with a broken row masks with list and profiles; texts sealed with
-// another key keep switch and budget, without the texts.
+// TestProviderReadErrors (F-93): a broken row switches masking on and
+// keeps budget and texts as last read; a start with a broken row masks
+// with list and profiles; texts sealed with another key keep switch and
+// budget, without the texts.
 func TestProviderReadErrors(t *testing.T) {
 	s, logs := newSettings(t)
 	ctx := context.Background()
@@ -78,7 +79,7 @@ func TestProviderReadErrors(t *testing.T) {
 	fresh := NewProvider(ctx, s, nil)
 	// A stored "off" that can no longer be read counts as on (F-93).
 	q := NewProvider(ctx, NewSettings(s.st, s.box, nil), nil)
-	if _, err := s.st.DB.Exec(`UPDATE settings SET value = ? WHERE key = ?`, `{"version":9,"enabled":false,"max_texts":50,"max_text_chars":256,"budget_ms":250}`, users.SettingLogMasking); err != nil {
+	if _, err := s.st.DB.Exec(`UPDATE settings SET value = ? WHERE key = ?`, `{"version":9,"enabled":false,"max_texts":50,"max_text_chars":256,"budget_ms":1234}`, users.SettingLogMasking); err != nil {
 		t.Fatal(err)
 	}
 	q.Reload(ctx)
@@ -91,6 +92,9 @@ func TestProviderReadErrors(t *testing.T) {
 	q.Reload(ctx)
 	if got := line(q, "token=a"); got != "token=•••" {
 		t.Errorf("off, then unreadable: %q", got)
+	}
+	if q.budget != 1234*time.Millisecond {
+		t.Errorf("off, then unreadable: budget %s, want the one last read", q.budget)
 	}
 	for name, c := range map[string]struct {
 		p    *Provider
@@ -208,5 +212,43 @@ func TestProviderOrder(t *testing.T) {
 		if got := line(pr, "token=a"); got != "token=•••" {
 			t.Errorf("%s provider after the repair: %q", name, got)
 		}
+	}
+}
+
+// TestProviderServerLines: the patterns of each profile of a server mask
+// its lines; when the profiles cannot be read, the patterns as last read
+// hold, without any the list and the texts (F-93).
+func TestProviderServerLines(t *testing.T) {
+	s, logs := newSettings(t)
+	ctx := context.Background()
+	for _, q := range []string{
+		`INSERT INTO game_profiles (id, slug, name, protocol, default_port, rules, source_file, content_hash, imported_at)
+			VALUES ('p1', 'g1', 'g1', 'source-rcon', 1, '{"log_masks":["(adminpass=)\\S+"]}', 'f', 'h', 't'),
+			('p2', 'g2', 'g2', 'source-rcon', 1, '{"log_masks":["(pw=)\\S+"]}', 'f', 'h', 't')`,
+		`INSERT INTO servers (id, name, created_at, updated_at) VALUES ('s1', 's1', 't', 't'), ('s2', 's2', 't', 't')`,
+		`INSERT INTO server_profiles (server_id, profile_id, position) VALUES ('s1', 'p1', 0), ('s1', 'p2', 1), ('s2', 'p2', 0)`,
+	} {
+		if _, err := s.st.DB.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := NewProvider(ctx, s, s.log)
+	const in = "adminpass=x pw=y token=z"
+	if got := p.ServerLines(ctx, "s1", []string{in})[0]; got != "adminpass=••• pw=••• token=•••" {
+		t.Errorf("both profiles: %q", got)
+	}
+	if _, err := s.st.DB.Exec(`ALTER TABLE server_profiles RENAME TO server_profiles_gone`); err != nil {
+		t.Fatal(err)
+	}
+	for server, want := range map[string]string{
+		"s1": "adminpass=••• pw=••• token=•••", // as last read
+		"s2": "adminpass=x pw=y token=•••",     // never read: the list
+	} {
+		if got := p.ServerLines(ctx, server, []string{in})[0]; got != want {
+			t.Errorf("%s unreadable: %q", server, got)
+		}
+	}
+	if !strings.Contains(logs.String(), "setting.read_failed") {
+		t.Errorf("log: %s", logs.String())
 	}
 }

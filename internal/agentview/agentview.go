@@ -92,28 +92,6 @@ type Metrics struct {
 	Stale      bool      `json:"stale"`
 }
 
-// Logs is the data of server.<id>.logs; the lines are foreign data
-// (SEC-006). Seq numbers the delivery; the hub drops live deliveries that
-// a new subscriber's current state already holds (Design 2.3).
-type Logs struct {
-	ServerID  string   `json:"server_id"`
-	Container string   `json:"container"`
-	Lines     []string `json:"lines"`
-	Truncated bool     `json:"truncated,omitempty"`
-	// Current marks the last lines sent to a new subscriber, which the
-	// client may hold already (UI-009).
-	Current bool `json:"current,omitempty"`
-	// First numbers the first line; Run names the count, which starts
-	// over with the panel. With them the client tells new lines from
-	// known ones without comparing text (#157).
-	First uint64 `json:"first"`
-	Run   string `json:"run"`
-	Seq   uint64 `json:"-"`
-}
-
-// Sequence implements events.Sequenced.
-func (l Logs) Sequence() uint64 { return l.Seq }
-
 type follow struct {
 	agentID, container string
 	viewers            int
@@ -135,6 +113,11 @@ type View struct {
 	orders  map[string]*logOrders
 	// run names this count of log lines, see Logs.
 	run string
+
+	// mask masks log lines before they leave the panel; queue carries the
+	// live deliveries to it (UI-022, logs.go).
+	mask  Masking
+	queue chan delivery
 }
 
 // SetPlayers adds the player counts to the runtime data.
@@ -283,8 +266,7 @@ func (v *View) Current(ctx context.Context, serverID, kind string) (any, bool) {
 	case "metrics":
 		return v.metricsOf(serverID, agentID, container)
 	case "logs":
-		lines, seq, first := v.data.Logs(agentID, container)
-		return Logs{ServerID: serverID, Container: container, Lines: lines, Current: true, First: first, Run: v.run, Seq: seq}, true
+		return v.currentLogs(ctx, serverID, agentID, container), true
 	}
 	return nil, false
 }
@@ -300,12 +282,6 @@ func (v *View) metrics(agentID string, containers []string) {
 			}
 			v.publishRuntime(context.Background(), id)
 		}
-	}
-}
-
-func (v *View) lines(agentID string, ll agentproto.LogLines, seq, first uint64) {
-	for _, id := range v.servers(agentID, ll.Container) {
-		v.bus.PublishAgentData(id, "logs", Logs{ServerID: id, Container: ll.Container, Lines: ll.Lines, Truncated: ll.Truncated, First: first, Run: v.run, Seq: seq})
 	}
 }
 

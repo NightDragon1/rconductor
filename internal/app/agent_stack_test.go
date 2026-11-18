@@ -24,6 +24,9 @@ import (
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 )
 
+// stackSecret stands for a secret an image writes into its log.
+const stackSecret = "hunter2x"
+
 // hostBackend stands in for Docker: one container mc, metrics every 50 ms,
 // logs while followed, and every order recorded.
 type hostBackend struct {
@@ -88,7 +91,7 @@ func (b *hostBackend) Handle(ctx context.Context, e agentproto.Envelope, out age
 	b.orders = append(b.orders, e.Type)
 	b.mu.Unlock()
 	if e.Type == agentproto.TypeLogsFollow {
-		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"[Server] <b>Done</b>"}})
+		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"[Server] <b>Done</b> --rcon-password " + stackSecret}})
 	}
 	if e.Type == agentproto.TypeVersionDetect {
 		_ = out.Send(ctx, agentproto.TypeVersionFound, e.ID, agentproto.VersionFound{Container: "mc", Version: "1.21.4"})
@@ -102,7 +105,7 @@ func (b *hostBackend) Handle(ctx context.Context, e agentproto.Envelope, out age
 			_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeRateLimited})
 			return
 		}
-		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"old 1", "old 2", "old \x1b[31m3\u202e"}})
+		_ = out.Send(ctx, agentproto.TypeLogLines, e.ID, agentproto.LogLines{Container: "mc", Lines: []string{"old 1", "old 2 password=" + stackSecret, "old \x1b[31m3\u202e"}})
 	}
 	_ = out.Send(ctx, agentproto.TypeResult, e.ID, agentproto.Result{Code: agentproto.CodeOK})
 }
@@ -259,6 +262,10 @@ func TestAgentThroughTheStack(t *testing.T) {
 	if !strings.Contains(string(data), `\u003cb\u003eDone\u003c/b\u003e`) {
 		t.Errorf("log lines not escaped JSON: %s", data)
 	}
+	// Known secrets are masked before the lines leave the panel (UI-022).
+	if strings.Contains(string(data), stackSecret) || !strings.Contains(string(data), "--rcon-password •••") {
+		t.Errorf("live lines not masked: %s", data)
+	}
 	b, _ := json.Marshal(map[string]string{"type": "unsubscribe", "topic": "server." + s.server + ".logs"})
 	_ = ws.Write(context.Background(), websocket.MessageText, b)
 	deadline = time.Now().Add(5 * time.Second)
@@ -316,7 +323,7 @@ func TestAgentThroughTheStack(t *testing.T) {
 	admin.must(http.MethodGet, "/servers/"+s.server+"/logs?lines=2", nil, &tail, http.StatusOK)
 	// Control characters go; format characters stay in free text and the
 	// interface isolates them (SEC-006).
-	if tail.Container != "mc" || !slices.Equal(tail.Lines, []string{"old 2", "old [31m3\u202e"}) || !tail.Truncated {
+	if tail.Container != "mc" || !slices.Equal(tail.Lines, []string{"old 2 password=•••", "old [31m3\u202e"}) || !tail.Truncated {
 		t.Errorf("tail = %+v", tail)
 	}
 	if code := admin.call(http.MethodGet, "/servers/"+s.server+"/logs?lines=7", nil, nil); code != http.StatusTooManyRequests {
@@ -330,6 +337,9 @@ func TestAgentThroughTheStack(t *testing.T) {
 	})
 	if strings.Contains(string(data), "old") {
 		t.Errorf("tail lines in the live ring: %s", data)
+	}
+	if strings.Contains(string(data), stackSecret) {
+		t.Errorf("replay not masked: %s", data)
 	}
 
 	// A restart goes to the agent and is audited.

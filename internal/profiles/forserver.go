@@ -56,6 +56,24 @@ func ForServer(ctx context.Context, q *sqlitedb.Queries, serverID string) (*Prof
 	return Effective(list), ids, nil
 }
 
+// LogMasksForServer are the masking patterns of each profile of a server,
+// top first; each profile keeps its own limits (D-088 b).
+func LogMasksForServer(ctx context.Context, q *sqlitedb.Queries, serverID string) ([][]string, error) {
+	ids, err := q.GetServerProfiles(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+	loaded, err := Load(ctx, q, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make([][]string, len(loaded))
+	for i, l := range loaded {
+		out[i] = l.Rules.LogMasks
+	}
+	return out, nil
+}
+
 // CatalogForServer is the catalog of a server: the union of the catalogs
 // of its profiles, top first; the upper entry wins for the same path.
 func CatalogForServer(ctx context.Context, q *sqlitedb.Queries, serverID string) ([]Command, error) {

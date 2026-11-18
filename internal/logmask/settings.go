@@ -31,7 +31,7 @@ const (
 )
 
 // ErrUnreadable means the stored settings or texts cannot be read; the
-// caller keeps what it read before (F-93).
+// caller masks and keeps budget and texts as read before (F-93).
 var ErrUnreadable = errors.New("masking settings cannot be read")
 
 // Settings holds the masking settings of the RCON admin (UI-022, D-088 c):

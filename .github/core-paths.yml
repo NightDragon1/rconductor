@@ -62,6 +62,8 @@ redact:
   - internal/logging/redact.go
   - internal/logging/logging.go
   - internal/logmask/**
+  - internal/agentview/logs.go
+  - internal/servers/logs.go
 
 # audit: audit log and the fixed event codes
 audit:

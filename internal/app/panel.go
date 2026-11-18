@@ -244,6 +244,12 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	agents.OnDisconnect(agentData.Disconnected)
 	serverSvc.SetActions(agents, conns)
 	views := agentview.New(st, agentData, agents, hub, logs.Module("agent"))
+	// Container logs are masked before they leave the panel; the API and
+	// the masking share the settings, so a change applies at once (UI-022).
+	maskSettings := logmask.NewSettings(st, box, logs.Module("logmask"))
+	masking := logmask.NewProvider(ctx, maskSettings, logs.Module("logmask"))
+	views.UseMasking(ctx, masking)
+	serverSvc.UseMasking(masking)
 	views.SetPlayers(runtime)
 	hub.SetAgentViews(views)
 	serverSvc.OnChange(func(string) { views.Wake() })
@@ -270,7 +276,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 		webLog.Warn("RCD_PUBLIC_URL is not https: session cookies are only marked Secure " +
 			"when a trusted proxy (RCD_TRUSTED_PROXIES) sends X-Forwarded-Proto: https")
 	}
-	handler := web.NewHandler(web.Options{Features: features.Default(), Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc, Mail: mailSvc, Masking: logmask.NewSettings(st, box, logs.Module("logmask")),
+	handler := web.NewHandler(web.Options{Features: features.Default(), Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc, Mail: mailSvc, Masking: maskSettings,
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
 		Agents: agentSvc, Runtime: views,
 	})
