@@ -135,10 +135,6 @@ are written like `24h`, `15m`, `30s`.
 | `auth.recovery_queue` (new in 1.1) | number | 100 | 1 to 10000 | recovery requests waiting in the background; further ones are dropped with the same answer and logged as `auth.recovery.dropped` |
 | `smtp.timeout` (new in 1.1) | duration | 10s | 1s to 5m | longest time for one mail, from connecting to the end |
 | `smtp.test_per_minute` (new in 1.1) | number | 5 | 1 to 60 | test mails per user and minute |
-| `messages.max_text` (new in 1.2) | number | 2000 | 100 to 8192 | characters of a message; at most 8 KiB in UTF-8 in any case |
-| `messages.max_recipients` (new in 1.2) | number | 100 | 1 to 500 | users chosen one by one for a message |
-| `messages.max_resolved_recipients` (new in 1.2) | number | 5000 | 1 to 100000 | users a message may go to; a larger audience is refused, never cut |
-| `messages.per_hour` (new in 1.2) | number | 20 | 1 to 1000 | messages per sender and hour; deleting a message does not lower the count |
 | `ui.shortcuts_enabled` | boolean | off | on, off | keyboard shortcuts for everyone |
 
 ## Mail (SMTP) (new in 1.1)

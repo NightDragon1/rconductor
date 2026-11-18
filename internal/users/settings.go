@@ -80,7 +80,8 @@ const (
 
 // Messages (MSG-001 to MSG-003, D-085): length of a text in characters,
 // user IDs of one message, users an audience may resolve to, and messages
-// per sender and hour.
+// per sender and hour. The RCON admin may change them once storing is
+// built; until then the defaults hold.
 const (
 	SettingMessagesMaxText       = "messages.max_text"
 	DefaultMessagesMaxText       = 2000
@@ -193,10 +194,6 @@ var settingRules = map[string]rule{
 	auth.SettingRecoveryQueue:      intRule(auth.MinRecoveryQueue, 10000),
 	SettingSMTPTimeout:             durationRule(MinSMTPTimeout, 5*time.Minute),
 	SettingSMTPTestPerMinute:       intRule(MinSMTPTestPerMinute, 60),
-	SettingMessagesMaxText:         intRule(MinMessagesMaxText, 8192),
-	SettingMessagesMaxRecipients:   intRule(1, 500),
-	SettingMessagesMaxResolved:     intRule(1, 100000),
-	SettingMessagesPerHour:         intRule(1, 1000),
 	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
 	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
 	SettingMultiParallel:           intRule(MinMultiParallel, 64),
@@ -214,18 +211,14 @@ func init() {
 // EnsureAuditDefaults stores the default audit retention unless it exists.
 func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 	for key, v := range map[string]int{
-		SettingAuditRetentionDays:    DefaultAuditRetentionDays,
-		SettingWSMaxSockets:          DefaultWSMaxSockets,
-		SettingWSMaxSubs:             DefaultWSMaxSubs,
-		SettingConnectionTests:       DefaultConnectionTests,
-		SettingTemplatesPerServer:    DefaultTemplatesPerServer,
-		SettingMultiMaxServers:       DefaultMultiMaxServers,
-		SettingMultiParallel:         DefaultMultiParallel,
-		SettingHTTPParallel:          DefaultHTTPParallel,
-		SettingMessagesMaxText:       DefaultMessagesMaxText,
-		SettingMessagesMaxRecipients: DefaultMessagesMaxRecipients,
-		SettingMessagesMaxResolved:   DefaultMessagesMaxResolved,
-		SettingMessagesPerHour:       DefaultMessagesPerHour,
+		SettingAuditRetentionDays: DefaultAuditRetentionDays,
+		SettingWSMaxSockets:       DefaultWSMaxSockets,
+		SettingWSMaxSubs:          DefaultWSMaxSubs,
+		SettingConnectionTests:    DefaultConnectionTests,
+		SettingTemplatesPerServer: DefaultTemplatesPerServer,
+		SettingMultiMaxServers:    DefaultMultiMaxServers,
+		SettingMultiParallel:      DefaultMultiParallel,
+		SettingHTTPParallel:       DefaultHTTPParallel,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
