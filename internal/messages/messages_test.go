@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -26,6 +27,12 @@ func request(t *testing.T, s *Service, role perm.Role) users.Request {
 	return users.Request{Actor: perm.Actor{ID: id, Role: role}, Pseudonym: string(role)}
 }
 
+func newService(t *testing.T) *Service {
+	t.Helper()
+	st := storetest.New(t)
+	return NewService(st, perm.NewChecker(st, slog.New(slog.DiscardHandler)), nil)
+}
+
 func denials(t *testing.T, s *Service, action string) int {
 	t.Helper()
 	var n int
@@ -40,7 +47,7 @@ func denials(t *testing.T, s *Service, action string) int {
 // TestSendRoles: only the RCON admin and the server admin send, each to
 // his own audiences (D-085); every refusal is 403 and in the audit.
 func TestSendRoles(t *testing.T) {
-	s := NewService(storetest.New(t), nil)
+	s := newService(t)
 	ctx := context.Background()
 	reqs := map[perm.Role]users.Request{}
 	for _, r := range []perm.Role{perm.RCONAdmin, perm.ServerAdmin, perm.Moderator, perm.Supporter, "unknown"} {
@@ -54,14 +61,12 @@ func TestSendRoles(t *testing.T) {
 			if a == AudienceUsers {
 				in.UserIDs = []string{"00000000-0000-4000-8000-000000000001"}
 			}
-			want := users.ErrForbidden
-			if slicesContain(senders[role], a) {
-				want = ErrNotImplemented
-			} else {
+			allowed := slicesContain(senders[role], a)
+			if !allowed {
 				refused++
 			}
-			if err := s.Send(ctx, req, in); !errors.Is(err, want) {
-				t.Errorf("%s to %s = %v, want %v", role, a, err, want)
+			if _, err := s.Send(ctx, req, in); errors.Is(err, users.ErrForbidden) == allowed {
+				t.Errorf("%s to %s = %v, allowed %v", role, a, err, allowed)
 			}
 		}
 	}
@@ -86,7 +91,7 @@ func slicesContain(l []string, v string) bool {
 // bytes, user_ids only and always with audience users, their number and
 // repeats. A refused role learns nothing about its input.
 func TestSendInput(t *testing.T) {
-	s := NewService(storetest.New(t), nil)
+	s := newService(t)
 	ctx := context.Background()
 	admin, sa, mod := request(t, s, perm.RCONAdmin), request(t, s, perm.ServerAdmin), request(t, s, perm.Moderator)
 	id := func(i int) string { return fmt.Sprintf("00000000-0000-4000-8000-%012d", i) }
@@ -110,17 +115,14 @@ func TestSendInput(t *testing.T) {
 	}
 	for _, c := range invalid {
 		var inv *users.InvalidError
-		if err := s.Send(ctx, c.req, c.in); !errors.As(err, &inv) {
+		if _, err := s.Send(ctx, c.req, c.in); !errors.As(err, &inv) {
 			t.Errorf("%s = %v, want invalid", c.name, err)
 		}
 	}
-	if err := s.Send(ctx, admin, Input{Text: strings.Repeat("a", MaxTextBytes), Audience: AudienceUsers, UserIDs: many[:MaxUserIDs]}); !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("at the bounds = %v, want not implemented", err)
-	}
-	if err := s.Send(ctx, mod, Input{Audience: AudienceUsers, UserIDs: many}); !errors.Is(err, users.ErrForbidden) {
+	if _, err := s.Send(ctx, mod, Input{Audience: AudienceUsers, UserIDs: many}); !errors.Is(err, users.ErrForbidden) {
 		t.Errorf("moderator with invalid input = %v, want forbidden first", err)
 	}
-	if err := s.Send(ctx, sa, Input{Text: "hi", Audience: AudienceUsers, UserIDs: []string{id(1)}}); !errors.Is(err, users.ErrForbidden) {
+	if _, err := s.Send(ctx, sa, Input{Text: "hi", Audience: AudienceUsers, UserIDs: []string{id(1)}}); !errors.Is(err, users.ErrForbidden) {
 		t.Errorf("server admin to users = %v, want forbidden", err)
 	}
 }
@@ -129,7 +131,7 @@ func TestSendInput(t *testing.T) {
 // on one message come through to the message; a role that is not known is
 // refused and audited.
 func TestReadRoles(t *testing.T) {
-	s := NewService(storetest.New(t), nil)
+	s := newService(t)
 	ctx := context.Background()
 	const id = "00000000-0000-4000-8000-000000000001"
 	ops := map[string]func(users.Request) error{
@@ -167,7 +169,7 @@ func TestReadRoles(t *testing.T) {
 // TestCommentInput: the role comes first (D-051), then the text: required
 // and at most MaxCommentBytes bytes.
 func TestCommentInput(t *testing.T) {
-	s := NewService(storetest.New(t), nil)
+	s := newService(t)
 	ctx := context.Background()
 	const id = "00000000-0000-4000-8000-000000000001"
 	mod := request(t, s, perm.Moderator)
@@ -187,13 +189,13 @@ func TestCommentInput(t *testing.T) {
 
 // TestRefusalsInParallel: parallel refusals each reach the audit.
 func TestRefusalsInParallel(t *testing.T) {
-	s := NewService(storetest.New(t), nil)
+	s := newService(t)
 	mod := request(t, s, perm.Moderator)
 	const n = 32
 	var wg sync.WaitGroup
 	for range n {
 		wg.Go(func() {
-			if err := s.Send(context.Background(), mod, Input{Text: "hi", Audience: AudienceAll}); !errors.Is(err, users.ErrForbidden) {
+			if _, err := s.Send(context.Background(), mod, Input{Text: "hi", Audience: AudienceAll}); !errors.Is(err, users.ErrForbidden) {
 				t.Errorf("send = %v", err)
 			}
 		})

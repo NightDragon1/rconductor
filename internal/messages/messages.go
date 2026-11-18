@@ -2,17 +2,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package messages holds the messages in the panel (MSG-001 to MSG-003,
-// D-085, D-086). This is its skeleton while the API is built contract first:
-// every operation checks the role of the caller and the audience, writes a
-// refusal to the audit log and otherwise answers ErrNotImplemented.
+// D-085, D-086). Every operation checks the role of the caller and the
+// audience and writes a refusal to the audit log; operations not built yet
+// answer ErrNotImplemented.
 package messages
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
+	"slices"
+	"time"
+	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/users"
@@ -21,6 +26,10 @@ import (
 // ErrNotImplemented is the answer of an operation that passed its checks
 // but is not built yet.
 var ErrNotImplemented = errors.New("not implemented yet")
+
+// ErrTooManyRecipients means the audience resolves to more users than
+// messages.max_resolved_recipients; a message is never cut.
+var ErrTooManyRecipients = errors.New("the audience has more users than messages.max_resolved_recipients")
 
 // Fixed bounds of the input, checked before the settings (field lengths).
 const (
@@ -53,16 +62,27 @@ var readers = []perm.Role{perm.RCONAdmin, perm.ServerAdmin, perm.Moderator, perm
 
 // Service answers the message operations.
 type Service struct {
-	st  *store.Store
-	log *slog.Logger
+	st   *store.Store
+	perm *perm.Checker
+	log  *slog.Logger
 }
 
 // NewService returns the service; without a log it logs nothing.
-func NewService(st *store.Store, log *slog.Logger) *Service {
+func NewService(st *store.Store, checker *perm.Checker, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{st: st, log: log}
+	return &Service{st: st, perm: checker, log: log}
+}
+
+// Message is a message as the caller sees it.
+type Message struct {
+	ID, SenderID, SenderPseudonym, Audience, Text string
+	CreatedAt                                     time.Time
+	// RecipientCount is for the sender and the RCON admin only; -1 hides it.
+	RecipientCount int
+	CommentCount   int
+	Read           bool
 }
 
 // Input is a message to send.
@@ -119,35 +139,134 @@ func (s *Service) DeleteComment(ctx context.Context, req users.Request, _, _ str
 }
 
 // Send sends a message: first the role and the audience (403), then the
-// input (400), as in D-051.
-func (s *Service) Send(ctx context.Context, req users.Request, in Input) error {
+// input (400), as in D-051; the recipients are resolved at sending time.
+func (s *Service) Send(ctx context.Context, req users.Request, in Input) (Message, error) {
 	allowed := false
 	for _, a := range senders[req.Actor.Role] {
 		allowed = allowed || a == in.Audience
 	}
 	if !allowed {
-		return s.denied(ctx, req, "message.send")
+		return Message{}, s.denied(ctx, req, "message.send")
 	}
 	switch {
 	case in.Text == "":
-		return &users.InvalidError{Detail: "text is required"}
+		return Message{}, &users.InvalidError{Detail: "text is required"}
 	case len(in.Text) > MaxTextBytes:
-		return &users.InvalidError{Detail: "text is too long"}
+		return Message{}, &users.InvalidError{Detail: "text is too long"}
 	case in.Audience == AudienceUsers && len(in.UserIDs) == 0:
-		return &users.InvalidError{Detail: "user_ids is required for audience users"}
+		return Message{}, &users.InvalidError{Detail: "user_ids is required for audience users"}
 	case in.Audience != AudienceUsers && in.UserIDs != nil:
-		return &users.InvalidError{Detail: "user_ids is only for audience users"}
+		return Message{}, &users.InvalidError{Detail: "user_ids is only for audience users"}
 	case len(in.UserIDs) > MaxUserIDs:
-		return &users.InvalidError{Detail: "too many user_ids"}
+		return Message{}, &users.InvalidError{Detail: "too many user_ids"}
 	}
 	seen := make(map[string]bool, len(in.UserIDs))
 	for _, id := range in.UserIDs {
 		if seen[id] {
-			return &users.InvalidError{Detail: "user_ids repeats an entry"}
+			return Message{}, &users.InvalidError{Detail: "user_ids repeats an entry"}
 		}
 		seen[id] = true
 	}
-	return ErrNotImplemented
+	if utf8.RuneCountInString(in.Text) > s.limit(ctx, users.SettingMessagesMaxText, users.DefaultMessagesMaxText, users.MinMessagesMaxText) {
+		return Message{}, &users.InvalidError{Detail: "text is too long"}
+	}
+	if len(in.UserIDs) > s.limit(ctx, users.SettingMessagesMaxRecipients, users.DefaultMessagesMaxRecipients, 1) {
+		return Message{}, &users.InvalidError{Detail: "too many user_ids"}
+	}
+	to, err := s.recipients(ctx, req, in)
+	if err != nil {
+		return Message{}, err
+	}
+	_ = to // stored with the next part of the backend
+	return Message{}, ErrNotImplemented
+}
+
+// recipients resolves the audience at sending time (D-085); the sender is
+// never among them.
+func (s *Service) recipients(ctx context.Context, req users.Request, in Input) ([]string, error) {
+	var to []string
+	if in.Audience == AudienceUsers {
+		for _, id := range in.UserIDs {
+			if _, err := s.st.Queries.GetActiveUserRole(ctx, id); errors.Is(err, sql.ErrNoRows) {
+				return nil, &users.InvalidError{Detail: "user_ids names an unknown user"}
+			} else if err != nil {
+				return nil, err
+			}
+			if id != req.Actor.ID {
+				to = append(to, id)
+			}
+		}
+	} else {
+		all, err := s.st.Queries.ListActiveUserRoles(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var mine []string
+		if in.Audience == AudienceScope || in.Audience == AudienceScopeModerators {
+			r, err := s.perm.For(ctx, req.Actor.ID)
+			if err != nil {
+				return nil, err
+			}
+			mine = r.ServerIDs()
+		}
+		for _, u := range all {
+			if u.ID == req.Actor.ID {
+				continue
+			}
+			ok, err := s.receives(ctx, in.Audience, perm.Role(u.Role), u.ID, mine)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				to = append(to, u.ID)
+			}
+		}
+	}
+	if len(to) == 0 {
+		return nil, &users.InvalidError{Detail: "the audience has no recipient"}
+	}
+	if len(to) > s.limit(ctx, users.SettingMessagesMaxResolved, users.DefaultMessagesMaxResolved, 1) {
+		return nil, ErrTooManyRecipients
+	}
+	return to, nil
+}
+
+// receives reports whether a user of the given role belongs to the
+// audience; for a scope, by a server shared with the sender's scope.
+func (s *Service) receives(ctx context.Context, audience string, role perm.Role, id string, scope []string) (bool, error) {
+	switch audience {
+	case AudienceAll:
+		return true, nil
+	case AudienceServerAdmins:
+		return role == perm.ServerAdmin, nil
+	case AudienceModerators:
+		return role == perm.Moderator, nil
+	case AudienceScope, AudienceScopeModerators:
+		if role != perm.Moderator && (audience == AudienceScopeModerators || role != perm.Supporter) {
+			return false, nil
+		}
+		r, err := s.perm.For(ctx, id)
+		if err != nil {
+			return false, err
+		}
+		return slices.ContainsFunc(r.ServerIDs(), func(sv string) bool { return slices.Contains(scope, sv) }), nil
+	}
+	return false, nil
+}
+
+// limit reads a number setting; missing, it is the default; unreadable or
+// below its minimum, the default with a log (F-93).
+func (s *Service) limit(ctx context.Context, key string, def, minimum int) int {
+	n := def
+	err := s.st.GlobalSetting(ctx, key, &n)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) && ctx.Err() == nil || err == nil && n < minimum {
+		s.log.Error("setting unreadable, default used", logging.Event(logging.SettingReadFailed), slog.String("key", key))
+		return def
+	}
+	if err != nil {
+		return def
+	}
+	return n
 }
 
 func (s *Service) read(ctx context.Context, req users.Request, action string) error {

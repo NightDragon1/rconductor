@@ -149,6 +149,26 @@ type LoginPending struct {
 	UserAgent string
 }
 
+type Message struct {
+	ID              string
+	SenderID        sql.NullString
+	SenderPseudonym string
+	Audience        string
+	Text            string
+	CreatedAt       string
+}
+
+type MessageRecipient struct {
+	MessageID string
+	UserID    string
+	ReadAt    sql.NullString
+}
+
+type MessageSend struct {
+	UserID string
+	SentAt string
+}
+
 type Server struct {
 	ID             string
 	Name           string
