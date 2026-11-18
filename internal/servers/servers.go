@@ -135,8 +135,8 @@ type Service struct {
 	agents Agents
 	rcon   Executor
 	tests  testLimiter
-	// mask masks container logs before they leave the panel (UI-022); nil
-	// only for tests that build the service without it.
+	// mask masks container logs before they leave the panel (UI-022);
+	// without it the built-in list masks (logs.go).
 	mask Masking
 }
 

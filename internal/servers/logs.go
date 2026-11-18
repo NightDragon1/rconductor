@@ -12,6 +12,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agenthub"
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
@@ -106,6 +107,8 @@ func (s *Service) Logs(ctx context.Context, req users.Request, id string, n int)
 	}
 	if s.mask != nil {
 		lines = s.mask.ServerLines(ctx, id, lines)
+	} else {
+		lines = logmask.ListLines(lines) // not wired: the built-in list still masks
 	}
 	s.log.Info("container logs read", logging.Event(logging.LogsTail), slog.String(logging.KeyRequestID, req.RequestID),
 		slog.String(logging.KeyServer, id), slog.String("agent_id", agentID), slog.String("container", container),

@@ -91,3 +91,24 @@ func TestLogFloodDoesNotHoldAnswers(t *testing.T) {
 		t.Errorf("%d deliveries beyond the queue", n)
 	}
 }
+
+// TestLogsWithoutMasking covers UI-022: a view that was given no masking
+// sends no line as it is (fail closed).
+func TestLogsWithoutMasking(t *testing.T) {
+	st := storetest.New(t)
+	for _, q := range []string{
+		`INSERT INTO agents (id, name, public_key, fingerprint, status, created_at) VALUES ('a1', 'host', x'00', 'fp', 'active', 't')`,
+		`INSERT INTO servers (id, name, created_at, updated_at, agent_id, container_name) VALUES ('s1', 's1', 't', 't', 'a1', 'mc')`,
+	} {
+		if _, err := st.DB.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	log := slog.New(slog.DiscardHandler)
+	bus := &logBus{logs: make(chan Logs, 1)}
+	v := New(st, cache.NewAgentData(log), &fakeAgents{}, bus, log)
+	v.lines("a1", agentproto.LogLines{Container: "mc", Lines: []string{"password=hunter2x"}}, 1, 1)
+	if l := <-bus.logs; strings.Join(l.Lines, "") != withheld {
+		t.Errorf("lines without masking: %q", l.Lines)
+	}
+}

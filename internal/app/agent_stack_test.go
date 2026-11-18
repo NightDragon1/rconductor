@@ -24,11 +24,11 @@ import (
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 )
 
-// hostBackend stands in for Docker: one container mc, metrics every 50 ms,
-// logs while followed, and every order recorded.
 // stackSecret stands for a secret an image writes into its log.
 const stackSecret = "hunter2x"
 
+// hostBackend stands in for Docker: one container mc, metrics every 50 ms,
+// logs while followed, and every order recorded.
 type hostBackend struct {
 	mu     sync.Mutex
 	orders []string

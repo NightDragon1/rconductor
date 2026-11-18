@@ -125,6 +125,13 @@ func (p *Provider) ServerLines(ctx context.Context, serverID string, lines []str
 	return out
 }
 
+// ListLines masks with the built-in list alone, for a way out of the panel
+// that has no provider (fail closed).
+func ListLines(lines []string) []string {
+	out, _ := (*Masker)(nil).WithPatterns(nil).Lines(lines, Budget{Max: DefaultBudget})
+	return out
+}
+
 // masker is the masker of the texts with the patterns of the profiles,
 // compiled once per set of patterns.
 func (p *Provider) masker(profilePatterns [][]string) *Masker {
