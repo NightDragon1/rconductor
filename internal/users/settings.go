@@ -214,14 +214,18 @@ func init() {
 // EnsureAuditDefaults stores the default audit retention unless it exists.
 func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 	for key, v := range map[string]int{
-		SettingAuditRetentionDays: DefaultAuditRetentionDays,
-		SettingWSMaxSockets:       DefaultWSMaxSockets,
-		SettingWSMaxSubs:          DefaultWSMaxSubs,
-		SettingConnectionTests:    DefaultConnectionTests,
-		SettingTemplatesPerServer: DefaultTemplatesPerServer,
-		SettingMultiMaxServers:    DefaultMultiMaxServers,
-		SettingMultiParallel:      DefaultMultiParallel,
-		SettingHTTPParallel:       DefaultHTTPParallel,
+		SettingAuditRetentionDays:    DefaultAuditRetentionDays,
+		SettingWSMaxSockets:          DefaultWSMaxSockets,
+		SettingWSMaxSubs:             DefaultWSMaxSubs,
+		SettingConnectionTests:       DefaultConnectionTests,
+		SettingTemplatesPerServer:    DefaultTemplatesPerServer,
+		SettingMultiMaxServers:       DefaultMultiMaxServers,
+		SettingMultiParallel:         DefaultMultiParallel,
+		SettingHTTPParallel:          DefaultHTTPParallel,
+		SettingMessagesMaxText:       DefaultMessagesMaxText,
+		SettingMessagesMaxRecipients: DefaultMessagesMaxRecipients,
+		SettingMessagesMaxResolved:   DefaultMessagesMaxResolved,
+		SettingMessagesPerHour:       DefaultMessagesPerHour,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err
