@@ -5,6 +5,7 @@ package logmask
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -50,14 +51,22 @@ func NewProvider(ctx context.Context, s *Settings, log *slog.Logger) *Provider {
 	return p
 }
 
-// Reload reads the settings; on a read error the last state stays, and
-// Load or OpenTexts has logged it.
+// Reload reads the settings; on a read error masking is on and budget and
+// texts stay as last read, and Load or OpenTexts has logged it.
 func (p *Provider) Reload(ctx context.Context) {
 	p.reload.Lock()
 	defer p.reload.Unlock()
 	st, err := p.settings.Load(ctx)
-	if err != nil {
+	if errors.Is(err, ErrUnreadable) {
+		// A switch that turns protection off counts as on when it cannot be
+		// read (F-93); budget and texts stay as last read.
+		p.mu.Lock()
+		p.enabled = true
+		p.mu.Unlock()
 		return
+	}
+	if err != nil {
+		return // canceled: nothing read, nothing changes
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()

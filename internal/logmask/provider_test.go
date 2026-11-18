@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -75,6 +76,22 @@ func TestProviderReadErrors(t *testing.T) {
 	}
 	p.Reload(ctx)
 	fresh := NewProvider(ctx, s, nil)
+	// A stored "off" that can no longer be read counts as on (F-93).
+	q := NewProvider(ctx, NewSettings(s.st, s.box, nil), nil)
+	if _, err := s.st.DB.Exec(`UPDATE settings SET value = ? WHERE key = ?`, `{"version":9,"enabled":false,"max_texts":50,"max_text_chars":256,"budget_ms":250}`, users.SettingLogMasking); err != nil {
+		t.Fatal(err)
+	}
+	q.Reload(ctx)
+	if got := line(q, "token=a"); got != "token=a" {
+		t.Fatalf("stored off: %q", got)
+	}
+	if _, err := s.st.DB.Exec(`UPDATE settings SET value = 'broken' WHERE key = ?`, users.SettingLogMasking); err != nil {
+		t.Fatal(err)
+	}
+	q.Reload(ctx)
+	if got := line(q, "token=a"); got != "token=•••" {
+		t.Errorf("off, then unreadable: %q", got)
+	}
 	for name, c := range map[string]struct {
 		p    *Provider
 		want string
@@ -145,17 +162,14 @@ func TestProviderParallel(t *testing.T) {
 	}
 	wg.Go(func() {
 		for v := range int64(10) {
-			if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(v), MaxTexts: num(int(v) + 1)}); err != nil {
+			if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(v), BudgetMS: num(MinBudgetMS + int(v))}); err != nil {
 				t.Errorf("write %d: %v", v, err)
 			}
 		}
 	})
 	wg.Wait()
-	if p.budget != DefaultBudget || line(p, "token=a") != "token=•••" {
-		t.Errorf("after the changes: budget %s", p.budget)
-	}
-	if st, _ := s.Load(ctx); st.MaxTexts != 10 {
-		t.Errorf("last change: %+v", st)
+	if want := time.Duration(MinBudgetMS+9) * time.Millisecond; p.budget != want {
+		t.Errorf("after the changes: budget %s, want %s", p.budget, want)
 	}
 }
 
