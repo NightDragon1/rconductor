@@ -251,6 +251,11 @@ describe('log lines by number', () => {
     expect(lines(b).slice(-2)).toEqual([GAP_LINE, 'n']);
   });
 
+  it('names the lines omitted at a gap (UI-022)', () => {
+    const b = addDelivery(held(3), { lines: ['n'], first: 9, run: 'r' }, ts, (n) => `${n} omitted`);
+    expect(lines(b).slice(-2)).toEqual(['5 omitted', 'n']);
+  });
+
   it('starts over with a new count, by text for a new subscription', () => {
     const b = addDelivery(
       held(2),

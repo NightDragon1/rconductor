@@ -5,16 +5,18 @@ import { useState, type FormEvent } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api, must, patchVersioned } from '@/api/client';
-import { sessionKey } from '@/api/session';
+import { sessionKey, useSession } from '@/api/session';
 import { outcome } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
+import { LOG_MASKING_FLAG } from '@/lib/console';
 import { formatDuration, isGoDuration, parseDuration } from '@/lib/duration';
 import { usePhone } from '@/lib/phone';
 import { useUndo, useUnsaved } from '@/lib/undo';
 import { PhoneNote } from './PhoneNote';
+import { LogMaskingPanel } from './LogMaskingPanel';
 import { SmtpPanel } from './SmtpPanel';
 
 type Values = Record<string, unknown>;
@@ -132,12 +134,16 @@ const sectionOf = (key: string) => sections.find(([, re]) => re.test(key))?.[0] 
 // admin. Changes wait for undo and go out with the settings' ETag
 // (revision 2.4 candidate 24); switching supporters off asks first, as
 // it ends the sessions of all supporters. A phone only reads (UI-012).
-// SettingsPage holds the global settings and the SMTP setup (NFR-017).
+// SettingsPage holds the global settings, the SMTP setup (NFR-017) and,
+// behind the flag log_masking_ui, the masking of container logs (UI-022).
 export function SettingsPage() {
+  const { data: session } = useSession();
+  const masking = !!session?.ui.features?.includes(LOG_MASKING_FLAG);
   return (
     <div className="flex flex-col gap-5">
       <SettingsForm />
       <SmtpPanel />
+      {masking && <LogMaskingPanel />}
     </div>
   );
 }
