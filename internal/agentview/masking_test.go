@@ -20,11 +20,18 @@ import (
 // time budget does.
 type slowMasking struct {
 	release chan struct{}
-	server  string // the server it is slow for; empty: all
+	server  string        // the server it is slow for; empty: all
+	held    chan struct{} // told when it holds a delivery, if set
 }
 
 func (m *slowMasking) ServerLines(ctx context.Context, serverID string, lines []string) []string {
 	if m.server == "" || m.server == serverID {
+		if m.held != nil {
+			select {
+			case m.held <- struct{}{}:
+			default:
+			}
+		}
 		select {
 		case <-m.release:
 		case <-ctx.Done():
@@ -179,7 +186,7 @@ func TestLogDropWarnings(t *testing.T) {
 	v := twoAgents(t, log, &logBus{logs: make(chan Logs, 4*maxMaskQueue)})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	m := &slowMasking{release: make(chan struct{})}
+	m := &slowMasking{release: make(chan struct{}), held: make(chan struct{}, 1)}
 	clock := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
 	v.now = func() time.Time { return clock }
 	v.UseMasking(ctx, m)
@@ -187,6 +194,11 @@ func TestLogDropWarnings(t *testing.T) {
 		for i := range n {
 			v.lines(agent, agentproto.LogLines{Container: "mc", Lines: []string{"a", "b"}}, uint64(i+1), uint64(i+1))
 		}
+	}
+	// Each worker holds one delivery first, so its queue fills exactly.
+	for _, agent := range []string{"a1", "a2"} {
+		flood(agent, 1)
+		<-m.held
 	}
 	flood("a1", 3*maxMaskQueue)
 	flood("a2", 2*maxMaskQueue)
