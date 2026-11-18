@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
+	"sync"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -38,6 +40,16 @@ type Settings struct {
 	st  *store.Store
 	box *secret.Box
 	log *slog.Logger
+
+	mu       sync.Mutex
+	onChange []func()
+}
+
+// OnChange adds what runs after every committed change.
+func (s *Settings) OnChange(f func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onChange = append(s.onChange, f)
 }
 
 // NewSettings returns the settings service; without a log it logs nothing.
@@ -232,7 +244,16 @@ func (s *Settings) Write(ctx context.Context, req users.Request, in SettingsInpu
 	}); err != nil {
 		return State{}, err
 	}
-	return next, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return State{}, err
+	}
+	s.mu.Lock()
+	hooks := slices.Clone(s.onChange)
+	s.mu.Unlock()
+	for _, f := range hooks {
+		f()
+	}
+	return next, nil
 }
 
 // apply checks the input against the limits after the change, for texts
