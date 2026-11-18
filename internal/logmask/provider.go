@@ -27,10 +27,12 @@ type Provider struct {
 	settings *Settings
 	log      *slog.Logger
 
-	reload sync.Mutex // one reload at a time, from read to taking over
+	// reload lets one reload at a time read and take over; each reads under
+	// it, so the last one to run holds the newest state, also after a repair
+	// that set a lower version.
+	reload sync.Mutex
 
 	mu       sync.RWMutex
-	version  int64 // of the state taken over; an older one never replaces it
 	enabled  bool
 	budget   time.Duration
 	base     *Masker // the texts of the admin; nil masks the list only
@@ -42,7 +44,7 @@ func NewProvider(ctx context.Context, s *Settings, log *slog.Logger) *Provider {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	p := &Provider{settings: s, log: log, enabled: true, budget: DefaultBudget, compiled: map[string]*Masker{}, version: -1}
+	p := &Provider{settings: s, log: log, enabled: true, budget: DefaultBudget, compiled: map[string]*Masker{}}
 	s.OnChange(func() { p.Reload(context.Background()) }) // before the first read: no change is missed
 	p.Reload(ctx)
 	return p
@@ -59,10 +61,7 @@ func (p *Provider) Reload(ctx context.Context) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if st.Version < p.version {
-		return
-	}
-	p.version, p.enabled, p.budget = st.Version, st.Enabled, time.Duration(st.BudgetMS)*time.Millisecond
+	p.enabled, p.budget = st.Enabled, time.Duration(st.BudgetMS)*time.Millisecond
 	texts, err := p.settings.OpenTexts(st)
 	if err != nil {
 		return // switch and budget as stored, the texts as last read

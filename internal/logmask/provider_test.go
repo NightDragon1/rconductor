@@ -151,13 +151,16 @@ func TestProviderParallel(t *testing.T) {
 		}
 	})
 	wg.Wait()
-	if p.version != 10 {
-		t.Errorf("provider holds version %d, want 10", p.version)
+	if p.budget != DefaultBudget || line(p, "token=a") != "token=•••" {
+		t.Errorf("after the changes: budget %s", p.budget)
+	}
+	if st, _ := s.Load(ctx); st.MaxTexts != 10 {
+		t.Errorf("last change: %+v", st)
 	}
 }
 
-// TestProviderOrder: an older state never replaces a newer one, and two
-// providers on the same settings both follow every change.
+// TestProviderOrder: two providers on the same settings both follow every
+// change, also a repair that lowers the version.
 func TestProviderOrder(t *testing.T) {
 	s, _ := newSettings(t)
 	ctx := context.Background()
@@ -172,11 +175,23 @@ func TestProviderOrder(t *testing.T) {
 			t.Errorf("%s provider: %q", name, got)
 		}
 	}
-	p.mu.Lock()
-	p.version, p.enabled = 5, true // as if a newer state had been taken over
-	p.mu.Unlock()
-	p.Reload(ctx)
-	if got := line(p, "token=a"); got != "token=•••" {
-		t.Errorf("older state taken over: %q", got)
+	for v := int64(1); v < 6; v++ {
+		if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(v), MaxTexts: num(int(v))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.st.DB.Exec(`UPDATE settings SET value = 'broken' WHERE key = ?`, users.SettingLogMasking); err != nil {
+		t.Fatal(err)
+	}
+	on := true
+	st, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), Enabled: &on, MaxTexts: num(5), TextRunes: num(64), BudgetMS: num(90),
+		SetTexts: true, Texts: []Text{}})
+	if err != nil || st.Version != 1 {
+		t.Fatalf("repair: %+v %v", st, err)
+	}
+	for name, pr := range map[string]*Provider{"first": p, "second": q} {
+		if got := line(pr, "token=a"); got != "token=•••" {
+			t.Errorf("%s provider after the repair: %q", name, got)
+		}
 	}
 }
