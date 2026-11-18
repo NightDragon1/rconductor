@@ -36,7 +36,14 @@ test.describe('log masking on', () => {
     await expect(panel.getByRole('status')).not.toBeEmpty();
     await expect(panel.getByText('1 text stored')).toBeVisible();
 
+    // Misuse: a limit that is not a whole number is refused, never saved.
     await panel.getByLabel('Replace the texts, one per line').fill('');
+    await panel.getByLabel('Most texts').fill('abc');
+    await panel.getByRole('button', { name: 'Save' }).click();
+    await expect(panel.getByRole('status')).toHaveText('The limits must be whole numbers.');
+    await page.reload();
+    await expect(panel.getByLabel('Most texts')).not.toHaveValue('abc');
+
     await panel.getByLabel('Remove all stored texts').check();
     await panel.getByRole('button', { name: 'Save' }).click();
     await expect(panel.getByText('0 texts stored')).toBeVisible();

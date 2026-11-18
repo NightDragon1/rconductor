@@ -62,8 +62,10 @@ func TestMessagesBehindFlag(t *testing.T) {
 		t.Fatalf("switch flag on = %d", got)
 	}
 	check(http.StatusUnauthorized, nil, ops...)
-	check(http.StatusNotImplemented, admin, ops...)
-	// Recipients are resolved: a scope without any is 400.
+	// Built: sending (201) and a scope without recipients (400); the
+	// rest still answers 501.
+	check(http.StatusCreated, admin, ops[1])
+	check(http.StatusNotImplemented, admin, ops[0], ops[2], ops[3], ops[4], ops[5], ops[6], ops[7])
 	check(http.StatusBadRequest, sa, send(`{"text":"hi","audience":"scope"}`))
 	check(http.StatusForbidden, mod, send(`{"text":"hi","audience":"all"}`))
 	check(http.StatusForbidden, sa, send(`{"text":"hi","audience":"all"}`), send(`{"text":"hi","audience":"users","user_ids":[`+uid+`]}`))
@@ -74,7 +76,7 @@ func TestMessagesBehindFlag(t *testing.T) {
 	check(http.StatusBadRequest, mod, comment(`{"text":""}`), comment(`{"text":"`+strings.Repeat("é", 2049)+`"}`),
 		call{method: http.MethodDelete, path: "/api/v1/messages/" + id + "/comments/x", origin: origin})
 	var refused int
-	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'message.send' AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
+	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'message.sent' AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
 		t.Errorf("audited refusals = %d (%v), want 3", refused, err)
 	}
 }

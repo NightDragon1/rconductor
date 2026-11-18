@@ -8,6 +8,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/messages"
 	"github.com/NightDragon1/rconductor/internal/users"
@@ -32,8 +34,26 @@ func (s *apiServer) CreateMessage(ctx context.Context, req api.CreateMessageRequ
 			in.UserIDs = append(in.UserIDs, id.String())
 		}
 	}
-	_, err := s.messages.Send(ctx, adminRequest(ctx), in)
-	return nil, messageError(err, "createMessage")
+	m, err := s.messages.Send(ctx, adminRequest(ctx), in)
+	if err != nil {
+		return nil, messageError(err, "createMessage")
+	}
+	return api.CreateMessage201JSONResponse(apiMessage(m)), nil
+}
+
+// apiMessage is a message as the API shows it.
+func apiMessage(m messages.Message) api.Message {
+	out := api.Message{Audience: api.MessageAudience(m.Audience), CommentCount: m.CommentCount, CreatedAt: m.CreatedAt,
+		Read: m.Read, Text: m.Text, Sender: api.MessageAuthor{Pseudonym: m.SenderPseudonym}}
+	out.Id, _ = uuid.Parse(m.ID)
+	if id, err := uuid.Parse(m.SenderID); err == nil {
+		out.Sender.Id = &id
+	}
+	if m.RecipientCount >= 0 {
+		n := m.RecipientCount
+		out.RecipientCount = &n
+	}
+	return out
 }
 
 func (s *apiServer) GetMessage(ctx context.Context, req api.GetMessageRequestObject) (api.GetMessageResponseObject, error) {
@@ -70,6 +90,9 @@ func messageError(err error, operationID string) error {
 	}
 	if errors.Is(err, messages.ErrTooManyRecipients) {
 		return &problem{status: http.StatusBadRequest, reason: api.ReasonCodeTooManyRecipients, detail: err.Error()}
+	}
+	if errors.Is(err, messages.ErrRateLimited) {
+		return &problem{status: http.StatusTooManyRequests, reason: api.ReasonCodeRateLimited, detail: err.Error(), retryAfter: 60}
 	}
 	if inv := (*users.InvalidError)(nil); errors.As(err, &inv) {
 		return &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: inv.Detail}

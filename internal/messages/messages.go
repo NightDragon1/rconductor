@@ -17,9 +17,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
-	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
+	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
@@ -30,6 +30,10 @@ var ErrNotImplemented = errors.New("not implemented yet")
 // ErrTooManyRecipients means the audience resolves to more users than
 // messages.max_resolved_recipients; a message is never cut.
 var ErrTooManyRecipients = errors.New("the audience has more users than messages.max_resolved_recipients")
+
+// ErrRateLimited means the sender sent messages.per_hour messages in the last
+// hour; deleting one does not lower the count.
+var ErrRateLimited = errors.New("too many messages in the last hour")
 
 // Fixed bounds of the input, checked before the settings (field lengths).
 const (
@@ -65,6 +69,7 @@ type Service struct {
 	st   *store.Store
 	perm *perm.Checker
 	log  *slog.Logger
+	now  func() time.Time
 }
 
 // NewService returns the service; without a log it logs nothing.
@@ -72,7 +77,7 @@ func NewService(st *store.Store, checker *perm.Checker, log *slog.Logger) *Servi
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{st: st, perm: checker, log: log}
+	return &Service{st: st, perm: checker, log: log, now: func() time.Time { return time.Now().UTC() }}
 }
 
 // Message is a message as the caller sees it.
@@ -139,14 +144,14 @@ func (s *Service) DeleteComment(ctx context.Context, req users.Request, _, _ str
 }
 
 // Send sends a message: first the role and the audience (403), then the
-// input (400), as in D-051; the recipients are resolved at sending time.
+// input (400), then the count of the last hour (429), as in D-051.
 func (s *Service) Send(ctx context.Context, req users.Request, in Input) (Message, error) {
 	allowed := false
 	for _, a := range senders[req.Actor.Role] {
 		allowed = allowed || a == in.Audience
 	}
 	if !allowed {
-		return Message{}, s.denied(ctx, req, "message.send")
+		return Message{}, s.denied(ctx, req, "message.sent")
 	}
 	switch {
 	case in.Text == "":
@@ -177,8 +182,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, in Input) (Messag
 	if err != nil {
 		return Message{}, err
 	}
-	_ = to // stored with the next part of the backend
-	return Message{}, ErrNotImplemented
+	return s.store(ctx, req, in, to)
 }
 
 // recipients resolves the audience at sending time (D-085); the sender is
@@ -254,16 +258,68 @@ func (s *Service) receives(ctx context.Context, audience string, role perm.Role,
 	return false, nil
 }
 
-// limit reads a number setting; missing, it is the default; unreadable or
-// below its minimum, the default with a log (F-93).
+// store writes the message, its recipients and the send in one
+// transaction, after the count of the last hour (429); the audit keeps
+// the audience and the number of recipients, never the text (D-086).
+func (s *Service) store(ctx context.Context, req users.Request, in Input, to []string) (Message, error) {
+	perHour := s.limit(ctx, users.SettingMessagesPerHour, users.DefaultMessagesPerHour, 1)
+	now := s.now()
+	hourAgo := now.Add(-time.Hour).Format(store.TimeLayout)
+	id, err := store.NewID()
+	if err != nil {
+		return Message{}, err
+	}
+	tx, err := s.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Message{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := sqlitedb.New(tx)
+	sent, err := q.CountMessageSends(ctx, sqlitedb.CountMessageSendsParams{UserID: req.Actor.ID, SentAt: hourAgo})
+	if err != nil {
+		return Message{}, err
+	}
+	if sent >= int64(perHour) {
+		return Message{}, ErrRateLimited
+	}
+	created := now.Format(store.TimeLayout)
+	if err := q.InsertMessage(ctx, sqlitedb.InsertMessageParams{
+		ID: id, SenderID: sql.NullString{String: req.Actor.ID, Valid: true}, SenderPseudonym: req.Pseudonym,
+		Audience: in.Audience, Text: in.Text, CreatedAt: created,
+	}); err != nil {
+		return Message{}, err
+	}
+	for _, u := range to {
+		if err := q.InsertMessageRecipient(ctx, sqlitedb.InsertMessageRecipientParams{MessageID: id, UserID: u}); err != nil {
+			return Message{}, err
+		}
+	}
+	if err := q.DeleteOldMessageSends(ctx, sqlitedb.DeleteOldMessageSendsParams{UserID: req.Actor.ID, SentAt: hourAgo}); err != nil {
+		return Message{}, err
+	}
+	if err := q.InsertMessageSend(ctx, sqlitedb.InsertMessageSendParams{UserID: req.Actor.ID, SentAt: created}); err != nil {
+		return Message{}, err
+	}
+	if _, err := audit.Write(ctx, tx, audit.Entry{
+		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
+		TargetType: "message", TargetID: id, Action: "message.sent", Result: audit.ResultOK,
+		Payload: map[string]any{"audience": in.Audience, "recipients": len(to)},
+	}); err != nil {
+		return Message{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Message{}, err
+	}
+	return Message{ID: id, SenderID: req.Actor.ID, SenderPseudonym: req.Pseudonym, Audience: in.Audience, Text: in.Text,
+		CreatedAt: now, RecipientCount: len(to), Read: true}, nil
+}
+
+// limit reads a number setting through the guarded read: missing, the
+// default; unreadable, the value last read, else the default; below its
+// minimum, the default (F-93).
 func (s *Service) limit(ctx context.Context, key string, def, minimum int) int {
 	n := def
-	err := s.st.GlobalSetting(ctx, key, &n)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) && ctx.Err() == nil || err == nil && n < minimum {
-		s.log.Error("setting unreadable, default used", logging.Event(logging.SettingReadFailed), slog.String("key", key))
-		return def
-	}
-	if err != nil {
+	if err := s.st.GuardedSetting(ctx, s.log, key, &n); err != nil || n < minimum {
 		return def
 	}
 	return n

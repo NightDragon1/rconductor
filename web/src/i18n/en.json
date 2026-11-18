@@ -272,7 +272,8 @@
     "maxTexts": "Most texts",
     "maxTextChars": "Most characters per text",
     "budget": "Time per batch of lines (ms)",
-    "budgetHint": "Lines left when the time is up are withheld, never shown unmasked."
+    "budgetHint": "Lines left when the time is up are withheld, never shown unmasked.",
+    "notNumber": "The limits must be whole numbers."
   },
   "topology": {
     "host": "Host",
@@ -947,6 +948,22 @@
       "commands_templates_per_server": {
         "label": "Templates per server",
         "help": "How many command templates one server may have."
+      },
+      "messages_max_text": {
+        "label": "Message length",
+        "help": "Characters of one message."
+      },
+      "messages_max_recipients": {
+        "label": "Chosen recipients",
+        "help": "Users chosen one by one for a message."
+      },
+      "messages_max_resolved_recipients": {
+        "label": "Recipients per message",
+        "help": "Users a message may go to; a larger audience is refused."
+      },
+      "messages_per_hour": {
+        "label": "Messages per hour",
+        "help": "Messages one user may send per hour; deleting one does not lower the count."
       },
       "servers_http_parallel": {
         "label": "Requests at once (HTTPS API)",

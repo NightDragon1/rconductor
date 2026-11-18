@@ -73,7 +73,7 @@ func TestSendRoles(t *testing.T) {
 	if refused != 5*len(audiences)-6 {
 		t.Fatalf("refused %d, the table changed", refused)
 	}
-	if n := denials(t, s, "message.send"); n != refused {
+	if n := denials(t, s, "message.sent"); n != refused {
 		t.Errorf("audited refusals = %d, want %d", n, refused)
 	}
 }
@@ -201,7 +201,7 @@ func TestRefusalsInParallel(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	if got := denials(t, s, "message.send"); got != n {
+	if got := denials(t, s, "message.sent"); got != n {
 		t.Errorf("audited refusals = %d, want %d", got, n)
 	}
 }
