@@ -237,9 +237,26 @@ func TestProviderServerLines(t *testing.T) {
 	if got := p.ServerLines(ctx, "s1", []string{in})[0]; got != "adminpass=••• pw=••• token=•••" {
 		t.Errorf("both profiles: %q", got)
 	}
+	// Read again only after a change of a server or a profile.
+	if _, err := s.st.DB.Exec(`UPDATE game_profiles SET rules = '{"log_masks":["(k=)\\S+"]}' WHERE id = 'p2'`); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.ServerLines(ctx, "s1", []string{"pw=y k=z"})[0]; got != "pw=••• k=z" {
+		t.Errorf("before the change is told: %q", got)
+	}
+	p.ProfilesChanged()
+	if got := p.ServerLines(ctx, "s1", []string{"pw=y k=z"})[0]; got != "pw=y k=•••" {
+		t.Errorf("after the change: %q", got)
+	}
+	if _, err := s.st.DB.Exec(`UPDATE game_profiles SET rules = '{"log_masks":["(pw=)\\S+"]}' WHERE id = 'p2'`); err != nil {
+		t.Fatal(err)
+	}
+	p.ProfilesChanged()
+	p.ServerLines(ctx, "s1", []string{in})
 	if _, err := s.st.DB.Exec(`ALTER TABLE server_profiles RENAME TO server_profiles_gone`); err != nil {
 		t.Fatal(err)
 	}
+	p.ProfilesChanged()
 	for server, want := range map[string]string{
 		"s1": "adminpass=••• pw=••• token=•••", // as last read
 		"s2": "adminpass=x pw=y token=•••",     // never read: the list
@@ -248,7 +265,9 @@ func TestProviderServerLines(t *testing.T) {
 			t.Errorf("%s unreadable: %q", server, got)
 		}
 	}
-	if !strings.Contains(logs.String(), "setting.read_failed") {
-		t.Errorf("log: %s", logs.String())
+	p.ServerLines(ctx, "s1", []string{in})
+	// Logged once per server until a read succeeds.
+	if n := strings.Count(logs.String(), "profile masking patterns not readable"); n != 2 {
+		t.Errorf("read errors logged %d times, want once per server: %s", n, logs.String())
 	}
 }

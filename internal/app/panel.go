@@ -145,6 +145,12 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	}
 	// Catalog import before serving (Architecture 5.4), then on every change.
 	importer := profiles.NewImporter(st, logs.Module("profiles"), builtinprofiles.FS(), filepath.Join(cfg.DataDir, "profiles"))
+	// Container logs are masked before they leave the panel; the API and
+	// the masking share the settings, so a change applies at once, and a
+	// changed profile or server makes its patterns be read again (UI-022).
+	maskSettings := logmask.NewSettings(st, box, logs.Module("logmask"))
+	masking := logmask.NewProvider(ctx, maskSettings, logs.Module("logmask"))
+	importer.OnImported(masking.ProfilesChanged)
 	if err := importer.Sync(ctx); err != nil {
 		return err
 	}
@@ -244,15 +250,14 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	agents.OnDisconnect(agentData.Disconnected)
 	serverSvc.SetActions(agents, conns)
 	views := agentview.New(st, agentData, agents, hub, logs.Module("agent"))
-	// Container logs are masked before they leave the panel; the API and
-	// the masking share the settings, so a change applies at once (UI-022).
-	maskSettings := logmask.NewSettings(st, box, logs.Module("logmask"))
-	masking := logmask.NewProvider(ctx, maskSettings, logs.Module("logmask"))
 	views.UseMasking(ctx, masking)
 	serverSvc.UseMasking(masking)
 	views.SetPlayers(runtime)
 	hub.SetAgentViews(views)
-	serverSvc.OnChange(func(string) { views.Wake() })
+	serverSvc.OnChange(func(string) {
+		masking.ProfilesChanged()
+		views.Wake()
+	})
 	wg.Go(func() { views.Run(ctx) })
 	agentSvc.SetHub(agents)
 	agentSvc.UseFeatures(features.Default())

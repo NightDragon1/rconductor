@@ -87,10 +87,13 @@ func custom(id, name string) string {
 }
 
 // TestSync covers CAT-001 and CAT-003: shipped profiles are imported with
-// their catalog; an unchanged file is not imported again.
+// their catalog; an unchanged file is not imported again, and only a stored
+// profile is told (UI-022).
 func TestSync(t *testing.T) {
 	f := newImportFixture(t)
 	ctx := context.Background()
+	told := 0
+	f.im.OnImported(func() { told++ }) // the masking reads the patterns again (D-088 b)
 	if err := f.im.Sync(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -103,6 +106,9 @@ func TestSync(t *testing.T) {
 	}
 	if c := logtest.WaitCount(t, f.logs, `"event":"profile.imported"`, 1); c != 1 {
 		t.Errorf("profile.imported %d times, want 1", c)
+	}
+	if told != 1 {
+		t.Errorf("told %d times, want 1", told)
 	}
 }
 

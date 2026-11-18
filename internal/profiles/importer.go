@@ -55,6 +55,9 @@ type Importer struct {
 	noNotify bool
 	// interval overrides the poll setting, for tests.
 	interval time.Duration
+	// onImported is told after a profile was stored (D-088 b); set before
+	// Watch starts.
+	onImported func()
 	// beforeWrite runs after a changed profile was read and before its
 	// write transaction begins, for tests of writes in between.
 	beforeWrite func()
@@ -92,6 +95,10 @@ func hashOf(b []byte) string {
 func isProfileFile(name string) bool {
 	return !strings.HasPrefix(name, ".") && (strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml"))
 }
+
+// OnImported sets the receiver told after each stored profile; set it
+// before Watch starts.
+func (im *Importer) OnImported(f func()) { im.onImported = f }
 
 // Sync imports what changed. A file that is not valid is rejected with
 // profile.rejected; the last valid state of its profile stays active and
@@ -322,6 +329,9 @@ func (im *Importer) store(ctx context.Context, c candidate) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+	if im.onImported != nil {
+		im.onImported()
 	}
 	im.log.Info("profile imported", logging.Event(logging.ProfileImported),
 		slog.String("profile", c.p.ID), slog.String("source", c.source), slog.Int("commands", len(c.p.Catalog)))
