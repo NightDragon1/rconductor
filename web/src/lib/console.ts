@@ -50,6 +50,10 @@ export interface ConsoleBuffer {
 // GAP_LINE marks lines that passed while nobody followed.
 export const GAP_LINE = '⋯';
 
+// LOG_MASKING_FLAG is the flag name the backend reports in ui.features
+// (UI-022); with it a gap names the number of lines omitted.
+export const LOG_MASKING_FLAG = 'log_masking_ui';
+
 // A delivery of log lines; first numbers its first line within run.
 export interface LogDelivery {
   lines: string[];
@@ -104,7 +108,12 @@ export function newLines(buf: ConsoleBuffer, lines: string[]): string[] {
 // addDelivery takes the new lines of a delivery by their numbers; repeated
 // lines stay apart that way (#157). Lines that passed meanwhile leave a mark.
 // Without a count to go by the text decides.
-export function addDelivery(buf: ConsoleBuffer, d: LogDelivery, ts: string): ConsoleBuffer {
+export function addDelivery(
+  buf: ConsoleBuffer,
+  d: LogDelivery,
+  ts: string,
+  gapLine: (omitted: number) => string = () => GAP_LINE,
+): ConsoleBuffer {
   const { lines, first, run } = d;
   if (first === undefined || run === undefined) {
     return addLogLines(buf, d.current ? newLines(buf, lines) : lines, ts);
@@ -118,7 +127,7 @@ export function addDelivery(buf: ConsoleBuffer, d: LogDelivery, ts: string): Con
   const fresh = lines.slice(Math.max(0, pos.last + 1 - first));
   const gap = first > pos.last + 1;
   return {
-    ...addLogLines(buf, gap ? [GAP_LINE, ...fresh] : fresh, ts),
+    ...addLogLines(buf, gap ? [gapLine(first - pos.last - 1), ...fresh] : fresh, ts),
     logPos: { run, last: Math.max(pos.last, last) },
   };
 }

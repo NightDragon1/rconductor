@@ -258,6 +258,22 @@
       "rejected": "Not sent: the SMTP server refused sender or recipient."
     }
   },
+  "logMasking": {
+    "title": "Log masking",
+    "explain": "Masks known secrets in container logs before they reach the browser: a built-in list, the patterns of the game profiles, and the fixed texts below. The texts are stored encrypted and never shown again.",
+    "enabled": "Mask container logs",
+    "offWarn": "Off, container logs reach the browser as they are.",
+    "textCount_one": "{{count}} text stored",
+    "textCount_other": "{{count}} texts stored",
+    "texts": "Replace the texts, one per line",
+    "textsHint": "Leave empty to keep the stored texts. Each text needs at least 4 characters.",
+    "ignoreCase": "Ignore upper and lower case for these texts",
+    "removeTexts": "Remove all stored texts",
+    "maxTexts": "Most texts",
+    "maxTextChars": "Most characters per text",
+    "budget": "Time per batch of lines (ms)",
+    "budgetHint": "Lines left when the time is up are withheld, never shown unmasked."
+  },
   "topology": {
     "host": "Host",
     "agent": "Agent",
@@ -393,7 +409,9 @@
     "tab": "Tab",
     "hint": "Tab takes the first suggestion · arrow keys walk your own commands",
     "slashHint": "Commands on this server start with /. Without it, the game may take the input as chat (Factorio does).",
-    "favorites": "Favorites"
+    "favorites": "Favorites",
+    "omitted_one": "⋯ {{count}} line omitted",
+    "omitted_other": "⋯ {{count}} lines omitted"
   },
   "palette": {
     "open": "Command palette",

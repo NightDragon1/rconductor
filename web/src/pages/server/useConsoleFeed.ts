@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, ApiError, must } from '@/api/client';
 import { useSession } from '@/api/session';
 import {
   addCommands,
   addDelivery,
   bufferWriter,
+  LOG_MASKING_FLAG,
   updateBuffer,
   useBuffer,
   type CmdBlock,
@@ -50,6 +52,13 @@ const latestRefill = new Map<string, number>();
 // (UI-009, G2).
 export function useLogsFeed(id: string, on: boolean) {
   const [write] = useState(bufferWriter);
+  const { t } = useTranslation();
+  const { data: session } = useSession();
+  // A gap names the lines omitted, also those dropped while the masking
+  // was behind (UI-022).
+  const gapLine = session?.ui.features?.includes(LOG_MASKING_FLAG)
+    ? (n: number) => t('console.omitted', { count: n })
+    : undefined;
   useTopic(id && on ? `server.${id}.logs` : undefined, (m) => {
     const d = m.data as
       { lines?: unknown; current?: unknown; first?: unknown; run?: unknown } | undefined;
@@ -58,7 +67,9 @@ export function useLogsFeed(id: string, on: boolean) {
       const ts = new Date().toISOString();
       const first = typeof d.first === 'number' ? d.first : undefined;
       const run = typeof d.run === 'string' ? d.run : undefined;
-      write(id, (b) => addDelivery(b, { lines, current: d.current === true, first, run }, ts));
+      write(id, (b) =>
+        addDelivery(b, { lines, current: d.current === true, first, run }, ts, gapLine),
+      );
     }
   });
 }
