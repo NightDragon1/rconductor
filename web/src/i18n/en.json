@@ -83,7 +83,8 @@
     "agents": "Agents",
     "settings": "Settings",
     "profile": "Your profile",
-    "messages": "Messages"
+    "messages": "Messages",
+    "systemLog": "System log"
   },
   "home": {
     "title": "Overview",
@@ -1277,5 +1278,39 @@
     "comment": "Your comment",
     "sendComment": "Comment",
     "deleteComment": "Delete"
+  },
+  "systemLog": {
+    "explain": "Events of the panel, oldest first, and on demand the log of an agent. Refreshes on its own.",
+    "notice": "May contain chat messages of players.",
+    "source": "Source",
+    "panel": "Panel",
+    "level": "Level",
+    "levels": {
+      "info": "Info and above",
+      "warn": "Warnings and errors",
+      "error": "Errors only"
+    },
+    "levelName": {
+      "info": "info",
+      "warn": "warn",
+      "error": "error"
+    },
+    "period": "Period",
+    "periods": {
+      "hour": "Last hour",
+      "day": "Last 24 hours",
+      "week": "Last 7 days"
+    },
+    "periodAgent": "The log of an agent shows its last lines; the period applies to the export.",
+    "entries": "Entries",
+    "none": "No entries.",
+    "truncated": "Cut to the limits; not every entry is shown.",
+    "offline": "The agent is offline.",
+    "unsupported": "This agent cannot send its log.",
+    "agentFailed": "The agent could not read its log.",
+    "failed": "Failed.",
+    "failedWith": "Failed: {{reason}}",
+    "export": "Download diagnostic package",
+    "exporting": "Preparing package…"
   }
 }
