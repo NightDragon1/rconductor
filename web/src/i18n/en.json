@@ -970,6 +970,14 @@
         "label": "Messages per hour",
         "help": "Messages one user may send per hour; deleting one does not lower the count."
       },
+      "messages_max_comment": {
+        "label": "Comment length",
+        "help": "Characters of one comment on a message."
+      },
+      "messages_comments_per_hour": {
+        "label": "Comments per hour",
+        "help": "Comments one user may write per hour; deleting one does not lower the count."
+      },
       "servers_http_parallel": {
         "label": "Requests at once (HTTPS API)",
         "help": "How many commands go to one game server with an HTTPS API at the same time."

@@ -140,6 +140,8 @@ are written like `24h`, `15m`, `30s`.
 | `messages.max_recipients` (new in 1.2) | number | 100 | 1 to 500 | users chosen one by one for a message |
 | `messages.max_resolved_recipients` (new in 1.2) | number | 5000 | 1 to 100000 | users a message may go to; a larger audience is refused, never cut |
 | `messages.per_hour` (new in 1.2) | number | 20 | 1 to 1000 | messages per sender and hour; deleting a message does not lower the count |
+| `messages.max_comment` (new in 1.2) | number | 2000 | 1 to 4096 | characters of a comment on a message; at most 4 KiB in UTF-8 in any case |
+| `messages.comments_per_hour` (new in 1.2) | number | 60 | 1 to 3600 | comments per author and hour; deleting a comment does not lower the count |
 | `ui.shortcuts_enabled` | boolean | off | on, off | keyboard shortcuts for everyone |
 
 ## Mail (SMTP) (new in 1.1)

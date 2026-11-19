@@ -98,6 +98,11 @@ type CommandTemplate struct {
 	DeletedAt sql.NullString
 }
 
+type CommentSend struct {
+	UserID string
+	SentAt string
+}
+
 type Counter struct {
 	Name  string
 	Value int64
@@ -155,6 +160,15 @@ type Message struct {
 	SenderID        sql.NullString
 	SenderPseudonym string
 	Audience        string
+	Text            string
+	CreatedAt       string
+}
+
+type MessageComment struct {
+	ID              string
+	MessageID       string
+	AuthorID        sql.NullString
+	AuthorPseudonym string
 	Text            string
 	CreatedAt       string
 }

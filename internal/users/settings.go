@@ -91,6 +91,12 @@ const (
 	DefaultMessagesMaxResolved   = 5000
 	SettingMessagesPerHour       = "messages.per_hour"
 	DefaultMessagesPerHour       = 20
+	// Comments (MSG-003): length in characters and comments per author
+	// and hour.
+	SettingMessagesMaxComment = "messages.max_comment"
+	DefaultMessagesMaxComment = 2000
+	SettingCommentsPerHour    = "messages.comments_per_hour"
+	DefaultCommentsPerHour    = 60
 )
 
 // Display name of an agent's host in characters (UI-021, D-089).
@@ -205,6 +211,8 @@ var settingRules = map[string]rule{
 	SettingMessagesMaxResolved:     intRule(1, 100000),
 	SettingMessagesPerHour:         intRule(1, 1000),
 	SettingAgentDisplayNameMax:     intRule(MinAgentDisplayNameMax, 256),
+	SettingMessagesMaxComment:      intRule(1, 4096),
+	SettingCommentsPerHour:         intRule(1, 3600),
 	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
 	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
 	SettingMultiParallel:           intRule(MinMultiParallel, 64),
@@ -235,6 +243,8 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingMessagesMaxResolved:   DefaultMessagesMaxResolved,
 		SettingMessagesPerHour:       DefaultMessagesPerHour,
 		SettingAgentDisplayNameMax:   DefaultAgentDisplayNameMax,
+		SettingMessagesMaxComment:    DefaultMessagesMaxComment,
+		SettingCommentsPerHour:       DefaultCommentsPerHour,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err

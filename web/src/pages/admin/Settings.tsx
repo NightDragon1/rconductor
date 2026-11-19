@@ -79,6 +79,8 @@ const keyTexts = [
   'login_max_tracked',
   'login_overflow_gap',
   'login_overflow_line',
+  'messages_comments_per_hour',
+  'messages_max_comment',
   'messages_max_recipients',
   'messages_max_resolved_recipients',
   'messages_max_text',
