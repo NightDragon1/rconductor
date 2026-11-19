@@ -62,10 +62,14 @@ func TestMessagesBehindFlag(t *testing.T) {
 		t.Fatalf("switch flag on = %d", got)
 	}
 	check(http.StatusUnauthorized, nil, ops...)
-	// Built: sending (201) and a scope without recipients (400); the
-	// rest still answers 501.
+	// Built: sending (201), the list (200), an unknown message (404) and
+	// a scope without recipients (400); the comments still answer 501.
 	check(http.StatusCreated, admin, ops[1])
-	check(http.StatusNotImplemented, admin, ops[0], ops[2], ops[3], ops[4], ops[5], ops[6], ops[7])
+	check(http.StatusOK, admin, ops[0])
+	check(http.StatusNotFound, admin, ops[2], ops[3], ops[4])
+	check(http.StatusNotImplemented, admin, ops[5], ops[6], ops[7])
+	check(http.StatusBadRequest, admin, call{method: http.MethodGet, path: "/api/v1/messages?limit=0"},
+		call{method: http.MethodGet, path: "/api/v1/messages?limit=101"})
 	check(http.StatusBadRequest, sa, send(`{"text":"hi","audience":"scope"}`))
 	check(http.StatusForbidden, mod, send(`{"text":"hi","audience":"all"}`))
 	check(http.StatusForbidden, sa, send(`{"text":"hi","audience":"all"}`), send(`{"text":"hi","audience":"users","user_ids":[`+uid+`]}`))

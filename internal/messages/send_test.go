@@ -6,6 +6,7 @@ package messages
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -137,20 +138,32 @@ func TestSendAudiences(t *testing.T) {
 	}
 }
 
-// TestSendRateLimit covers MSG-001: messages.per_hour counts the sends
-// of the last hour; an hour later the sender may send again.
-func TestSendRateLimit(t *testing.T) {
+// TestSendDeleteSendAgain covers MSG-001 and D-086: messages.per_hour
+// counts sends on its own, so deleting a message does not lower the
+// count; an hour later the sender may send again.
+func TestSendDeleteSendAgain(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	w.set(t, users.SettingMessagesPerHour, 2)
 	in := Input{Text: "hi", Audience: AudienceModerators}
+	var sent []string
 	for range 2 {
-		if _, err := w.s.Send(ctx, w.admin, in); err != nil {
+		m, err := w.s.Send(ctx, w.admin, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sent = append(sent, m.ID)
+	}
+	if _, err := w.s.Send(ctx, w.admin, in); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("third = %v", err)
+	}
+	for _, id := range sent {
+		if err := w.s.Delete(ctx, w.admin, id); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if _, err := w.s.Send(ctx, w.admin, in); !errors.Is(err, ErrRateLimited) {
-		t.Fatalf("third = %v", err)
+		t.Errorf("after deleting = %v, want the limit to hold", err)
 	}
 	w.clock = w.clock.Add(time.Hour + time.Second)
 	if _, err := w.s.Send(ctx, w.admin, in); err != nil {
@@ -184,5 +197,105 @@ func TestSendParallel(t *testing.T) {
 	wg.Wait()
 	if ok != 5 || limited != 7 {
 		t.Errorf("ok %d, limited %d", ok, limited)
+	}
+}
+
+// TestDeleteRights covers D-085: the sender and the RCON admin delete; a
+// recipient is 403 and audited, anyone else 404; the audit keeps no text.
+func TestDeleteRights(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	m, err := w.s.Send(ctx, w.sa, Input{Text: "secret words", Audience: AudienceScopeModerators})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.s.Delete(ctx, w.mod1, m.ID); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("recipient = %v", err)
+	}
+	var denied int
+	_ = w.s.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'message.deleted' AND result = 'denied' AND target_id = ?`, m.ID).Scan(&denied)
+	if denied != 1 {
+		t.Errorf("refusal audited %d times with the message ID", denied)
+	}
+	if err := w.s.Delete(ctx, w.mod2, m.ID); !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("stranger = %v", err)
+	}
+	if err := w.s.Delete(ctx, w.sa, m.ID); err != nil {
+		t.Errorf("sender = %v", err)
+	}
+	if err := w.s.Delete(ctx, w.sa, m.ID); !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("again = %v", err)
+	}
+	m2, _ := w.s.Send(ctx, w.sa, Input{Text: "more", Audience: AudienceScopeModerators})
+	if err := w.s.Delete(ctx, w.admin, m2.ID); err != nil {
+		t.Errorf("RCON admin = %v", err)
+	}
+	var left int
+	_ = w.s.st.DB.QueryRow(`SELECT (SELECT count(*) FROM messages) + (SELECT count(*) FROM message_recipients)`).Scan(&left)
+	var audit string
+	_ = w.s.st.DB.QueryRow(`SELECT group_concat(action || coalesce(payload, ''), '|') FROM audit_log WHERE target_type = 'message' AND result = 'ok'`).Scan(&audit)
+	if left != 0 || strings.Count(audit, "message.deleted") != 2 || strings.Contains(audit, "secret") {
+		t.Errorf("left %d, audit %s", left, audit)
+	}
+}
+
+// TestListGetRead covers MSG-003 and D-085: each sees the messages sent to
+// him and those he sent, the RCON admin all; anyone else gets 404. Only
+// the sender and the RCON admin see the number of recipients; only a
+// recipient marks a message read, repeated without change.
+func TestListGetRead(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	var ids []string
+	for i := range 3 {
+		w.clock = w.clock.Add(time.Second)
+		m, err := w.s.Send(ctx, w.sa, Input{Text: fmt.Sprint("m", i), Audience: AudienceScopeModerators})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, m.ID)
+	}
+	page := func(r users.Request, limit int, before string) Page {
+		t.Helper()
+		p, err := w.s.List(ctx, r, limit, before)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	p := page(w.mod1, 2, "")
+	if len(p.Items) != 2 || p.Items[0].ID != ids[2] || p.Unread != 3 || p.Items[0].RecipientCount != -1 || p.Items[0].Read {
+		t.Errorf("recipient page: %+v", p)
+	}
+	if p2 := page(w.mod1, 2, p.Items[1].ID); len(p2.Items) != 1 || p2.Items[0].ID != ids[0] {
+		t.Errorf("second page: %+v", p2)
+	}
+	if p := page(w.mod2, 50, ""); len(p.Items) != 0 || p.Unread != 0 {
+		t.Errorf("stranger sees %+v", p)
+	}
+	if p := page(w.mod2, 50, ids[2]); len(p.Items) != 0 {
+		t.Errorf("stranger pages past a foreign ID: %+v", p)
+	}
+	for _, r := range []users.Request{w.sa, w.admin} {
+		if p := page(r, 50, ""); len(p.Items) != 3 || p.Items[0].RecipientCount != 1 || !p.Items[0].Read {
+			t.Errorf("%s page: %+v", r.Pseudonym, p)
+		}
+	}
+	if _, err := w.s.Get(ctx, w.mod2, ids[0]); !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("stranger get = %v", err)
+	}
+	for range 2 {
+		if err := w.s.MarkRead(ctx, w.mod1, ids[0]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if m, err := w.s.Get(ctx, w.mod1, ids[0]); err != nil || !m.Read || page(w.mod1, 50, "").Unread != 2 {
+		t.Errorf("after read: %+v %v", m, err)
+	}
+	if err := w.s.MarkRead(ctx, w.sa, ids[0]); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("sender marks read = %v", err)
+	}
+	if err := w.s.MarkRead(ctx, w.mod2, ids[0]); !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("stranger marks read = %v", err)
 	}
 }

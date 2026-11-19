@@ -128,16 +128,21 @@ func TestSendInput(t *testing.T) {
 }
 
 // TestReadRoles: every known role may be a recipient, so the operations
-// on one message come through to the message; a role that is not known is
-// refused and audited.
+// come through to the message (built ones: not found, the list empty); a
+// role that is not known is refused and audited.
 func TestReadRoles(t *testing.T) {
 	s := newService(t)
 	ctx := context.Background()
 	const id = "00000000-0000-4000-8000-000000000001"
 	ops := map[string]func(users.Request) error{
-		"message.list":            func(r users.Request) error { return s.List(ctx, r) },
-		"message.read":            func(r users.Request) error { return s.Get(ctx, r, id) },
-		"message.delete":          func(r users.Request) error { return s.Delete(ctx, r, id) },
+		"message.list": func(r users.Request) error {
+			if p, err := s.List(ctx, r, 50, id); err != nil || len(p.Items) != 0 {
+				return err
+			}
+			return ErrNotImplemented
+		},
+		"message.read":            func(r users.Request) error { _, err := s.Get(ctx, r, id); return err },
+		"message.deleted":         func(r users.Request) error { return s.Delete(ctx, r, id) },
 		"message.mark_read":       func(r users.Request) error { return s.MarkRead(ctx, r, id) },
 		"message.comment_list":    func(r users.Request) error { return s.Comments(ctx, r, id) },
 		"message.commented":       func(r users.Request) error { return s.Comment(ctx, r, id, "ok") },
@@ -146,7 +151,11 @@ func TestReadRoles(t *testing.T) {
 	for _, role := range []perm.Role{perm.RCONAdmin, perm.ServerAdmin, perm.Moderator, perm.Supporter} {
 		req := request(t, s, role)
 		for action, op := range ops {
-			if err := op(req); !errors.Is(err, ErrNotImplemented) {
+			want := ErrNotImplemented
+			if action == "message.read" || action == "message.deleted" || action == "message.mark_read" {
+				want = users.ErrNotFound // built: no such message
+			}
+			if err := op(req); !errors.Is(err, want) {
 				t.Errorf("%s %s = %v", role, action, err)
 			}
 		}

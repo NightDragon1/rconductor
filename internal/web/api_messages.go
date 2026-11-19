@@ -19,8 +19,26 @@ import (
 // session and the flag messages; internal/messages checks role and
 // audience; operations not built yet answer 501.
 
-func (s *apiServer) ListMessages(ctx context.Context, _ api.ListMessagesRequestObject) (api.ListMessagesResponseObject, error) {
-	return nil, messageError(s.messages.List(ctx, adminRequest(ctx)), "listMessages")
+func (s *apiServer) ListMessages(ctx context.Context, req api.ListMessagesRequestObject) (api.ListMessagesResponseObject, error) {
+	limit, before := 50, ""
+	if req.Params.Limit != nil {
+		limit = *req.Params.Limit
+	}
+	if req.Params.Before != nil {
+		before = req.Params.Before.String()
+	}
+	if limit < 1 || limit > 100 {
+		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "limit is 1 to 100"}
+	}
+	p, err := s.messages.List(ctx, adminRequest(ctx), limit, before)
+	if err != nil {
+		return nil, messageError(err, "listMessages")
+	}
+	out := api.ListMessages200JSONResponse{Items: make([]api.Message, 0, len(p.Items)), Unread: p.Unread}
+	for _, m := range p.Items {
+		out.Items = append(out.Items, apiMessage(m))
+	}
+	return out, nil
 }
 
 func (s *apiServer) CreateMessage(ctx context.Context, req api.CreateMessageRequestObject) (api.CreateMessageResponseObject, error) {
@@ -57,15 +75,25 @@ func apiMessage(m messages.Message) api.Message {
 }
 
 func (s *apiServer) GetMessage(ctx context.Context, req api.GetMessageRequestObject) (api.GetMessageResponseObject, error) {
-	return nil, messageError(s.messages.Get(ctx, adminRequest(ctx), req.Id.String()), "getMessage")
+	m, err := s.messages.Get(ctx, adminRequest(ctx), req.Id.String())
+	if err != nil {
+		return nil, messageError(err, "getMessage")
+	}
+	return api.GetMessage200JSONResponse(apiMessage(m)), nil
 }
 
 func (s *apiServer) DeleteMessage(ctx context.Context, req api.DeleteMessageRequestObject) (api.DeleteMessageResponseObject, error) {
-	return nil, messageError(s.messages.Delete(ctx, adminRequest(ctx), req.Id.String()), "deleteMessage")
+	if err := s.messages.Delete(ctx, adminRequest(ctx), req.Id.String()); err != nil {
+		return nil, messageError(err, "deleteMessage")
+	}
+	return api.DeleteMessage204Response{}, nil
 }
 
 func (s *apiServer) MarkMessageRead(ctx context.Context, req api.MarkMessageReadRequestObject) (api.MarkMessageReadResponseObject, error) {
-	return nil, messageError(s.messages.MarkRead(ctx, adminRequest(ctx), req.Id.String()), "markMessageRead")
+	if err := s.messages.MarkRead(ctx, adminRequest(ctx), req.Id.String()); err != nil {
+		return nil, messageError(err, "markMessageRead")
+	}
+	return api.MarkMessageRead204Response{}, nil
 }
 
 func (s *apiServer) ListMessageComments(ctx context.Context, req api.ListMessageCommentsRequestObject) (api.ListMessageCommentsResponseObject, error) {
