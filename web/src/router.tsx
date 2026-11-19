@@ -25,6 +25,7 @@ import { ServerLayout } from '@/pages/server/ServerLayout';
 import { ServersPage } from '@/pages/Servers';
 import { AgentsPage } from '@/pages/admin/Agents';
 import { SettingsPage } from '@/pages/admin/Settings';
+import { SystemLogPage } from '@/pages/admin/SystemLog';
 import { AuditPage } from '@/pages/Audit';
 import { TopologyPage } from '@/pages/Topology';
 import { ProfilesPage } from '@/pages/Profiles';
@@ -138,6 +139,7 @@ const pages = [
   guarded('/admin/servers', 'serverAdmin', ServersAdminPage),
   guarded('/admin/agents', 'agents', AgentsPage),
   guarded('/admin/settings', 'settings', SettingsPage),
+  guarded('/admin/system-log', 'systemLog', SystemLogPage),
 ];
 const serversRoute = createRoute({
   getParentRoute: () => appRoute,

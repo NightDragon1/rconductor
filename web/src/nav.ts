@@ -8,6 +8,7 @@ import {
   ListChecks,
   Mail,
   Network,
+  ScrollText,
   Server,
   Settings,
   ShieldCheck,
@@ -85,6 +86,14 @@ export const adminNav: NavEntry[] = [
   { to: '/admin/servers', key: 'serverAdmin', icon: Server, allowed: admins },
   { to: '/admin/agents', key: 'agents', icon: Bot, allowed: rconAdmin },
   { to: '/admin/settings', key: 'settings', icon: Settings, allowed: rconAdmin },
+  // System log of the panel and of the agents (UI-025, D-091).
+  {
+    to: '/admin/system-log',
+    key: 'systemLog',
+    icon: ScrollText,
+    allowed: rconAdmin,
+    feature: 'diagnostics_export',
+  },
 ];
 
 export function entryFor(path: string): NavEntry | undefined {
