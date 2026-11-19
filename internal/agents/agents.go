@@ -61,8 +61,7 @@ type Hub interface {
 // (AGT-014); while it is off the agents are shown as in 1.1.
 const FeatureDockerHost = "docker_host"
 
-// FeatureHostGroups is the flag of the display name of an agent's host
-// (UI-021, D-089).
+// FeatureHostGroups is the flag of host display names (UI-021, D-089).
 const FeatureHostGroups = "host_groups"
 
 // Agent is an agent as the API shows it.
@@ -82,8 +81,7 @@ type Agent struct {
 	// DockerHost is the host of the agent's last hello, only with the
 	// flag docker_host on (AGT-014).
 	DockerHost *agentproto.DockerHost
-	// DisplayName is the display name of the host, only with the flag
-	// host_groups on (UI-021, D-089); "" while none is set.
+	// DisplayName of the host, only with host_groups on; "" while unset.
 	DisplayName string
 }
 

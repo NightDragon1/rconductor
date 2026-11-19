@@ -58,7 +58,6 @@ func TestHostGroups(t *testing.T) {
 	if groups()["a1"] != nil || patch(`{"features.host_groups":true}`) != http.StatusOK {
 		t.Fatal("flag off: host group shown, or flag not switched on")
 	}
-
 	for body, want := range map[string]int{
 		`{"display_name":"Rack\u0007"}`: 400, `{"display_name":"Rack\n1"}`: 400, `{"display_name":"\u001b[31mRack"}`: 400,
 		`{"display_name":"` + strings.Repeat("x", 65) + `"}`: 400, `{"display_name":"` + strings.Repeat("x", 1<<20) + `"}`: 400,
@@ -68,7 +67,6 @@ func TestHostGroups(t *testing.T) {
 			t.Errorf("%.40s = %d, want %d", body, got, want)
 		}
 	}
-	// The length is a setting with a validated minimum.
 	if patch(`{"agents.display_name_max":15}`) != http.StatusUnprocessableEntity || patch(`{"agents.display_name_max":16}`) != http.StatusOK ||
 		set(b, `{"display_name":"`+strings.Repeat("x", 17)+`"}`) != http.StatusBadRequest {
 		t.Error("agents.display_name_max not applied")
@@ -92,7 +90,6 @@ func TestHostGroups(t *testing.T) {
 	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'agent.display_name_set' AND result = 'ok'`).Scan(&ok); err != nil || ok != 23 {
 		t.Errorf("audited changes = %d (%v), want 23", ok, err)
 	}
-
 	g := groups()
 	switch {
 	case g["a1"] == nil || g["a2"] == nil || g["b"] == nil || g["none"] != nil:

@@ -926,6 +926,10 @@
         "label": "Supporters",
         "help": "Moderators may have supporters. Off ends all supporter sessions."
       },
+      "agents_display_name_max": {
+        "label": "Host display name length",
+        "help": "Characters of the display name of a host."
+      },
       "audit_retention_days": {
         "label": "Audit retention (days)",
         "help": "Audit entries older than this are removed."
