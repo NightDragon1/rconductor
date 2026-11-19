@@ -52,7 +52,8 @@ func TestSinkKeepsBlackedOut(t *testing.T) {
 	log := logs.Module("test")
 	log.Debug("only on stdout")
 	log.Info("started", logging.Event(logging.AppStart), slog.String("password", "hunter2"))
-	log.Warn("db at postgres://user:pw1@db.lan failed", slog.String("detail", "token=abc123def"))
+	log.Warn("db at postgres://user:pw1@db.lan failed", slog.String("detail", "token=abc123def"),
+		slog.String(logging.KeyAnswer, "Unknown token=abc123ans"))
 	sink.drain(ctx, st, newBuiltin(t), log)
 	rows, err := st.DB.QueryContext(ctx, `SELECT level, code, text FROM system_log ORDER BY id`)
 	if err != nil {
@@ -70,7 +71,10 @@ func TestSinkKeepsBlackedOut(t *testing.T) {
 	if len(got) != 2 || !strings.HasPrefix(got[0], "info app.start ") || !strings.HasPrefix(got[1], "warn  ") {
 		t.Fatalf("rows = %q", got)
 	}
-	for _, secret := range []string{"hunter2", "pw1", "abc123def", "only on stdout"} {
+	if !strings.Contains(got[1], `"answer":"Unknown token=`) {
+		t.Errorf("answer not kept: %s", got[1])
+	}
+	for _, secret := range []string{"hunter2", "pw1", "abc123def", "abc123ans", "only on stdout"} {
 		if strings.Contains(strings.Join(got, "\n"), secret) {
 			t.Errorf("%q kept: %q", secret, got)
 		}
