@@ -65,6 +65,9 @@ type Docker struct {
 	followLimiter *orderLimiter
 	metrics       time.Duration
 	maxFollows    int
+	// selfID is the agent's own container, empty outside a container
+	// (D-091); only its logs are allowed without the label.
+	selfID string
 
 	mu      sync.Mutex
 	follows map[string]context.CancelFunc
@@ -76,7 +79,9 @@ func NewDocker(cfg config.Agent, log *slog.Logger) (*Docker, error) {
 	if err != nil {
 		return nil, fmt.Errorf("docker client: %w", err)
 	}
-	return newDocker(c, cfg, log), nil
+	d := newDocker(c, cfg, log)
+	d.selfID = ownContainerID("/proc/self/mountinfo")
+	return d, nil
 }
 
 func newDocker(api dockerAPI, cfg config.Agent, log *slog.Logger) *Docker {
@@ -111,8 +116,12 @@ func (d *Docker) Name() string { return "docker" }
 
 // Capabilities implements Backend (AGT-013).
 func (d *Docker) Capabilities() []string {
-	return []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics, agentproto.CapRestartInfo,
+	caps := []string{agentproto.CapContainerAction, agentproto.CapLogs, agentproto.CapMetrics, agentproto.CapRestartInfo,
 		agentproto.CapVersionDetect, agentproto.CapVolumesSize}
+	if d.selfID != "" {
+		caps = append(caps, agentproto.CapSelfLogs)
+	}
+	return caps
 }
 
 // Host returns the host of the daemon as the daemon names it (AGT-014):
@@ -189,12 +198,33 @@ func (d *Docker) withStart(ctx context.Context, c agentproto.Container) agentpro
 // resolve finds an allowed container by name; a container without the
 // label does not exist for the agent (revision 2.3 candidate 1).
 func (d *Docker) resolve(ctx context.Context, name string) (container.Summary, error) {
+	if name == agentproto.SelfContainer {
+		return d.resolveSelf(ctx)
+	}
 	items, err := d.list(ctx, d.labelFilter().Add("name", "^/"+name+"$"))
 	if err != nil {
 		return container.Summary{}, err
 	}
 	for _, s := range items {
 		if len(s.Names) > 0 && strings.TrimPrefix(s.Names[0], "/") == name {
+			return s, nil
+		}
+	}
+	return container.Summary{}, errForbidden
+}
+
+// resolveSelf finds the agent's own container by its ID, the one
+// exception to the label (D-091); only the log orders reach it.
+func (d *Docker) resolveSelf(ctx context.Context) (container.Summary, error) {
+	if d.selfID == "" {
+		return container.Summary{}, errForbidden
+	}
+	r, err := d.api.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: client.Filters{}.Add("id", d.selfID)})
+	if err != nil {
+		return container.Summary{}, err
+	}
+	for _, s := range r.Items {
+		if s.ID == d.selfID {
 			return s, nil
 		}
 	}
@@ -417,7 +447,7 @@ func (d *Docker) handle(ctx context.Context, e agentproto.Envelope, out Sender) 
 		return d.action(ctx, s, name, a.Action)
 	case agentproto.TypeLogsTail:
 		t, err := agentproto.Payload[agentproto.LogsTail](e)
-		if err != nil || !validName(t.Container) || t.Lines < 1 {
+		if err != nil || !logName(t.Container) || t.Lines < 1 {
 			return agentproto.CodeInvalid, ""
 		}
 		s, code := d.allow(ctx, t.Container, e.Type)
@@ -427,7 +457,7 @@ func (d *Docker) handle(ctx context.Context, e agentproto.Envelope, out Sender) 
 		return d.tail(ctx, s, t.Container, min(t.Lines, agentproto.MaxLogLines), e.ID, out)
 	case agentproto.TypeLogsFollow:
 		f, err := agentproto.Payload[agentproto.LogsFollow](e)
-		if err != nil || !validName(f.Container) {
+		if err != nil || !logName(f.Container) {
 			return agentproto.CodeInvalid, ""
 		}
 		s, code := d.allow(ctx, f.Container, e.Type)
@@ -437,7 +467,7 @@ func (d *Docker) handle(ctx context.Context, e agentproto.Envelope, out Sender) 
 		return d.follow(ctx, s, f.Container, e.ID, out)
 	case agentproto.TypeLogsStop:
 		f, err := agentproto.Payload[agentproto.LogsFollow](e)
-		if err != nil || !validName(f.Container) {
+		if err != nil || !logName(f.Container) {
 			return agentproto.CodeInvalid, ""
 		}
 		d.stopFollow(f.Container)
@@ -462,6 +492,9 @@ func (d *Docker) handle(ctx context.Context, e agentproto.Envelope, out Sender) 
 	d.log.Warn("order not supported", logging.Event(logging.AgentUnsupported), slog.String("type", e.Type))
 	return agentproto.CodeUnsupported, ""
 }
+
+// logName is validName or the agent's own container, for the log orders.
+func logName(n string) bool { return n == agentproto.SelfContainer || validName(n) }
 
 func validName(n string) bool {
 	if n == "" || len(n) > 255 {
