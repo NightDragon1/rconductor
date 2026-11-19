@@ -38,6 +38,10 @@ var production = []Flag{
 	// Settings of the masking of container logs (UI-022, D-088); the
 	// masking itself runs without the flag.
 	{Name: "log_masking_ui", Operations: []string{"GetLogMasking", "UpdateLogMasking"}},
+	// Overview grouped by host with the display name of the agent (UI-021, D-089).
+	{Name: "host_groups", Operations: []string{"UpdateAgent"}},
+	// Diagnostic export for the RCON admin (NFR-018, D-090).
+	{Name: "diagnostics_export", Operations: []string{"GetDiagnostics"}},
 	// Messages in the panel (MSG-001 to MSG-003, D-085).
 	{Name: "messages", Operations: []string{"ListMessages", "CreateMessage", "GetMessage", "DeleteMessage", "MarkMessageRead", "ListMessageComments", "CreateMessageComment", "DeleteMessageComment"}},
 }

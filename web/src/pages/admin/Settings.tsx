@@ -47,6 +47,8 @@ const keyTexts = [
   'features_docker_host',
   'features_server_number',
   'features_messages',
+  'features_diagnostics_export',
+  'features_host_groups',
   'features_log_masking_ui',
   'features_server_save_as_new',
   'features_log_filter_split',

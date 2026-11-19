@@ -602,6 +602,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Diagnostic export as ZIP (NFR-018, D-090); RCON admin only.
+         * @description Behind the feature flag diagnostics_export (404 while off). One JSON file per area (versions, settings, profiles, states of agents and servers) and the event log of the period as a text file. Period from to to, at most 7 days (400); without from the last 24 hours. Blacked out before writing (SEC-012), log lines masked as in D-088. Above diagnostics.max_bytes the period is shortened and the package says so. Exports at the same time are limited (503 with Retry-After). Audited with period and size, never with content.
+         */
+        get: operations["getDiagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agents": {
         parameters: {
             query?: never;
@@ -662,7 +682,11 @@ export interface paths {
         delete: operations["deleteAgent"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Set the display name of an agent's host (UI-021, D-089); RCON admin only.
+         * @description Behind the feature flag host_groups (404 while off). display_name null or "" removes it; at most agents.display_name_max characters, no control characters (400). The other roles see the display name or a neutral placeholder, never the host name (D-089).
+         */
+        patch: operations["updateAgent"];
         trace?: never;
     };
     "/agents/{id}/containers": {
@@ -1337,6 +1361,8 @@ export interface components {
             id: string;
             /** @description Foreign data from the agent (SEC-006). */
             name: string;
+            /** @description Display name of the host, set by the RCON admin (D-089); only while the feature flag host_groups is on. */
+            display_name?: string;
             /** @description SHA256:<base64> of the agent key. */
             fingerprint: string;
             /** @enum {string} */
@@ -1356,12 +1382,25 @@ export interface components {
             /** Format: date-time */
             revoked_at?: string;
         };
+        /** @description Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name or the address. */
+        HostGroup: {
+            /**
+             * Format: uuid
+             * @description The agent; only for grouping.
+             */
+            id: string;
+            /** @description Missing when none is set; the interface shows a neutral placeholder. */
+            display_name?: string;
+        };
         /** @description Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Only while the feature flag docker_host is on; each field is missing when the agent does not give it. */
         DockerHost: {
             /** @description Foreign data from the agent (SEC-006). */
             name?: string;
             /** @description IPv4 or IPv6 address without zone; never loopback, link-local, unspecified or multicast. */
             ip?: string;
+        };
+        AgentInput: {
+            display_name: string | null;
         };
         AgentList: {
             items: components["schemas"]["Agent"][];
@@ -1520,6 +1559,7 @@ export interface components {
             credentials?: "ok" | "missing" | "reenter";
             /** @description Admins only; the paired agent on the server's host. */
             agent_id?: string;
+            host_group?: components["schemas"]["HostGroup"];
             /** @description Admins only; the container on that host. The agent resolves the name and checks its label for every order. */
             container_name?: string;
             runtime?: components["schemas"]["ServerRuntime"];
@@ -3537,6 +3577,34 @@ export interface operations {
             428: components["responses"]["PreconditionRequired"];
         };
     };
+    getDiagnostics: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The package. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Busy"];
+        };
+    };
     listAgents: {
         parameters: {
             query?: never;
@@ -3624,6 +3692,36 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AgentID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentInput"];
+            };
+        };
+        responses: {
+            /** @description The agent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

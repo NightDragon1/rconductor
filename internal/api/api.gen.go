@@ -705,6 +705,9 @@ type Agent struct {
 	Connected    bool      `json:"connected"`
 	CreatedAt    time.Time `json:"created_at"`
 
+	// DisplayName Display name of the host, set by the RCON admin (D-089); only while the feature flag host_groups is on.
+	DisplayName *string `json:"display_name,omitempty"`
+
 	// DockerHost Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Only while the feature flag docker_host is on; each field is missing when the agent does not give it.
 	DockerHost *DockerHost `json:"docker_host,omitempty"`
 
@@ -735,6 +738,11 @@ type AgentContainers struct {
 		Name  string  `json:"name"`
 		State string  `json:"state"`
 	} `json:"items"`
+}
+
+// AgentInput defines model for AgentInput.
+type AgentInput struct {
+	DisplayName *string `json:"display_name"`
 }
 
 // AgentList defines model for AgentList.
@@ -1098,6 +1106,15 @@ type HistoryEntryResult string
 type HistoryPage struct {
 	Items      []HistoryEntry `json:"items"`
 	NextCursor *string        `json:"next_cursor,omitempty"`
+}
+
+// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name or the address.
+type HostGroup struct {
+	// DisplayName Missing when none is set; the interface shows a neutral placeholder.
+	DisplayName *string `json:"display_name,omitempty"`
+
+	// Id The agent; only for grouping.
+	Id openapi_types.UUID `json:"id"`
 }
 
 // Invite defines model for Invite.
@@ -1554,9 +1571,12 @@ type Server struct {
 	Groups            []openapi_types.UUID `json:"groups"`
 
 	// Host RCON admin only; the server admin sees of the ports only the game ports (D-056).
-	Host *string            `json:"host,omitempty"`
-	Id   openapi_types.UUID `json:"id"`
-	Name string             `json:"name"`
+	Host *string `json:"host,omitempty"`
+
+	// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name or the address.
+	HostGroup *HostGroup         `json:"host_group,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+	Name      string             `json:"name"`
 
 	// Number Consecutive number of the server, given at creation and never given again, also after a delete (UI-018). Every role in scope gets it; the interface shows it with the flag server_number.
 	Number int64 `json:"number"`
@@ -1940,6 +1960,12 @@ type UpdateCommandListParams struct {
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
 }
 
+// GetDiagnosticsParams defines parameters for GetDiagnostics.
+type GetDiagnosticsParams struct {
+	From *time.Time `form:"from,omitempty" json:"from,omitempty"`
+	To   *time.Time `form:"to,omitempty" json:"to,omitempty"`
+}
+
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
 	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
@@ -2019,6 +2045,9 @@ type ListUsersParams struct {
 	// Q Part of the pseudonym or real name, ignoring case.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
 }
+
+// UpdateAgentJSONRequestBody defines body for UpdateAgent for application/json ContentType.
+type UpdateAgentJSONRequestBody = AgentInput
 
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
@@ -2145,6 +2174,9 @@ type ServerInterface interface {
 	// GetAgent One agent; RCON admin only.
 	// (GET /agents/{id})
 	GetAgent(w http.ResponseWriter, r *http.Request, id AgentID)
+	// UpdateAgent Set the display name of an agent's host (UI-021, D-089); RCON admin only.
+	// (PATCH /agents/{id})
+	UpdateAgent(w http.ResponseWriter, r *http.Request, id AgentID)
 	// ApproveAgent Approve a pending pairing by fingerprint (way B); RCON admin only.
 	// (POST /agents/{id}/approve)
 	ApproveAgent(w http.ResponseWriter, r *http.Request, id AgentID)
@@ -2190,6 +2222,9 @@ type ServerInterface interface {
 	// SendMultiCommand Send one command to several servers at once (CMD-010, D-069).
 	// (POST /commands/multi)
 	SendMultiCommand(w http.ResponseWriter, r *http.Request)
+	// GetDiagnostics Diagnostic export as ZIP (NFR-018, D-090); RCON admin only.
+	// (GET /diagnostics)
+	GetDiagnostics(w http.ResponseWriter, r *http.Request, params GetDiagnosticsParams)
 	// ListInvites Invitations of the caller; the RCON admin sees all (UI-008).
 	// (GET /invites)
 	ListInvites(w http.ResponseWriter, r *http.Request)
@@ -2505,6 +2540,32 @@ func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAgent(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAgent operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAgent(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2857,6 +2918,52 @@ func (siw *ServerInterfaceWrapper) SendMultiCommand(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SendMultiCommand(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDiagnostics operation middleware
+func (siw *ServerInterfaceWrapper) GetDiagnostics(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDiagnosticsParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDiagnostics(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4904,10 +5011,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/server-groups/{id}", wrapper.UpdateServerGroup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{id}/say-prefix", wrapper.GetServerGroupSayPrefix)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/server-groups/{id}/say-prefix", wrapper.SetServerGroupSayPrefix)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/tokens", wrapper.CreateAgentToken)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{id}", wrapper.DeleteAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{id}", wrapper.GetAgent)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/agents/{id}", wrapper.UpdateAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{id}/containers", wrapper.ListAgentContainers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{id}/approve", wrapper.ApproveAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/messages", wrapper.ListMessages)
@@ -5243,6 +5352,93 @@ type GetAgent404ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetAgent404ApplicationProblemPlusJSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentRequestObject struct {
+	Id   AgentID `json:"id"`
+	Body *UpdateAgentJSONRequestBody
+}
+
+type UpdateAgentResponseObject interface {
+	VisitUpdateAgentResponse(w http.ResponseWriter) error
+}
+
+type UpdateAgent200JSONResponse Agent
+
+func (response UpdateAgent200JSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAgent400ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAgent401ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAgent403ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAgent404ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -6307,6 +6503,117 @@ func (response SendMultiCommand422ApplicationProblemPlusJSONResponse) VisitSendM
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDiagnosticsRequestObject struct {
+	Params GetDiagnosticsParams
+}
+
+type GetDiagnosticsResponseObject interface {
+	VisitGetDiagnosticsResponse(w http.ResponseWriter) error
+}
+
+type GetDiagnostics200ApplicationzipResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetDiagnostics200ApplicationzipResponse) VisitGetDiagnosticsResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/zip")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetDiagnostics400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetDiagnostics400ApplicationProblemPlusJSONResponse) VisitGetDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDiagnostics401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response GetDiagnostics401ApplicationProblemPlusJSONResponse) VisitGetDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDiagnostics403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetDiagnostics403ApplicationProblemPlusJSONResponse) VisitGetDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDiagnostics404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetDiagnostics404ApplicationProblemPlusJSONResponse) VisitGetDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDiagnostics503ApplicationProblemPlusJSONResponse struct {
+	BusyApplicationProblemPlusJSONResponse
+}
+
+func (response GetDiagnostics503ApplicationProblemPlusJSONResponse) VisitGetDiagnosticsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -12162,6 +12469,9 @@ type StrictServerInterface interface {
 	// GetAgent One agent; RCON admin only.
 	// (GET /agents/{id})
 	GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error)
+	// UpdateAgent Set the display name of an agent's host (UI-021, D-089); RCON admin only.
+	// (PATCH /agents/{id})
+	UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error)
 	// ApproveAgent Approve a pending pairing by fingerprint (way B); RCON admin only.
 	// (POST /agents/{id}/approve)
 	ApproveAgent(ctx context.Context, request ApproveAgentRequestObject) (ApproveAgentResponseObject, error)
@@ -12207,6 +12517,9 @@ type StrictServerInterface interface {
 	// SendMultiCommand Send one command to several servers at once (CMD-010, D-069).
 	// (POST /commands/multi)
 	SendMultiCommand(ctx context.Context, request SendMultiCommandRequestObject) (SendMultiCommandResponseObject, error)
+	// GetDiagnostics Diagnostic export as ZIP (NFR-018, D-090); RCON admin only.
+	// (GET /diagnostics)
+	GetDiagnostics(ctx context.Context, request GetDiagnosticsRequestObject) (GetDiagnosticsResponseObject, error)
 	// ListInvites Invitations of the caller; the RCON admin sees all (UI-008).
 	// (GET /invites)
 	ListInvites(ctx context.Context, request ListInvitesRequestObject) (ListInvitesResponseObject, error)
@@ -12584,6 +12897,39 @@ func (sh *strictHandler) GetAgent(w http.ResponseWriter, r *http.Request, id Age
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetAgentResponseObject); ok {
 		if err := validResponse.VisitGetAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAgent operation middleware
+func (sh *strictHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, id AgentID) {
+	var request UpdateAgentRequestObject
+
+	request.Id = id
+
+	var body UpdateAgentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAgent(ctx, request.(UpdateAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAgentResponseObject); ok {
+		if err := validResponse.VisitUpdateAgentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -13006,6 +13352,32 @@ func (sh *strictHandler) SendMultiCommand(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SendMultiCommandResponseObject); ok {
 		if err := validResponse.VisitSendMultiCommandResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetDiagnostics operation middleware
+func (sh *strictHandler) GetDiagnostics(w http.ResponseWriter, r *http.Request, params GetDiagnosticsParams) {
+	var request GetDiagnosticsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDiagnostics(ctx, request.(GetDiagnosticsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDiagnostics")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetDiagnosticsResponseObject); ok {
+		if err := validResponse.VisitGetDiagnosticsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

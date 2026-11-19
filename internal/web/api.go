@@ -17,6 +17,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/cache"
 	"github.com/NightDragon1/rconductor/internal/commands"
+	"github.com/NightDragon1/rconductor/internal/diag"
 	"github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -52,6 +53,7 @@ type apiServer struct {
 	users    *users.Service
 	mail     *mail.Service
 	messages *messages.Service
+	diag     *diag.Service
 	masking  *logmask.Settings
 	invites  *users.Invites
 	profiles *users.Profiles

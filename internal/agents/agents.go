@@ -291,6 +291,18 @@ volumes:
 `, repo, version, token)
 }
 
+// ErrNotImplemented means the display name is not built yet.
+var ErrNotImplemented = errors.New("not implemented yet")
+
+// SetDisplayName sets the display name of an agent's host (UI-021,
+// D-089): the RCON admin only, refusals audited.
+func (s *Service) SetDisplayName(ctx context.Context, req users.Request, id string, _ *string) (Agent, error) {
+	if err := s.mustBeAdmin(ctx, req, "agent.display_name_set", id); err != nil {
+		return Agent{}, err
+	}
+	return Agent{}, ErrNotImplemented
+}
+
 // Approve accepts a pending pairing by fingerprint (way B).
 func (s *Service) Approve(ctx context.Context, req users.Request, id string) (Agent, error) {
 	if err := s.mustBeAdmin(ctx, req, "agent.approve", id); err != nil {
