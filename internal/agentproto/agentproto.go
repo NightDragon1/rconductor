@@ -88,7 +88,15 @@ const (
 	// AGT-007); an agent 1.0 does not report them.
 	CapVersionDetect = "version.detect"
 	CapVolumesSize   = "volumes.size"
+	// CapSelfLogs comes with 1.2 (D-091): logs.tail and logs.follow for
+	// SelfContainer read the agent's own container.
+	CapSelfLogs = "logs.self"
 )
+
+// SelfContainer names the agent's own container in logs.tail, logs.follow
+// and logs.stop (D-091); no Docker name starts with "@", and every other
+// order refuses it.
+const SelfContainer = "@self"
 
 // NeededCapability names the capability an agent must report for a
 // message type, an order to it or data from it; empty when every agent of
