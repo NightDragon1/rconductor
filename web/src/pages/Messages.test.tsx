@@ -1,0 +1,316 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider } from '@tanstack/react-router';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '@/api/client';
+import { sessionKey } from '@/api/session';
+import { makeRouter } from '@/router';
+import { renderPage, setLanguage, unmarked } from '@/test/render';
+import { MessagesPage } from './Messages';
+
+vi.mock('@/lib/live', () => ({
+  LiveSocket: class {
+    close() {}
+    subscribe() {
+      return () => undefined;
+    }
+  },
+}));
+
+const now = new Date().toISOString();
+const evil = '<img src=x onerror=alert(1)>';
+
+function session(role = 'rcon_admin', features = ['messages']) {
+  return {
+    user: { id: 'me', pseudonym: 'me', role },
+    expires_at: now,
+    must_change_password: false,
+    totp_setup_required: false,
+    panel_version: '1.2',
+    ui: {
+      features,
+      shortcuts_enabled: false,
+      supporters_enabled: false,
+      supporters_allowed: false,
+    },
+  };
+}
+
+const msg = (id: string, over: object = {}) => ({
+  id,
+  sender: { id: 'boss', pseudonym: 'boss' },
+  text: `text ${id}`,
+  audience: 'all',
+  created_at: now,
+  comment_count: 0,
+  read: true,
+  ...over,
+});
+
+type Answer = { status: number; body?: unknown };
+const answer = ({ status, body }: Answer) => {
+  const ok = status < 400;
+  return Promise.resolve({
+    data: ok ? body : undefined,
+    error: ok ? undefined : body,
+    response: new Response(null, { status }),
+  });
+};
+
+// mock answers GET by path; every other call goes to write.
+function mock(
+  get: Record<string, Answer>,
+  write: (method: string, path: string, init: unknown) => Answer = () => ({ status: 204 }),
+) {
+  const g = vi.spyOn(api, 'GET').mockImplementation(((path: string) => {
+    const a = get[path];
+    if (!a) throw new Error(`unexpected GET ${path}`);
+    return answer(a);
+  }) as never);
+  const p = vi
+    .spyOn(api, 'POST')
+    .mockImplementation(((path: string, init: unknown) =>
+      answer(write('POST', path, init))) as never);
+  const d = vi
+    .spyOn(api, 'DELETE')
+    .mockImplementation(((path: string, init: unknown) =>
+      answer(write('DELETE', path, init))) as never);
+  return { get: g, post: p, del: d };
+}
+
+const list = (items: unknown[], unread = 0) => ({ status: 200, body: { items, unread } });
+const noComments = { status: 200, body: { items: [] } };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  document.querySelector('base')?.remove();
+  window.history.replaceState(null, '', '/');
+});
+
+describe('messages (MSG-001 to MSG-003, D-085)', () => {
+  it('lets the RCON admin send to chosen users and shows the recipients', async () => {
+    setLanguage('en');
+    const calls = mock(
+      {
+        '/messages': list([msg('m1', { sender: { id: 'me', pseudonym: 'me' } })]),
+        '/users': {
+          status: 200,
+          body: { items: [{ id: 'u1', pseudonym: 'mod', role: 'moderator' }] },
+        },
+      },
+      () => ({ status: 201, body: { ...msg('m2'), recipient_count: 1 } }),
+    );
+    await renderPage(MessagesPage, [[sessionKey, session()]]);
+    const form = screen.getByRole('form', { name: 'New message' });
+    const to = within(form).getByLabelText('To') as HTMLSelectElement;
+    expect([...to.options].map((o) => o.value)).toEqual([
+      'all',
+      'server_admins',
+      'moderators',
+      'users',
+    ]);
+    fireEvent.change(to, { target: { value: 'users' } });
+    fireEvent.click(await within(form).findByRole('checkbox', { name: /mod/ }));
+    fireEvent.change(within(form).getByLabelText('Text'), { target: { value: 'Hello' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Send' }));
+    await waitFor(() =>
+      expect(within(form).getByRole('status').textContent).toBe('Sent to 1 recipient.'),
+    );
+    expect(calls.post).toHaveBeenCalledWith('/messages', {
+      body: { text: 'Hello', audience: 'users', user_ids: ['u1'] },
+    });
+  });
+
+  it('offers a server admin only his scope', async () => {
+    setLanguage('en');
+    mock({ '/messages': list([]) });
+    await renderPage(MessagesPage, [[sessionKey, session('server_admin')]]);
+    const to = screen.getByLabelText('To') as HTMLSelectElement;
+    expect([...to.options].map((o) => o.value)).toEqual(['scope', 'scope_moderators']);
+  });
+
+  it('gives a moderator no send form and marks an opened message read', async () => {
+    setLanguage('en');
+    const calls = mock({
+      '/messages': list([msg('m1', { read: false, text: evil })], 1),
+      '/messages/{id}/comments': noComments,
+    });
+    const { container } = await renderPage(MessagesPage, [[sessionKey, session('moderator')]]);
+    await screen.findByTestId('message');
+    expect(screen.queryByRole('form', { name: 'New message' })).toBeNull();
+    // The text is foreign data: text, never markup (SEC-006).
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByTestId('message').textContent).toContain(evil);
+    fireEvent.click(within(screen.getByTestId('message')).getAllByRole('button')[0] as HTMLElement);
+    await waitFor(() =>
+      expect(calls.post).toHaveBeenCalledWith('/messages/{id}/read', {
+        params: { path: { id: 'm1' } },
+      }),
+    );
+    // Not the sender and not the RCON admin: no delete.
+    expect(screen.queryByRole('button', { name: 'Delete message' })).toBeNull();
+  });
+
+  it('does not mark a message read that I sent and lets me delete it', async () => {
+    setLanguage('en');
+    const calls = mock({
+      '/messages': list([msg('m1', { sender: { id: 'me', pseudonym: 'me' }, recipient_count: 4 })]),
+      '/messages/{id}/comments': noComments,
+    });
+    await renderPage(MessagesPage, [[sessionKey, session('server_admin')]]);
+    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+    expect(await screen.findByText('4 recipients')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete message' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete message' }),
+    );
+    await waitFor(() =>
+      expect(calls.del).toHaveBeenCalledWith('/messages/{id}', { params: { path: { id: 'm1' } } }),
+    );
+    expect(calls.post).not.toHaveBeenCalled();
+  });
+
+  it('shows the refusal of the backend instead of a success', async () => {
+    setLanguage('en');
+    mock({ '/messages': list([]) }, () => ({
+      status: 429,
+      body: { title: 'Too Many Requests', status: 429, detail: 'too many messages this hour' },
+    }));
+    await renderPage(MessagesPage, [[sessionKey, session()]]);
+    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Hello' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Failed: too many messages this hour',
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('shows the error text of the comments and sends a comment', async () => {
+    setLanguage('en');
+    const calls = mock(
+      {
+        '/messages': list([msg('m1')]),
+        '/messages/{id}/comments': {
+          status: 501,
+          body: { title: 'Not Implemented', status: 501 },
+        },
+      },
+      () => ({ status: 501, body: { title: 'Not Implemented', status: 501 } }),
+    );
+    await renderPage(MessagesPage, [[sessionKey, session('supporter')]]);
+    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+    const comments = await screen.findByRole('region', { name: 'Comments' });
+    expect((await within(comments).findByRole('alert')).textContent).toBe(
+      'Failed: Not Implemented',
+    );
+    fireEvent.change(within(comments).getByLabelText('Your comment'), {
+      target: { value: 'ok' },
+    });
+    fireEvent.click(within(comments).getByRole('button', { name: 'Comment' }));
+    await waitFor(() =>
+      expect(calls.post).toHaveBeenCalledWith('/messages/{id}/comments', {
+        params: { path: { id: 'm1' } },
+        body: { text: 'ok' },
+      }),
+    );
+  });
+
+  it('deletes a comment only where author, sender or RCON admin', async () => {
+    setLanguage('en');
+    mock({
+      '/messages': list([msg('m1')]),
+      '/messages/{id}/comments': {
+        status: 200,
+        body: {
+          items: [
+            { id: 'c1', author: { id: 'me', pseudonym: 'me' }, text: 'mine', created_at: now },
+            { id: 'c2', author: { id: 'x', pseudonym: 'x' }, text: evil, created_at: now },
+          ],
+        },
+      },
+    });
+    const { container } = await renderPage(MessagesPage, [[sessionKey, session('moderator')]]);
+    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+    const [own, other] = (await screen.findAllByTestId('comment')) as [HTMLElement, HTMLElement];
+    expect(within(own).queryByRole('button', { name: 'Delete' })).toBeTruthy();
+    expect(within(other).queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(other.textContent).toContain(evil);
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('loads older messages with before', async () => {
+    setLanguage('en');
+    const page = Array.from({ length: 50 }, (_, i) => msg(`m${i}`));
+    const calls = mock({ '/messages': list(page) });
+    await renderPage(MessagesPage, [[sessionKey, session('supporter')]]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    await waitFor(() =>
+      expect(calls.get).toHaveBeenCalledWith('/messages', {
+        params: { query: { limit: 50, before: 'm49' } },
+      }),
+    );
+  });
+
+  it('takes every text from the language file', async () => {
+    setLanguage('xx');
+    mock({
+      '/messages': list([msg('m1', { read: false })], 1),
+      '/messages/{id}/comments': noComments,
+    });
+    const { container } = await renderPage(MessagesPage, [[sessionKey, session()]]);
+    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+    await screen.findByRole('region');
+    // Names, texts and times are data.
+    const texts = unmarked(container).filter(
+      (s) => !['boss', 'text m1'].includes(s) && /\p{L}/u.test(s),
+    );
+    expect(texts).toEqual([]);
+    setLanguage('en');
+  });
+});
+
+describe('messages behind the flag messages (NFR-019)', () => {
+  async function open(features: string[]) {
+    setLanguage('en');
+    const get = vi.spyOn(api, 'GET').mockImplementation(((path: string) =>
+      Promise.resolve({
+        data:
+          path === '/auth/session'
+            ? session('moderator', features)
+            : path === '/messages'
+              ? { items: [], unread: 3 }
+              : { items: [] },
+        response: new Response(null, { status: 200 }),
+      })) as never);
+    const b = document.createElement('base');
+    b.href = '/';
+    document.head.append(b);
+    window.history.replaceState(null, '', '/messages');
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = makeRouter(qc);
+    render(
+      <QueryClientProvider client={qc}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await act(() => router.load());
+    return get;
+  }
+
+  it('does not exist while the flag is off: no menu entry, no page, no request', async () => {
+    const get = await open([]);
+    expect(await screen.findByText('Page not found')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Messages/ })).toBeNull();
+    expect(get.mock.calls.map((c) => c[0])).not.toContain('/messages');
+  });
+
+  it('shows the menu entry with the unread count while the flag is on', async () => {
+    await open(['messages']);
+    expect(await screen.findByRole('heading', { name: 'Messages' })).toBeTruthy();
+    expect(
+      (await screen.findAllByRole('link', { name: /Messages.*3 unread messages/ })).length,
+    ).toBeGreaterThan(0);
+  });
+});
