@@ -1,10 +1,9 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package syslog keeps the system log of the panel (D-091, UI-025): every
-// event from info up, as the log handler wrote it (blacked out after
-// SEC-012), masked as in D-088 and stored in batches. Writing never blocks
-// the panel: a line that cannot be kept is counted and dropped.
+// Package syslog keeps the system log of the panel (D-091): events from
+// info up, blacked out (SEC-012), masked (D-088), stored in batches; it
+// never blocks the panel, a line not kept is counted.
 package syslog
 
 import (
@@ -23,8 +22,7 @@ import (
 // Retention is how long an entry stays (D-091).
 const Retention = 7 * 24 * time.Hour
 
-// Sizes of the queue and of one batch, and how often the queue is written
-// and the log trimmed.
+// Queue and batch sizes, write and trim intervals.
 const (
 	queueSize  = 4096
 	batchSize  = 256
@@ -43,16 +41,14 @@ type Masker interface {
 type Sink struct {
 	queue chan []byte
 	lost  atomic.Int64
-	// failing is set after a failed write until the next one succeeds, so
-	// the failure is logged once (only the writer goroutine uses it).
+	// failing: the last write failed (logged once; writer goroutine only).
 	failing bool
 }
 
-// NewSink returns an empty sink; lines wait in its queue until Run.
+// NewSink returns an empty sink; lines wait in the queue until Run.
 func NewSink() *Sink { return &Sink{queue: make(chan []byte, queueSize)} }
 
-// Write takes one line. It never blocks: with a full queue the line is
-// counted as lost.
+// Write takes one line; with a full queue it is counted as lost.
 func (s *Sink) Write(p []byte) (int, error) {
 	select {
 	case s.queue <- bytes.Clone(p):
@@ -65,7 +61,8 @@ func (s *Sink) Write(p []byte) (int, error) {
 // Lost counts the lines that were not kept.
 func (s *Sink) Lost() int64 { return s.lost.Load() }
 
-// Run writes the queue in batches and trims the log until ctx ends.
+// Run writes the queue in batches and trims the log until ctx ends, then
+// writes what is left.
 func (s *Sink) Run(ctx context.Context, st *store.Store, m Masker, log *slog.Logger, now func() time.Time) {
 	flush, prune := time.NewTicker(flushEvery), time.NewTicker(pruneEvery)
 	defer flush.Stop()
@@ -74,6 +71,7 @@ func (s *Sink) Run(ctx context.Context, st *store.Store, m Masker, log *slog.Log
 	for {
 		select {
 		case <-ctx.Done():
+			s.drain(context.WithoutCancel(ctx), st, m, log)
 			return
 		case <-flush.C:
 			s.drain(ctx, st, m, log)
@@ -139,8 +137,7 @@ func (s *Sink) write(ctx context.Context, st *store.Store, m Masker, lines []str
 	return tx.Commit()
 }
 
-// prune deletes entries older than Retention, then the oldest ones while
-// the log is above system_log.max_bytes.
+// prune deletes entries past Retention, then the oldest above the size.
 func (s *Sink) prune(ctx context.Context, st *store.Store, log *slog.Logger, now time.Time) {
 	q := st.Queries
 	if _, err := q.PurgeSystemLogBefore(ctx, now.Add(-Retention).UTC().Format(store.TimeLayout)); err != nil {

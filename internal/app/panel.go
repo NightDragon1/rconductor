@@ -155,7 +155,11 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	maskSettings := logmask.NewSettings(st, box, logs.Module("logmask"))
 	masking := logmask.NewProvider(ctx, maskSettings, logs.Module("logmask"))
 	importer.OnImported(masking.ProfilesChanged)
-	go sink.Run(ctx, st, masking, logs.Module("syslog"), time.Now)
+	// The system log ends before the store closes, with a last write.
+	sctx, stopSink := context.WithCancel(ctx)
+	sinkDone := make(chan struct{})
+	go func() { sink.Run(sctx, st, masking, logs.Module("syslog"), time.Now); close(sinkDone) }()
+	defer func() { stopSink(); <-sinkDone }()
 	if err := importer.Sync(ctx); err != nil {
 		return err
 	}

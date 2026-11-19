@@ -80,9 +80,8 @@ func TestSinkKeepsBlackedOut(t *testing.T) {
 	}
 }
 
-// TestSinkNeverBlocks: with a full queue and with a store that cannot be
-// written, the panel goes on; every line not kept is counted, and the
-// failure is logged once.
+// TestSinkNeverBlocks: a full queue and a store that cannot be written
+// count every line not kept; the failure is logged once.
 func TestSinkNeverBlocks(t *testing.T) {
 	sink := NewSink()
 	var wg sync.WaitGroup
@@ -112,8 +111,7 @@ func TestSinkNeverBlocks(t *testing.T) {
 	}
 }
 
-// TestPrune covers D-091: entries older than 7 days go; above
-// system_log.max_bytes the oldest go first.
+// TestPrune (D-091): 7 days, then above the size the oldest first.
 func TestPrune(t *testing.T) {
 	st := storetest.New(t)
 	ctx := context.Background()
@@ -149,9 +147,20 @@ func TestPrune(t *testing.T) {
 	sink.prune(ctx, st, log, now)
 	var oldest int
 	_ = st.DB.QueryRow(`SELECT min(id) FROM system_log`).Scan(&oldest)
-	// 3,000,005 bytes in 3005 entries are over 1 MiB; the oldest go in
-	// steps of 500 until 1005 entries (1,000,005 bytes) are left.
+	// Steps of 500 oldest leave 1005 entries (1,000,005 bytes).
 	if n := count(); n != 1005 || oldest != 2006 {
 		t.Errorf("above the size %d entries from id %d, want the newest 1005 from 2006", n, oldest)
+	}
+}
+
+// TestRunWritesLastLines: when ctx ends, Run writes what is queued.
+func TestRunWritesLastLines(t *testing.T) {
+	sink := NewSink()
+	_, _ = sink.Write([]byte(`{"level":"info","msg":"panel stopped"}`))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	sink.Run(ctx, storetest.New(t), newBuiltin(t), slog.New(slog.DiscardHandler), time.Now)
+	if len(sink.queue) != 0 || sink.Lost() != 0 {
+		t.Errorf("after the end %d queued, %d lost", len(sink.queue), sink.Lost())
 	}
 }
