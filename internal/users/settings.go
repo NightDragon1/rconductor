@@ -97,6 +97,10 @@ const (
 	DefaultMessagesMaxComment = 2000
 	SettingCommentsPerHour    = "messages.comments_per_hour"
 	DefaultCommentsPerHour    = 60
+	// Days a message is kept with its recipients and comments (D-086).
+	SettingMessagesRetentionDays = "messages.retention_days"
+	DefaultMessagesRetentionDays = 180
+	MinMessagesRetentionDays     = 7
 )
 
 // Command templates per server (CMD-008, D-068).
@@ -205,6 +209,7 @@ var settingRules = map[string]rule{
 	SettingMessagesPerHour:         intRule(1, 1000),
 	SettingMessagesMaxComment:      intRule(1, 4096),
 	SettingCommentsPerHour:         intRule(1, 3600),
+	SettingMessagesRetentionDays:   intRule(MinMessagesRetentionDays, 3650),
 	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
 	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
 	SettingMultiParallel:           intRule(MinMultiParallel, 64),
@@ -236,6 +241,7 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingMessagesPerHour:       DefaultMessagesPerHour,
 		SettingMessagesMaxComment:    DefaultMessagesMaxComment,
 		SettingCommentsPerHour:       DefaultCommentsPerHour,
+		SettingMessagesRetentionDays: DefaultMessagesRetentionDays,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err

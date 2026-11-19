@@ -974,6 +974,10 @@
         "label": "Comments per hour",
         "help": "Comments one user may write per hour; deleting one does not lower the count."
       },
+      "messages_retention_days": {
+        "label": "Message retention (days)",
+        "help": "Days a message is kept; then it is deleted for good with its comments."
+      },
       "servers_http_parallel": {
         "label": "Requests at once (HTTPS API)",
         "help": "How many commands go to one game server with an HTTPS API at the same time."

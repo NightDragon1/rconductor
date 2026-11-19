@@ -84,6 +84,7 @@ const keyTexts = [
   'messages_max_resolved_recipients',
   'messages_max_text',
   'messages_per_hour',
+  'messages_retention_days',
   'profiles_poll_interval',
   'servers_connection_test_per_minute',
   'servers_http_parallel',
