@@ -49,3 +49,26 @@ func TestLogDeliveriesAfterReplay(t *testing.T) {
 		}
 	}
 }
+
+// TestPublishMessageOnlyToParticipants (D-085): an event of the topic
+// messages reaches the sockets of the given users only, never a text.
+func TestPublishMessageOnlyToParticipants(t *testing.T) {
+	h := &Hub{clients: map[*client]bool{}}
+	sockets := map[string]*client{}
+	for _, user := range []string{"sender", "recipient", "other"} {
+		c := &client{out: make(chan []byte, 2), subs: map[string]*subscription{}}
+		c.p.UserID = user
+		c.subs["messages"] = &subscription{topic: "messages", kind: "messages", ready: true}
+		h.clients[c] = true
+		sockets[user] = c
+	}
+	h.PublishMessage([]string{"sender", "recipient"}, MessageEvent{Kind: "comment", MessageID: "m1", CommentID: "c1"})
+	for user, want := range map[string]int{"sender": 1, "recipient": 1, "other": 0} {
+		if got := len(sockets[user].out); got != want {
+			t.Errorf("%s got %d events, want %d", user, got, want)
+		}
+	}
+	if got := string(<-sockets["recipient"].out); got != `{"type":"event","topic":"messages","data":{"kind":"comment","message_id":"m1","comment_id":"c1"}}` {
+		t.Errorf("event = %s", got)
+	}
+}
