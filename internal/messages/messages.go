@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
+	"github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -70,6 +71,37 @@ type Service struct {
 	perm *perm.Checker
 	log  *slog.Logger
 	now  func() time.Time
+	// notify gets the events of the topic messages; nil sends none.
+	notify Notifier
+}
+
+// Notifier sends an event of the topic messages to the sockets of the
+// given users (the WebSocket hub).
+type Notifier interface {
+	PublishMessage(userIDs []string, e events.MessageEvent)
+}
+
+// Notify sets where the events of the topic messages go.
+func (s *Service) Notify(n Notifier) *Service {
+	s.notify = n
+	return s
+}
+
+// publish sends an event after the change is stored: what happened, never
+// a text (D-085).
+func (s *Service) publish(ids []string, kind, id, commentID string) {
+	if s.notify != nil && len(ids) > 0 {
+		s.notify.PublishMessage(ids, events.MessageEvent{Kind: kind, MessageID: id, CommentID: commentID})
+	}
+}
+
+// participants are the recipients and the sender of a message.
+func (s *Service) participants(ctx context.Context, id string) []string {
+	ids, err := s.st.Queries.ListMessageParticipants(ctx, id)
+	if err != nil {
+		s.log.Warn("participants of a message not read", slog.Any("err", err))
+	}
+	return ids
 }
 
 // NewService returns the service; without a log it logs nothing.
@@ -197,6 +229,10 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	ids, err := sqlitedb.New(tx).ListMessageParticipants(ctx, id)
+	if err != nil {
+		return err
+	}
 	if n, err := sqlitedb.New(tx).DeleteMessage(ctx, id); err != nil || n == 0 {
 		if err == nil {
 			err = users.ErrNotFound
@@ -209,7 +245,11 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 	}); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.publish(ids, "deleted", id, "")
+	return nil
 }
 
 // MarkRead marks a message read for the caller; repeating it changes
@@ -231,6 +271,7 @@ func (s *Service) MarkRead(ctx context.Context, req users.Request, id string) er
 	if n == 0 {
 		return s.denied(ctx, req, "message.mark_read", id)
 	}
+	s.publish([]string{req.Actor.ID}, "read", id, "")
 	return nil
 }
 
@@ -338,6 +379,7 @@ func (s *Service) Comment(ctx context.Context, req users.Request, id, text strin
 	if err := tx.Commit(); err != nil {
 		return Comment{}, err
 	}
+	s.publish(s.participants(ctx, id), "comment", id, cid)
 	return Comment{ID: cid, AuthorID: req.Actor.ID, AuthorPseudonym: req.Pseudonym, Text: text, CreatedAt: now}, nil
 }
 
@@ -373,7 +415,11 @@ func (s *Service) DeleteComment(ctx context.Context, req users.Request, id, comm
 	if err := s.audited(ctx, tx, req, "message.comment_deleted", id, commentID); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.publish(s.participants(ctx, id), "comment_deleted", id, commentID)
+	return nil
 }
 
 // audited writes the audit entry of a comment: the message and the
@@ -426,7 +472,11 @@ func (s *Service) Send(ctx context.Context, req users.Request, in Input) (Messag
 	if err != nil {
 		return Message{}, err
 	}
-	return s.store(ctx, req, in, to)
+	m, err := s.store(ctx, req, in, to)
+	if err == nil {
+		s.publish(to, "message", m.ID, "")
+	}
+	return m, err
 }
 
 // recipients resolves the audience at sending time (D-085); the sender is

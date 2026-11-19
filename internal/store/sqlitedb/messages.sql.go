@@ -347,6 +347,36 @@ func (q *Queries) ListMessageComments(ctx context.Context, arg ListMessageCommen
 	return items, nil
 }
 
+const listMessageParticipants = `-- name: ListMessageParticipants :many
+SELECT user_id FROM message_recipients WHERE message_id = ?1
+UNION
+SELECT sender_id FROM messages WHERE id = ?1 AND sender_id IS NOT NULL
+`
+
+// Recipients and sender of a message, for the events of the topic messages.
+func (q *Queries) ListMessageParticipants(ctx context.Context, messageID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listMessageParticipants, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var user_id string
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMessagesView = `-- name: ListMessagesView :many
 SELECT m.id, m.sender_id, m.sender_pseudonym, m.audience, m.text, m.created_at,
   (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id) AS recipients,
