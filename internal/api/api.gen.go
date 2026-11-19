@@ -1108,13 +1108,13 @@ type HistoryPage struct {
 	NextCursor *string        `json:"next_cursor,omitempty"`
 }
 
-// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name or the address.
+// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name, the address or the agent ID.
 type HostGroup struct {
 	// DisplayName Missing when none is set; the interface shows a neutral placeholder.
 	DisplayName *string `json:"display_name,omitempty"`
 
-	// Id The agent; only for grouping.
-	Id openapi_types.UUID `json:"id"`
+	// Key The same for the servers on the same host within one answer, otherwise without meaning; never the agent ID.
+	Key string `json:"key"`
 }
 
 // Invite defines model for Invite.
@@ -1573,7 +1573,7 @@ type Server struct {
 	// Host RCON admin only; the server admin sees of the ports only the game ports (D-056).
 	Host *string `json:"host,omitempty"`
 
-	// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name or the address.
+	// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name, the address or the agent ID.
 	HostGroup *HostGroup         `json:"host_group,omitempty"`
 	Id        openapi_types.UUID `json:"id"`
 	Name      string             `json:"name"`

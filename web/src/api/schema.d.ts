@@ -1382,13 +1382,10 @@ export interface components {
             /** Format: date-time */
             revoked_at?: string;
         };
-        /** @description Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name or the address. */
+        /** @description Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name, the address or the agent ID. */
         HostGroup: {
-            /**
-             * Format: uuid
-             * @description The agent; only for grouping.
-             */
-            id: string;
+            /** @description The same for the servers on the same host within one answer, otherwise without meaning; never the agent ID. */
+            key: string;
             /** @description Missing when none is set; the interface shows a neutral placeholder. */
             display_name?: string;
         };
