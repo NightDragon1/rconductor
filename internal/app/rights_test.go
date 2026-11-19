@@ -626,11 +626,12 @@ func matrix() []matrixOp {
 			return request{path: "/settings", body: map[string]any{"ui.shortcuts_enabled": false}}
 		}, false},
 		// Behind the flags host_groups (UI-021) and diagnostics_export
-		// (NFR-018): 404 for every role.
+		// (NFR-018, UI-025): 404 for every role.
 		{"PATCH", "/agents/{id}", "NNNNNNUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/agents/" + f.agentRow("active"), body: map[string]any{"display_name": "Rack"}}
 		}, false},
 		{"GET", "/diagnostics", "NNNNNNUP", at("/diagnostics"), false},
+		{"GET", "/system-log", "NNNNNNUP", at("/system-log"), false},
 		// Behind the flag log_masking_ui (UI-022): 404 for every role.
 		{"GET", "/settings/log-masking", "NNNNNNUP", at("/settings/log-masking"), false},
 		{"PUT", "/settings/log-masking", "NNNNNNUP", func(*rightsFixture, string) request {
