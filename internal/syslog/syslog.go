@@ -61,8 +61,7 @@ func (s *Sink) Write(p []byte) (int, error) {
 // Lost counts the lines that were not kept.
 func (s *Sink) Lost() int64 { return s.lost.Load() }
 
-// Run writes the queue in batches and trims the log until ctx ends, then
-// writes what is left.
+// Run writes and trims until ctx ends, then writes what is left.
 func (s *Sink) Run(ctx context.Context, st *store.Store, m Masker, log *slog.Logger, now func() time.Time) {
 	flush, prune := time.NewTicker(flushEvery), time.NewTicker(pruneEvery)
 	defer flush.Stop()
