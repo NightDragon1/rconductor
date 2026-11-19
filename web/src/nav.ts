@@ -6,6 +6,7 @@ import {
   FileClock,
   LayoutGrid,
   ListChecks,
+  Mail,
   Network,
   Server,
   Settings,
@@ -66,6 +67,9 @@ export const mainNav: NavEntry[] = [
     allowed: () => true,
     feature: 'profile_browser',
   },
+  // Every role receives messages (MSG-001 to MSG-003); the backend shows
+  // each role its own.
+  { to: '/messages', key: 'messages', icon: Mail, allowed: () => true, feature: 'messages' },
 ];
 
 export const adminNav: NavEntry[] = [
