@@ -99,6 +99,13 @@ const (
 	DefaultCommentsPerHour    = 60
 )
 
+// Display name of an agent's host in characters (UI-021, D-089).
+const (
+	SettingAgentDisplayNameMax = "agents.display_name_max"
+	DefaultAgentDisplayNameMax = 64
+	MinAgentDisplayNameMax     = 16
+)
+
 // Command templates per server (CMD-008, D-068).
 const (
 	SettingTemplatesPerServer = "commands.templates_per_server"
@@ -203,6 +210,7 @@ var settingRules = map[string]rule{
 	SettingMessagesMaxRecipients:   intRule(1, 500),
 	SettingMessagesMaxResolved:     intRule(1, 100000),
 	SettingMessagesPerHour:         intRule(1, 1000),
+	SettingAgentDisplayNameMax:     intRule(MinAgentDisplayNameMax, 256),
 	SettingMessagesMaxComment:      intRule(1, 4096),
 	SettingCommentsPerHour:         intRule(1, 3600),
 	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
@@ -234,6 +242,7 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingMessagesMaxRecipients: DefaultMessagesMaxRecipients,
 		SettingMessagesMaxResolved:   DefaultMessagesMaxResolved,
 		SettingMessagesPerHour:       DefaultMessagesPerHour,
+		SettingAgentDisplayNameMax:   DefaultAgentDisplayNameMax,
 		SettingMessagesMaxComment:    DefaultMessagesMaxComment,
 		SettingCommentsPerHour:       DefaultCommentsPerHour,
 	} {

@@ -7,9 +7,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 
+	"github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -95,9 +97,15 @@ func (s *apiServer) ListServers(ctx context.Context, _ api.ListServersRequestObj
 	if err != nil {
 		return nil, adminError(err)
 	}
+	hosts, err := s.hostGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
 	out := api.ServerList{Items: make([]api.Server, 0, len(list))}
 	for _, sv := range list {
-		out.Items = append(out.Items, s.withRuntime(ctx, sv))
+		item := s.withRuntime(ctx, sv)
+		item.HostGroup = hosts.of(sv)
+		out.Items = append(out.Items, item)
 	}
 	return api.ListServers200JSONResponse(out), nil
 }
@@ -153,7 +161,13 @@ func (s *apiServer) GetServer(ctx context.Context, req api.GetServerRequestObjec
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.GetServer200JSONResponse(s.withRuntime(ctx, sv)), nil
+	hosts, err := s.hostGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := s.withRuntime(ctx, sv)
+	out.HostGroup = hosts.of(sv)
+	return api.GetServer200JSONResponse(out), nil
 }
 
 func (s *apiServer) UpdateServer(ctx context.Context, req api.UpdateServerRequestObject) (api.UpdateServerResponseObject, error) {
@@ -411,4 +425,35 @@ func strIDs(list []uuid.UUID) []string {
 		out[i] = u.String()
 	}
 	return out
+}
+
+// hostGroups gives the servers of one answer their host in the overview
+// (UI-021, D-089): a key, the same per host within the answer, meaningless
+// beyond it and never the agent ID, and the display name. Nil: flag off.
+type hostGroups struct{ names, keys map[string]string }
+
+func (s *apiServer) hostGroups(ctx context.Context) (*hostGroups, error) {
+	if s.agents == nil || !s.features.Enabled(ctx, s.store, agents.FeatureHostGroups) {
+		return nil, nil
+	}
+	names, err := s.agents.DisplayNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &hostGroups{names: names, keys: map[string]string{}}, nil
+}
+
+// of is the host of sv; nil for a server without an agent.
+func (h *hostGroups) of(sv servers.Server) *api.HostGroup {
+	if h == nil || sv.HostAgentID == "" {
+		return nil
+	}
+	if _, ok := h.keys[sv.HostAgentID]; !ok {
+		h.keys[sv.HostAgentID] = strconv.Itoa(len(h.keys) + 1)
+	}
+	g := &api.HostGroup{Key: h.keys[sv.HostAgentID]}
+	if n := h.names[sv.HostAgentID]; n != "" {
+		g.DisplayName = &n
+	}
+	return g
 }

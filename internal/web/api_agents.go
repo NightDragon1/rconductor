@@ -6,11 +6,13 @@ package web
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	"github.com/google/uuid"
 
 	"github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/api"
+	"github.com/NightDragon1/rconductor/internal/users"
 )
 
 func toAPIAgent(a agents.Agent) api.Agent {
@@ -22,6 +24,9 @@ func toAPIAgent(a agents.Agent) api.Agent {
 	}
 	if a.Remote != "" {
 		out.Remote = &a.Remote
+	}
+	if a.DisplayName != "" {
+		out.DisplayName = &a.DisplayName
 	}
 	if d := a.DockerHost; d != nil {
 		out.DockerHost = &api.DockerHost{}
@@ -118,8 +123,9 @@ func (s *apiServer) UpdateAgent(ctx context.Context, req api.UpdateAgentRequestO
 		return nil, bodyRequired()
 	}
 	a, err := s.agents.SetDisplayName(ctx, adminRequest(ctx), req.Id.String(), req.Body.DisplayName)
-	if errors.Is(err, agents.ErrNotImplemented) {
-		return nil, notImplemented("updateAgent")
+	// The contract answers an invalid display name with 400 (D-089).
+	if inv := (*users.InvalidError)(nil); errors.As(err, &inv) {
+		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: inv.Detail}
 	}
 	if err != nil {
 		return nil, adminError(err)

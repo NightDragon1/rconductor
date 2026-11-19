@@ -63,6 +63,7 @@ const keyTexts = [
   'agent_version_window',
   'agent_volume_interval',
   'agent_volume_stale',
+  'agents_display_name_max',
   'agents_fingerprint_pairing',
   'audit_retention_days',
   'backup_interval',
