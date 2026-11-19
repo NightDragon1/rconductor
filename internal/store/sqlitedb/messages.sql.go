@@ -7,7 +7,38 @@ package sqlitedb
 
 import (
 	"context"
+	"database/sql"
 )
+
+const countMessageSends = `-- name: CountMessageSends :one
+SELECT count(*) FROM message_sends WHERE user_id = ? AND sent_at > ?
+`
+
+type CountMessageSendsParams struct {
+	UserID string
+	SentAt string
+}
+
+func (q *Queries) CountMessageSends(ctx context.Context, arg CountMessageSendsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMessageSends, arg.UserID, arg.SentAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const deleteOldMessageSends = `-- name: DeleteOldMessageSends :exec
+DELETE FROM message_sends WHERE user_id = ? AND sent_at <= ?
+`
+
+type DeleteOldMessageSendsParams struct {
+	UserID string
+	SentAt string
+}
+
+func (q *Queries) DeleteOldMessageSends(ctx context.Context, arg DeleteOldMessageSendsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteOldMessageSends, arg.UserID, arg.SentAt)
+	return err
+}
 
 const getActiveUserRole = `-- name: GetActiveUserRole :one
 SELECT role FROM users WHERE id = ? AND deleted_at IS NULL AND disabled_at IS NULL
@@ -18,6 +49,59 @@ func (q *Queries) GetActiveUserRole(ctx context.Context, id string) (string, err
 	var role string
 	err := row.Scan(&role)
 	return role, err
+}
+
+const insertMessage = `-- name: InsertMessage :exec
+INSERT INTO messages (id, sender_id, sender_pseudonym, audience, text, created_at) VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type InsertMessageParams struct {
+	ID              string
+	SenderID        sql.NullString
+	SenderPseudonym string
+	Audience        string
+	Text            string
+	CreatedAt       string
+}
+
+func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) error {
+	_, err := q.db.ExecContext(ctx, insertMessage,
+		arg.ID,
+		arg.SenderID,
+		arg.SenderPseudonym,
+		arg.Audience,
+		arg.Text,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertMessageRecipient = `-- name: InsertMessageRecipient :exec
+INSERT INTO message_recipients (message_id, user_id) VALUES (?, ?)
+`
+
+type InsertMessageRecipientParams struct {
+	MessageID string
+	UserID    string
+}
+
+func (q *Queries) InsertMessageRecipient(ctx context.Context, arg InsertMessageRecipientParams) error {
+	_, err := q.db.ExecContext(ctx, insertMessageRecipient, arg.MessageID, arg.UserID)
+	return err
+}
+
+const insertMessageSend = `-- name: InsertMessageSend :exec
+INSERT INTO message_sends (user_id, sent_at) VALUES (?, ?)
+`
+
+type InsertMessageSendParams struct {
+	UserID string
+	SentAt string
+}
+
+func (q *Queries) InsertMessageSend(ctx context.Context, arg InsertMessageSendParams) error {
+	_, err := q.db.ExecContext(ctx, insertMessageSend, arg.UserID, arg.SentAt)
+	return err
 }
 
 const listActiveUserRoles = `-- name: ListActiveUserRoles :many

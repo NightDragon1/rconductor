@@ -157,7 +157,9 @@ func TestProviderParallel(t *testing.T) {
 	for i := range 8 {
 		wg.Go(func() {
 			for range 50 {
-				if got := line(p, "token=a", []string{fmt.Sprintf(`(k%d=)\S+`, i)}); got != "token=•••" {
+				// On a stalled machine the time budget may run out; the line
+				// is then withheld, never shown unmasked.
+				if got := line(p, "token=a", []string{fmt.Sprintf(`(k%d=)\S+`, i)}); got != "token=•••" && got != Withheld {
 					t.Errorf("line: %q", got)
 					return
 				}

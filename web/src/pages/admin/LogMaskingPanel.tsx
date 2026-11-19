@@ -58,6 +58,12 @@ export function LogMaskingPanel() {
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
+    // Limits are whole numbers; anything else is refused before sending,
+    // never sent as 0 or null (UI-016).
+    if (![d.maxTexts, d.maxTextChars, d.budget].every((v) => /^\d+$/.test(v.trim()))) {
+      setMessage({ ok: false, text: t('logMasking.notNumber') });
+      return;
+    }
     const body: components['schemas']['LogMaskingInput'] = {
       enabled: d.enabled,
       max_texts: Number(d.maxTexts),
