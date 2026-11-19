@@ -172,7 +172,7 @@ func (s *Service) view(ctx context.Context, req users.Request, id, at, after str
 			return nil, err
 		}
 		m := Message{ID: r.ID, SenderID: r.SenderID.String, SenderPseudonym: r.SenderPseudonym, Audience: r.Audience,
-			Text: r.Text, CreatedAt: created, RecipientCount: -1, Read: r.Unread == 0}
+			Text: r.Text, CreatedAt: created, RecipientCount: -1, CommentCount: int(r.Comments), Read: r.Unread == 0}
 		if admin == 1 || r.SenderID.Valid && r.SenderID.String == req.Actor.ID {
 			m.RecipientCount = int(r.Recipients)
 		}
@@ -240,9 +240,38 @@ type Comment struct {
 	CreatedAt                           time.Time
 }
 
-// Comments lists the comments of a message.
-func (s *Service) Comments(ctx context.Context, req users.Request, _ string) error {
-	return s.read(ctx, req, "message.comment_list")
+// Comments lists the comments of a message, oldest first, to everyone who
+// sees the message (D-085). after is the ID of the last comment of the
+// page before; it is only looked for among the comments of this message.
+func (s *Service) Comments(ctx context.Context, req users.Request, id string, limit int, after string) ([]Comment, error) {
+	if _, err := s.one(ctx, req, "message.comment_list", id); err != nil {
+		return nil, err
+	}
+	at := ""
+	if after != "" {
+		c, err := s.st.Queries.GetMessageComment(ctx, sqlitedb.GetMessageCommentParams{MessageID: id, ID: after})
+		if errors.Is(err, sql.ErrNoRows) {
+			return []Comment{}, nil
+		} else if err != nil {
+			return nil, err
+		}
+		at = c.CreatedAt
+	}
+	rows, err := s.st.Queries.ListMessageComments(ctx, sqlitedb.ListMessageCommentsParams{
+		MessageID: id, Column2: at, ID: after, Limit: int64(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Comment, 0, len(rows))
+	for _, r := range rows {
+		created, err := time.Parse(store.TimeLayout, r.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, Comment{ID: r.ID, AuthorID: r.AuthorID.String, AuthorPseudonym: r.AuthorPseudonym, Text: r.Text, CreatedAt: created})
+	}
+	return out, nil
 }
 
 // Comment comments on a message: its recipients and its sender (D-085).
@@ -312,9 +341,39 @@ func (s *Service) Comment(ctx context.Context, req users.Request, id, text strin
 	return Comment{ID: cid, AuthorID: req.Actor.ID, AuthorPseudonym: req.Pseudonym, Text: text, CreatedAt: now}, nil
 }
 
-// DeleteComment deletes a comment of a message.
-func (s *Service) DeleteComment(ctx context.Context, req users.Request, _, _ string) error {
-	return s.read(ctx, req, "message.comment_deleted")
+// DeleteComment deletes a comment at once and for good: its author, the
+// sender of the message and the RCON admin (D-085, D-086); another
+// recipient gets 403, anyone else 404, also for a comment of another
+// message.
+func (s *Service) DeleteComment(ctx context.Context, req users.Request, id, commentID string) error {
+	m, err := s.one(ctx, req, "message.comment_deleted", id)
+	if err != nil {
+		return err
+	}
+	c, err := s.st.Queries.GetMessageComment(ctx, sqlitedb.GetMessageCommentParams{MessageID: id, ID: commentID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return users.ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	if req.Actor.Role != perm.RCONAdmin && m.SenderID != req.Actor.ID && (!c.AuthorID.Valid || c.AuthorID.String != req.Actor.ID) {
+		return s.denied(ctx, req, "message.comment_deleted", id)
+	}
+	tx, err := s.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if n, err := sqlitedb.New(tx).DeleteMessageComment(ctx, sqlitedb.DeleteMessageCommentParams{MessageID: id, ID: commentID}); err != nil || n == 0 {
+		if err == nil {
+			err = users.ErrNotFound
+		}
+		return err
+	}
+	if err := s.audited(ctx, tx, req, "message.comment_deleted", id, commentID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // audited writes the audit entry of a comment: the message and the

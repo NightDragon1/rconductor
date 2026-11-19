@@ -144,7 +144,7 @@ func TestReadRoles(t *testing.T) {
 		"message.read":            func(r users.Request) error { _, err := s.Get(ctx, r, id); return err },
 		"message.deleted":         func(r users.Request) error { return s.Delete(ctx, r, id) },
 		"message.mark_read":       func(r users.Request) error { return s.MarkRead(ctx, r, id) },
-		"message.comment_list":    func(r users.Request) error { return s.Comments(ctx, r, id) },
+		"message.comment_list":    func(r users.Request) error { _, err := s.Comments(ctx, r, id, 50, ""); return err },
 		"message.commented":       func(r users.Request) error { _, err := s.Comment(ctx, r, id, "ok"); return err },
 		"message.comment_deleted": func(r users.Request) error { return s.DeleteComment(ctx, r, id, id) },
 	}
@@ -152,7 +152,7 @@ func TestReadRoles(t *testing.T) {
 		req := request(t, s, role)
 		for action, op := range ops {
 			want := users.ErrNotFound // no such message
-			if action == "message.list" || action == "message.comment_list" || action == "message.comment_deleted" {
+			if action == "message.list" {
 				want = ErrNotImplemented
 			}
 			if err := op(req); !errors.Is(err, want) {

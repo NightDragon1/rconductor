@@ -6,6 +6,7 @@ package messages
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -58,42 +59,127 @@ func TestCommentInput(t *testing.T) {
 	}
 }
 
-// TestCommentStored covers MSG-003 and D-086: the comment keeps author
-// and text, the audit only the IDs; deleting the message deletes its
-// comments.
-func TestCommentStored(t *testing.T) {
+// TestCommentRights covers MSG-003 and D-085: recipients and the sender
+// see and write comments, the RCON admin sees them; a comment is deleted
+// by its author, the sender and the RCON admin; another recipient gets
+// 403, anyone else 404, also for a comment of another message. The audit
+// keeps no text (D-086).
+func TestCommentRights(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	m, err := w.s.Send(ctx, w.sa, Input{Text: "hi", Audience: AudienceScopeModerators})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := w.s.Comment(ctx, w.mod1, m.ID, "secret words")
-	if err != nil || c.AuthorID != w.mod1.Actor.ID || c.AuthorPseudonym != w.mod1.Pseudonym || c.Text != "secret words" {
-		t.Fatalf("comment = %+v, %v", c, err)
+	other, err := w.s.Send(ctx, w.admin, Input{Text: "other", Audience: AudienceUsers, UserIDs: []string{w.mod1.Actor.ID, w.sup.Actor.ID}})
+	if err != nil {
+		t.Fatal(err)
 	}
+	oc, err := w.s.Comment(ctx, w.mod1, other.ID, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.s.DeleteComment(ctx, w.sup, other.ID, oc.ID); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("another recipient deletes = %v", err)
+	}
+	c, err := w.s.Comment(ctx, w.mod1, m.ID, "secret words")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, who := range []users.Request{w.sa, w.admin, w.mod1} {
+		if list, err := w.s.Comments(ctx, who, m.ID, 50, ""); err != nil || len(list) != 1 || list[0].Text != "secret words" || list[0].AuthorID != w.mod1.Actor.ID {
+			t.Errorf("%s sees %v, %v", who.Pseudonym, list, err)
+		}
+	}
+	if _, err := w.s.Comments(ctx, w.mod2, m.ID, 50, ""); !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("stranger lists = %v", err)
+	}
+	if got, _ := w.s.Get(ctx, w.mod1, m.ID); got.CommentCount != 1 {
+		t.Errorf("comment count = %d", got.CommentCount)
+	}
+	if err := w.s.DeleteComment(ctx, w.mod2, m.ID, c.ID); !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("stranger deletes = %v", err)
+	}
+	if err := w.s.DeleteComment(ctx, w.admin, other.ID, c.ID); !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("comment of another message = %v", err)
+	}
+	for _, who := range []users.Request{w.mod1, w.sa, w.admin} {
+		c, err := w.s.Comment(ctx, w.mod1, m.ID, "more secret words")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := w.s.DeleteComment(ctx, who, m.ID, c.ID); err != nil {
+			t.Errorf("%s deletes = %v", who.Pseudonym, err)
+		}
+	}
+	var left int
 	var audit string
-	_ = w.s.st.DB.QueryRow(`SELECT target_id || coalesce(payload, '') FROM audit_log WHERE action = 'message.commented' AND result = 'ok'`).Scan(&audit)
-	if !strings.Contains(audit, m.ID) || !strings.Contains(audit, c.ID) || strings.Contains(audit, "secret") {
-		t.Errorf("audit %s", audit)
+	_ = w.s.st.DB.QueryRow(`SELECT count(*) FROM message_comments`).Scan(&left)
+	_ = w.s.st.DB.QueryRow(`SELECT group_concat(action || coalesce(payload, ''), '|') FROM audit_log WHERE action LIKE 'message.comment%' AND result = 'ok'`).Scan(&audit)
+	if left != 2 || strings.Count(audit, "message.commented") != 5 || strings.Count(audit, "message.comment_deleted") != 3 || strings.Contains(audit, "secret") {
+		t.Errorf("left %d, audit %s", left, audit)
 	}
 	if err := w.s.Delete(ctx, w.sa, m.ID); err != nil {
 		t.Fatal(err)
 	}
-	var left int
-	if _ = w.s.st.DB.QueryRow(`SELECT count(*) FROM message_comments`).Scan(&left); left != 0 {
+	if _ = w.s.st.DB.QueryRow(`SELECT count(*) FROM message_comments WHERE message_id = ?`, m.ID).Scan(&left); left != 0 {
 		t.Errorf("comments left after deleting the message: %d", left)
 	}
 }
 
-// TestCommentParallel: of parallel comments past
-// messages.comments_per_hour exactly the count passes; an hour later the
-// author comments again.
-func TestCommentParallel(t *testing.T) {
+// TestCommentsPaging: oldest first; after is looked for only among the
+// comments of the message, so a foreign ID gives an empty page.
+func TestCommentsPaging(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	m, _ := w.s.Send(ctx, w.sa, Input{Text: "hi", Audience: AudienceScopeModerators})
-	w.set(t, users.SettingCommentsPerHour, 2)
+	other, _ := w.s.Send(ctx, w.sa, Input{Text: "other", Audience: AudienceScopeModerators})
+	for i := range 5 {
+		if i%2 == 0 {
+			w.clock = w.clock.Add(time.Second) // pairs share a time stamp
+		}
+		if _, err := w.s.Comment(ctx, w.mod1, m.ID, fmt.Sprint("c", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	foreign, _ := w.s.Comment(ctx, w.mod1, other.ID, "x")
+	var got []string
+	for after := ""; ; {
+		page, err := w.s.Comments(ctx, w.sa, m.ID, 2, after)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(page) == 0 {
+			break
+		}
+		for _, c := range page {
+			got = append(got, c.Text)
+		}
+		after = page[len(page)-1].ID
+	}
+	if strings.Join(got, ",") != "c0,c1,c2,c3,c4" {
+		t.Errorf("pages = %v", got)
+	}
+	if page, err := w.s.Comments(ctx, w.sa, m.ID, 50, foreign.ID); err != nil || len(page) != 0 {
+		t.Errorf("foreign cursor = %v, %v", page, err)
+	}
+}
+
+// TestCommentDeleteCommentAgain covers D-086: deleting a comment does not
+// lower messages.comments_per_hour; of parallel comments past the count
+// exactly the count passes.
+func TestCommentDeleteCommentAgain(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	m, _ := w.s.Send(ctx, w.sa, Input{Text: "hi", Audience: AudienceScopeModerators})
+	w.set(t, users.SettingCommentsPerHour, 3)
+	c, err := w.s.Comment(ctx, w.mod1, m.ID, "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.s.DeleteComment(ctx, w.mod1, m.ID, c.ID); err != nil {
+		t.Fatal(err)
+	}
 	var ok, limited int
 	var mu sync.Mutex
 	var wg sync.WaitGroup

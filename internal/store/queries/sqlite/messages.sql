@@ -23,7 +23,8 @@ SELECT role FROM users WHERE id = ? AND deleted_at IS NULL AND disabled_at IS NU
 SELECT m.id, m.sender_id, m.sender_pseudonym, m.audience, m.text, m.created_at,
   (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id) AS recipients,
   (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1) AS mine,
-  (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1 AND r.read_at IS NULL) AS unread
+  (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1 AND r.read_at IS NULL) AS unread,
+  (SELECT count(*) FROM message_comments c WHERE c.message_id = m.id) AS comments
 FROM messages m
 WHERE (?2 = 1 OR m.sender_id = ?1 OR EXISTS (SELECT 1 FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1))
   AND (?3 = '' OR m.created_at < ?3 OR (m.created_at = ?3 AND m.id < ?4))
@@ -43,8 +44,20 @@ DELETE FROM messages WHERE id = ?;
 -- name: IsMessageRecipient :one
 SELECT count(*) FROM message_recipients WHERE message_id = ? AND user_id = ?;
 
+-- name: GetMessageComment :one
+SELECT id, author_id, author_pseudonym, text, created_at FROM message_comments WHERE message_id = ? AND id = ?;
+
+-- name: ListMessageComments :many
+SELECT id, author_id, author_pseudonym, text, created_at FROM message_comments
+WHERE message_id = ?1 AND (?2 = '' OR created_at > ?2 OR (created_at = ?2 AND id > ?3))
+ORDER BY created_at, id
+LIMIT ?4;
+
 -- name: InsertMessageComment :exec
 INSERT INTO message_comments (id, message_id, author_id, author_pseudonym, text, created_at) VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: DeleteMessageComment :execrows
+DELETE FROM message_comments WHERE message_id = ? AND id = ?;
 
 -- name: CountCommentSends :one
 SELECT count(*) FROM comment_sends WHERE user_id = ? AND sent_at > ?;
