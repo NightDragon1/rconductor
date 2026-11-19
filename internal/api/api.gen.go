@@ -643,6 +643,27 @@ func (e ServerRuntimeKind) Valid() bool {
 	}
 }
 
+// Defines values for SystemLogLevel.
+const (
+	SystemLogLevelError SystemLogLevel = "error"
+	SystemLogLevelInfo  SystemLogLevel = "info"
+	SystemLogLevelWarn  SystemLogLevel = "warn"
+)
+
+// Valid indicates whether the value is a known member of the SystemLogLevel enum.
+func (e SystemLogLevel) Valid() bool {
+	switch e {
+	case SystemLogLevelError:
+		return true
+	case SystemLogLevelInfo:
+		return true
+	case SystemLogLevelWarn:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAuditParamsKind.
 const (
 	ListAuditParamsKindAdmin   ListAuditParamsKind = "admin"
@@ -1750,6 +1771,34 @@ type SupporterGrant struct {
 	ServerId    openapi_types.UUID `json:"server_id"`
 }
 
+// SystemLogEntry defines model for SystemLogEntry.
+type SystemLogEntry struct {
+	// Code Event code of the panel (internal/logging).
+	Code *string `json:"code,omitempty"`
+
+	// Id Only for entries of the panel; the cursor after.
+	Id    *int64          `json:"id,omitempty"`
+	Level *SystemLogLevel `json:"level,omitempty"`
+
+	// Text Blacked out and masked; may contain chat messages of players.
+	Text string `json:"text"`
+
+	// Time Only for entries of the panel; lines of an agent carry no time of their own.
+	Time *time.Time `json:"time,omitempty"`
+}
+
+// SystemLogLevel defines model for SystemLogLevel.
+type SystemLogLevel string
+
+// SystemLogPage defines model for SystemLogPage.
+type SystemLogPage struct {
+	Items  []SystemLogEntry `json:"items"`
+	Source string           `json:"source"`
+
+	// Truncated Lines of an agent or the whole were cut to the limits.
+	Truncated *bool `json:"truncated,omitempty"`
+}
+
 // Target Exactly one of server_id or server_group_id.
 type Target struct {
 	ServerGroupId *openapi_types.UUID `json:"server_group_id,omitempty"`
@@ -2030,6 +2079,17 @@ type UpdateLogMaskingParams struct {
 type UpdateSMTPSettingsParams struct {
 	// IfMatch The version read before (version field, or ETag of /settings). Required for these writes: without it the answer is 428 precondition_required, after the role check. If it is not the current one, the change is refused with 409 conflict and nothing is written; the database checks and raises the version in one statement (revision 2.4 candidate 24). Optional in this file only so that the role check comes first: a required header would be refused by the generated wrapper with 400 before role and scope are checked (D-051). x-rcd-required-by-server marks it as required by the panel; web/src/api/client.ts (patchVersioned) and internal/app/rights_test.go (TestIfMatchRequiredFromSpec) follow it.
 	IfMatch *IfMatch `json:"If-Match,omitempty"`
+}
+
+// ListSystemLogParams defines parameters for ListSystemLog.
+type ListSystemLogParams struct {
+	// Source panel or the ID of an agent.
+	Source *string         `form:"source,omitempty" json:"source,omitempty"`
+	Level  *SystemLogLevel `form:"level,omitempty" json:"level,omitempty"`
+	From   *time.Time      `form:"from,omitempty" json:"from,omitempty"`
+	To     *time.Time      `form:"to,omitempty" json:"to,omitempty"`
+	After  *int64          `form:"after,omitempty" json:"after,omitempty"`
+	Limit  *int            `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // UpdateUserGroupParams defines parameters for UpdateUserGroup.
@@ -2396,6 +2456,9 @@ type ServerInterface interface {
 	// TestSMTP Send the fixed test mail to a recipient; RCON admin only (NFR-017).
 	// (POST /settings/smtp/test)
 	TestSMTP(w http.ResponseWriter, r *http.Request)
+	// ListSystemLog System log of the panel or the log of an agent (UI-025, D-091); RCON admin only.
+	// (GET /system-log)
+	ListSystemLog(w http.ResponseWriter, r *http.Request, params ListSystemLogParams)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(w http.ResponseWriter, r *http.Request)
@@ -4427,6 +4490,104 @@ func (siw *ServerInterfaceWrapper) TestSMTP(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListSystemLog operation middleware
+func (siw *ServerInterfaceWrapper) ListSystemLog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSystemLogParams
+
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "level" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "level", r.URL.Query(), &params.Level, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "level"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "level", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSystemLog(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListUserGroups operation middleware
 func (siw *ServerInterfaceWrapper) ListUserGroups(w http.ResponseWriter, r *http.Request) {
 
@@ -5012,6 +5173,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/server-groups/{id}/say-prefix", wrapper.GetServerGroupSayPrefix)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/server-groups/{id}/say-prefix", wrapper.SetServerGroupSayPrefix)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/diagnostics", wrapper.GetDiagnostics)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/system-log", wrapper.ListSystemLog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/tokens", wrapper.CreateAgentToken)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/agents/{id}", wrapper.DeleteAgent)
@@ -11347,6 +11509,134 @@ func (response TestSMTP429ApplicationProblemPlusJSONResponse) VisitTestSMTPRespo
 	return err
 }
 
+type ListSystemLogRequestObject struct {
+	Params ListSystemLogParams
+}
+
+type ListSystemLogResponseObject interface {
+	VisitListSystemLogResponse(w http.ResponseWriter) error
+}
+
+type ListSystemLog200JSONResponse SystemLogPage
+
+func (response ListSystemLog200JSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSystemLog400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListSystemLog400ApplicationProblemPlusJSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSystemLog401ApplicationProblemPlusJSONResponse struct {
+	UnauthenticatedApplicationProblemPlusJSONResponse
+}
+
+func (response ListSystemLog401ApplicationProblemPlusJSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSystemLog403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListSystemLog403ApplicationProblemPlusJSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSystemLog404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListSystemLog404ApplicationProblemPlusJSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSystemLog409ApplicationProblemPlusJSONResponse Problem
+
+func (response ListSystemLog409ApplicationProblemPlusJSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSystemLog502ApplicationProblemPlusJSONResponse Problem
+
+func (response ListSystemLog502ApplicationProblemPlusJSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(502)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSystemLog503ApplicationProblemPlusJSONResponse Problem
+
+func (response ListSystemLog503ApplicationProblemPlusJSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUserGroupsRequestObject struct {
 }
 
@@ -12691,6 +12981,9 @@ type StrictServerInterface interface {
 	// TestSMTP Send the fixed test mail to a recipient; RCON admin only (NFR-017).
 	// (POST /settings/smtp/test)
 	TestSMTP(ctx context.Context, request TestSMTPRequestObject) (TestSMTPResponseObject, error)
+	// ListSystemLog System log of the panel or the log of an agent (UI-025, D-091); RCON admin only.
+	// (GET /system-log)
+	ListSystemLog(ctx context.Context, request ListSystemLogRequestObject) (ListSystemLogResponseObject, error)
 	// ListUserGroups Groups the caller administers (AUTH-002, ROLE-005).
 	// (GET /user-groups)
 	ListUserGroups(ctx context.Context, request ListUserGroupsRequestObject) (ListUserGroupsResponseObject, error)
@@ -14998,6 +15291,32 @@ func (sh *strictHandler) TestSMTP(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TestSMTPResponseObject); ok {
 		if err := validResponse.VisitTestSMTPResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSystemLog operation middleware
+func (sh *strictHandler) ListSystemLog(w http.ResponseWriter, r *http.Request, params ListSystemLogParams) {
+	var request ListSystemLogRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSystemLog(ctx, request.(ListSystemLogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSystemLog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSystemLogResponseObject); ok {
+		if err := validResponse.VisitListSystemLogResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
