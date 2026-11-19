@@ -1128,6 +1128,49 @@ paths:
           $ref: "#/components/responses/Conflict"
         "428":
           $ref: "#/components/responses/PreconditionRequired"
+  /diagnostics:
+    get:
+      operationId: getDiagnostics
+      summary: Diagnostic export as ZIP (NFR-018, D-090); RCON admin only.
+      description: >-
+        Behind the feature flag diagnostics_export (404 while off). One JSON
+        file per area (versions, settings, profiles, states of agents and
+        servers) and the event log of the period as a text file. Period from
+        to to, at most 7 days (400); without from the last 24 hours. Blacked
+        out before writing (SEC-012), log lines masked as in D-088. Above
+        diagnostics.max_bytes the period is shortened and the package says
+        so. Exports at the same time are limited (503 with Retry-After).
+        Audited with period and size, never with content.
+      tags: [diagnostics]
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: The package.
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Busy"
   /agents:
     get:
       operationId: listAgents
@@ -1199,6 +1242,36 @@ paths:
       responses:
         "204":
           description: Revoked or turned down.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateAgent
+      summary: Set the display name of an agent's host (UI-021, D-089); RCON admin only.
+      description: >-
+        Behind the feature flag host_groups (404 while off). display_name
+        null or "" removes it; at most agents.display_name_max characters,
+        no control characters (400). The other roles see the display name
+        or a neutral placeholder, never the host name (D-089).
+      tags: [agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentInput"
+      responses:
+        "200":
+          description: The agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthenticated"
         "403":
@@ -2590,6 +2663,12 @@ components:
           x-foreign: true
           type: string
           description: Foreign data from the agent (SEC-006).
+        display_name:
+          x-foreign: true
+          type: string
+          description: >-
+            Display name of the host, set by the RCON admin (D-089); only
+            while the feature flag host_groups is on.
         fingerprint:
           type: string
           description: SHA256:<base64> of the agent key.
@@ -2626,6 +2705,25 @@ components:
           type: string
           format: date-time
 
+    HostGroup:
+      type: object
+      required: [key]
+      description: >-
+        Host of the server for the grouping in the overview (UI-021, D-089),
+        for every role that sees the server; missing for a server without
+        an agent. Only while the feature flag host_groups is on. Never the
+        host name, the address or the agent ID.
+      properties:
+        key:
+          type: string
+          description: >-
+            The same for the servers on the same host within one answer,
+            otherwise without meaning; never the agent ID.
+        display_name:
+          x-foreign: true
+          type: string
+          description: Missing when none is set; the interface shows a neutral placeholder.
+
     DockerHost:
       type: object
       description: >-
@@ -2646,6 +2744,13 @@ components:
           description: >-
             IPv4 or IPv6 address without zone; never loopback, link-local,
             unspecified or multicast.
+
+    AgentInput:
+      type: object
+      required: [display_name]
+      properties:
+        display_name:
+          type: [string, "null"]
 
     AgentList:
       type: object
@@ -2960,6 +3065,8 @@ components:
         agent_id:
           type: string
           description: Admins only; the paired agent on the server's host.
+        host_group:
+          $ref: "#/components/schemas/HostGroup"
         container_name:
           type: string
           description: >-

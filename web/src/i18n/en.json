@@ -1070,6 +1070,14 @@
         "label": "Log masking settings",
         "help": "Settings for the masking of container logs: switch it off or add fixed texts that are masked. Masking itself is on without this flag."
       },
+      "features_host_groups": {
+        "label": "Overview by host",
+        "help": "Server cards grouped by host in the overview, with a display name the RCON admin gives each agent."
+      },
+      "features_diagnostics_export": {
+        "label": "Diagnostic export",
+        "help": "The RCON admin downloads a package for bug reports, with secrets and host names blacked out."
+      },
       "features_messages": {
         "label": "Messages",
         "help": "Messages from the RCON admin and server admins to users in the panel, with comments of the recipients."

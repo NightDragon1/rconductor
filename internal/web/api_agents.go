@@ -5,6 +5,7 @@ package web
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 
@@ -110,4 +111,18 @@ func (s *apiServer) CreateAgentToken(ctx context.Context, _ api.CreateAgentToken
 		out.PanelAddr = &t.PanelAddr
 	}
 	return api.CreateAgentToken201JSONResponse(out), nil
+}
+
+func (s *apiServer) UpdateAgent(ctx context.Context, req api.UpdateAgentRequestObject) (api.UpdateAgentResponseObject, error) {
+	if req.Body == nil {
+		return nil, bodyRequired()
+	}
+	a, err := s.agents.SetDisplayName(ctx, adminRequest(ctx), req.Id.String(), req.Body.DisplayName)
+	if errors.Is(err, agents.ErrNotImplemented) {
+		return nil, notImplemented("updateAgent")
+	}
+	if err != nil {
+		return nil, adminError(err)
+	}
+	return api.UpdateAgent200JSONResponse(toAPIAgent(a)), nil
 }
