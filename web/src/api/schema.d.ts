@@ -611,9 +611,29 @@ export interface paths {
         };
         /**
          * Diagnostic export as ZIP (NFR-018, D-090); RCON admin only.
-         * @description Behind the feature flag diagnostics_export (404 while off). One JSON file per area (versions, settings, profiles, states of agents and servers) and the event log of the period as a text file. Period from to to, at most 7 days (400); without from the last 24 hours. Blacked out before writing (SEC-012), log lines masked as in D-088. Above diagnostics.max_bytes the period is shortened and the package says so. Exports at the same time are limited (503 with Retry-After). Audited with period and size, never with content.
+         * @description Behind the feature flag diagnostics_export (404 while off). One JSON file per area (versions, settings, profiles, states of agents and servers), the system log of the period (D-091) and the logs of the agents, fetched on demand; an agent offline is noted in the package. Every log file starts with the notice that it may contain chat messages of players. Period from to to, at most 7 days (400); without from the last 24 hours. Blacked out before writing (SEC-012), log lines masked as in D-088. Above diagnostics.max_bytes the period is shortened and the package says so. Exports at the same time are limited (503 with Retry-After). Audited with period and size, never with content.
          */
         get: operations["getDiagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * System log of the panel or the log of an agent (UI-025, D-091); RCON admin only.
+         * @description Behind the feature flag diagnostics_export (404 while off). source panel reads the stored system log (events from info up, blacked out and masked before writing), oldest first, from level up, within from and to (at most 7 days, 400; without from the last hour); after is the ID of the last entry of the page before, for polling. source with an agent ID fetches the last lines of the agent's own container over logs.tail, not stored, masked as container logs; from, to and after do not apply. Retrieval is audited without content.
+         */
+        get: operations["listSystemLog"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1835,6 +1855,29 @@ export interface components {
                 image?: string;
                 state: string;
             }[];
+        };
+        /**
+         * @default info
+         * @enum {string}
+         */
+        SystemLogLevel: "info" | "warn" | "error";
+        SystemLogEntry: {
+            /**
+             * Format: int64
+             * @description Only for entries of the panel; the cursor after.
+             */
+            id?: number;
+            /** Format: date-time */
+            time: string;
+            level?: components["schemas"]["SystemLogLevel"];
+            /** @description Event code of the panel (internal/logging). */
+            code?: string;
+            /** @description Blacked out and masked; may contain chat messages of players. */
+            text: string;
+        };
+        SystemLogPage: {
+            source: string;
+            items: components["schemas"]["SystemLogEntry"][];
         };
         LogTail: {
             /** Format: uuid */
@@ -3600,6 +3643,65 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             503: components["responses"]["Busy"];
+        };
+    };
+    listSystemLog: {
+        parameters: {
+            query?: {
+                /** @description panel or the ID of an agent. */
+                source?: string;
+                level?: components["schemas"]["SystemLogLevel"];
+                from?: string;
+                to?: string;
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The entries, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemLogPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The agent does not report the capability for it (agent_unsupported, AGT-013). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The agent could not read its log (action_failed). */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The agent is not connected (agent_unavailable). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
         };
     };
     listAgents: {

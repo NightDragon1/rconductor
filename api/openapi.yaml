@@ -1135,9 +1135,12 @@ paths:
       description: >-
         Behind the feature flag diagnostics_export (404 while off). One JSON
         file per area (versions, settings, profiles, states of agents and
-        servers) and the event log of the period as a text file. Period from
-        to to, at most 7 days (400); without from the last 24 hours. Blacked
-        out before writing (SEC-012), log lines masked as in D-088. Above
+        servers), the system log of the period (D-091) and the logs of the
+        agents, fetched on demand; an agent offline is noted in the package.
+        Every log file starts with the notice that it may contain chat
+        messages of players. Period from to to, at most 7 days (400);
+        without from the last 24 hours. Blacked out before writing
+        (SEC-012), log lines masked as in D-088. Above
         diagnostics.max_bytes the period is shortened and the package says
         so. Exports at the same time are limited (503 with Retry-After).
         Audited with period and size, never with content.
@@ -1171,6 +1174,88 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/Busy"
+  /system-log:
+    get:
+      operationId: listSystemLog
+      summary: System log of the panel or the log of an agent (UI-025, D-091); RCON admin only.
+      description: >-
+        Behind the feature flag diagnostics_export (404 while off). source
+        panel reads the stored system log (events from info up, blacked out
+        and masked before writing), oldest first, from level up, within from
+        and to (at most 7 days, 400; without from the last hour); after is
+        the ID of the last entry of the page before, for polling. source
+        with an agent ID fetches the last lines of the agent's own container
+        over logs.tail, not stored, masked as container logs; from, to and
+        after do not apply. Retrieval is audited without content.
+      tags: [diagnostics]
+      parameters:
+        - name: source
+          in: query
+          description: panel or the ID of an agent.
+          schema:
+            type: string
+            default: panel
+            maxLength: 36
+        - name: level
+          in: query
+          schema:
+            $ref: "#/components/schemas/SystemLogLevel"
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: after
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+      responses:
+        "200":
+          description: The entries, oldest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemLogPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The agent does not report the capability for it (agent_unsupported, AGT-013).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "502":
+          description: The agent could not read its log (action_failed).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          description: The agent is not connected (agent_unavailable).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
   /agents:
     get:
       operationId: listAgents
@@ -3667,6 +3752,41 @@ components:
               state:
                 type: string
 
+    SystemLogLevel:
+      type: string
+      enum: [info, warn, error]
+      default: info
+    SystemLogEntry:
+      type: object
+      required: [time, text]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Only for entries of the panel; the cursor after.
+        time:
+          type: string
+          format: date-time
+        level:
+          $ref: "#/components/schemas/SystemLogLevel"
+        code:
+          type: string
+          maxLength: 64
+          description: Event code of the panel (internal/logging).
+        text:
+          x-foreign: true
+          type: string
+          description: Blacked out and masked; may contain chat messages of players.
+    SystemLogPage:
+      type: object
+      required: [source, items]
+      properties:
+        source:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SystemLogEntry"
     LogTail:
       type: object
       required: [server_id, container, lines, truncated]

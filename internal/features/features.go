@@ -41,7 +41,7 @@ var production = []Flag{
 	// Overview grouped by host with the display name of the agent (UI-021, D-089).
 	{Name: "host_groups", Operations: []string{"UpdateAgent"}},
 	// Diagnostic export for the RCON admin (NFR-018, D-090).
-	{Name: "diagnostics_export", Operations: []string{"GetDiagnostics"}},
+	{Name: "diagnostics_export", Operations: []string{"GetDiagnostics", "ListSystemLog"}},
 	// Messages in the panel (MSG-001 to MSG-003, D-085).
 	{Name: "messages", Operations: []string{"ListMessages", "CreateMessage", "GetMessage", "DeleteMessage", "MarkMessageRead", "ListMessageComments", "CreateMessageComment", "DeleteMessageComment"}},
 }
