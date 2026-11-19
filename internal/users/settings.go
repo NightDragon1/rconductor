@@ -97,6 +97,10 @@ const (
 	DefaultMessagesMaxComment = 2000
 	SettingCommentsPerHour    = "messages.comments_per_hour"
 	DefaultCommentsPerHour    = 60
+	// Days a message is kept with its recipients and comments (D-086).
+	SettingMessagesRetentionDays = "messages.retention_days"
+	DefaultMessagesRetentionDays = 180
+	MinMessagesRetentionDays     = 7
 )
 
 // Display name of an agent's host in characters (UI-021, D-089).
@@ -213,6 +217,7 @@ var settingRules = map[string]rule{
 	SettingAgentDisplayNameMax:     intRule(MinAgentDisplayNameMax, 256),
 	SettingMessagesMaxComment:      intRule(1, 4096),
 	SettingCommentsPerHour:         intRule(1, 3600),
+	SettingMessagesRetentionDays:   intRule(MinMessagesRetentionDays, 3650),
 	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
 	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
 	SettingMultiParallel:           intRule(MinMultiParallel, 64),
@@ -245,6 +250,7 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingAgentDisplayNameMax:   DefaultAgentDisplayNameMax,
 		SettingMessagesMaxComment:    DefaultMessagesMaxComment,
 		SettingCommentsPerHour:       DefaultCommentsPerHour,
+		SettingMessagesRetentionDays: DefaultMessagesRetentionDays,
 	} {
 		if _, err := st.EnsureDefault(ctx, key, v); err != nil {
 			return err

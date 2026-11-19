@@ -88,3 +88,48 @@ func TestRun(t *testing.T) {
 		t.Errorf("run with 30 days = %+v, %v", res, err)
 	}
 }
+
+// TestRunMessages covers D-086: a message older than
+// messages.retention_days is gone with its recipients and comments; a
+// newer one stays; a shorter retention applies on the next run.
+func TestRunMessages(t *testing.T) {
+	st := storetest.New(t)
+	ctx := context.Background()
+	if err := users.EnsureAuditDefaults(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	mod := storetest.CreateUser(t, st, storetest.User{Pseudonym: "mod"})
+	for _, m := range []struct {
+		id  string
+		age int
+	}{{"old", 181}, {"mid", 100}, {"new", 1}} {
+		for _, q := range []string{
+			`INSERT INTO messages (id, sender_id, sender_pseudonym, audience, text, created_at) VALUES (?1, NULL, 'x', 'all', 't', ?2)`,
+			`INSERT INTO message_recipients (message_id, user_id) VALUES (?1, ?3)`,
+			`INSERT INTO message_comments (id, message_id, author_id, author_pseudonym, text, created_at) VALUES (?1 || '-c', ?1, ?3, 'mod', 'c', ?2)`,
+		} {
+			if _, err := st.DB.ExecContext(ctx, q, m.id, at(now.AddDate(0, 0, -m.age)), mod); err != nil {
+				t.Fatalf("%s: %v", q, err)
+			}
+		}
+	}
+	left := func() (n int) {
+		t.Helper()
+		if err := st.DB.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM messages) * 100 + (SELECT count(*) FROM message_recipients) * 10
+			+ (SELECT count(*) FROM message_comments)`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	log := logging.New(&bytes.Buffer{}, "panel", config.Log{}).Module("audit")
+	if res, err := Run(ctx, st, log, now); err != nil || res.Messages != 1 || left() != 222 {
+		t.Errorf("default 180 days = %+v, %v, left %d", res, err, left())
+	}
+	if _, err := st.DB.ExecContext(ctx, `UPDATE settings SET value = '30' WHERE key = ?`, users.SettingMessagesRetentionDays); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := Run(ctx, st, log, now); err != nil || res.Messages != 1 || left() != 111 {
+		t.Errorf("30 days = %+v, %v, left %d", res, err, left())
+	}
+}

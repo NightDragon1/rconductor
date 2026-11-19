@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package cleanup is the daily clean-up job (Design 4.4): it enforces the
-// audit retention (AUD-003) and removes expired sessions and invitations
+// audit retention (AUD-003) and the retention of messages (D-086), and removes expired sessions and invitations
 // and soft-deleted records that nothing refers to any more (D-028).
 package cleanup
 
@@ -25,7 +25,7 @@ const Interval = 24 * time.Hour
 
 // Result counts what a run removed.
 type Result struct {
-	Audit, Sessions, Invites, Records int64
+	Audit, Messages, Sessions, Invites, Records int64
 }
 
 // Run removes everything that is due at now.
@@ -51,6 +51,14 @@ func Run(ctx context.Context, st *store.Store, log *slog.Logger, now time.Time) 
 	}
 	log.Info("audit entries removed", logging.Event(logging.AuditPurge),
 		slog.Int64("removed", res.Audit), slog.Int("retention_days", days))
+
+	mdays := users.DefaultMessagesRetentionDays
+	if err := st.GuardedSetting(ctx, log, users.SettingMessagesRetentionDays, &mdays); err != nil || mdays < users.MinMessagesRetentionDays {
+		mdays = users.DefaultMessagesRetentionDays
+	}
+	if res.Messages, err = q.PurgeMessages(ctx, now.AddDate(0, 0, -mdays).Format(store.TimeLayout)); err != nil {
+		return res, fmt.Errorf("purge messages: %w", err)
+	}
 
 	ts := now.Format(store.TimeLayout)
 	if res.Sessions, err = q.PurgeSessions(ctx, sqlitedb.PurgeSessionsParams{Now: ts, IdleBefore: now.Add(-idle).Format(store.TimeLayout)}); err != nil {
@@ -88,7 +96,7 @@ func Run(ctx context.Context, st *store.Store, log *slog.Logger, now time.Time) 
 			}
 		}
 	}
-	log.Debug("clean-up done", slog.Int64("sessions", res.Sessions), slog.Int64("invites", res.Invites),
+	log.Debug("clean-up done", slog.Int64("messages", res.Messages), slog.Int64("sessions", res.Sessions), slog.Int64("invites", res.Invites),
 		slog.Int64("records", res.Records))
 	return res, nil
 }
