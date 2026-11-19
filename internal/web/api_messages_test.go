@@ -15,7 +15,7 @@ import (
 // TestMessagesBehindFlag: the message operations (MSG-001 to MSG-003) are
 // 404 while the flag messages is off and 401 without a session. With the
 // flag on, the skeleton checks role and audience (403), then the input
-// (400), as in D-051, and answers 501 for the rest (contract first).
+// (400), as in D-051.
 func TestMessagesBehindFlag(t *testing.T) {
 	flags, err := features.New(features.Flag{Name: "messages", Operations: []string{"ListMessages", "CreateMessage", "GetMessage", "DeleteMessage", "MarkMessageRead", "ListMessageComments", "CreateMessageComment", "DeleteMessageComment"}})
 	if err != nil {
@@ -66,8 +66,7 @@ func TestMessagesBehindFlag(t *testing.T) {
 	// scope without recipients (400).
 	check(http.StatusCreated, admin, ops[1])
 	check(http.StatusOK, admin, ops[0])
-	check(http.StatusNotFound, admin, ops[2], ops[3], ops[4], ops[5])
-	check(http.StatusNotImplemented, admin, ops[6], ops[7])
+	check(http.StatusNotFound, admin, ops[2:]...)
 	check(http.StatusBadRequest, admin, call{method: http.MethodGet, path: "/api/v1/messages?limit=0"},
 		call{method: http.MethodGet, path: "/api/v1/messages?limit=101"})
 	check(http.StatusBadRequest, sa, send(`{"text":"hi","audience":"scope"}`))
@@ -77,9 +76,10 @@ func TestMessagesBehindFlag(t *testing.T) {
 		send(`{"text":"hi","audience":"users","user_ids":[`+uid+`,`+uid+`]}`))
 	check(http.StatusBadRequest, mod, call{method: http.MethodGet, path: "/api/v1/messages/x"})
 	check(http.StatusNotFound, mod, comment(`{"text":""}`))
-	check(http.StatusBadRequest, mod, call{method: http.MethodDelete, path: "/api/v1/messages/" + id + "/comments/x", origin: origin})
-	// Comments on a message to all (MSG-003): written (201), too long
-	// (400).
+	check(http.StatusBadRequest, mod, call{method: http.MethodDelete, path: "/api/v1/messages/" + id + "/comments/x", origin: origin},
+		call{method: http.MethodGet, path: "/api/v1/messages/" + id + "/comments?limit=101"})
+	// Comments on a message to all (MSG-003): written (201), listed (200),
+	// too long (400), deleted (204).
 	var mid string
 	if err := f.st.DB.QueryRow(`SELECT id FROM messages`).Scan(&mid); err != nil {
 		t.Fatal(err)
@@ -87,8 +87,14 @@ func TestMessagesBehindFlag(t *testing.T) {
 	on := call{method: http.MethodPost, path: "/api/v1/messages/" + mid + "/comments", origin: origin}
 	on.body = `{"text":"ok"}`
 	check(http.StatusCreated, mod, on)
+	check(http.StatusOK, admin, call{method: http.MethodGet, path: "/api/v1/messages/" + mid + "/comments"})
 	on.body = `{"text":"` + strings.Repeat("é", 2049) + `"}`
 	check(http.StatusBadRequest, mod, on)
+	var cid string
+	if err := f.st.DB.QueryRow(`SELECT id FROM message_comments`).Scan(&cid); err != nil {
+		t.Fatal(err)
+	}
+	check(http.StatusNoContent, mod, call{method: http.MethodDelete, path: "/api/v1/messages/" + mid + "/comments/" + cid, origin: origin})
 	var refused int
 	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'message.sent' AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
 		t.Errorf("audited refusals = %d (%v), want 3", refused, err)

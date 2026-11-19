@@ -17,7 +17,7 @@ import (
 
 // Messages in the panel (MSG-001 to MSG-003, D-085, D-086): behind the
 // session and the flag messages; internal/messages checks role and
-// audience; operations not built yet answer 501.
+// audience.
 
 func (s *apiServer) ListMessages(ctx context.Context, req api.ListMessagesRequestObject) (api.ListMessagesResponseObject, error) {
 	limit, before := 50, ""
@@ -97,7 +97,25 @@ func (s *apiServer) MarkMessageRead(ctx context.Context, req api.MarkMessageRead
 }
 
 func (s *apiServer) ListMessageComments(ctx context.Context, req api.ListMessageCommentsRequestObject) (api.ListMessageCommentsResponseObject, error) {
-	return nil, messageError(s.messages.Comments(ctx, adminRequest(ctx), req.Id.String()), "listMessageComments")
+	limit, after := 50, ""
+	if req.Params.Limit != nil {
+		limit = *req.Params.Limit
+	}
+	if req.Params.After != nil {
+		after = req.Params.After.String()
+	}
+	if limit < 1 || limit > 100 {
+		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "limit is 1 to 100"}
+	}
+	list, err := s.messages.Comments(ctx, adminRequest(ctx), req.Id.String(), limit, after)
+	if err != nil {
+		return nil, messageError(err, "listMessageComments")
+	}
+	out := api.ListMessageComments200JSONResponse{Items: make([]api.MessageComment, 0, len(list))}
+	for _, c := range list {
+		out.Items = append(out.Items, apiComment(c))
+	}
+	return out, nil
 }
 
 func (s *apiServer) CreateMessageComment(ctx context.Context, req api.CreateMessageCommentRequestObject) (api.CreateMessageCommentResponseObject, error) {
@@ -112,7 +130,10 @@ func (s *apiServer) CreateMessageComment(ctx context.Context, req api.CreateMess
 }
 
 func (s *apiServer) DeleteMessageComment(ctx context.Context, req api.DeleteMessageCommentRequestObject) (api.DeleteMessageCommentResponseObject, error) {
-	return nil, messageError(s.messages.DeleteComment(ctx, adminRequest(ctx), req.Id.String(), req.CommentId.String()), "deleteMessageComment")
+	if err := s.messages.DeleteComment(ctx, adminRequest(ctx), req.Id.String(), req.CommentId.String()); err != nil {
+		return nil, messageError(err, "deleteMessageComment")
+	}
+	return api.DeleteMessageComment204Response{}, nil
 }
 
 // apiComment is a comment as the API shows it.

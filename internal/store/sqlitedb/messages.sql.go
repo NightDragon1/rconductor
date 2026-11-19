@@ -65,6 +65,23 @@ func (q *Queries) DeleteMessage(ctx context.Context, id string) (int64, error) {
 	return result.RowsAffected()
 }
 
+const deleteMessageComment = `-- name: DeleteMessageComment :execrows
+DELETE FROM message_comments WHERE message_id = ? AND id = ?
+`
+
+type DeleteMessageCommentParams struct {
+	MessageID string
+	ID        string
+}
+
+func (q *Queries) DeleteMessageComment(ctx context.Context, arg DeleteMessageCommentParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteMessageComment, arg.MessageID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteOldCommentSends = `-- name: DeleteOldCommentSends :exec
 DELETE FROM comment_sends WHERE user_id = ? AND sent_at <= ?
 `
@@ -102,6 +119,36 @@ func (q *Queries) GetActiveUserRole(ctx context.Context, id string) (string, err
 	var role string
 	err := row.Scan(&role)
 	return role, err
+}
+
+const getMessageComment = `-- name: GetMessageComment :one
+SELECT id, author_id, author_pseudonym, text, created_at FROM message_comments WHERE message_id = ? AND id = ?
+`
+
+type GetMessageCommentParams struct {
+	MessageID string
+	ID        string
+}
+
+type GetMessageCommentRow struct {
+	ID              string
+	AuthorID        sql.NullString
+	AuthorPseudonym string
+	Text            string
+	CreatedAt       string
+}
+
+func (q *Queries) GetMessageComment(ctx context.Context, arg GetMessageCommentParams) (GetMessageCommentRow, error) {
+	row := q.db.QueryRowContext(ctx, getMessageComment, arg.MessageID, arg.ID)
+	var i GetMessageCommentRow
+	err := row.Scan(
+		&i.ID,
+		&i.AuthorID,
+		&i.AuthorPseudonym,
+		&i.Text,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const insertCommentSend = `-- name: InsertCommentSend :exec
@@ -244,11 +291,68 @@ func (q *Queries) ListActiveUserRoles(ctx context.Context) ([]ListActiveUserRole
 	return items, nil
 }
 
+const listMessageComments = `-- name: ListMessageComments :many
+SELECT id, author_id, author_pseudonym, text, created_at FROM message_comments
+WHERE message_id = ?1 AND (?2 = '' OR created_at > ?2 OR (created_at = ?2 AND id > ?3))
+ORDER BY created_at, id
+LIMIT ?4
+`
+
+type ListMessageCommentsParams struct {
+	MessageID string
+	Column2   interface{}
+	ID        string
+	Limit     int64
+}
+
+type ListMessageCommentsRow struct {
+	ID              string
+	AuthorID        sql.NullString
+	AuthorPseudonym string
+	Text            string
+	CreatedAt       string
+}
+
+func (q *Queries) ListMessageComments(ctx context.Context, arg ListMessageCommentsParams) ([]ListMessageCommentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMessageComments,
+		arg.MessageID,
+		arg.Column2,
+		arg.ID,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMessageCommentsRow{}
+	for rows.Next() {
+		var i ListMessageCommentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AuthorID,
+			&i.AuthorPseudonym,
+			&i.Text,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMessagesView = `-- name: ListMessagesView :many
 SELECT m.id, m.sender_id, m.sender_pseudonym, m.audience, m.text, m.created_at,
   (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id) AS recipients,
   (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1) AS mine,
-  (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1 AND r.read_at IS NULL) AS unread
+  (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1 AND r.read_at IS NULL) AS unread,
+  (SELECT count(*) FROM message_comments c WHERE c.message_id = m.id) AS comments
 FROM messages m
 WHERE (?2 = 1 OR m.sender_id = ?1 OR EXISTS (SELECT 1 FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1))
   AND (?3 = '' OR m.created_at < ?3 OR (m.created_at = ?3 AND m.id < ?4))
@@ -276,6 +380,7 @@ type ListMessagesViewRow struct {
 	Recipients      int64
 	Mine            int64
 	Unread          int64
+	Comments        int64
 }
 
 func (q *Queries) ListMessagesView(ctx context.Context, arg ListMessagesViewParams) ([]ListMessagesViewRow, error) {
@@ -304,6 +409,7 @@ func (q *Queries) ListMessagesView(ctx context.Context, arg ListMessagesViewPara
 			&i.Recipients,
 			&i.Mine,
 			&i.Unread,
+			&i.Comments,
 		); err != nil {
 			return nil, err
 		}
