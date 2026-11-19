@@ -3758,7 +3758,7 @@ components:
       default: info
     SystemLogEntry:
       type: object
-      required: [time, text]
+      required: [text]
       properties:
         id:
           type: integer
@@ -3767,6 +3767,7 @@ components:
         time:
           type: string
           format: date-time
+          description: Only for entries of the panel; lines of an agent carry no time of their own.
         level:
           $ref: "#/components/schemas/SystemLogLevel"
         code:
@@ -3787,6 +3788,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SystemLogEntry"
+        truncated:
+          type: boolean
+          description: Lines of an agent or the whole were cut to the limits.
     LogTail:
       type: object
       required: [server_id, container, lines, truncated]

@@ -1867,8 +1867,11 @@ export interface components {
              * @description Only for entries of the panel; the cursor after.
              */
             id?: number;
-            /** Format: date-time */
-            time: string;
+            /**
+             * Format: date-time
+             * @description Only for entries of the panel; lines of an agent carry no time of their own.
+             */
+            time?: string;
             level?: components["schemas"]["SystemLogLevel"];
             /** @description Event code of the panel (internal/logging). */
             code?: string;
@@ -1878,6 +1881,8 @@ export interface components {
         SystemLogPage: {
             source: string;
             items: components["schemas"]["SystemLogEntry"][];
+            /** @description Lines of an agent or the whole were cut to the limits. */
+            truncated?: boolean;
         };
         LogTail: {
             /** Format: uuid */

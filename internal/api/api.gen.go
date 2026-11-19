@@ -1781,8 +1781,10 @@ type SystemLogEntry struct {
 	Level *SystemLogLevel `json:"level,omitempty"`
 
 	// Text Blacked out and masked; may contain chat messages of players.
-	Text string    `json:"text"`
-	Time time.Time `json:"time"`
+	Text string `json:"text"`
+
+	// Time Only for entries of the panel; lines of an agent carry no time of their own.
+	Time *time.Time `json:"time,omitempty"`
 }
 
 // SystemLogLevel defines model for SystemLogLevel.
@@ -1792,6 +1794,9 @@ type SystemLogLevel string
 type SystemLogPage struct {
 	Items  []SystemLogEntry `json:"items"`
 	Source string           `json:"source"`
+
+	// Truncated Lines of an agent or the whole were cut to the limits.
+	Truncated *bool `json:"truncated,omitempty"`
 }
 
 // Target Exactly one of server_id or server_group_id.
