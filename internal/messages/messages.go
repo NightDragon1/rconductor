@@ -97,24 +97,141 @@ type Input struct {
 	UserIDs  []string
 }
 
-// List lists the messages of the caller.
-func (s *Service) List(ctx context.Context, req users.Request) error {
-	return s.read(ctx, req, "message.list")
+// Page is one page of the caller's messages, newest first.
+type Page struct {
+	Items []Message
+	// Unread counts the unread messages to the caller over all pages.
+	Unread int
 }
 
-// Get returns one message.
-func (s *Service) Get(ctx context.Context, req users.Request, _ string) error {
-	return s.read(ctx, req, "message.read")
+// List lists the messages of the caller (D-085): those sent to him and
+// those he sent; the RCON admin sees all. before is the ID of the last
+// message of the page before; it is only compared with the caller's view,
+// so an ID outside it gives an empty page like any unknown one.
+func (s *Service) List(ctx context.Context, req users.Request, limit int, before string) (Page, error) {
+	if err := s.read(ctx, req, "message.list"); !errors.Is(err, ErrNotImplemented) {
+		return Page{}, err
+	}
+	at, after := "", ""
+	if before != "" {
+		cur, err := s.view(ctx, req, before, "", "", 1)
+		if err != nil || len(cur) == 0 {
+			return Page{Items: []Message{}}, err
+		}
+		at, after = cur[0].CreatedAt.Format(store.TimeLayout), before
+	}
+	items, err := s.view(ctx, req, "", at, after, limit)
+	if err != nil {
+		return Page{}, err
+	}
+	unread, err := s.st.Queries.CountUnreadMessages(ctx, req.Actor.ID)
+	if err != nil {
+		return Page{}, err
+	}
+	return Page{Items: items, Unread: int(unread)}, nil
 }
 
-// Delete deletes a message.
-func (s *Service) Delete(ctx context.Context, req users.Request, _ string) error {
-	return s.read(ctx, req, "message.delete")
+// Get returns one message to its recipients, its sender and the RCON
+// admin; anyone else gets 404 as for an unknown message.
+func (s *Service) Get(ctx context.Context, req users.Request, id string) (Message, error) {
+	return s.one(ctx, req, "message.read", id)
 }
 
-// MarkRead marks a message read for the caller.
-func (s *Service) MarkRead(ctx context.Context, req users.Request, _ string) error {
-	return s.read(ctx, req, "message.mark_read")
+// one checks the role, then reads one message of the caller's view.
+func (s *Service) one(ctx context.Context, req users.Request, action, id string) (Message, error) {
+	if err := s.read(ctx, req, action); !errors.Is(err, ErrNotImplemented) {
+		return Message{}, err
+	}
+	m, err := s.view(ctx, req, id, "", "", 1)
+	if err != nil {
+		return Message{}, err
+	}
+	if len(m) == 0 {
+		return Message{}, users.ErrNotFound
+	}
+	return m[0], nil
+}
+
+// view reads the caller's messages: one by id, or a page after the
+// position (at, after).
+func (s *Service) view(ctx context.Context, req users.Request, id, at, after string, limit int) ([]Message, error) {
+	admin := 0
+	if req.Actor.Role == perm.RCONAdmin {
+		admin = 1
+	}
+	rows, err := s.st.Queries.ListMessagesView(ctx, sqlitedb.ListMessagesViewParams{
+		UserID: req.Actor.ID, Column2: admin, Column3: at, ID: after, Column5: id, Limit: int64(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Message, 0, len(rows))
+	for _, r := range rows {
+		created, err := time.Parse(store.TimeLayout, r.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		m := Message{ID: r.ID, SenderID: r.SenderID.String, SenderPseudonym: r.SenderPseudonym, Audience: r.Audience,
+			Text: r.Text, CreatedAt: created, RecipientCount: -1, Read: r.Unread == 0}
+		if admin == 1 || r.SenderID.Valid && r.SenderID.String == req.Actor.ID {
+			m.RecipientCount = int(r.Recipients)
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+// Delete deletes a message with its recipients at once and for good:
+// the sender and the RCON admin (D-085, D-086); a recipient gets 403,
+// anyone else 404. The audit keeps only the metadata.
+func (s *Service) Delete(ctx context.Context, req users.Request, id string) error {
+	m, err := s.one(ctx, req, "message.deleted", id)
+	if err != nil {
+		return err
+	}
+	if req.Actor.Role != perm.RCONAdmin && m.SenderID != req.Actor.ID {
+		return s.denied(ctx, req, "message.deleted", id)
+	}
+	tx, err := s.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if n, err := sqlitedb.New(tx).DeleteMessage(ctx, id); err != nil || n == 0 {
+		if err == nil {
+			err = users.ErrNotFound
+		}
+		return err
+	}
+	if _, err := audit.Write(ctx, tx, audit.Entry{
+		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
+		TargetType: "message", TargetID: id, Action: "message.deleted", Result: audit.ResultOK,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// MarkRead marks a message read for the caller; repeating it changes
+// nothing. Sender and RCON admin who are not recipients get 403, anyone
+// else 404.
+func (s *Service) MarkRead(ctx context.Context, req users.Request, id string) error {
+	if _, err := s.one(ctx, req, "message.mark_read", id); err != nil {
+		return err
+	}
+	if _, err := s.st.Queries.MarkMessageRead(ctx, sqlitedb.MarkMessageReadParams{
+		ReadAt: sql.NullString{String: s.now().Format(store.TimeLayout), Valid: true}, MessageID: id, UserID: req.Actor.ID,
+	}); err != nil {
+		return err
+	}
+	n, err := s.st.Queries.IsMessageRecipient(ctx, sqlitedb.IsMessageRecipientParams{MessageID: id, UserID: req.Actor.ID})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return s.denied(ctx, req, "message.mark_read", id)
+	}
+	return nil
 }
 
 // Comments lists the comments of a message.
@@ -151,7 +268,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, in Input) (Messag
 		allowed = allowed || a == in.Audience
 	}
 	if !allowed {
-		return Message{}, s.denied(ctx, req, "message.sent")
+		return Message{}, s.denied(ctx, req, "message.sent", "")
 	}
 	switch {
 	case in.Text == "":
@@ -331,17 +448,17 @@ func (s *Service) read(ctx context.Context, req users.Request, action string) er
 			return ErrNotImplemented
 		}
 	}
-	return s.denied(ctx, req, action)
+	return s.denied(ctx, req, action, "")
 }
 
-func (s *Service) denied(ctx context.Context, req users.Request, action string) error {
+func (s *Service) denied(ctx context.Context, req users.Request, action, target string) error {
 	perm.LogDenied(s.log, perm.Denial{
 		RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym,
 		Role: req.Actor.Role, Reason: "forbidden", Action: action,
 	})
 	if _, err := audit.Write(ctx, s.st.DB, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
-		TargetType: "message", Action: action, Result: audit.ResultDenied, Reason: "forbidden",
+		TargetType: "message", TargetID: target, Action: action, Result: audit.ResultDenied, Reason: "forbidden",
 	}); err != nil {
 		s.log.Error("audit entry not written", slog.String("action", action), slog.Any("err", err))
 	}

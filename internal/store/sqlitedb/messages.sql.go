@@ -26,6 +26,29 @@ func (q *Queries) CountMessageSends(ctx context.Context, arg CountMessageSendsPa
 	return count, err
 }
 
+const countUnreadMessages = `-- name: CountUnreadMessages :one
+SELECT count(*) FROM message_recipients WHERE user_id = ? AND read_at IS NULL
+`
+
+func (q *Queries) CountUnreadMessages(ctx context.Context, userID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnreadMessages, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const deleteMessage = `-- name: DeleteMessage :execrows
+DELETE FROM messages WHERE id = ?
+`
+
+func (q *Queries) DeleteMessage(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteMessage, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteOldMessageSends = `-- name: DeleteOldMessageSends :exec
 DELETE FROM message_sends WHERE user_id = ? AND sent_at <= ?
 `
@@ -104,6 +127,22 @@ func (q *Queries) InsertMessageSend(ctx context.Context, arg InsertMessageSendPa
 	return err
 }
 
+const isMessageRecipient = `-- name: IsMessageRecipient :one
+SELECT count(*) FROM message_recipients WHERE message_id = ? AND user_id = ?
+`
+
+type IsMessageRecipientParams struct {
+	MessageID string
+	UserID    string
+}
+
+func (q *Queries) IsMessageRecipient(ctx context.Context, arg IsMessageRecipientParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, isMessageRecipient, arg.MessageID, arg.UserID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const listActiveUserRoles = `-- name: ListActiveUserRoles :many
 SELECT id, role FROM users WHERE deleted_at IS NULL AND disabled_at IS NULL ORDER BY id
 `
@@ -134,4 +173,96 @@ func (q *Queries) ListActiveUserRoles(ctx context.Context) ([]ListActiveUserRole
 		return nil, err
 	}
 	return items, nil
+}
+
+const listMessagesView = `-- name: ListMessagesView :many
+SELECT m.id, m.sender_id, m.sender_pseudonym, m.audience, m.text, m.created_at,
+  (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id) AS recipients,
+  (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1) AS mine,
+  (SELECT count(*) FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1 AND r.read_at IS NULL) AS unread
+FROM messages m
+WHERE (?2 = 1 OR m.sender_id = ?1 OR EXISTS (SELECT 1 FROM message_recipients r WHERE r.message_id = m.id AND r.user_id = ?1))
+  AND (?3 = '' OR m.created_at < ?3 OR (m.created_at = ?3 AND m.id < ?4))
+  AND (?5 = '' OR m.id = ?5)
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT ?6
+`
+
+type ListMessagesViewParams struct {
+	UserID  string
+	Column2 interface{}
+	Column3 interface{}
+	ID      string
+	Column5 interface{}
+	Limit   int64
+}
+
+type ListMessagesViewRow struct {
+	ID              string
+	SenderID        sql.NullString
+	SenderPseudonym string
+	Audience        string
+	Text            string
+	CreatedAt       string
+	Recipients      int64
+	Mine            int64
+	Unread          int64
+}
+
+func (q *Queries) ListMessagesView(ctx context.Context, arg ListMessagesViewParams) ([]ListMessagesViewRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMessagesView,
+		arg.UserID,
+		arg.Column2,
+		arg.Column3,
+		arg.ID,
+		arg.Column5,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMessagesViewRow{}
+	for rows.Next() {
+		var i ListMessagesViewRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SenderID,
+			&i.SenderPseudonym,
+			&i.Audience,
+			&i.Text,
+			&i.CreatedAt,
+			&i.Recipients,
+			&i.Mine,
+			&i.Unread,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markMessageRead = `-- name: MarkMessageRead :execrows
+UPDATE message_recipients SET read_at = ? WHERE message_id = ? AND user_id = ? AND read_at IS NULL
+`
+
+type MarkMessageReadParams struct {
+	ReadAt    sql.NullString
+	MessageID string
+	UserID    string
+}
+
+func (q *Queries) MarkMessageRead(ctx context.Context, arg MarkMessageReadParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markMessageRead, arg.ReadAt, arg.MessageID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
