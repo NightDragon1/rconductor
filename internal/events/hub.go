@@ -525,6 +525,9 @@ func agentKind(kind string) bool { return kind == "metrics" || kind == "logs" }
 // PublishMessage sends an event of the topic messages to the sockets of
 // the given users only: sender and recipients of the message (D-085).
 func (h *Hub) PublishMessage(userIDs []string, e MessageEvent) {
+	if h == nil {
+		return
+	}
 	h.each("messages", "", func(c *client, s *subscription) {
 		if slices.Contains(userIDs, c.p.UserID) {
 			h.deliver(c, s, message{Type: "event", Topic: s.topic, Data: e})

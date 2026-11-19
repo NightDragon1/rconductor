@@ -254,6 +254,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	serverSvc.UseMasking(masking)
 	views.SetPlayers(runtime)
 	hub.SetAgentViews(views)
+	hub.SetMessages(func(ctx context.Context) bool { return features.Default().Enabled(ctx, st, "messages") })
 	serverSvc.OnChange(func(string) {
 		masking.ProfilesChanged()
 		views.Wake()

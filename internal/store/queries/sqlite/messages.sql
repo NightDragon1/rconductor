@@ -68,5 +68,11 @@ INSERT INTO comment_sends (user_id, sent_at) VALUES (?, ?);
 -- name: DeleteOldCommentSends :exec
 DELETE FROM comment_sends WHERE user_id = ? AND sent_at <= ?;
 
+-- name: ListMessageParticipants :many
+-- Recipients and sender of a message, for the events of the topic messages.
+SELECT user_id FROM message_recipients WHERE message_id = ?1
+UNION
+SELECT sender_id FROM messages WHERE id = ?1 AND sender_id IS NOT NULL;
+
 -- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later
