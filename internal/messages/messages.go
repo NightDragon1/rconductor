@@ -234,30 +234,98 @@ func (s *Service) MarkRead(ctx context.Context, req users.Request, id string) er
 	return nil
 }
 
+// Comment is a comment on a message.
+type Comment struct {
+	ID, AuthorID, AuthorPseudonym, Text string
+	CreatedAt                           time.Time
+}
+
 // Comments lists the comments of a message.
 func (s *Service) Comments(ctx context.Context, req users.Request, _ string) error {
 	return s.read(ctx, req, "message.comment_list")
 }
 
-// Comment comments on a message: first the role (403), then the input
-// (400), as in D-051. Whether the caller is a recipient or the sender is
-// decided on the message itself.
-func (s *Service) Comment(ctx context.Context, req users.Request, _, text string) error {
-	if err := s.read(ctx, req, "message.commented"); !errors.Is(err, ErrNotImplemented) {
-		return err
+// Comment comments on a message: its recipients and its sender (D-085).
+// The RCON admin who is neither gets 403, anyone else 404; then the input
+// (400), then the count of the last hour (429). The audit keeps no text
+// (D-086).
+func (s *Service) Comment(ctx context.Context, req users.Request, id, text string) (Comment, error) {
+	m, err := s.one(ctx, req, "message.commented", id)
+	if err != nil {
+		return Comment{}, err
+	}
+	if m.SenderID != req.Actor.ID {
+		n, err := s.st.Queries.IsMessageRecipient(ctx, sqlitedb.IsMessageRecipientParams{MessageID: id, UserID: req.Actor.ID})
+		if err != nil {
+			return Comment{}, err
+		}
+		if n == 0 {
+			return Comment{}, s.denied(ctx, req, "message.commented", id)
+		}
 	}
 	switch {
 	case text == "":
-		return &users.InvalidError{Detail: "text is required"}
-	case len(text) > MaxCommentBytes:
-		return &users.InvalidError{Detail: "text is too long"}
+		return Comment{}, &users.InvalidError{Detail: "text is required"}
+	case len(text) > MaxCommentBytes,
+		utf8.RuneCountInString(text) > s.limit(ctx, users.SettingMessagesMaxComment, users.DefaultMessagesMaxComment, 1):
+		return Comment{}, &users.InvalidError{Detail: "text is too long"}
 	}
-	return ErrNotImplemented
+	perHour := s.limit(ctx, users.SettingCommentsPerHour, users.DefaultCommentsPerHour, 1)
+	now := s.now()
+	hourAgo := now.Add(-time.Hour).Format(store.TimeLayout)
+	cid, err := store.NewID()
+	if err != nil {
+		return Comment{}, err
+	}
+	tx, err := s.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Comment{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := sqlitedb.New(tx)
+	sent, err := q.CountCommentSends(ctx, sqlitedb.CountCommentSendsParams{UserID: req.Actor.ID, SentAt: hourAgo})
+	if err != nil {
+		return Comment{}, err
+	}
+	if sent >= int64(perHour) {
+		return Comment{}, ErrRateLimited
+	}
+	created := now.Format(store.TimeLayout)
+	if err := q.InsertMessageComment(ctx, sqlitedb.InsertMessageCommentParams{
+		ID: cid, MessageID: id, AuthorID: sql.NullString{String: req.Actor.ID, Valid: true},
+		AuthorPseudonym: req.Pseudonym, Text: text, CreatedAt: created,
+	}); err != nil {
+		return Comment{}, err
+	}
+	if err := q.DeleteOldCommentSends(ctx, sqlitedb.DeleteOldCommentSendsParams{UserID: req.Actor.ID, SentAt: hourAgo}); err != nil {
+		return Comment{}, err
+	}
+	if err := q.InsertCommentSend(ctx, sqlitedb.InsertCommentSendParams{UserID: req.Actor.ID, SentAt: created}); err != nil {
+		return Comment{}, err
+	}
+	if err := s.audited(ctx, tx, req, "message.commented", id, cid); err != nil {
+		return Comment{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Comment{}, err
+	}
+	return Comment{ID: cid, AuthorID: req.Actor.ID, AuthorPseudonym: req.Pseudonym, Text: text, CreatedAt: now}, nil
 }
 
 // DeleteComment deletes a comment of a message.
 func (s *Service) DeleteComment(ctx context.Context, req users.Request, _, _ string) error {
 	return s.read(ctx, req, "message.comment_deleted")
+}
+
+// audited writes the audit entry of a comment: the message and the
+// comment ID, never the text (D-086).
+func (s *Service) audited(ctx context.Context, tx *sql.Tx, req users.Request, action, id, commentID string) error {
+	_, err := audit.Write(ctx, tx, audit.Entry{
+		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
+		TargetType: "message", TargetID: id, Action: action, Result: audit.ResultOK,
+		Payload: map[string]any{"comment_id": commentID},
+	})
+	return err
 }
 
 // Send sends a message: first the role and the audience (403), then the
