@@ -19,6 +19,8 @@ import (
 	"net/netip"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/agenthub"
 	"github.com/NightDragon1/rconductor/internal/agentproto"
@@ -59,6 +61,10 @@ type Hub interface {
 // (AGT-014); while it is off the agents are shown as in 1.1.
 const FeatureDockerHost = "docker_host"
 
+// FeatureHostGroups is the flag of the display name of an agent's host
+// (UI-021, D-089).
+const FeatureHostGroups = "host_groups"
+
 // Agent is an agent as the API shows it.
 type Agent struct {
 	ID           string
@@ -76,6 +82,9 @@ type Agent struct {
 	// DockerHost is the host of the agent's last hello, only with the
 	// flag docker_host on (AGT-014).
 	DockerHost *agentproto.DockerHost
+	// DisplayName is the display name of the host, only with the flag
+	// host_groups on (UI-021, D-089); "" while none is set.
+	DisplayName string
 }
 
 // Token is a new pairing token with what the pairing dialog shows.
@@ -125,6 +134,9 @@ func (s *Service) UseFeatures(f *features.Set) { s.flags = f }
 // address it connected from only outside the panel's networks (D-084).
 func (s *Service) view(ctx context.Context, r sqlitedb.Agent) Agent {
 	a := toAgent(r, s.connected(r.ID))
+	if s.flags != nil && s.flags.Enabled(ctx, s.st, FeatureHostGroups) {
+		a.DisplayName = r.DisplayName.String
+	}
 	if s.hub == nil || s.flags == nil || !s.flags.Enabled(ctx, s.st, FeatureDockerHost) {
 		return a
 	}
@@ -291,16 +303,67 @@ volumes:
 `, repo, version, token)
 }
 
-// ErrNotImplemented means the display name is not built yet.
-var ErrNotImplemented = errors.New("not implemented yet")
-
-// SetDisplayName sets the display name of an agent's host (UI-021,
-// D-089): the RCON admin only, refusals audited.
-func (s *Service) SetDisplayName(ctx context.Context, req users.Request, id string, _ *string) (Agent, error) {
+// SetDisplayName sets the display name of an agent's host (UI-021, D-089),
+// foreign data (SEC-006): RCON admin only, refusals audited; nil or ""
+// removes it; at most agents.display_name_max characters, no controls.
+func (s *Service) SetDisplayName(ctx context.Context, req users.Request, id string, name *string) (Agent, error) {
 	if err := s.mustBeAdmin(ctx, req, "agent.display_name_set", id); err != nil {
 		return Agent{}, err
 	}
-	return Agent{}, ErrNotImplemented
+	var v string
+	if name != nil {
+		v = strings.TrimSpace(*name)
+	}
+	limit := users.DefaultAgentDisplayNameMax
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingAgentDisplayNameMax, &limit); err != nil || limit < users.MinAgentDisplayNameMax {
+		limit = users.DefaultAgentDisplayNameMax
+	}
+	switch {
+	case strings.ContainsFunc(v, unicode.IsControl):
+		return Agent{}, &users.InvalidError{Detail: "a display name must not contain control characters"}
+	case utf8.RuneCountInString(v) > limit:
+		return Agent{}, &users.InvalidError{Detail: fmt.Sprintf("a display name has at most %d characters", limit)}
+	}
+	tx, err := s.st.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return Agent{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := sqlitedb.New(tx)
+	old, err := q.GetAgent(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Agent{}, users.ErrNotFound
+	}
+	if err != nil {
+		return Agent{}, err
+	}
+	next := sql.NullString{String: v, Valid: v != ""}
+	if _, err := q.SetAgentDisplayName(ctx, sqlitedb.SetAgentDisplayNameParams{DisplayName: next, ID: id}); err != nil {
+		return Agent{}, err
+	}
+	payload := map[string]any{"display_name": map[string]string{"from": old.DisplayName.String, "to": v}}
+	if err := s.auditOK(ctx, tx, req, "agent.display_name_set", id, payload); err != nil {
+		return Agent{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Agent{}, err
+	}
+	old.DisplayName = next
+	return s.view(ctx, old), nil
+}
+
+// DisplayNames returns the set display names by agent ID for the hosts in
+// the overview (UI-021, D-089); the caller keeps to the user's scope.
+func (s *Service) DisplayNames(ctx context.Context) (map[string]string, error) {
+	rows, err := s.st.Queries.ListAgentDisplayNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(rows))
+	for _, r := range rows {
+		out[r.ID] = r.DisplayName.String
+	}
+	return out, nil
 }
 
 // Approve accepts a pending pairing by fingerprint (way B).

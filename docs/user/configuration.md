@@ -123,6 +123,7 @@ are written like `24h`, `15m`, `30s`.
 | `commands.multi_max_servers` (new in 1.1) | number | 50 | 1 to 1000 | servers of one command to several servers |
 | `commands.multi_parallel` (new in 1.1) | number | 8 | 1 to 64 | servers a command to several servers runs on at the same time |
 | `agents.fingerprint_pairing` | boolean | off | on, off | pairing by fingerprint; closes itself after 30 minutes |
+| `agents.display_name_max` (new in 1.2) | number | 64 | 16 to 256 | characters of the display name of a host |
 | `agent.version_retry` (new in 1.1) | duration | 30s | 5s to 1h | how often the panel asks the agent again for the game version; each attempt reads only the log since the last one |
 | `agent.version_window` (new in 1.1) | duration | 10m | 1m to 24h | how long the panel looks for the game version after it first sees a container run |
 | `agent.volume_interval` (new in 1.1) | duration | 2h | 10m to 7 days | how often each agent measures the used size of its volumes, in one call for all containers |

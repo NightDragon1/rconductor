@@ -13,8 +13,9 @@ import (
 // TestHostsAndDiagnosticsBehindFlags: the display name of a host (UI-021,
 // D-089) and the diagnostic export (NFR-018, D-090) are 404 while their
 // flag is off. With the flag on, the skeleton refuses every role but the
-// RCON admin (403), then checks the period (400), and answers 501 for the
-// rest (contract first).
+// RCON admin (403); the display name of an unknown agent is 404, the
+// export checks the period (400) and answers 501 for the rest (contract
+// first).
 func TestHostsAndDiagnosticsBehindFlags(t *testing.T) {
 	flags, err := features.New(features.Flag{Name: "host_groups", Operations: []string{"UpdateAgent"}},
 		features.Flag{Name: "diagnostics_export", Operations: []string{"GetDiagnostics"}})
@@ -44,7 +45,8 @@ func TestHostsAndDiagnosticsBehindFlags(t *testing.T) {
 	}
 	check(http.StatusForbidden, mod, rename, export, call{method: http.MethodGet, path: "/api/v1/diagnostics?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z"})
 	check(http.StatusBadRequest, admin, call{method: http.MethodGet, path: "/api/v1/diagnostics?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z"})
-	check(http.StatusNotImplemented, admin, rename, export)
+	check(http.StatusNotFound, admin, rename)
+	check(http.StatusNotImplemented, admin, export)
 	var refused int
 	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action IN ('agent.display_name_set', 'diagnostics.exported') AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
 		t.Errorf("audited refusals = %d (%v), want 3", refused, err)

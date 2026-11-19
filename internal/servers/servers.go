@@ -84,6 +84,9 @@ type Server struct {
 	// ContainerName is the container on the agent's host; the agent
 	// resolves it and checks the label each time (revision 2.3 cand. 1).
 	ContainerName string
+	// HostAgentID is the agent of the server's host for every role, only
+	// to group the overview by host (UI-021, D-089); never in an answer.
+	HostAgentID string
 	// GamePorts are the effective game ports: the override of the server,
 	// or else those of the profile (SRV-005).
 	GamePorts         []profiles.GamePort
@@ -278,6 +281,7 @@ func (s *Service) toServer(ctx context.Context, r sqlitedb.ListServersRow, group
 	if srv.GroupIDs == nil {
 		srv.GroupIDs = []string{}
 	}
+	srv.HostAgentID = r.AgentID.String
 	// The effective profile: the topmost profile that sets a field (D-074).
 	var eff *profiles.Profile
 	if r.ProfileID.Valid {

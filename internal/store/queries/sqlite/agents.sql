@@ -51,5 +51,11 @@ SELECT * FROM agent_tokens WHERE token_hash = ?;
 -- name: UseAgentToken :execrows
 UPDATE agent_tokens SET used_at = ?, agent_id = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?;
 
+-- name: SetAgentDisplayName :execrows
+UPDATE agents SET display_name = ? WHERE id = ?;
+
+-- name: ListAgentDisplayNames :many
+SELECT id, display_name FROM agents WHERE display_name IS NOT NULL;
+
 -- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

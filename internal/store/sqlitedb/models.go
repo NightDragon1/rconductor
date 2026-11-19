@@ -30,6 +30,7 @@ type Agent struct {
 	CreatedAt    string
 	LastSeenAt   sql.NullString
 	RevokedAt    sql.NullString
+	DisplayName  sql.NullString
 }
 
 type AgentToken struct {

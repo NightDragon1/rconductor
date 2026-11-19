@@ -77,7 +77,7 @@ func (q *Queries) DetachServersFromAgent(ctx context.Context, arg DetachServersF
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT id, name, public_key, fingerprint, status, version, capabilities, remote, paired_by, created_at, last_seen_at, revoked_at FROM agents WHERE id = ?
+SELECT id, name, public_key, fingerprint, status, version, capabilities, remote, paired_by, created_at, last_seen_at, revoked_at, display_name FROM agents WHERE id = ?
 `
 
 func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
@@ -96,12 +96,13 @@ func (q *Queries) GetAgent(ctx context.Context, id string) (Agent, error) {
 		&i.CreatedAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.DisplayName,
 	)
 	return i, err
 }
 
 const getAgentByFingerprint = `-- name: GetAgentByFingerprint :one
-SELECT id, name, public_key, fingerprint, status, version, capabilities, remote, paired_by, created_at, last_seen_at, revoked_at FROM agents WHERE fingerprint = ?
+SELECT id, name, public_key, fingerprint, status, version, capabilities, remote, paired_by, created_at, last_seen_at, revoked_at, display_name FROM agents WHERE fingerprint = ?
 `
 
 func (q *Queries) GetAgentByFingerprint(ctx context.Context, fingerprint string) (Agent, error) {
@@ -120,6 +121,7 @@ func (q *Queries) GetAgentByFingerprint(ctx context.Context, fingerprint string)
 		&i.CreatedAt,
 		&i.LastSeenAt,
 		&i.RevokedAt,
+		&i.DisplayName,
 	)
 	return i, err
 }
@@ -204,8 +206,40 @@ func (q *Queries) InsertAgentToken(ctx context.Context, arg InsertAgentTokenPara
 	return err
 }
 
+const listAgentDisplayNames = `-- name: ListAgentDisplayNames :many
+SELECT id, display_name FROM agents WHERE display_name IS NOT NULL
+`
+
+type ListAgentDisplayNamesRow struct {
+	ID          string
+	DisplayName sql.NullString
+}
+
+func (q *Queries) ListAgentDisplayNames(ctx context.Context) ([]ListAgentDisplayNamesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentDisplayNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAgentDisplayNamesRow{}
+	for rows.Next() {
+		var i ListAgentDisplayNamesRow
+		if err := rows.Scan(&i.ID, &i.DisplayName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAgents = `-- name: ListAgents :many
-SELECT id, name, public_key, fingerprint, status, version, capabilities, remote, paired_by, created_at, last_seen_at, revoked_at FROM agents ORDER BY status, name, id
+SELECT id, name, public_key, fingerprint, status, version, capabilities, remote, paired_by, created_at, last_seen_at, revoked_at, display_name FROM agents ORDER BY status, name, id
 `
 
 func (q *Queries) ListAgents(ctx context.Context) ([]Agent, error) {
@@ -230,6 +264,7 @@ func (q *Queries) ListAgents(ctx context.Context) ([]Agent, error) {
 			&i.CreatedAt,
 			&i.LastSeenAt,
 			&i.RevokedAt,
+			&i.DisplayName,
 		); err != nil {
 			return nil, err
 		}
@@ -305,6 +340,23 @@ type RevokeAgentParams struct {
 
 func (q *Queries) RevokeAgent(ctx context.Context, arg RevokeAgentParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, revokeAgent, arg.RevokedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setAgentDisplayName = `-- name: SetAgentDisplayName :execrows
+UPDATE agents SET display_name = ? WHERE id = ?
+`
+
+type SetAgentDisplayNameParams struct {
+	DisplayName sql.NullString
+	ID          string
+}
+
+func (q *Queries) SetAgentDisplayName(ctx context.Context, arg SetAgentDisplayNameParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setAgentDisplayName, arg.DisplayName, arg.ID)
 	if err != nil {
 		return 0, err
 	}
