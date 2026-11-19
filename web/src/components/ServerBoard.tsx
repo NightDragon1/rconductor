@@ -3,6 +3,8 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { byGroups } from '@/lib/groups';
+import { byHost, hostCounts } from '@/lib/hostgroups';
+import { ForeignText } from '@/components/ForeignText';
 import { useProfiles, useServerGroups, type Server } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { useLiveServers } from '@/api/live-servers';
@@ -49,11 +51,16 @@ function Cards({
 
 function GroupFrame({
   name,
+  title,
+  line,
   index,
   servers,
   children,
 }: {
   name: string;
+  // title and line replace name and the count of servers up, for a host.
+  title?: ReactNode;
+  line?: string;
   index: number;
   servers: Server[];
   children: ReactNode;
@@ -81,10 +88,10 @@ function GroupFrame({
             )}
             aria-hidden
           />
-          <bdi>{name}</bdi>
+          {title ?? <bdi>{name}</bdi>}
         </h2>
         <span className="text-sm text-muted">
-          {t('home.groupSummary', { count: servers.length, ok })}
+          {line ?? t('home.groupSummary', { count: servers.length, ok })}
         </span>
       </div>
       {children}
@@ -94,15 +101,18 @@ function GroupFrame({
 
 // ServerBoard is a page of server cards with a search: the overview and
 // the server list (F13). Admins see the cards by server group (Gesamtkonzept
-// 5); summary and head come from the page.
+// 5); with hosts, every role sees them by host instead (UI-021). Summary and
+// head come from the page.
 export function ServerBoard({
   title,
   summary = [],
   head,
+  hosts = false,
 }: {
   title: string;
   summary?: (string | undefined)[];
   head?: ReactNode;
+  hosts?: boolean;
 }) {
   const { t } = useTranslation();
   const { data: session } = useSession();
@@ -133,6 +143,40 @@ export function ServerBoard({
     cards = <p className="text-muted">{t('home.empty')}</p>;
   } else if (shown.length === 0) {
     cards = <p className="text-muted">{t('home.noMatch')}</p>;
+  } else if (hosts) {
+    // Each host in a frame with its display name or a neutral placeholder,
+    // never the host name (D-089); not collapsible, nothing remembered.
+    const { hosts: list, rest } = byHost(shown);
+    let unnamed = 0;
+    cards = (
+      <>
+        {list.map((g, i) => {
+          const name = g.displayName ?? t('home.hostUnnamed', { n: ++unnamed });
+          return (
+            <GroupFrame
+              key={g.key}
+              name={name}
+              title={g.displayName ? <ForeignText text={g.displayName} /> : name}
+              line={t('home.hostSummary', { count: g.servers.length, ...g.counts })}
+              index={i}
+              servers={g.servers}
+            >
+              <Cards servers={g.servers} profiles={profileNames} now={now} />
+            </GroupFrame>
+          );
+        })}
+        {rest.length > 0 && (
+          <GroupFrame
+            name={t('home.withoutAgent')}
+            line={t('home.hostSummary', { count: rest.length, ...hostCounts(rest) })}
+            index={-1}
+            servers={rest}
+          >
+            <Cards servers={rest} profiles={profileNames} now={now} />
+          </GroupFrame>
+        )}
+      </>
+    );
   } else if (admin && groups.data && byGroups(shown, groups.data).groups.length > 0) {
     const { groups: sections, rest } = byGroups(shown, groups.data);
     cards = (
