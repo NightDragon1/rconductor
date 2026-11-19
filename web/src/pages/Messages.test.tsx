@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { dateTime } from '@/lib/format';
 import { RouterProvider } from '@tanstack/react-router';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -264,7 +265,7 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     await screen.findByRole('region');
     // Names, texts and times are data.
     const texts = unmarked(container).filter(
-      (s) => !['boss', 'text m1'].includes(s) && /\p{L}/u.test(s),
+      (s) => !['boss', 'text m1', dateTime('xx', now)].includes(s) && /\p{L}/u.test(s),
     );
     expect(texts).toEqual([]);
     setLanguage('en');
