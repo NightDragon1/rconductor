@@ -1,0 +1,79 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { describe, expect, it } from 'vitest';
+import type { Server } from '@/api/servers';
+import { byHost, hostCounts } from './hostgroups';
+
+const now = new Date().toISOString();
+
+function server(id: string, host?: { key: string; display_name?: string }, state?: string): Server {
+  return {
+    number: 1,
+    version: 'v',
+    id,
+    name: id,
+    groups: [],
+    status: 'connected',
+    status_since: now,
+    host_group: host,
+    runtime: state
+      ? {
+          kind: 'runtime',
+          server_id: id,
+          container: {
+            name: id,
+            state,
+            restart_count: 0,
+            restart_loop: false,
+            stale: false,
+            agent_connected: true,
+          },
+        }
+      : undefined,
+  } as Server;
+}
+
+describe('host groups (UI-021)', () => {
+  it('groups by key, named hosts first by name, servers without agent apart', () => {
+    const { hosts, rest } = byHost([
+      server('a', { key: '1' }),
+      server('b', { key: '2', display_name: 'Zulu' }),
+      server('c', { key: '1' }),
+      server('d'),
+      server('e', { key: '3', display_name: 'Alpha' }),
+    ]);
+    expect(hosts.map((g) => [g.key, g.displayName, g.servers.map((s) => s.id)])).toEqual([
+      ['3', 'Alpha', ['e']],
+      ['2', 'Zulu', ['b']],
+      ['1', undefined, ['a', 'c']],
+    ]);
+    expect(rest.map((s) => s.id)).toEqual(['d']);
+  });
+
+  it('sums running, stopped and error', () => {
+    const s = (id: string, state?: string, status: Server['status'] = 'connected') => ({
+      ...server(id, { key: '1' }, state),
+      status,
+    });
+    expect(
+      hostCounts([
+        s('run', 'running'),
+        s('online'),
+        s('stop', 'exited'),
+        s('gone', 'unknown'),
+        s('rcon', 'running', 'offline'),
+        s('auth', undefined, 'auth_failed'),
+      ] as Server[]),
+    ).toEqual({ running: 2, stopped: 1, error: 3 });
+  });
+
+  it('keeps 500 servers on 50 hosts in order and fast', () => {
+    const list = Array.from({ length: 500 }, (_, i) => server(`s${i}`, { key: String(i % 50) }));
+    const t0 = performance.now();
+    const { hosts } = byHost(list);
+    expect(performance.now() - t0).toBeLessThan(100);
+    expect(hosts).toHaveLength(50);
+    expect(hosts.every((g) => g.servers.length === 10)).toBe(true);
+    expect(hosts[0]?.servers.map((s) => s.id).slice(0, 2)).toEqual(['s0', 's50']);
+  });
+});

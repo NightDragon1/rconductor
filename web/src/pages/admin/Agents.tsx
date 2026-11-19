@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, must, patchVersioned } from '@/api/client';
-import { agentsKey, useAgents, type Agent } from '@/api/servers';
+import { agentsKey, serversKey, useAgents, type Agent } from '@/api/servers';
 import { outcome } from '@/api/users';
 import type { components } from '@/api/schema';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -27,6 +27,7 @@ import { PhoneNote } from './PhoneNote';
 import { ForeignText } from '@/components/ForeignText';
 import { DOCKER_HOST_FLAG, DockerHost } from '@/components/DockerHost';
 import { useSession } from '@/api/session';
+import { HOST_GROUPS_FLAG } from '@/lib/hostgroups';
 
 type Token = components['schemas']['AgentToken'];
 const settingsKey = ['settings'] as const;
@@ -85,6 +86,67 @@ function PairDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+// NameDialog sets the display name of an agent's host (UI-021, D-089);
+// empty removes it. The backend checks role, length and control
+// characters.
+function NameDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [value, setValue] = useState(agent.display_name ?? '');
+  const [error, setError] = useState('');
+  const save = async () => {
+    const r = await outcome('display-name', async () => {
+      must(
+        await api.PATCH('/agents/{id}', {
+          params: { path: { id: agent.id } },
+          body: { display_name: value.trim() === '' ? null : value },
+        }),
+      );
+    });
+    if (!r.ok) {
+      setError(reasonText(t, r));
+      return;
+    }
+    void qc.invalidateQueries({ queryKey: agentsKey });
+    void qc.invalidateQueries({ queryKey: serversKey });
+    onClose();
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogTitle>{t('agents.displayNameTitle')}</DialogTitle>
+        <DialogDescription>{t('agents.displayNameExplain')}</DialogDescription>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <Input
+            aria-label={t('agents.displayName')}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+          {error && (
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <DialogClose asChild>
+              <Button type="button" variant="ghost">
+                {t('admin.close')}
+              </Button>
+            </DialogClose>
+            <Button type="submit">{t('agents.displayNameSave')}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // AgentsPage lists the paired agents (AGT-005): pairing by token, approval
 // of a waiting pairing by fingerprint, revocation. Only the RCON admin
 // reaches it (Design 6.2); the backend decides. A phone only reads
@@ -94,6 +156,9 @@ export function AgentsPage() {
   const { data: session } = useSession();
   // The Docker host with the flag docker_host (AGT-014).
   const dockerHost = (session?.ui.features ?? []).includes(DOCKER_HOST_FLAG);
+  // The display name of the host with the flag host_groups (UI-021).
+  const hostGroups = (session?.ui.features ?? []).includes(HOST_GROUPS_FLAG);
+  const [naming, setNaming] = useState<Agent | null>(null);
   const phone = usePhone();
   const qc = useQueryClient();
   const now = useNow(10_000);
@@ -201,6 +266,14 @@ export function AgentsPage() {
                 ...(dockerHost
                   ? [{ label: t('agents.dockerHost'), value: <DockerHost agent={a} /> }]
                   : []),
+                ...(hostGroups
+                  ? [
+                      {
+                        label: t('agents.displayName'),
+                        value: a.display_name ? <ForeignText text={a.display_name} /> : '',
+                      },
+                    ]
+                  : []),
                 {
                   label: t('agents.fingerprint'),
                   value: <span className="font-mono text-xs">{a.fingerprint}</span>,
@@ -222,6 +295,7 @@ export function AgentsPage() {
                 <th className="p-3 font-medium">{t('admin.statusLabel')}</th>
                 <th className="p-3 font-medium">{t('agents.version')}</th>
                 {dockerHost && <th className="p-3 font-medium">{t('agents.dockerHost')}</th>}
+                {hostGroups && <th className="p-3 font-medium">{t('agents.displayName')}</th>}
                 <th className="p-3 font-medium">{t('agents.fingerprint')}</th>
                 <th className="p-3 font-medium">{t('agents.lastSeen')}</th>
                 <th className="p-3" />
@@ -257,6 +331,11 @@ export function AgentsPage() {
                       <DockerHost agent={a} />
                     </td>
                   )}
+                  {hostGroups && (
+                    <td className="p-3">
+                      {a.display_name && <ForeignText text={a.display_name} />}
+                    </td>
+                  )}
                   <td
                     className="max-w-56 wrap-anywhere md:truncate p-3 font-mono text-xs"
                     title={a.fingerprint}
@@ -267,6 +346,11 @@ export function AgentsPage() {
                     {a.last_seen_at ? ago(t, a.last_seen_at, now) : ''}
                   </td>
                   <td className="p-3 text-right">
+                    {hostGroups && a.status !== 'revoked' && (
+                      <Button variant="ghost" size="sm" onClick={() => setNaming(a)}>
+                        {t('agents.displayNameEdit')}
+                      </Button>
+                    )}
                     {a.status === 'pending' && (
                       <Button
                         size="sm"
@@ -301,7 +385,10 @@ export function AgentsPage() {
               ))}
               {all.length === 0 && (
                 <tr>
-                  <td colSpan={dockerHost ? 7 : 6} className="p-6 text-center text-muted">
+                  <td
+                    colSpan={6 + (dockerHost ? 1 : 0) + (hostGroups ? 1 : 0)}
+                    className="p-6 text-center text-muted"
+                  >
                     {t(agents.isPending ? 'app.loading' : 'agents.none')}
                   </td>
                 </tr>
@@ -311,6 +398,7 @@ export function AgentsPage() {
         </div>
       )}
       {pairing && <PairDialog onClose={() => setPairing(false)} />}
+      {naming && <NameDialog agent={naming} onClose={() => setNaming(null)} />}
       <ConfirmDialog
         open={!!revoke}
         title={t('agents.revokeTitle', { name: revoke?.name ?? '' })}

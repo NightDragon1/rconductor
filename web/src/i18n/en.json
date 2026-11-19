@@ -99,7 +99,11 @@
     "empty": "No servers yet.",
     "noMatch": "No server matches the search.",
     "groupSummary_one": "{{count}} server · {{ok}} up",
-    "groupSummary_other": "{{count}} servers · {{ok}} up"
+    "groupSummary_other": "{{count}} servers · {{ok}} up",
+    "hostUnnamed": "Host {{n}}",
+    "withoutAgent": "Servers without agent",
+    "hostSummary_one": "{{count}} server · running {{running}} · stopped {{stopped}} · error {{error}}",
+    "hostSummary_other": "{{count}} servers · running {{running}} · stopped {{stopped}} · error {{error}}"
   },
   "role": {
     "rcon_admin": "RCON admin",
@@ -811,6 +815,11 @@
   },
   "agents": {
     "summary": "{{count}} paired · {{connected}} connected",
+    "displayName": "Display name",
+    "displayNameEdit": "Display name",
+    "displayNameTitle": "Display name of the host",
+    "displayNameExplain": "Every role sees this name above the servers of this host in the overview, never the host name. Leave it empty to remove it.",
+    "displayNameSave": "Save",
     "pair": "Pair an agent",
     "pairTitle": "Pair an agent",
     "pairExplain": "Make a one-time token. The Compose service below starts the agent on the game host with it.",
