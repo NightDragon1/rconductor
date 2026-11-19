@@ -17,6 +17,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/client';
+import { MESSAGES_FLAG, useUnreadMessages } from '@/api/messages';
 import { useSession } from '@/api/session';
 import { AboutButton } from '@/components/AboutDialog';
 import { Logo } from '@/components/Logo';
@@ -128,6 +129,7 @@ function Brand({ collapsed }: { collapsed: boolean }) {
 function Navigation({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { t } = useTranslation();
   const { data: session } = useSession();
+  const unread = useUnreadMessages(!!session?.ui.features?.includes(MESSAGES_FLAG)).data ?? 0;
   if (!session) return null;
   const ctx = navContext(session.ui);
   const visible = (list: NavEntry[]) => list.filter((e) => shown(e, session.user.role, ctx));
@@ -151,6 +153,7 @@ function Navigation({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
         ) : (
           <span>{t(`nav.${e.key}`)}</span>
         )}
+        {e.key === 'messages' && unread > 0 && <UnreadBadge count={unread} />}
       </Link>
     </li>
   );
@@ -170,6 +173,21 @@ function Navigation({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
         </>
       )}
     </nav>
+  );
+}
+
+// UnreadBadge is the number of unread messages at their menu entry
+// (MSG-001 to MSG-003).
+function UnreadBadge({ count }: { count: number }) {
+  const { t } = useTranslation();
+  return (
+    <span
+      className="ml-auto rounded-full bg-accent px-1.5 text-xs font-semibold text-accent-text"
+      title={t('messages.unread', { count })}
+    >
+      <span aria-hidden>{count}</span>
+      <span className="sr-only">{t('messages.unread', { count })}</span>
+    </span>
   );
 }
 

@@ -82,7 +82,8 @@
     "serverAdmin": "Servers and groups",
     "agents": "Agents",
     "settings": "Settings",
-    "profile": "Your profile"
+    "profile": "Your profile",
+    "messages": "Messages"
   },
   "home": {
     "title": "Overview",
@@ -1201,5 +1202,47 @@
     "done": "Two-factor sign-in is reset; all sessions ended. Sign in with your password.",
     "failed": "The link is not valid or the password is wrong.",
     "toLogin": "To sign-in"
+  },
+  "messages": {
+    "explain": "Messages to you and from you, newest first.",
+    "list": "Messages",
+    "none": "No messages.",
+    "more": "Load more",
+    "new": "New message",
+    "to": "To",
+    "audience": {
+      "all": "All users",
+      "server_admins": "Server admins",
+      "moderators": "Moderators",
+      "users": "Chosen users",
+      "scope": "Everyone in my scope",
+      "scope_moderators": "Moderators in my scope"
+    },
+    "users": "Recipients",
+    "noUsers": "No users to choose.",
+    "text": "Text",
+    "send": "Send",
+    "sent": "Sent.",
+    "sentTo_one": "Sent to {{count}} recipient.",
+    "sentTo_other": "Sent to {{count}} recipients.",
+    "failed": "Failed.",
+    "failedWith": "Failed: {{reason}}",
+    "unreadMark": "new",
+    "unread_one": "{{count}} unread message",
+    "unread_other": "{{count}} unread messages",
+    "mine": "sent by you",
+    "comments_one": "{{count}} comment",
+    "comments_other": "{{count}} comments",
+    "recipients_one": "{{count}} recipient",
+    "recipients_other": "{{count}} recipients",
+    "delete": "Delete message",
+    "deleteTitle": "Delete this message?",
+    "deleteText": "The message and its comments are gone for every recipient.",
+    "commentsLabel": "Comments",
+    "noComments": "No comments yet.",
+    "moreComments": "More comments",
+    "comment": "Your comment",
+    "sendComment": "Comment",
+    "deleteComment": "Delete"
   }
 }

@@ -28,6 +28,7 @@ import { SettingsPage } from '@/pages/admin/Settings';
 import { AuditPage } from '@/pages/Audit';
 import { TopologyPage } from '@/pages/Topology';
 import { ProfilesPage } from '@/pages/Profiles';
+import { MessagesPage } from '@/pages/Messages';
 import { RecoverPage } from '@/pages/Recover';
 import { SetupSecondFactorPage } from '@/pages/SetupSecondFactor';
 import { ProfilePage } from '@/pages/Profile';
@@ -130,6 +131,7 @@ const pages = [
   guarded('/topology', 'topology', TopologyPage),
   guarded('/audit', 'audit', AuditPage),
   guarded('/profiles', 'profiles', ProfilesPage),
+  guarded('/messages', 'messages', MessagesPage),
   guarded('/admin/users', 'users', UsersPage),
   guarded('/admin/groups', 'groups', GroupsPage),
   guarded('/admin/command-lists', 'commandLists', CommandListsPage),
