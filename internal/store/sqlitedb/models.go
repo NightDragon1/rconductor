@@ -268,6 +268,15 @@ type SupporterGrant struct {
 	CreatedAt   string
 }
 
+type SystemLog struct {
+	ID    int64
+	Ts    string
+	Level string
+	Code  string
+	Text  string
+	Size  int64
+}
+
 type TotpRecovery struct {
 	UserID    string
 	TokenHash string

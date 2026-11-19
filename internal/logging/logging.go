@@ -58,6 +58,14 @@ func New(w io.Writer, app string, cfg config.Log) *Factory {
 	return &Factory{app: app, handler: witness(h, opts)}
 }
 
+// Also writes every record from info up to w as well, one JSON line per
+// record, blacked out like the first output (D-091). Loggers made before
+// it do not write to w.
+func (f *Factory) Also(w io.Writer) {
+	opts := &slog.HandlerOptions{Level: slog.LevelInfo, ReplaceAttr: replaceAttr(slog.LevelInfo)}
+	f.handler = slog.NewMultiHandler(f.handler, slog.NewJSONHandler(w, opts))
+}
+
 // Root returns the logger of the application itself (comp = app).
 func (f *Factory) Root() *slog.Logger {
 	return slog.New(f.handler).With(KeyComp, f.app)

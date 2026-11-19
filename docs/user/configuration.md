@@ -143,6 +143,7 @@ are written like `24h`, `15m`, `30s`.
 | `messages.max_comment` (new in 1.2) | number | 2000 | 1 to 4096 | characters of a comment on a message; at most 4 KiB in UTF-8 in any case |
 | `messages.comments_per_hour` (new in 1.2) | number | 60 | 1 to 3600 | comments per author and hour; deleting a comment does not lower the count |
 | `messages.retention_days` (new in 1.2) | number | 180 | 7 to 3650 | days a message is kept; then it is deleted for good with its recipients and comments |
+| `system_log.max_bytes` (new in 1.2) | number | 67108864 | 1048576 to 1073741824 | bytes of the system log in all; beyond it the oldest entries are deleted first; entries older than 7 days go anyway |
 | `ui.shortcuts_enabled` | boolean | off | on, off | keyboard shortcuts for everyone |
 
 ## Mail (SMTP) (new in 1.1)

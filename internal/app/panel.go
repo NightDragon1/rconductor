@@ -46,6 +46,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
+	"github.com/NightDragon1/rconductor/internal/syslog"
 	"github.com/NightDragon1/rconductor/internal/users"
 	"github.com/NightDragon1/rconductor/internal/web"
 	builtinprofiles "github.com/NightDragon1/rconductor/profiles"
@@ -71,6 +72,9 @@ type PanelOptions struct {
 // and returned.
 func RunPanel(ctx context.Context, cfg config.Panel, out io.Writer, opts PanelOptions) error {
 	logs := logging.New(out, "panel", cfg.Log)
+	// The system log (D-091) gets every event from info up; stdout stays.
+	sink := syslog.NewSink()
+	logs.Also(sink)
 	root := logs.Root()
 	audit.SetLostLog(root)
 	defer context.AfterFunc(ctx, audit.Stop)()
@@ -81,14 +85,14 @@ func RunPanel(ctx context.Context, cfg config.Panel, out io.Writer, opts PanelOp
 	root.Info("starting", logging.Event(logging.AppStart), slog.String(logging.KeyVersion, buildinfo.Version),
 		slog.String("commit", buildinfo.Commit), slog.String("build_date", buildinfo.BuildDate))
 
-	err := runPanel(ctx, cfg, logs, opts)
+	err := runPanel(ctx, cfg, logs, sink, opts)
 	if err != nil {
 		root.Error("panel stopped with error", slog.Any("err", err))
 	}
 	return err
 }
 
-func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts PanelOptions) error {
+func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink *syslog.Sink, opts PanelOptions) error {
 	dbLog := logs.Module("db")
 	st, err := store.Open(ctx, cfg.DataDir)
 	if err != nil {
@@ -151,6 +155,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, opts
 	maskSettings := logmask.NewSettings(st, box, logs.Module("logmask"))
 	masking := logmask.NewProvider(ctx, maskSettings, logs.Module("logmask"))
 	importer.OnImported(masking.ProfilesChanged)
+	go sink.Run(ctx, st, masking, logs.Module("syslog"), time.Now)
 	if err := importer.Sync(ctx); err != nil {
 		return err
 	}

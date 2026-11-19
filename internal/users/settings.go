@@ -110,6 +110,14 @@ const (
 	MinAgentDisplayNameMax     = 16
 )
 
+// Total size of the system log in bytes (D-091); beyond it the oldest
+// entries go first.
+const (
+	SettingSystemLogMaxBytes = "system_log.max_bytes"
+	DefaultSystemLogMaxBytes = 64 << 20
+	MinSystemLogMaxBytes     = 1 << 20
+)
+
 // Command templates per server (CMD-008, D-068).
 const (
 	SettingTemplatesPerServer = "commands.templates_per_server"
@@ -215,6 +223,7 @@ var settingRules = map[string]rule{
 	SettingMessagesMaxResolved:     intRule(1, 100000),
 	SettingMessagesPerHour:         intRule(1, 1000),
 	SettingAgentDisplayNameMax:     intRule(MinAgentDisplayNameMax, 256),
+	SettingSystemLogMaxBytes:       intRule(MinSystemLogMaxBytes, 1<<30),
 	SettingMessagesMaxComment:      intRule(1, 4096),
 	SettingCommentsPerHour:         intRule(1, 3600),
 	SettingMessagesRetentionDays:   intRule(MinMessagesRetentionDays, 3650),
@@ -248,6 +257,7 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingMessagesMaxResolved:   DefaultMessagesMaxResolved,
 		SettingMessagesPerHour:       DefaultMessagesPerHour,
 		SettingAgentDisplayNameMax:   DefaultAgentDisplayNameMax,
+		SettingSystemLogMaxBytes:     DefaultSystemLogMaxBytes,
 		SettingMessagesMaxComment:    DefaultMessagesMaxComment,
 		SettingCommentsPerHour:       DefaultCommentsPerHour,
 		SettingMessagesRetentionDays: DefaultMessagesRetentionDays,
