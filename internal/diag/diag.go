@@ -11,8 +11,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -25,10 +23,12 @@ var ErrNotImplemented = errors.New("not implemented yet")
 // MaxPeriod is the longest period of the event log in one export (D-090).
 const MaxPeriod = 7 * 24 * time.Hour
 
-// Service answers the export.
+// Service answers the export and the system log.
 type Service struct {
-	st  *store.Store
-	log *slog.Logger
+	st     *store.Store
+	log    *slog.Logger
+	agents Agents
+	mask   Masker
 }
 
 // NewService returns the service; without a log it logs nothing.
@@ -46,31 +46,6 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 		return s.denied(ctx, req, "diagnostics.exported")
 	}
 	if err := period(from, to); err != nil {
-		return err
-	}
-	return ErrNotImplemented
-}
-
-// LogQuery selects entries of the system log (UI-025, D-091): Source is
-// "panel" or the ID of an agent; From, To and After apply to the panel.
-type LogQuery struct {
-	Source   string
-	From, To time.Time
-}
-
-// SystemLog checks the role first (403, audited), then the source and,
-// for the panel, the period (400).
-func (s *Service) SystemLog(ctx context.Context, req users.Request, q LogQuery) error {
-	if req.Actor.Role != perm.RCONAdmin {
-		return s.denied(ctx, req, "system_log.viewed")
-	}
-	if q.Source != "panel" {
-		if _, err := uuid.Parse(q.Source); err != nil {
-			return &users.InvalidError{Detail: "source is panel or the ID of an agent"}
-		}
-		return ErrNotImplemented
-	}
-	if err := period(q.From, q.To); err != nil {
 		return err
 	}
 	return ErrNotImplemented

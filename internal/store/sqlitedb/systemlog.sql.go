@@ -44,6 +44,66 @@ func (q *Queries) InsertSystemLog(ctx context.Context, arg InsertSystemLogParams
 	return err
 }
 
+const listSystemLog = `-- name: ListSystemLog :many
+SELECT id, ts, level, code, text FROM system_log
+WHERE ts >= ?1 AND ts < ?2 AND id > ?3
+  AND (CASE level WHEN 'error' THEN 2 WHEN 'warn' THEN 1 ELSE 0 END) >= CAST(?4 AS INTEGER)
+ORDER BY id
+LIMIT ?5
+`
+
+type ListSystemLogParams struct {
+	FromTs  string
+	ToTs    string
+	After   int64
+	MinRank int64
+	MaxRows int64
+}
+
+type ListSystemLogRow struct {
+	ID    int64
+	Ts    string
+	Level string
+	Code  string
+	Text  string
+}
+
+// From a minimum level up (info 0, warn 1, error 2), oldest first, after an ID.
+func (q *Queries) ListSystemLog(ctx context.Context, arg ListSystemLogParams) ([]ListSystemLogRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSystemLog,
+		arg.FromTs,
+		arg.ToTs,
+		arg.After,
+		arg.MinRank,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSystemLogRow{}
+	for rows.Next() {
+		var i ListSystemLogRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Ts,
+			&i.Level,
+			&i.Code,
+			&i.Text,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const purgeSystemLogBefore = `-- name: PurgeSystemLogBefore :execrows
 DELETE FROM system_log WHERE ts < ?
 `
