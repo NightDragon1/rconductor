@@ -43,5 +43,17 @@ DELETE FROM messages WHERE id = ?;
 -- name: IsMessageRecipient :one
 SELECT count(*) FROM message_recipients WHERE message_id = ? AND user_id = ?;
 
+-- name: InsertMessageComment :exec
+INSERT INTO message_comments (id, message_id, author_id, author_pseudonym, text, created_at) VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: CountCommentSends :one
+SELECT count(*) FROM comment_sends WHERE user_id = ? AND sent_at > ?;
+
+-- name: InsertCommentSend :exec
+INSERT INTO comment_sends (user_id, sent_at) VALUES (?, ?);
+
+-- name: DeleteOldCommentSends :exec
+DELETE FROM comment_sends WHERE user_id = ? AND sent_at <= ?;
+
 -- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

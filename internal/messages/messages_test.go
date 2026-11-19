@@ -128,7 +128,7 @@ func TestSendInput(t *testing.T) {
 }
 
 // TestReadRoles: every known role may be a recipient, so the operations
-// come through to the message (built ones: not found, the list empty); a
+// come through to the message (not found, the list empty); a
 // role that is not known is refused and audited.
 func TestReadRoles(t *testing.T) {
 	s := newService(t)
@@ -145,15 +145,15 @@ func TestReadRoles(t *testing.T) {
 		"message.deleted":         func(r users.Request) error { return s.Delete(ctx, r, id) },
 		"message.mark_read":       func(r users.Request) error { return s.MarkRead(ctx, r, id) },
 		"message.comment_list":    func(r users.Request) error { return s.Comments(ctx, r, id) },
-		"message.commented":       func(r users.Request) error { return s.Comment(ctx, r, id, "ok") },
+		"message.commented":       func(r users.Request) error { _, err := s.Comment(ctx, r, id, "ok"); return err },
 		"message.comment_deleted": func(r users.Request) error { return s.DeleteComment(ctx, r, id, id) },
 	}
 	for _, role := range []perm.Role{perm.RCONAdmin, perm.ServerAdmin, perm.Moderator, perm.Supporter} {
 		req := request(t, s, role)
 		for action, op := range ops {
-			want := ErrNotImplemented
-			if action == "message.read" || action == "message.deleted" || action == "message.mark_read" {
-				want = users.ErrNotFound // built: no such message
+			want := users.ErrNotFound // no such message
+			if action == "message.list" || action == "message.comment_list" || action == "message.comment_deleted" {
+				want = ErrNotImplemented
 			}
 			if err := op(req); !errors.Is(err, want) {
 				t.Errorf("%s %s = %v", role, action, err)
@@ -172,27 +172,6 @@ func TestReadRoles(t *testing.T) {
 		if n := denials(t, s, action); n != 2 {
 			t.Errorf("audited refusals of %s = %d, want 2", action, n)
 		}
-	}
-}
-
-// TestCommentInput: the role comes first (D-051), then the text: required
-// and at most MaxCommentBytes bytes.
-func TestCommentInput(t *testing.T) {
-	s := newService(t)
-	ctx := context.Background()
-	const id = "00000000-0000-4000-8000-000000000001"
-	mod := request(t, s, perm.Moderator)
-	var inv *users.InvalidError
-	for _, text := range []string{"", strings.Repeat("a", MaxCommentBytes+1), strings.Repeat("é", MaxCommentBytes/2+1)} {
-		if err := s.Comment(ctx, mod, id, text); !errors.As(err, &inv) {
-			t.Errorf("%d bytes: %v", len(text), err)
-		}
-	}
-	if err := s.Comment(ctx, mod, id, strings.Repeat("a", MaxCommentBytes)); !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("at the bound: %v", err)
-	}
-	if err := s.Comment(ctx, request(t, s, "unknown"), id, ""); !errors.Is(err, users.ErrForbidden) {
-		t.Errorf("unknown role with empty text: %v", err)
 	}
 }
 

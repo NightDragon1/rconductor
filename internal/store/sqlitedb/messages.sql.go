@@ -10,6 +10,22 @@ import (
 	"database/sql"
 )
 
+const countCommentSends = `-- name: CountCommentSends :one
+SELECT count(*) FROM comment_sends WHERE user_id = ? AND sent_at > ?
+`
+
+type CountCommentSendsParams struct {
+	UserID string
+	SentAt string
+}
+
+func (q *Queries) CountCommentSends(ctx context.Context, arg CountCommentSendsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCommentSends, arg.UserID, arg.SentAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countMessageSends = `-- name: CountMessageSends :one
 SELECT count(*) FROM message_sends WHERE user_id = ? AND sent_at > ?
 `
@@ -49,6 +65,20 @@ func (q *Queries) DeleteMessage(ctx context.Context, id string) (int64, error) {
 	return result.RowsAffected()
 }
 
+const deleteOldCommentSends = `-- name: DeleteOldCommentSends :exec
+DELETE FROM comment_sends WHERE user_id = ? AND sent_at <= ?
+`
+
+type DeleteOldCommentSendsParams struct {
+	UserID string
+	SentAt string
+}
+
+func (q *Queries) DeleteOldCommentSends(ctx context.Context, arg DeleteOldCommentSendsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteOldCommentSends, arg.UserID, arg.SentAt)
+	return err
+}
+
 const deleteOldMessageSends = `-- name: DeleteOldMessageSends :exec
 DELETE FROM message_sends WHERE user_id = ? AND sent_at <= ?
 `
@@ -74,6 +104,20 @@ func (q *Queries) GetActiveUserRole(ctx context.Context, id string) (string, err
 	return role, err
 }
 
+const insertCommentSend = `-- name: InsertCommentSend :exec
+INSERT INTO comment_sends (user_id, sent_at) VALUES (?, ?)
+`
+
+type InsertCommentSendParams struct {
+	UserID string
+	SentAt string
+}
+
+func (q *Queries) InsertCommentSend(ctx context.Context, arg InsertCommentSendParams) error {
+	_, err := q.db.ExecContext(ctx, insertCommentSend, arg.UserID, arg.SentAt)
+	return err
+}
+
 const insertMessage = `-- name: InsertMessage :exec
 INSERT INTO messages (id, sender_id, sender_pseudonym, audience, text, created_at) VALUES (?, ?, ?, ?, ?, ?)
 `
@@ -93,6 +137,31 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 		arg.SenderID,
 		arg.SenderPseudonym,
 		arg.Audience,
+		arg.Text,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertMessageComment = `-- name: InsertMessageComment :exec
+INSERT INTO message_comments (id, message_id, author_id, author_pseudonym, text, created_at) VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type InsertMessageCommentParams struct {
+	ID              string
+	MessageID       string
+	AuthorID        sql.NullString
+	AuthorPseudonym string
+	Text            string
+	CreatedAt       string
+}
+
+func (q *Queries) InsertMessageComment(ctx context.Context, arg InsertMessageCommentParams) error {
+	_, err := q.db.ExecContext(ctx, insertMessageComment,
+		arg.ID,
+		arg.MessageID,
+		arg.AuthorID,
+		arg.AuthorPseudonym,
 		arg.Text,
 		arg.CreatedAt,
 	)

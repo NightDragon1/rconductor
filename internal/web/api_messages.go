@@ -104,11 +104,25 @@ func (s *apiServer) CreateMessageComment(ctx context.Context, req api.CreateMess
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	return nil, messageError(s.messages.Comment(ctx, adminRequest(ctx), req.Id.String(), req.Body.Text), "createMessageComment")
+	c, err := s.messages.Comment(ctx, adminRequest(ctx), req.Id.String(), req.Body.Text)
+	if err != nil {
+		return nil, messageError(err, "createMessageComment")
+	}
+	return api.CreateMessageComment201JSONResponse(apiComment(c)), nil
 }
 
 func (s *apiServer) DeleteMessageComment(ctx context.Context, req api.DeleteMessageCommentRequestObject) (api.DeleteMessageCommentResponseObject, error) {
 	return nil, messageError(s.messages.DeleteComment(ctx, adminRequest(ctx), req.Id.String(), req.CommentId.String()), "deleteMessageComment")
+}
+
+// apiComment is a comment as the API shows it.
+func apiComment(c messages.Comment) api.MessageComment {
+	out := api.MessageComment{Text: c.Text, CreatedAt: c.CreatedAt, Author: api.MessageAuthor{Pseudonym: c.AuthorPseudonym}}
+	out.Id, _ = uuid.Parse(c.ID)
+	if id, err := uuid.Parse(c.AuthorID); err == nil {
+		out.Author.Id = &id
+	}
+	return out
 }
 
 // messageError maps the answers of the service; invalid input is 400.
