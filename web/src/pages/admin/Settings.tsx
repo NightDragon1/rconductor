@@ -94,6 +94,7 @@ const keyTexts = [
   'smtp_test_per_minute',
   'smtp_timeout',
   'supporters_enabled',
+  'system_log_max_bytes',
   'ui_shortcuts_enabled',
   'ws_max_sockets_per_session',
   'ws_max_subscriptions_per_socket',

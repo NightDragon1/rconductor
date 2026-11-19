@@ -932,6 +932,10 @@
         "label": "Invitation lifetime",
         "help": "How long an invitation link can be used."
       },
+      "system_log_max_bytes": {
+        "label": "System log size (bytes)",
+        "help": "Bytes the system log keeps in all; the oldest entries go first. Entries older than 7 days go anyway."
+      },
       "supporters_enabled": {
         "label": "Supporters",
         "help": "Moderators may have supporters. Off ends all supporter sessions."
