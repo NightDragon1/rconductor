@@ -70,8 +70,9 @@ type Page struct {
 var ranks = map[string]int{"info": 0, "warn": 1, "error": 2}
 
 // SystemLog checks the role first (403, audited), then the source and,
-// for the panel, the period (400). A call without After is audited
-// without content; polling with After is not.
+// for the panel, the period (400). The first read of a source in a
+// session is audited without content, whatever After says; polling after
+// it is not.
 func (s *Service) SystemLog(ctx context.Context, req users.Request, q LogQuery) (Page, error) {
 	if req.Actor.Role != perm.RCONAdmin {
 		return Page{}, s.denied(ctx, req, "system_log.viewed")
@@ -83,13 +84,14 @@ func (s *Service) SystemLog(ctx context.Context, req users.Request, q LogQuery) 
 	} else if err := period(q.From, q.To); err != nil {
 		return Page{}, err
 	}
-	if q.After == 0 {
+	if s.firstRead(req.SessionID, q.Source, q.After) {
 		if _, err := audit.Write(ctx, s.st.DB, audit.Entry{
 			Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
 			TargetType: "diagnostics", TargetID: q.Source, Action: "system_log.viewed", Result: audit.ResultOK,
 		}); err != nil {
 			return Page{}, err
 		}
+		s.markRead(req.SessionID, q.Source)
 	}
 	if q.Source != "panel" {
 		return s.agentLog(ctx, q)
@@ -107,6 +109,27 @@ func (s *Service) SystemLog(ctx context.Context, req users.Request, q LogQuery) 
 		p.Items = append(p.Items, Entry{ID: r.ID, Time: ts, Level: r.Level, Code: r.Code, Text: r.Text})
 	}
 	return p, nil
+}
+
+// firstRead tells whether a read is audited: every call without After,
+// and the first call of a session for a source.
+func (s *Service) firstRead(session, source string, after int64) bool {
+	if after == 0 {
+		return true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.viewed[session+"\x00"+source]
+}
+
+// markRead notes the audited read of a source in a session.
+func (s *Service) markRead(session, source string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.viewed == nil {
+		s.viewed = map[string]bool{}
+	}
+	s.viewed[session+"\x00"+source] = true
 }
 
 // agentLog reads the last lines of the agent's own container over

@@ -28,7 +28,8 @@ type Service struct {
 	mask   Masker
 
 	mu      sync.Mutex
-	running int // packages being built
+	running int             // packages being built
+	viewed  map[string]bool // session and source whose first read is audited
 }
 
 // NewService returns the service; without a log it logs nothing.

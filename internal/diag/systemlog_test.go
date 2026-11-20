@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agenthub"
 	"github.com/NightDragon1/rconductor/internal/agentproto"
@@ -127,5 +128,49 @@ func TestC175AgentJSONLinesMasked(t *testing.T) {
 	if err != nil || len(texts) != 3 || strings.Contains(got, "abc12345") || strings.Contains(got, "tok98765") ||
 		strings.Contains(got, "txt45678") || !strings.Contains(got, "login password") {
 		t.Errorf("agent log = %q, %v", got, err)
+	}
+}
+
+// TestC179FirstReadAudited: the first read of a source in a session is
+// audited even when it already carries After; polling after it is not,
+// another source or session is audited again (D-091).
+func TestC179FirstReadAudited(t *testing.T) {
+	st := storetest.New(t)
+	m, err := logmask.New(nil, logmask.DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := NewService(st, nil)
+	s.Use(&hub{code: agentproto.CodeOK, lines: []string{"line"}}, builtin{m})
+	ctx := context.Background()
+	id := storetest.CreateUser(t, st, storetest.User{Pseudonym: "a", Role: string(perm.RCONAdmin)})
+	in := func(session string) users.Request {
+		return users.Request{Actor: perm.Actor{ID: id, Role: perm.RCONAdmin}, SessionID: session}
+	}
+	const agent = "00000000-0000-4000-8000-000000000001"
+	now := time.Now().UTC()
+	panel := LogQuery{Source: "panel", From: now.Add(-time.Hour), To: now, Level: "info", Limit: 5, After: 1}
+	viewed := func() (n int) {
+		_ = st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'system_log.viewed' AND result = 'ok'`).Scan(&n)
+		return n
+	}
+	for i, c := range []struct {
+		req  users.Request
+		q    LogQuery
+		want int
+	}{
+		{in("s1"), panel, 1}, // first call with After
+		{in("s1"), panel, 1}, // poll
+		{in("s1"), LogQuery{Source: agent, Level: "info", Limit: 5, After: 1}, 2}, // other source
+		{in("s1"), LogQuery{Source: agent, Level: "info", Limit: 5, After: 7}, 2}, // poll
+		{in("s2"), panel, 3}, // other session
+		{in("s2"), LogQuery{Source: "panel", From: panel.From, To: now, Level: "info", Limit: 5}, 4}, // without After, always
+	} {
+		if _, err := s.SystemLog(ctx, c.req, c.q); err != nil {
+			t.Fatalf("call %d: %v", i, err)
+		}
+		if got := viewed(); got != c.want {
+			t.Errorf("call %d: audited reads = %d, want %d", i, got, c.want)
+		}
 	}
 }
