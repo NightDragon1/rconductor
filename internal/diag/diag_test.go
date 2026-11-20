@@ -14,9 +14,9 @@ import (
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
-// TestExportSkeleton covers NFR-018 and D-090 as far as built: only the
-// RCON admin, refusals audited; then the period, at most 7 days.
-func TestExportSkeleton(t *testing.T) {
+// TestExportRolesAndPeriod covers NFR-018 and D-090: only the RCON admin,
+// refusals audited; then the period, at most 7 days.
+func TestExportRolesAndPeriod(t *testing.T) {
 	st := storetest.New(t)
 	s := NewService(st, nil)
 	ctx := context.Background()
@@ -24,7 +24,7 @@ func TestExportSkeleton(t *testing.T) {
 	for _, role := range []perm.Role{perm.ServerAdmin, perm.Moderator, perm.Supporter, ""} {
 		id := storetest.CreateUser(t, st, storetest.User{Pseudonym: "u" + string(role), Role: string(role)})
 		req := users.Request{Actor: perm.Actor{ID: id, Role: role}}
-		if err := s.Export(ctx, req, now.Add(time.Hour), now); !errors.Is(err, users.ErrForbidden) {
+		if _, err := s.Export(ctx, req, now.Add(time.Hour), now); !errors.Is(err, users.ErrForbidden) {
 			t.Errorf("%q = %v, want forbidden before the period", role, err)
 		}
 	}
@@ -36,11 +36,11 @@ func TestExportSkeleton(t *testing.T) {
 	admin := users.Request{Actor: perm.Actor{ID: storetest.CreateUser(t, st, storetest.User{Pseudonym: "a", Role: string(perm.RCONAdmin)}), Role: perm.RCONAdmin}}
 	var inv *users.InvalidError
 	for _, p := range [][2]time.Time{{now, now}, {now, now.Add(-time.Hour)}, {now, now.Add(MaxPeriod + time.Second)}} {
-		if err := s.Export(ctx, admin, p[0], p[1]); !errors.As(err, &inv) {
+		if _, err := s.Export(ctx, admin, p[0], p[1]); !errors.As(err, &inv) {
 			t.Errorf("period %v = %v, want invalid", p, err)
 		}
 	}
-	if err := s.Export(ctx, admin, now, now.Add(MaxPeriod)); !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("7 days = %v", err)
+	if b, err := s.Export(ctx, admin, now, now.Add(MaxPeriod)); err != nil || len(b) == 0 {
+		t.Errorf("7 days = %d bytes, %v", len(b), err)
 	}
 }

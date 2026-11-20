@@ -7,7 +7,6 @@ package diag
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
@@ -16,9 +15,6 @@ import (
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
-
-// ErrNotImplemented means the export is not built yet.
-var ErrNotImplemented = errors.New("not implemented yet")
 
 // MaxPeriod is the longest period of the event log in one export (D-090).
 const MaxPeriod = 7 * 24 * time.Hour
@@ -37,18 +33,6 @@ func NewService(st *store.Store, log *slog.Logger) *Service {
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{st: st, log: log}
-}
-
-// Export checks the role first (403, audited), then the period (400):
-// to not before from and at most MaxPeriod.
-func (s *Service) Export(ctx context.Context, req users.Request, from, to time.Time) error {
-	if req.Actor.Role != perm.RCONAdmin {
-		return s.denied(ctx, req, "diagnostics.exported")
-	}
-	if err := period(from, to); err != nil {
-		return err
-	}
-	return ErrNotImplemented
 }
 
 func period(from, to time.Time) error {
