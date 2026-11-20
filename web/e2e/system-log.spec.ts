@@ -30,7 +30,10 @@ const entry = (page: Page) => page.getByRole('navigation').getByRole('link', { n
 test.describe('system log on', () => {
   test.use({ flags: ['diagnostics_export'] });
 
-  test('admin opens the page, filters, sees the notice and a refusal', async ({ page, state }) => {
+  test('admin opens the page, filters, sees the notice and downloads the package', async ({
+    page,
+    state,
+  }) => {
     await login(page, 'admin', secret(state, 'admin'));
     await entry(page).click();
     await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
@@ -41,12 +44,14 @@ test.describe('system log on', () => {
     await level.selectOption('error');
     await expect(level).toHaveValue('error');
     await page.getByLabel('Period').selectOption('week');
-    // The backend does not answer yet: the page names the refusal and stays.
+    // Seven days are within the limit: the entries load without a refusal.
     const entries = page.getByRole('region', { name: 'Entries' });
-    await expect(entries.getByRole('alert')).toBeVisible();
+    await expect(entries.getByText('Loading')).toHaveCount(0);
+    await expect(entries.getByRole('alert')).toHaveCount(0);
+    const download = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Download diagnostic package' }).click();
-    // The export names its refusal next to the one of the entries.
-    await expect(page.getByRole('alert')).toHaveCount(2);
+    expect((await download).suggestedFilename()).toBe('rconductor-diagnostics.zip');
+    await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
   });
 

@@ -4,6 +4,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -26,9 +27,9 @@ func (s *apiServer) GetDiagnostics(ctx context.Context, req api.GetDiagnosticsRe
 	if req.Params.From != nil {
 		from = *req.Params.From
 	}
-	err := s.diag.Export(ctx, adminRequest(ctx), from, to)
-	if errors.Is(err, diag.ErrNotImplemented) {
-		return nil, notImplemented("getDiagnostics")
+	zipped, err := s.diag.Export(ctx, adminRequest(ctx), from, to)
+	if err == nil {
+		return api.GetDiagnostics200ApplicationzipResponse{Body: bytes.NewReader(zipped), ContentLength: int64(len(zipped))}, nil
 	}
 	if inv := (*users.InvalidError)(nil); errors.As(err, &inv) {
 		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: inv.Detail}

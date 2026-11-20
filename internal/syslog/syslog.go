@@ -134,40 +134,49 @@ func (s *Sink) write(ctx context.Context, st *store.Store, m Masker, lines []str
 
 type head struct{ TS, Level, Event string }
 
-// maskJSON masks each text value of a JSON line on its own, as it was
-// logged and before the encoding escapes its quotes (D-088), and encodes
-// the line again; a line that is not JSON is masked as it is.
+// maskJSON masks a JSON line of the panel value by value through Rewrite
+// and reads its head.
 func maskJSON(line string, m Masker) (string, head) {
-	var rec map[string]any
-	if json.Unmarshal([]byte(line), &rec) != nil {
-		out, _ := m.Lines([]string{line}, nil)
-		return out[0], head{}
+	var h struct {
+		TS    string `json:"ts"`
+		Level string `json:"level"`
+		Event string `json:"event"`
+	}
+	_ = json.Unmarshal([]byte(line), &h)
+	return MaskLine(line, m), head{TS: h.TS, Level: h.Level, Event: h.Event}
+}
+
+// MaskLine masks a log line through Rewrite, such as the agent's own log
+// (D-091).
+func MaskLine(line string, m Masker) string {
+	return Rewrite(line, func(texts []string) []string {
+		out, _ := m.Lines(texts, nil)
+		return out
+	})
+}
+
+// Rewrite hands the text values of an encoded line or document to f, in a
+// fixed order and as they were logged, and puts f's answers in their place:
+// JSON is decoded (numbers kept exact) and encoded again without HTML
+// escaping; any other text goes to f whole, without its escaped quotes
+// (slog text). Every sink of logs and of the diagnostic export masks,
+// blacks out and pseudonymizes through it (D-088, D-090, D-091).
+func Rewrite(line string, f func([]string) []string) string {
+	var v any
+	dec := json.NewDecoder(strings.NewReader(line))
+	dec.UseNumber()
+	if !json.Valid([]byte(line)) || dec.Decode(&v) != nil {
+		return f([]string{strings.ReplaceAll(line, `\"`, `"`)})[0]
 	}
 	var texts []string
-	walk(rec, func(t string) string { texts = append(texts, t); return t })
-	masked, _ := m.Lines(texts, nil)
-	walk(rec, func(string) string { t := masked[0]; masked = masked[1:]; return t })
+	walk(v, func(t string) string { texts = append(texts, t); return t })
+	out := f(texts)
+	v = walk(v, func(string) string { t := out[0]; out = out[1:]; return t })
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
 	enc.SetEscapeHTML(false)
-	_ = enc.Encode(rec)
-	h := head{}
-	h.TS, _ = rec["ts"].(string)
-	h.Level, _ = rec["level"].(string)
-	h.Event, _ = rec["event"].(string)
-	return strings.TrimRight(b.String(), "\n"), h
-}
-
-// MaskLine masks a log line that arrives encoded, such as the agent's own
-// log (D-091): JSON value by value as maskJSON does; a text line (slog
-// text, values quoted with \") without its escaped quotes, as logged.
-func MaskLine(line string, m Masker) string {
-	if !json.Valid([]byte(line)) {
-		out, _ := m.Lines([]string{strings.ReplaceAll(line, `\"`, `"`)}, nil)
-		return out[0]
-	}
-	out, _ := maskJSON(line, m)
-	return out
+	_ = enc.Encode(v)
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // walk replaces every text value in v, in a fixed order.

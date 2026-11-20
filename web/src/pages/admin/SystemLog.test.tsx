@@ -117,6 +117,8 @@ describe('system log (UI-025, D-091)', () => {
     const from = Date.parse(String(q?.from));
     expect(Date.now() - from).toBeGreaterThanOrEqual(3_600_000 - 1000);
     expect(Date.now() - from).toBeLessThan(3_600_000 + 60_000);
+    // to from the same clock, so the period is exact (7 days stay valid).
+    expect(Date.parse(String(q?.to)) - from).toBe(3_600_000);
     expect(q).not.toHaveProperty('after');
   });
 

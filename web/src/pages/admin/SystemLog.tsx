@@ -72,6 +72,8 @@ export function SystemLogPage() {
     queryFn: async (): Promise<LogPage> => {
       const before = qc.getQueryData<LogPage>(key);
       const last = panel ? before?.items.at(-1)?.id : undefined;
+      // from and to from one clock, so 7 days stay within the limit.
+      const now = Date.now();
       const query =
         last !== undefined
           ? { source, level, after: last, limit: pageSize }
@@ -79,7 +81,8 @@ export function SystemLogPage() {
             ? {
                 source,
                 level,
-                from: new Date(Date.now() - periods[period]).toISOString(),
+                from: new Date(now - periods[period]).toISOString(),
+                to: new Date(now).toISOString(),
                 limit: pageSize,
               }
             : { source, level, limit: pageSize };
