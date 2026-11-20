@@ -28,6 +28,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/commands"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
+	"github.com/NightDragon1/rconductor/internal/diag"
 	eventbus "github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -262,6 +263,8 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	serverSvc.UseMasking(masking)
 	views.SetPlayers(runtime)
 	hub.SetAgentViews(views)
+	diagSvc := diag.NewService(st, logs.Module("diag"))
+	diagSvc.Use(agents, masking)
 	hub.SetMessages(func(ctx context.Context) bool { return features.Default().Enabled(ctx, st, "messages") })
 	serverSvc.OnChange(func(string) {
 		masking.ProfilesChanged()
@@ -292,7 +295,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	}
 	handler := web.NewHandler(web.Options{Features: features.Default(), Log: webLog, UI: opts.UI, Proxies: proxies, Store: st, Servers: serverSvc, Commands: cmdSvc, Cache: runtime, Hub: hub, Auth: authSvc, Perm: checker, Users: userSvc, Mail: mailSvc, Masking: maskSettings,
 		Invites: users.NewInvites(userSvc, hasher), Profiles: users.NewProfiles(userSvc, hasher, authSvc.RevokeOtherSessions),
-		Agents: agentSvc, Runtime: views,
+		Agents: agentSvc, Runtime: views, Diag: diagSvc,
 	})
 	return web.Serve(ctx, cfg.HTTPAddr, netlimit.Options{Max: cfg.MaxConnections, PerClient: cfg.MaxClientConnections, MaxAge: cfg.MaxAnonymousAge, Exempt: proxies.Trust}, handler, webLog,
 		func(addr net.Addr) {
