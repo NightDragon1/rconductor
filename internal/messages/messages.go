@@ -3,8 +3,7 @@
 
 // Package messages holds the messages in the panel (MSG-001 to MSG-003,
 // D-085, D-086). Every operation checks the role of the caller and the
-// audience and writes a refusal to the audit log; operations not built yet
-// answer ErrNotImplemented.
+// audience and writes a refusal to the audit log.
 package messages
 
 import (
@@ -23,10 +22,6 @@ import (
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
-
-// ErrNotImplemented is the answer of an operation that passed its checks
-// but is not built yet.
-var ErrNotImplemented = errors.New("not implemented yet")
 
 // ErrTooManyRecipients means the audience resolves to more users than
 // messages.max_resolved_recipients; a message is never cut.
@@ -141,7 +136,7 @@ type Page struct {
 // message of the page before; it is only compared with the caller's view,
 // so an ID outside it gives an empty page like any unknown one.
 func (s *Service) List(ctx context.Context, req users.Request, limit int, before string) (Page, error) {
-	if err := s.read(ctx, req, "message.list"); !errors.Is(err, ErrNotImplemented) {
+	if err := s.read(ctx, req, "message.list"); err != nil {
 		return Page{}, err
 	}
 	at, after := "", ""
@@ -171,7 +166,7 @@ func (s *Service) Get(ctx context.Context, req users.Request, id string) (Messag
 
 // one checks the role, then reads one message of the caller's view.
 func (s *Service) one(ctx context.Context, req users.Request, action, id string) (Message, error) {
-	if err := s.read(ctx, req, action); !errors.Is(err, ErrNotImplemented) {
+	if err := s.read(ctx, req, action); err != nil {
 		return Message{}, err
 	}
 	m, err := s.view(ctx, req, id, "", "", 1)
@@ -622,7 +617,7 @@ func (s *Service) limit(ctx context.Context, key string, def, minimum int) int {
 func (s *Service) read(ctx context.Context, req users.Request, action string) error {
 	for _, r := range readers {
 		if req.Actor.Role == r {
-			return ErrNotImplemented
+			return nil
 		}
 	}
 	return s.denied(ctx, req, action, "")

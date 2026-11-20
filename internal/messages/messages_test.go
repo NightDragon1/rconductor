@@ -131,6 +131,7 @@ func TestSendInput(t *testing.T) {
 // come through to the message (not found, the list empty); a
 // role that is not known is refused and audited.
 func TestReadRoles(t *testing.T) {
+	errEmptyPage := errors.New("empty page")
 	s := newService(t)
 	ctx := context.Background()
 	const id = "00000000-0000-4000-8000-000000000001"
@@ -139,7 +140,7 @@ func TestReadRoles(t *testing.T) {
 			if p, err := s.List(ctx, r, 50, id); err != nil || len(p.Items) != 0 {
 				return err
 			}
-			return ErrNotImplemented
+			return errEmptyPage
 		},
 		"message.read":            func(r users.Request) error { _, err := s.Get(ctx, r, id); return err },
 		"message.deleted":         func(r users.Request) error { return s.Delete(ctx, r, id) },
@@ -153,7 +154,7 @@ func TestReadRoles(t *testing.T) {
 		for action, op := range ops {
 			want := users.ErrNotFound // no such message
 			if action == "message.list" {
-				want = ErrNotImplemented
+				want = errEmptyPage
 			}
 			if err := op(req); !errors.Is(err, want) {
 				t.Errorf("%s %s = %v", role, action, err)

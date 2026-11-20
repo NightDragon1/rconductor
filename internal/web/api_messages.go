@@ -32,7 +32,7 @@ func (s *apiServer) ListMessages(ctx context.Context, req api.ListMessagesReques
 	}
 	p, err := s.messages.List(ctx, adminRequest(ctx), limit, before)
 	if err != nil {
-		return nil, messageError(err, "listMessages")
+		return nil, messageError(err)
 	}
 	out := api.ListMessages200JSONResponse{Items: make([]api.Message, 0, len(p.Items)), Unread: p.Unread}
 	for _, m := range p.Items {
@@ -54,7 +54,7 @@ func (s *apiServer) CreateMessage(ctx context.Context, req api.CreateMessageRequ
 	}
 	m, err := s.messages.Send(ctx, adminRequest(ctx), in)
 	if err != nil {
-		return nil, messageError(err, "createMessage")
+		return nil, messageError(err)
 	}
 	return api.CreateMessage201JSONResponse(apiMessage(m)), nil
 }
@@ -77,21 +77,21 @@ func apiMessage(m messages.Message) api.Message {
 func (s *apiServer) GetMessage(ctx context.Context, req api.GetMessageRequestObject) (api.GetMessageResponseObject, error) {
 	m, err := s.messages.Get(ctx, adminRequest(ctx), req.Id.String())
 	if err != nil {
-		return nil, messageError(err, "getMessage")
+		return nil, messageError(err)
 	}
 	return api.GetMessage200JSONResponse(apiMessage(m)), nil
 }
 
 func (s *apiServer) DeleteMessage(ctx context.Context, req api.DeleteMessageRequestObject) (api.DeleteMessageResponseObject, error) {
 	if err := s.messages.Delete(ctx, adminRequest(ctx), req.Id.String()); err != nil {
-		return nil, messageError(err, "deleteMessage")
+		return nil, messageError(err)
 	}
 	return api.DeleteMessage204Response{}, nil
 }
 
 func (s *apiServer) MarkMessageRead(ctx context.Context, req api.MarkMessageReadRequestObject) (api.MarkMessageReadResponseObject, error) {
 	if err := s.messages.MarkRead(ctx, adminRequest(ctx), req.Id.String()); err != nil {
-		return nil, messageError(err, "markMessageRead")
+		return nil, messageError(err)
 	}
 	return api.MarkMessageRead204Response{}, nil
 }
@@ -109,7 +109,7 @@ func (s *apiServer) ListMessageComments(ctx context.Context, req api.ListMessage
 	}
 	list, err := s.messages.Comments(ctx, adminRequest(ctx), req.Id.String(), limit, after)
 	if err != nil {
-		return nil, messageError(err, "listMessageComments")
+		return nil, messageError(err)
 	}
 	out := api.ListMessageComments200JSONResponse{Items: make([]api.MessageComment, 0, len(list))}
 	for _, c := range list {
@@ -124,14 +124,14 @@ func (s *apiServer) CreateMessageComment(ctx context.Context, req api.CreateMess
 	}
 	c, err := s.messages.Comment(ctx, adminRequest(ctx), req.Id.String(), req.Body.Text)
 	if err != nil {
-		return nil, messageError(err, "createMessageComment")
+		return nil, messageError(err)
 	}
 	return api.CreateMessageComment201JSONResponse(apiComment(c)), nil
 }
 
 func (s *apiServer) DeleteMessageComment(ctx context.Context, req api.DeleteMessageCommentRequestObject) (api.DeleteMessageCommentResponseObject, error) {
 	if err := s.messages.DeleteComment(ctx, adminRequest(ctx), req.Id.String(), req.CommentId.String()); err != nil {
-		return nil, messageError(err, "deleteMessageComment")
+		return nil, messageError(err)
 	}
 	return api.DeleteMessageComment204Response{}, nil
 }
@@ -147,10 +147,7 @@ func apiComment(c messages.Comment) api.MessageComment {
 }
 
 // messageError maps the answers of the service; invalid input is 400.
-func messageError(err error, operationID string) error {
-	if errors.Is(err, messages.ErrNotImplemented) {
-		return notImplemented(operationID)
-	}
+func messageError(err error) error {
 	if errors.Is(err, messages.ErrTooManyRecipients) {
 		return &problem{status: http.StatusBadRequest, reason: api.ReasonCodeTooManyRecipients, detail: err.Error()}
 	}
