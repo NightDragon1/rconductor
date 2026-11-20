@@ -24,9 +24,12 @@ authz:
   - internal/web/web.go
   - internal/users/assignments.go
   - internal/users/groups.go
-# who sees which message (MSG-001, MSG-002)
+# who sees which message (MSG-001, MSG-002), with the handlers and the
+# request (actor) they hand to the service
   - internal/messages/**
   - internal/store/queries/sqlite/messages.sql
+  - internal/web/api_messages.go
+  - internal/web/api_users.go
 # the session with the role and lock the pipeline is handed
   - internal/store/queries/sqlite/sessions.sql
 

@@ -73,6 +73,9 @@ check "session query" 0 "stage-2 authz 1" "modified 1 0 internal/store/queries/s
 check "log witness" 0 "stage-2 redact 1" "modified 1 0 internal/logging/witness.go"
 check "message visibility" 0 "stage-2 authz 2" "modified 1 0 internal/messages/messages.go" \
   "modified 1 0 internal/store/queries/sqlite/messages.sql"
+check "message handlers and actor" 0 "stage-2 authz 2" "modified 1 0 internal/web/api_messages.go" \
+  "modified 1 0 internal/web/api_users.go"
+check "other web handler" 0 "stage-1  1" "modified 1 0 internal/web/api_servers.go"
 check "log masking" 0 "stage-2 redact 1" "added 1 0 internal/logmask/x.go"
 check "sqlc config" 0 "stage-2 rules 1" "modified 1 0 sqlc.yaml"
 check "other profile and query files" 0 "stage-1  2" "modified 1 0 internal/profiles/catalog.go" \
