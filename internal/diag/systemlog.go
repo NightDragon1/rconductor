@@ -113,34 +113,14 @@ func (s *Service) SystemLog(ctx context.Context, req users.Request, q LogQuery) 
 // logs.tail (D-091), masks them as container logs and keeps those from
 // the level up; a line without a level stays.
 func (s *Service) agentLog(ctx context.Context, q LogQuery) (Page, error) {
-	if s.agents == nil || s.mask == nil {
+	if s.mask == nil {
 		return Page{}, ErrAgentUnavailable
 	}
-	var got agentproto.LogLines
-	collect := func(e agentproto.Envelope) {
-		if ll, err := agentproto.Payload[agentproto.LogLines](e); err == nil && e.Type == agentproto.TypeLogLines {
-			lines, cut := agentproto.LimitLines(append(got.Lines, ll.Lines...))
-			got.Lines, got.Truncated = lines, got.Truncated || ll.Truncated || cut
-		}
-	}
-	tctx, cancel := context.WithTimeout(ctx, agentTimeout)
-	defer cancel()
-	res, err := s.agents.RequestData(tctx, q.Source, agentproto.TypeLogsTail,
-		agentproto.LogsTail{Container: agentproto.SelfContainer, Lines: q.Limit}, collect)
-	switch {
-	case errors.Is(err, agenthub.ErrNotCapable):
-		return Page{}, ErrAgentUnsupported
-	case errors.Is(err, agenthub.ErrNotConnected), errors.Is(err, agenthub.ErrBusy), errors.Is(err, context.DeadlineExceeded):
-		return Page{}, ErrAgentUnavailable
-	case err != nil:
+	lines, cut, err := s.tail(ctx, q.Source, q.Limit)
+	if err != nil {
 		return Page{}, err
-	case res.Code == agentproto.CodeForbidden:
-		return Page{}, ErrAgentUnsupported // an agent before 1.2 or outside a container
-	case res.Code != agentproto.CodeOK:
-		return Page{}, ErrAgentFailed
 	}
-	lines, cut := agentproto.LimitLines(got.Lines)
-	p := Page{Source: q.Source, Truncated: got.Truncated || cut, Items: []Entry{}}
+	p := Page{Source: q.Source, Truncated: cut, Items: []Entry{}}
 	for _, l := range lines {
 		// The agent logs JSON: each value is masked as it was logged.
 		l = syslog.MaskLine(l, s.mask)
@@ -153,4 +133,37 @@ func (s *Service) agentLog(ctx context.Context, q LogQuery) (Page, error) {
 		p.Items = append(p.Items, Entry{Level: head.Level, Text: l})
 	}
 	return p, nil
+}
+
+// tail fetches the last lines of the agent's own container over logs.tail
+// (D-091), unmasked and bounded to agentproto.MaxLogLines.
+func (s *Service) tail(ctx context.Context, agentID string, n int) ([]string, bool, error) {
+	if s.agents == nil {
+		return nil, false, ErrAgentUnavailable
+	}
+	var got agentproto.LogLines
+	collect := func(e agentproto.Envelope) {
+		if ll, err := agentproto.Payload[agentproto.LogLines](e); err == nil && e.Type == agentproto.TypeLogLines {
+			lines, cut := agentproto.LimitLines(append(got.Lines, ll.Lines...))
+			got.Lines, got.Truncated = lines, got.Truncated || ll.Truncated || cut
+		}
+	}
+	tctx, cancel := context.WithTimeout(ctx, agentTimeout)
+	defer cancel()
+	res, err := s.agents.RequestData(tctx, agentID, agentproto.TypeLogsTail,
+		agentproto.LogsTail{Container: agentproto.SelfContainer, Lines: n}, collect)
+	switch {
+	case errors.Is(err, agenthub.ErrNotCapable):
+		return nil, false, ErrAgentUnsupported
+	case errors.Is(err, agenthub.ErrNotConnected), errors.Is(err, agenthub.ErrBusy), errors.Is(err, context.DeadlineExceeded):
+		return nil, false, ErrAgentUnavailable
+	case err != nil:
+		return nil, false, err
+	case res.Code == agentproto.CodeForbidden:
+		return nil, false, ErrAgentUnsupported // an agent before 1.2 or outside a container
+	case res.Code != agentproto.CodeOK:
+		return nil, false, ErrAgentFailed
+	}
+	lines, cut := agentproto.LimitLines(got.Lines)
+	return lines, got.Truncated || cut, nil
 }

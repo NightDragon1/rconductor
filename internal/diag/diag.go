@@ -8,6 +8,7 @@ package diag
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
@@ -25,6 +26,9 @@ type Service struct {
 	log    *slog.Logger
 	agents Agents
 	mask   Masker
+
+	mu      sync.Mutex
+	running int // packages being built
 }
 
 // NewService returns the service; without a log it logs nothing.

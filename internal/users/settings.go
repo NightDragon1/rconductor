@@ -118,6 +118,18 @@ const (
 	MinSystemLogMaxBytes     = 1 << 20
 )
 
+// Diagnostic package (NFR-018, D-090): its size in bytes before
+// compression, beyond which the period of the system log is shortened, and
+// the exports at the same time.
+const (
+	SettingDiagnosticsMaxBytes = "diagnostics.max_bytes"
+	DefaultDiagnosticsMaxBytes = 32 << 20
+	MinDiagnosticsMaxBytes     = 1 << 20
+	SettingDiagnosticsParallel = "diagnostics.parallel"
+	DefaultDiagnosticsParallel = 2
+	MinDiagnosticsParallel     = 1
+)
+
 // Command templates per server (CMD-008, D-068).
 const (
 	SettingTemplatesPerServer = "commands.templates_per_server"
@@ -224,6 +236,8 @@ var settingRules = map[string]rule{
 	SettingMessagesPerHour:         intRule(1, 1000),
 	SettingAgentDisplayNameMax:     intRule(MinAgentDisplayNameMax, 256),
 	SettingSystemLogMaxBytes:       intRule(MinSystemLogMaxBytes, 1<<30),
+	SettingDiagnosticsMaxBytes:     intRule(MinDiagnosticsMaxBytes, 1<<30),
+	SettingDiagnosticsParallel:     intRule(MinDiagnosticsParallel, 16),
 	SettingMessagesMaxComment:      intRule(1, 4096),
 	SettingCommentsPerHour:         intRule(1, 3600),
 	SettingMessagesRetentionDays:   intRule(MinMessagesRetentionDays, 3650),
@@ -258,6 +272,8 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 		SettingMessagesPerHour:       DefaultMessagesPerHour,
 		SettingAgentDisplayNameMax:   DefaultAgentDisplayNameMax,
 		SettingSystemLogMaxBytes:     DefaultSystemLogMaxBytes,
+		SettingDiagnosticsMaxBytes:   DefaultDiagnosticsMaxBytes,
+		SettingDiagnosticsParallel:   DefaultDiagnosticsParallel,
 		SettingMessagesMaxComment:    DefaultMessagesMaxComment,
 		SettingCommentsPerHour:       DefaultCommentsPerHour,
 		SettingMessagesRetentionDays: DefaultMessagesRetentionDays,
