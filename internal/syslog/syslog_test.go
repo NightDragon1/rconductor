@@ -168,3 +168,33 @@ func TestRunWritesLastLines(t *testing.T) {
 		t.Errorf("after the end %d queued, %d lost", len(sink.queue), sink.Lost())
 	}
 }
+
+// TestC174QuotedValuesMasked: a value in quotes and a JSON answer are
+// masked as they were logged, not after the JSON encoding escaped their
+// quotes (D-088, D-091).
+func TestC174QuotedValuesMasked(t *testing.T) {
+	st := storetest.New(t)
+	logs := logging.New(&bytes.Buffer{}, "panel", config.Log{Format: "json"})
+	sink := NewSink()
+	logs.Also(sink)
+	log := logs.Module("cmd")
+	log.Info("command answered", slog.String(logging.KeyAnswer, `Unknown password: "hunter2" <here>`))
+	log.Info("command answered", slog.String(logging.KeyAnswer, `{"error":"bad","token":"abc12345"}`))
+	sink.drain(context.Background(), st, newBuiltin(t), log)
+	rows, err := st.DB.Query(`SELECT text FROM system_log ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var all []string
+	for rows.Next() {
+		var text string
+		_ = rows.Scan(&text)
+		all = append(all, text)
+	}
+	got := strings.Join(all, "\n")
+	if len(all) != 2 || strings.Contains(got, "hunter2") || strings.Contains(got, "abc12345") ||
+		!strings.Contains(got, `Unknown password: \"`) || !strings.Contains(got, "<here>") {
+		t.Errorf("stored:\n%s", got)
+	}
+}

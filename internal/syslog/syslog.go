@@ -11,6 +11,9 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"maps"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -109,24 +112,17 @@ func (s *Sink) drain(ctx context.Context, st *store.Store, m Masker, log *slog.L
 }
 
 func (s *Sink) write(ctx context.Context, st *store.Store, m Masker, lines []string) error {
-	masked, _ := m.Lines(lines, nil)
 	tx, err := st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
-	for i, line := range lines {
-		var head struct {
-			TS    string `json:"ts"`
-			Level string `json:"level"`
-			Event string `json:"event"`
-		}
-		_ = json.Unmarshal([]byte(line), &head)
+	for _, line := range lines {
+		text, head := maskJSON(line, m)
 		if len(head.Event) > maxCode {
 			head.Event = ""
 		}
-		text := masked[i]
 		if err := q.InsertSystemLog(ctx, sqlitedb.InsertSystemLogParams{
 			Ts: head.TS, Level: head.Level, Code: head.Event, Text: text, Size: int64(len(text)),
 		}); err != nil {
@@ -134,6 +130,49 @@ func (s *Sink) write(ctx context.Context, st *store.Store, m Masker, lines []str
 		}
 	}
 	return tx.Commit()
+}
+
+type head struct{ TS, Level, Event string }
+
+// maskJSON masks each text value of a JSON line on its own, as it was
+// logged and before the encoding escapes its quotes (D-088), and encodes
+// the line again; a line that is not JSON is masked as it is.
+func maskJSON(line string, m Masker) (string, head) {
+	var rec map[string]any
+	if json.Unmarshal([]byte(line), &rec) != nil {
+		out, _ := m.Lines([]string{line}, nil)
+		return out[0], head{}
+	}
+	var texts []string
+	walk(rec, func(t string) string { texts = append(texts, t); return t })
+	masked, _ := m.Lines(texts, nil)
+	walk(rec, func(string) string { t := masked[0]; masked = masked[1:]; return t })
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(rec)
+	h := head{}
+	h.TS, _ = rec["ts"].(string)
+	h.Level, _ = rec["level"].(string)
+	h.Event, _ = rec["event"].(string)
+	return strings.TrimRight(b.String(), "\n"), h
+}
+
+// walk replaces every text value in v, in a fixed order.
+func walk(v any, f func(string) string) any {
+	switch x := v.(type) {
+	case string:
+		return f(x)
+	case map[string]any:
+		for _, k := range slices.Sorted(maps.Keys(x)) {
+			x[k] = walk(x[k], f)
+		}
+	case []any:
+		for i := range x {
+			x[i] = walk(x[i], f)
+		}
+	}
+	return v
 }
 
 // prune deletes entries past Retention, then the oldest above the size.
