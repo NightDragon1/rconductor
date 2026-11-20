@@ -72,6 +72,8 @@ const keyTexts = [
   'commands_multi_max_servers',
   'commands_multi_parallel',
   'commands_templates_per_server',
+  'diagnostics_max_bytes',
+  'diagnostics_parallel',
   'invite_lifetime',
   'login_lockout_duration',
   'login_max_client_failures',

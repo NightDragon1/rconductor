@@ -8,14 +8,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net"
 	"strings"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/store"
+	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/syslog"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
@@ -23,11 +28,21 @@ import (
 // redacted stands for a value a package never holds (SEC-012).
 const redacted = "[redacted]"
 
-// Export builds the diagnostic package (NFR-018, D-090): role first (403,
-// audited), then the period (400). One JSON file per area in a fixed
-// schema, never a raw dump; every file goes through syslog.Rewrite, so its
-// values are masked (D-088), blacked out and pseudonymized as they were
-// stored, before the file is encoded again. Audited with period and size.
+// Notice heads every log file of a package (D-091, UI-025).
+const Notice = "May contain chat messages of players."
+
+// ErrBusy means diagnostics.parallel packages are being built (503).
+var ErrBusy = errors.New("too many diagnostic packages at the same time")
+
+// Export builds the diagnostic package (NFR-018, D-090, D-091): role first
+// (403, audited), then the period (400), then a slot of
+// diagnostics.parallel (ErrBusy). One JSON file per area in a fixed schema,
+// never a raw dump, the log of every active agent (or why it is missing)
+// and the system log of the period as text. Every file goes through
+// syslog.Rewrite, so its values are masked (D-088), blacked out and
+// pseudonymized as they were stored or logged, before the file is encoded
+// again. Above diagnostics.max_bytes the oldest lines of the system log
+// stay out and the package says so. Audited with period and size.
 func (s *Service) Export(ctx context.Context, req users.Request, from, to time.Time) ([]byte, error) {
 	if req.Actor.Role != perm.RCONAdmin {
 		return nil, s.denied(ctx, req, "diagnostics.exported")
@@ -35,6 +50,11 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 	if err := period(from, to); err != nil {
 		return nil, err
 	}
+	release, ok := s.acquire(ctx)
+	if !ok {
+		return nil, ErrBusy
+	}
+	defer release()
 	files, known, err := s.areas(ctx)
 	if err != nil {
 		return nil, err
@@ -46,18 +66,58 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 		}
 		return p.apply(texts)
 	}
-	var b bytes.Buffer
-	z := zip.NewWriter(&b)
+	type out struct{ name, text string }
+	var all []out
+	size := 0
 	for _, f := range files {
 		doc, err := json.Marshal(f.doc)
 		if err != nil {
 			return nil, err
 		}
-		w, err := z.Create(f.name)
+		all = append(all, out{f.name, syslog.Rewrite(string(doc), clean) + "\n"})
+	}
+	agents, err := s.st.Queries.ListAgents(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range agents {
+		if a.Status != "active" {
+			continue
+		}
+		var b strings.Builder
+		b.WriteString(Notice + "\n")
+		lines, cut, err := s.tail(ctx, a.ID, agentproto.MaxLogLines)
+		switch {
+		case errors.Is(err, ErrAgentUnavailable):
+			b.WriteString("The agent is offline; its log is not in this package.\n")
+		case errors.Is(err, ErrAgentUnsupported):
+			b.WriteString("The agent does not send its own log.\n")
+		case err != nil:
+			b.WriteString("The agent could not read its log.\n")
+		case cut:
+			b.WriteString("Only the last lines of the log.\n")
+		}
+		for _, l := range lines {
+			b.WriteString(syslog.Rewrite(l, clean) + "\n")
+		}
+		all = append(all, out{"agents/" + a.ID + ".log", b.String()})
+	}
+	for _, o := range all {
+		size += len(o.name) + len(o.text)
+	}
+	text, shortened, err := s.systemLog(ctx, from, to, s.maxBytes(ctx)-size, clean)
+	if err != nil {
+		return nil, err
+	}
+	all = append(all, out{"system-log.txt", text})
+	var b bytes.Buffer
+	z := zip.NewWriter(&b)
+	for _, o := range all {
+		w, err := z.Create(o.name)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := w.Write([]byte(syslog.Rewrite(string(doc), clean) + "\n")); err != nil {
+		if _, err := io.WriteString(w, o.text); err != nil {
 			return nil, err
 		}
 	}
@@ -67,11 +127,72 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 	if _, err := audit.Write(ctx, s.st.DB, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
 		TargetType: "diagnostics", Action: "diagnostics.exported", Result: audit.ResultOK,
-		Payload: map[string]any{"from": from.UTC(), "to": to.UTC(), "bytes": b.Len()},
+		Payload: map[string]any{"from": from.UTC(), "to": to.UTC(), "bytes": b.Len(), "shortened": shortened},
 	}); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
+}
+
+// systemLog writes the stored lines of the period, oldest first, through
+// clean; beyond budget bytes the oldest stay out, and the head says from
+// when the lines are.
+func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int, clean func([]string) []string) (string, bool, error) {
+	const page = 1000
+	var lines, stamps []string
+	size, shortened := 0, false
+	for after := int64(0); ; {
+		rows, err := s.st.Queries.ListSystemLog(ctx, sqlitedb.ListSystemLogParams{
+			FromTs: from.UTC().Format(store.TimeLayout), ToTs: to.UTC().Format(store.TimeLayout), After: after, MaxRows: page,
+		})
+		if err != nil {
+			return "", false, err
+		}
+		for _, r := range rows {
+			l := syslog.Rewrite(r.Text, clean) + "\n"
+			lines, stamps, size, after = append(lines, l), append(stamps, r.Ts), size+len(l), r.ID
+			for size > budget && len(lines) > 0 {
+				size, lines, stamps, shortened = size-len(lines[0]), lines[1:], stamps[1:], true
+			}
+		}
+		if len(rows) < page {
+			break
+		}
+	}
+	head := Notice + "\nPeriod " + from.UTC().Format(time.RFC3339) + " to " + to.UTC().Format(time.RFC3339) + ".\n"
+	if shortened {
+		since := to.UTC().Format(time.RFC3339)
+		if len(stamps) > 0 {
+			since = stamps[0]
+		}
+		head += "Shortened by diagnostics.max_bytes: lines from " + since + " only.\n"
+	}
+	return head + strings.Join(lines, ""), shortened, nil
+}
+
+// maxBytes is diagnostics.max_bytes; a value not readable is the last one
+// read or the default (F-93).
+func (s *Service) maxBytes(ctx context.Context) int {
+	n := users.DefaultDiagnosticsMaxBytes
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsMaxBytes, &n); err != nil || n < users.MinDiagnosticsMaxBytes {
+		n = users.DefaultDiagnosticsMaxBytes
+	}
+	return n
+}
+
+// acquire takes one of diagnostics.parallel slots.
+func (s *Service) acquire(ctx context.Context) (func(), bool) {
+	n := users.DefaultDiagnosticsParallel
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsParallel, &n); err != nil || n < users.MinDiagnosticsParallel {
+		n = users.DefaultDiagnosticsParallel
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running >= n {
+		return nil, false
+	}
+	s.running++
+	return func() { s.mu.Lock(); s.running--; s.mu.Unlock() }, true
 }
 
 type file struct {

@@ -16,8 +16,8 @@ import (
 )
 
 // GetDiagnostics is the diagnostic export (NFR-018, D-090) behind the
-// flag diagnostics_export; internal/diag checks role and period. Without
-// from, the last 24 hours.
+// flag diagnostics_export; internal/diag checks role, period and the
+// packages at the same time (503). Without from, the last 24 hours.
 func (s *apiServer) GetDiagnostics(ctx context.Context, req api.GetDiagnosticsRequestObject) (api.GetDiagnosticsResponseObject, error) {
 	to := time.Now().UTC()
 	if req.Params.To != nil {
@@ -33,6 +33,9 @@ func (s *apiServer) GetDiagnostics(ctx context.Context, req api.GetDiagnosticsRe
 	}
 	if inv := (*users.InvalidError)(nil); errors.As(err, &inv) {
 		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: inv.Detail}
+	}
+	if errors.Is(err, diag.ErrBusy) {
+		return nil, &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeBusy, detail: err.Error(), retryAfter: 5}
 	}
 	return nil, adminError(err)
 }

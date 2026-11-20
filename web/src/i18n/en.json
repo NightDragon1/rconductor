@@ -932,6 +932,14 @@
         "label": "Invitation lifetime",
         "help": "How long an invitation link can be used."
       },
+      "diagnostics_max_bytes": {
+        "label": "Diagnostic package size (bytes)",
+        "help": "Bytes of a diagnostic package before compression; beyond it the period of the system log is shortened."
+      },
+      "diagnostics_parallel": {
+        "label": "Diagnostic packages at the same time",
+        "help": "Diagnostic packages built at the same time; one more is refused for a moment."
+      },
       "system_log_max_bytes": {
         "label": "System log size (bytes)",
         "help": "Bytes the system log keeps in all; the oldest entries go first. Entries older than 7 days go anyway."
