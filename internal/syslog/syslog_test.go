@@ -52,7 +52,8 @@ func TestSinkKeepsBlackedOut(t *testing.T) {
 	log := logs.Module("test")
 	log.Debug("only on stdout")
 	log.Info("started", logging.Event(logging.AppStart), slog.String("password", "hunter2"))
-	log.Warn("db at postgres://user:pw1@db.lan failed", slog.String("detail", "token=abc123def"))
+	log.Warn("db at postgres://user:pw1@db.lan failed", slog.String("detail", "token=abc123def"),
+		slog.String(logging.KeyAnswer, "Unknown token=abc123ans"))
 	sink.drain(ctx, st, newBuiltin(t), log)
 	rows, err := st.DB.QueryContext(ctx, `SELECT level, code, text FROM system_log ORDER BY id`)
 	if err != nil {
@@ -70,7 +71,10 @@ func TestSinkKeepsBlackedOut(t *testing.T) {
 	if len(got) != 2 || !strings.HasPrefix(got[0], "info app.start ") || !strings.HasPrefix(got[1], "warn  ") {
 		t.Fatalf("rows = %q", got)
 	}
-	for _, secret := range []string{"hunter2", "pw1", "abc123def", "only on stdout"} {
+	if !strings.Contains(got[1], `"answer":"Unknown token=`) {
+		t.Errorf("answer not kept: %s", got[1])
+	}
+	for _, secret := range []string{"hunter2", "pw1", "abc123def", "abc123ans", "only on stdout"} {
 		if strings.Contains(strings.Join(got, "\n"), secret) {
 			t.Errorf("%q kept: %q", secret, got)
 		}
@@ -162,5 +166,35 @@ func TestRunWritesLastLines(t *testing.T) {
 	sink.Run(ctx, storetest.New(t), newBuiltin(t), slog.New(slog.DiscardHandler), time.Now)
 	if len(sink.queue) != 0 || sink.Lost() != 0 {
 		t.Errorf("after the end %d queued, %d lost", len(sink.queue), sink.Lost())
+	}
+}
+
+// TestC174QuotedValuesMasked: a value in quotes and a JSON answer are
+// masked as they were logged, not after the JSON encoding escaped their
+// quotes (D-088, D-091).
+func TestC174QuotedValuesMasked(t *testing.T) {
+	st := storetest.New(t)
+	logs := logging.New(&bytes.Buffer{}, "panel", config.Log{Format: "json"})
+	sink := NewSink()
+	logs.Also(sink)
+	log := logs.Module("cmd")
+	log.Info("command answered", slog.String(logging.KeyAnswer, `Unknown password: "hunter2" <here>`))
+	log.Info("command answered", slog.String(logging.KeyAnswer, `{"error":"bad","token":"abc12345"}`))
+	sink.drain(context.Background(), st, newBuiltin(t), log)
+	rows, err := st.DB.Query(`SELECT text FROM system_log ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var all []string
+	for rows.Next() {
+		var text string
+		_ = rows.Scan(&text)
+		all = append(all, text)
+	}
+	got := strings.Join(all, "\n")
+	if len(all) != 2 || strings.Contains(got, "hunter2") || strings.Contains(got, "abc12345") ||
+		!strings.Contains(got, `Unknown password: \"`) || !strings.Contains(got, "<here>") {
+		t.Errorf("stored:\n%s", got)
 	}
 }
