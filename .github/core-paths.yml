@@ -24,6 +24,9 @@ authz:
   - internal/web/web.go
   - internal/users/assignments.go
   - internal/users/groups.go
+# who sees which message (MSG-001, MSG-002)
+  - internal/messages/**
+  - internal/store/queries/sqlite/messages.sql
 # the session with the role and lock the pipeline is handed
   - internal/store/queries/sqlite/sessions.sql
 
@@ -61,6 +64,8 @@ render:
 redact:
   - internal/logging/redact.go
   - internal/logging/logging.go
+# the wrapper of the log handler that production builds compile in
+  - internal/logging/witness.go
   - internal/logmask/**
   - internal/agentview/logs.go
   - internal/servers/logs.go

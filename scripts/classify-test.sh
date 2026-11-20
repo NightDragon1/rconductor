@@ -60,7 +60,7 @@ check "gate scripts and test data" 0 "stage-2 rules 4" "modified 1 0 scripts/cla
 check "npm config" 0 "stage-2 rules 2" "added 1 0 web/.npmrc" "added 1 0 .npmrc"
 check "tool and bundler config" 0 "stage-2 rules 4" "added 1 0 web/redocly.yaml" \
   "added 1 0 web/.redocly.yml" "modified 1 0 web/index.html" "modified 1 0 web/vite.config.ts"
-check "exact file only" 0 "stage-1  2" "modified 1 0 internal/logging/witness.go" "added 1 0 docs/CLAUDE.md"
+check "exact file only" 0 "stage-1  2" "modified 1 0 internal/logging/witness_eventlog.go" "added 1 0 docs/CLAUDE.md"
 check "several areas" 0 "stage-2 audit,redact 2" "modified 1 0 internal/logging/events.go" \
   "modified 1 0 internal/logging/redact.go"
 check "migration" 0 "stage-2 boundary 9" "added 9 0 migrations/sqlite/00099_x.sql"
@@ -70,6 +70,9 @@ check "profile rules" 0 "stage-2 cmd 2" "modified 1 0 internal/profiles/effectiv
   "modified 1 0 internal/profiles/forserver.go"
 check "pipeline query" 0 "stage-2 cmd 1" "modified 1 0 internal/store/queries/sqlite/settings.sql"
 check "session query" 0 "stage-2 authz 1" "modified 1 0 internal/store/queries/sqlite/sessions.sql"
+check "log witness" 0 "stage-2 redact 1" "modified 1 0 internal/logging/witness.go"
+check "message visibility" 0 "stage-2 authz 2" "modified 1 0 internal/messages/messages.go" \
+  "modified 1 0 internal/store/queries/sqlite/messages.sql"
 check "log masking" 0 "stage-2 redact 1" "added 1 0 internal/logmask/x.go"
 check "sqlc config" 0 "stage-2 rules 1" "modified 1 0 sqlc.yaml"
 check "other profile and query files" 0 "stage-1  2" "modified 1 0 internal/profiles/catalog.go" \
