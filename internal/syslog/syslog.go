@@ -158,9 +158,14 @@ func maskJSON(line string, m Masker) (string, head) {
 	return strings.TrimRight(b.String(), "\n"), h
 }
 
-// MaskLine masks a JSON log line value by value as maskJSON does, for log
-// lines that arrive encoded, such as the agent's own log (D-091).
+// MaskLine masks a log line that arrives encoded, such as the agent's own
+// log (D-091): JSON value by value as maskJSON does; a text line (slog
+// text, values quoted with \") without its escaped quotes, as logged.
 func MaskLine(line string, m Masker) string {
+	if !json.Valid([]byte(line)) {
+		out, _ := m.Lines([]string{strings.ReplaceAll(line, `\"`, `"`)}, nil)
+		return out[0]
+	}
 	out, _ := maskJSON(line, m)
 	return out
 }
