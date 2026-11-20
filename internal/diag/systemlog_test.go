@@ -11,12 +11,14 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/agenthub"
 	"github.com/NightDragon1/rconductor/internal/agentproto"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
-// hub answers logs.tail and keeps the order it got.
+// hub answers logs.tail with lines, a result code or an error, and keeps
+// the order it got.
 type hub struct {
 	lines []string
 	code  string
@@ -34,27 +36,33 @@ func (h *hub) RequestData(_ context.Context, _, typ string, payload any, collect
 	return agentproto.Result{Code: h.code}, nil
 }
 
-// mask stands for the masking of container logs: it hides abc12345.
-type mask struct{}
+// builtin masks with the built-in list of D-088.
+type builtin struct{ m *logmask.Masker }
 
-func (mask) Lines(l []string, _ [][]string) ([]string, int) {
-	for i := range l {
-		l[i] = strings.ReplaceAll(l[i], "abc12345", "•••")
+func (b builtin) Lines(lines []string, _ [][]string) ([]string, int) {
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		out[i] = b.m.Line(l)
 	}
-	return l, 0
+	return out, 0
 }
 
-// TestAgentLog (D-091, UI-025): the own container (@self) over logs.tail,
-// masked, from the level up, audited without content; an agent without
-// the capability or outside a container is unsupported, one that is not
+// TestAgentLog covers D-091 and UI-025: the log of an agent is the own
+// container (@self) over logs.tail, masked as container logs, from the
+// level up; a read is audited without content; an agent without the
+// capability or outside a container is unsupported, an agent that is not
 // connected unavailable.
 func TestAgentLog(t *testing.T) {
 	st := storetest.New(t)
+	m, err := logmask.New(nil, logmask.DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
 	h := &hub{code: agentproto.CodeOK, lines: []string{
 		`{"level":"info","msg":"paired"}`, `{"level":"error","msg":"docker gone","detail":"token=abc12345"}`, "plain line",
 	}}
 	s := NewService(st, nil)
-	s.Use(h, mask{})
+	s.Use(h, builtin{m})
 	ctx := context.Background()
 	admin := users.Request{Actor: perm.Actor{ID: storetest.CreateUser(t, st, storetest.User{Pseudonym: "a", Role: string(perm.RCONAdmin)}), Role: perm.RCONAdmin}}
 	const agent = "00000000-0000-4000-8000-000000000001"
