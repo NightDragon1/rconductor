@@ -93,9 +93,13 @@ test.describe('command palette on', () => {
   });
 });
 
-test('command palette off: no button, Ctrl+K without effect', async ({ page, state }) => {
-  await openConsole(page, state, 'sadmin');
-  await expect(button(page)).toHaveCount(0);
-  await page.keyboard.press('Control+k');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+test.describe('flag off', () => {
+  test.use({ flagsOff: ['command_palette'] });
+
+  test('command palette off: no button, Ctrl+K without effect', async ({ page, state }) => {
+    await openConsole(page, state, 'sadmin');
+    await expect(button(page)).toHaveCount(0);
+    await page.keyboard.press('Control+k');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
 });

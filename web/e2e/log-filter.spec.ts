@@ -61,8 +61,12 @@ test.describe('two-part log filter on', () => {
   });
 });
 
-test('two-part log filter off: one filter', async ({ page, state }) => {
-  await openLogs(page, state);
-  await expect(page.getByRole('searchbox', { name: 'Filter the logs' })).toBeVisible();
-  await expect(bracket(page)).toHaveCount(0);
+test.describe('flag off', () => {
+  test.use({ flagsOff: ['log_filter_split'] });
+
+  test('two-part log filter off: one filter', async ({ page, state }) => {
+    await openLogs(page, state);
+    await expect(page.getByRole('searchbox', { name: 'Filter the logs' })).toBeVisible();
+    await expect(bracket(page)).toHaveCount(0);
+  });
 });

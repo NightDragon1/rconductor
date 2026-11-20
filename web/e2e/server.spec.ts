@@ -119,8 +119,11 @@ test('history by role, with the switch for own commands (ROLE-009)', async ({ pa
   await expect(history).toContainText('list');
   const colored = history.getByRole('listitem').filter({ hasText: 'say §ahello' });
   await colored.getByText('Answer', { exact: true }).click();
-  // Color codes of the answer are dropped, never styled (W1).
-  await expect(colored.locator('pre')).toHaveText('Done: say hello world');
+  // A say goes out with its sender as tellraw (CMD-020); the answer stays
+  // text, never styled (W1).
+  await expect(colored.locator('pre')).toHaveText(
+    'Done: tellraw @a {"text":"","extra":[{"text":"admin: "},{"text":"\\u00a7ahello \\u00a7lworld"}]}',
+  );
   // Moderators share a pool on their servers, admin commands stay hidden.
   await open(page, state, 'mod2', 'survival', 'history');
   const pool = page.getByRole('region', { name: 'History' });

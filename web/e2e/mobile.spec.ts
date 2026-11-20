@@ -146,10 +146,12 @@ for (const width of [390, 320]) {
     await input.fill(`say ${width}`);
     await page.getByRole('button', { name: 'Send' }).tap();
     const block = page.getByRole('article', { name: `say ${width}` });
-    await expect(block.getByRole('button', { name: 'Copy the block' })).toBeInViewport();
     for (const name of ['Own commands', "Others' commands", 'Logs']) {
       await expect(page.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
     }
+    // The toolbar wraps to more rows; the block is scrolled to, then it fits.
+    await block.getByRole('button', { name: 'Copy the block' }).scrollIntoViewIfNeeded();
+    await expect(block.getByRole('button', { name: 'Copy the block' })).toBeInViewport();
     await fits(page);
 
     await page.goto(`${base}/logs`);

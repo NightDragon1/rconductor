@@ -92,14 +92,18 @@ test.describe('docker host on', () => {
   });
 });
 
-test('docker host off: the agent data are as in 1.1', async ({ page, state }) => {
-  await as(page, state, 'admin');
-  const r = await page.request.get('api/v1/agents');
-  const { items } = (await r.json()) as { items: { docker_host?: unknown }[] };
-  expect(items.every((a) => a.docker_host === undefined)).toBe(true);
-  await page.goto('topology');
-  await expect(agentNode(page, 'host-1')).not.toContainText(hostIP);
-  await page.goto('admin/agents');
-  await expect(page.getByRole('row').filter({ hasText: 'host-1' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Docker host' })).toHaveCount(0);
+test.describe('flag off', () => {
+  test.use({ flagsOff: ['docker_host'] });
+
+  test('docker host off: the agent data are as in 1.1', async ({ page, state }) => {
+    await as(page, state, 'admin');
+    const r = await page.request.get('api/v1/agents');
+    const { items } = (await r.json()) as { items: { docker_host?: unknown }[] };
+    expect(items.every((a) => a.docker_host === undefined)).toBe(true);
+    await page.goto('topology');
+    await expect(agentNode(page, 'host-1')).not.toContainText(hostIP);
+    await page.goto('admin/agents');
+    await expect(page.getByRole('row').filter({ hasText: 'host-1' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Docker host' })).toHaveCount(0);
+  });
 });

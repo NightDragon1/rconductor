@@ -134,13 +134,17 @@ test.describe('Save as New on', () => {
   });
 });
 
-test('Save as New off: the dialog closes after create', async ({ page, playwright, state }) => {
-  try {
-    await as(page, state, 'admin');
-    await createOne(page, 'e2e-san-off');
-    await expect(page.getByRole('row').filter({ hasText: 'e2e-san-off' })).toBeVisible();
-    await expect(page.getByRole('complementary', { name: /^Details of / })).toHaveCount(0);
-  } finally {
-    await cleanup(playwright, state, 'e2e-san-');
-  }
+test.describe('flag off', () => {
+  test.use({ flagsOff: ['server_save_as_new'] });
+
+  test('Save as New off: the dialog closes after create', async ({ page, playwright, state }) => {
+    try {
+      await as(page, state, 'admin');
+      await createOne(page, 'e2e-san-off');
+      await expect(page.getByRole('row').filter({ hasText: 'e2e-san-off' })).toBeVisible();
+      await expect(page.getByRole('complementary', { name: /^Details of / })).toHaveCount(0);
+    } finally {
+      await cleanup(playwright, state, 'e2e-san-');
+    }
+  });
 });

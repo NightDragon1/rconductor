@@ -87,17 +87,21 @@ test.describe('system log on', () => {
   });
 });
 
-test('system log off: no menu entry, no page, 404', async ({ page, playwright, state }) => {
-  await login(page, 'admin', secret(state, 'admin'));
-  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
-  await expect(entry(page)).toHaveCount(0);
-  await page.goto('admin/system-log');
-  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
-  const admin = await api(playwright, state, 'admin');
-  try {
-    expect((await admin.get('api/v1/system-log')).status()).toBe(404);
-    expect((await admin.get('api/v1/diagnostics')).status()).toBe(404);
-  } finally {
-    await admin.dispose();
-  }
+test.describe('flag off', () => {
+  test.use({ flagsOff: ['diagnostics_export'] });
+
+  test('system log off: no menu entry, no page, 404', async ({ page, playwright, state }) => {
+    await login(page, 'admin', secret(state, 'admin'));
+    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    await expect(entry(page)).toHaveCount(0);
+    await page.goto('admin/system-log');
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+    const admin = await api(playwright, state, 'admin');
+    try {
+      expect((await admin.get('api/v1/system-log')).status()).toBe(404);
+      expect((await admin.get('api/v1/diagnostics')).status()).toBe(404);
+    } finally {
+      await admin.dispose();
+    }
+  });
 });

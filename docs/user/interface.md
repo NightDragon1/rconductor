@@ -115,6 +115,9 @@ reload" and nothing is overwritten.
 
 Keyboard shortcuts are off unless the RCON admin switches them on.
 
+The new functions of 1.2 are on. Under Settings, Features, the RCON admin can
+switch each of them off; a switched-off function is gone for every role.
+
 ### Game profiles of a server
 
 In the server form, Game profiles is a list, top first. **+** adds a profile, **−**

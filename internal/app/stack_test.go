@@ -285,7 +285,7 @@ func TestThroughTheStack(t *testing.T) {
 	for _, user := range []string{"admin", "sa1", "sa2"} {
 		for i := range 20 {
 			wg.Go(func() {
-				cmd := fmt.Sprintf("say %s %d", user, i)
+				cmd := fmt.Sprintf("help %s %d", user, i)
 				r, code := s.send(user, cmd)
 				if code != http.StatusOK || r.Response != "done: "+cmd {
 					mu.Lock()

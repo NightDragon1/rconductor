@@ -183,7 +183,7 @@ socket narrows the API further (see below).
 
 ### Docker host in the panel
 
-With the feature flag `docker_host` on, the RCON admin sees for each agent
+With the feature `docker_host` on (the default), the RCON admin sees for each agent
 the Docker host: the name Docker gives and the host's address. Outside
 Swarm mode Docker does not know the host's address, so set it on the agent:
 
