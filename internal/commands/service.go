@@ -35,6 +35,10 @@ const Timeout = 10 * time.Second
 // also the console history (D-029, SEC-006).
 const MaxStoredResponse = 64 << 10
 
+// MaxLoggedAnswer bounds the answer of a failed command in the system log
+// (D-091); the system log masks it, stdout never gets it.
+const MaxLoggedAnswer = 2 << 10
+
 // ReasonTimeout is the reason code of a command without answer in time
 // (Design 3.5, 504).
 const ReasonTimeout = "timeout"
@@ -384,11 +388,19 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 			outcome, reason, err = ResultError, ReasonCommandFailed, nil
 		}
 		res.Response, res.Truncated = foreign.Text(answer, MaxStoredResponse)
-		s.log.Info("command answered", append(s.attrs(req, serverID), logging.Event(logging.CmdResponse),
-			slog.Int("bytes", len(answer)), slog.String("result", outcome), logging.Duration(s.now().Sub(start)))...)
+		attrs := append(s.attrs(req, serverID), logging.Event(logging.CmdResponse),
+			slog.Int("bytes", len(answer)), slog.String("result", outcome), logging.Duration(s.now().Sub(start)))
+		if outcome == ResultError {
+			attrs = append(attrs, loggedAnswer(answer))
+		}
+		s.log.Info("command answered", attrs...)
 	case errors.Is(err, context.DeadlineExceeded):
 		outcome, reason = ResultTimeout, ReasonTimeout
-		s.log.Warn("command timed out", append(s.attrs(req, serverID), logging.Event(logging.CmdTimeout))...)
+		attrs := append(s.attrs(req, serverID), logging.Event(logging.CmdTimeout))
+		if answer != "" {
+			attrs = append(attrs, loggedAnswer(answer))
+		}
+		s.log.Warn("command timed out", attrs...)
 		err = ErrTimeout
 	case errors.Is(err, connmgr.ErrQueueFull):
 		outcome, reason = ResultError, "busy"
@@ -497,4 +509,10 @@ func (s *Service) History(ctx context.Context, req users.Request, serverID strin
 		out = append(out, e)
 	}
 	return out, next, nil
+}
+
+// loggedAnswer is the answer of a failed command for the system log only.
+func loggedAnswer(answer string) slog.Attr {
+	text, _ := foreign.Text(answer, MaxLoggedAnswer)
+	return slog.String(logging.KeyAnswer, text)
 }

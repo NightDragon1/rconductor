@@ -34,6 +34,10 @@ const (
 	KeyVersion   = "version"
 )
 
+// KeyAnswer is the answer of a failed command: only the system log keeps
+// it, masked, never stdout (D-091).
+const KeyAnswer = "answer"
+
 const tsLayout = "2006-01-02T15:04:05.000Z07:00"
 
 // Factory creates loggers for one application ("panel" or "agent") and its
@@ -47,7 +51,7 @@ type Factory struct {
 func New(w io.Writer, app string, cfg config.Log) *Factory {
 	opts := &slog.HandlerOptions{
 		Level:       cfg.Level,
-		ReplaceAttr: replaceAttr(cfg.Level),
+		ReplaceAttr: replaceAttr(cfg.Level, false),
 	}
 	var h slog.Handler
 	if cfg.Format == "json" {
@@ -62,7 +66,7 @@ func New(w io.Writer, app string, cfg config.Log) *Factory {
 // record, blacked out like the first output (D-091). Loggers made before
 // it do not write to w.
 func (f *Factory) Also(w io.Writer) {
-	opts := &slog.HandlerOptions{Level: slog.LevelInfo, ReplaceAttr: replaceAttr(slog.LevelInfo)}
+	opts := &slog.HandlerOptions{Level: slog.LevelInfo, ReplaceAttr: replaceAttr(slog.LevelInfo, true)}
 	f.handler = slog.NewMultiHandler(f.handler, slog.NewJSONHandler(w, opts))
 }
 
@@ -92,10 +96,16 @@ func SessionRef(sessionID string) string {
 	return hex.EncodeToString(sum[:])[:8]
 }
 
-func replaceAttr(min slog.Level) func([]string, slog.Attr) slog.Attr {
+// replaceAttr formats and blacks out; KeyAnswer stays only where answer
+// is set, the system log, which masks it (D-091).
+func replaceAttr(min slog.Level, answer bool) func([]string, slog.Attr) slog.Attr {
 	return func(groups []string, a slog.Attr) slog.Attr {
 		if len(groups) == 0 {
 			switch a.Key {
+			case KeyAnswer:
+				if !answer {
+					return slog.Attr{}
+				}
 			case slog.TimeKey:
 				if a.Value.Kind() == slog.KindTime {
 					return slog.String(KeyTS, a.Value.Time().UTC().Format(tsLayout))

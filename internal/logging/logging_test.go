@@ -156,3 +156,21 @@ func TestCodesUniqueAndWellFormed(t *testing.T) {
 		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected, logs.tail, audit.entry_lost, rcon.connection_test, mail.sent, mail.failed, the four of AUTH-008, the two of PROT-003, auth.recovery.dropped and setting.read_failed", len(AllCodes))
 	}
 }
+
+// TestAnswerOnlyInSystemLog covers D-091: the answer of a failed command
+// reaches only the second output (the system log), never stdout, in JSON
+// and in text.
+func TestAnswerOnlyInSystemLog(t *testing.T) {
+	for _, format := range []string{"json", "text"} {
+		var out, sys bytes.Buffer
+		f := New(&out, "panel", config.Log{Level: slog.LevelDebug, Format: format})
+		f.Also(&sys)
+		f.Module("cmd").Info("command answered", slog.String(KeyAnswer, "Unknown command steve"))
+		if strings.Contains(out.String(), "steve") || !strings.Contains(out.String(), "command answered") {
+			t.Errorf("%s stdout: %s", format, out.String())
+		}
+		if !strings.Contains(sys.String(), `"answer":"Unknown command steve"`) {
+			t.Errorf("%s system log: %s", format, sys.String())
+		}
+	}
+}
