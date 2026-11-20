@@ -100,3 +100,29 @@ func TestAgentLog(t *testing.T) {
 		t.Errorf("without hub = %v", err)
 	}
 }
+
+// TestC175AgentJSONLinesMasked: the agent logs JSON; a value in quotes and
+// a JSON text inside a value are masked as they were logged (D-088, D-091).
+func TestC175AgentJSONLinesMasked(t *testing.T) {
+	st := storetest.New(t)
+	m, err := logmask.New(nil, logmask.DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &hub{code: agentproto.CodeOK, lines: []string{
+		`{"level":"error","msg":"login password: \"abc12345\""}`,
+		`{"level":"warn","detail":"{\"token\":\"tok98765\"}"}`,
+	}}
+	s := NewService(st, nil)
+	s.Use(h, builtin{m})
+	admin := users.Request{Actor: perm.Actor{ID: storetest.CreateUser(t, st, storetest.User{Pseudonym: "a", Role: string(perm.RCONAdmin)}), Role: perm.RCONAdmin}}
+	p, err := s.SystemLog(context.Background(), admin, LogQuery{Source: "00000000-0000-4000-8000-000000000001", Level: "info", Limit: 50})
+	var texts []string
+	for _, e := range p.Items {
+		texts = append(texts, e.Text)
+	}
+	got := strings.Join(texts, "\n")
+	if err != nil || len(texts) != 2 || strings.Contains(got, "abc12345") || strings.Contains(got, "tok98765") || !strings.Contains(got, "login password") {
+		t.Errorf("agent log = %q, %v", got, err)
+	}
+}

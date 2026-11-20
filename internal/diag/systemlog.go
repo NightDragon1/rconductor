@@ -17,6 +17,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
+	"github.com/NightDragon1/rconductor/internal/syslog"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
@@ -139,9 +140,10 @@ func (s *Service) agentLog(ctx context.Context, q LogQuery) (Page, error) {
 		return Page{}, ErrAgentFailed
 	}
 	lines, cut := agentproto.LimitLines(got.Lines)
-	lines, _ = s.mask.Lines(lines, nil)
 	p := Page{Source: q.Source, Truncated: got.Truncated || cut, Items: []Entry{}}
 	for _, l := range lines {
+		// The agent logs JSON: each value is masked as it was logged.
+		l = syslog.MaskLine(l, s.mask)
 		var head struct {
 			Level string `json:"level"`
 		}

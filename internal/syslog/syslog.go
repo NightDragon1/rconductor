@@ -158,6 +158,13 @@ func maskJSON(line string, m Masker) (string, head) {
 	return strings.TrimRight(b.String(), "\n"), h
 }
 
+// MaskLine masks a JSON log line value by value as maskJSON does, for log
+// lines that arrive encoded, such as the agent's own log (D-091).
+func MaskLine(line string, m Masker) string {
+	out, _ := maskJSON(line, m)
+	return out
+}
+
 // walk replaces every text value in v, in a fixed order.
 func walk(v any, f func(string) string) any {
 	switch x := v.(type) {
