@@ -893,8 +893,22 @@
       "mail": "Mail",
       "other": "Other",
       "twofactor": "Two-factor sign-in",
-      "features": "Features"
+      "features": "Features",
+      "messages": "Messages",
+      "diagnostics": "Diagnostics"
     },
+    "group": {
+      "security": "Security",
+      "users": "Users",
+      "messages": "Messages",
+      "servers": "Servers and commands",
+      "agents": "Agents",
+      "system": "System",
+      "features": "Features",
+      "other": "Other"
+    },
+    "groupsLabel": "Settings groups",
+    "advanced": "Advanced",
     "key": {
       "backup_interval": {
         "label": "Backup interval",

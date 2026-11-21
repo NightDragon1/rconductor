@@ -12,14 +12,55 @@ async function as(page: Page, state: StackState, user: string, path: string, tit
   await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();
 }
 
+// From 1024 px the settings show one group at a time (O8).
+const group = (page: Page, name: string) =>
+  page.getByRole('navigation', { name: 'Settings groups' }).getByRole('button', { name }).click();
+
+test('settings: groups on the left, tuning values behind Advanced (O8)', async ({
+  page,
+  state,
+}) => {
+  await as(page, state, 'admin', 'admin/settings', 'Settings');
+  await group(page, 'Security');
+  await expect(page.getByRole('heading', { name: 'Security', level: 2 })).toBeVisible();
+  await expect(page.getByLabel('login.max_failures')).toBeVisible();
+  await expect(page.getByLabel('invite.lifetime')).toHaveCount(0);
+  await expect(page.getByLabel('login.max_tracked')).toBeHidden();
+  await page
+    .getByRole('region', { name: 'Sign-in protection' })
+    .getByText('Advanced', { exact: true })
+    .click();
+  await expect(page.getByLabel('login.max_tracked')).toBeVisible();
+  // A change waits over a change of group and saves with the others.
+  await group(page, 'Users');
+  await expect(page.getByLabel('invite.lifetime')).toBeVisible();
+  await expect(page.getByLabel('login.max_failures')).toHaveCount(0);
+  await page.getByLabel('invite.lifetime').fill('47 h');
+  await group(page, 'System');
+  await expect(page.getByRole('region', { name: 'Mail (SMTP)' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save 1 change' })).toBeVisible();
+  await page.getByRole('button', { name: 'Discard' }).click();
+  await group(page, 'Users');
+  await expect(page.getByLabel('invite.lifetime')).not.toHaveValue('47 h');
+});
+
+test('misuse: a server admin has no settings and the API refuses them', async ({ page, state }) => {
+  await login(page, 'sadmin', secret(state, 'sadmin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await expect(page.getByRole('navigation').getByRole('link', { name: 'Settings' })).toHaveCount(0);
+  expect((await page.request.get('api/v1/settings')).status()).toBe(403);
+});
+
 test('settings: a change saves at once with the ETag (Design 5.6)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/settings', 'Settings');
+  await group(page, 'Users');
   const field = page.getByLabel('invite.lifetime');
   const before = await field.inputValue();
   await field.fill('48 h');
   await page.getByRole('button', { name: 'Save 1 change' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible(saved);
   await page.reload();
+  await group(page, 'Users');
   await expect(page.getByLabel('invite.lifetime')).toHaveValue('48 h');
   await page.getByLabel('invite.lifetime').fill(before);
   await page.getByRole('button', { name: 'Save 1 change' }).click();
@@ -28,6 +69,7 @@ test('settings: a change saves at once with the ETag (Design 5.6)', async ({ pag
 
 test('switching supporters off asks first', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/settings', 'Settings');
+  await group(page, 'Users');
   await page.getByLabel('supporters.enabled').uncheck();
   await page.getByRole('button', { name: 'Save 1 change' }).click();
   const dialog = page.getByRole('dialog');
@@ -39,6 +81,7 @@ test('switching supporters off asks first', async ({ page, state }) => {
 
 test('the RCON admin switches shortcuts on for everyone (UI-008)', async ({ page, state }) => {
   await as(page, state, 'admin', 'admin/settings', 'Settings');
+  await group(page, 'System');
   await page.getByLabel('ui.shortcuts_enabled').check();
   await page.getByRole('button', { name: 'Save 1 change' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible(saved);
@@ -49,6 +92,7 @@ test('the RCON admin switches shortcuts on for everyone (UI-008)', async ({ page
     await expect(page.getByRole('searchbox', { name: 'Search users' })).toBeFocused();
   } finally {
     await page.goto('admin/settings');
+    await group(page, 'System');
     await page.getByLabel('ui.shortcuts_enabled').uncheck();
     await page.getByRole('button', { name: 'Save 1 change' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible(saved);

@@ -91,6 +91,24 @@ test('the pages of a server', async ({ page, state }) => {
   }
 });
 
+// From 1024 px the settings show one group at a time, tuning values behind
+// Advanced (O8): every group and every Advanced part is checked.
+test('every group of the settings', async ({ page, state }) => {
+  await signIn(page, 'admin', secret(state, 'admin'));
+  await page.goto('admin/settings');
+  const groups = page.getByRole('navigation', { name: '⟦Settings groups⟧' }).getByRole('button');
+  await expect(groups.first()).toBeVisible();
+  const count = await groups.count();
+  expect(count).toBeGreaterThanOrEqual(7);
+  for (let i = 0; i < count; i++) {
+    await groups.nth(i).click();
+    await page.evaluate(() => {
+      for (const d of Array.from(document.querySelectorAll('details'))) d.open = true;
+    });
+    await check(page, state, `settings group ${i}`);
+  }
+});
+
 test('a page that does not exist', async ({ page, state }) => {
   await signIn(page, 'admin', secret(state, 'admin'));
   await page.goto('no-such-page');

@@ -7,6 +7,15 @@ import { expect, login, secret, test, type StackState } from './fixtures';
 // log_masking_ui: the RCON admin sets the switch, fixed texts and limits;
 // the texts are write-only, the page shows only their number.
 
+// The masking settings are part of the group System (O8).
+async function system(page: Page) {
+  await page.goto('admin/settings');
+  await page
+    .getByRole('navigation', { name: 'Settings groups' })
+    .getByRole('button', { name: 'System' })
+    .click();
+}
+
 async function as(page: Page, state: StackState, user: string) {
   await login(page, user, secret(state, user));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
@@ -17,7 +26,7 @@ test.describe('log masking on', () => {
 
   test('the RCON admin stores a text; it is never shown again', async ({ page, state }) => {
     await as(page, state, 'admin');
-    await page.goto('admin/settings');
+    await system(page);
     const panel = page.getByRole('region', { name: 'Log masking' });
     await expect(panel.getByText('0 texts stored')).toBeVisible();
     await panel.getByLabel('Replace the texts, one per line').fill('e2e-s3cr3t-text');
@@ -64,7 +73,7 @@ test.describe('flag off', () => {
     state,
   }) => {
     await as(page, state, 'admin');
-    await page.goto('admin/settings');
+    await system(page);
     await expect(page.getByRole('region', { name: 'Mail (SMTP)' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Log masking' })).toHaveCount(0);
     const r = await page.request.get('api/v1/settings/log-masking');
