@@ -82,7 +82,7 @@
     "profiles": "Game profiles",
     "admin": "Administration",
     "users": "Users",
-    "groups": "Moderator groups",
+    "groups": "Groups",
     "commandLists": "Command lists",
     "serverAdmin": "Servers and server groups",
     "agents": "Agents",
@@ -697,14 +697,14 @@
     }
   },
   "groups": {
-    "explain": "A bundle of members and a command list. Which servers they work on is set by the grant.",
+    "explain": "Moderator groups bundle members and a command list; user groups bundle members only. Which servers they work on is set by the grant.",
     "summary_one": "{{count}} group",
     "summary_other": "{{count}} groups",
     "search": "Group name …",
     "searchLabel": "Search groups",
     "newName": "Name of a new group",
     "create": "Create group",
-    "kindLabel": "Kind",
+    "kindLabel": "Type",
     "kind": {
       "moderator": "Moderator group",
       "general": "User group"
@@ -1300,7 +1300,7 @@
     "toLogin": "To sign-in"
   },
   "messages": {
-    "explain": "Messages to and from the panel users on your servers.",
+    "explain": "Your messages with the panel users on your servers.",
     "list": "Messages",
     "none": "No messages yet.",
     "pick": "Choose a message to read it.",

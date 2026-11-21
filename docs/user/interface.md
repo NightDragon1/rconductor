@@ -23,7 +23,7 @@ command list.
 | Game profiles (new in 1.2) | yes | yes | yes | yes |
 | Messages (new in 1.2) | yes | yes | yes | yes |
 | Users | yes | moderators, supporters | supporters, if released | – |
-| Moderator groups | yes | own | – | – |
+| Groups (moderator and user groups) | yes | own | – | – |
 | Command lists | yes | own | – | – |
 | Agents | yes | – | – | – |
 | Settings | yes | – | – | – |

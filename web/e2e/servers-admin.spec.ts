@@ -177,7 +177,7 @@ test('the RCON admin reaches every administration page (ROLE-002)', async ({ pag
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   for (const [path, title] of [
     ['admin/users', 'Users'],
-    ['admin/groups', 'Moderator groups'],
+    ['admin/groups', 'Groups'],
     ['admin/command-lists', 'Command lists'],
     ['servers/manage', 'Servers and server groups'],
     ['admin/agents', 'Agents'],
