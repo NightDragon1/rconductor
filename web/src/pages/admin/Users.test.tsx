@@ -384,6 +384,16 @@ describe('page description (O4)', () => {
     ).toBeTruthy();
   });
 
+  it('names every lower role and all invitations for the RCON admin', async () => {
+    setLanguage('en');
+    await render('rcon_admin');
+    expect(
+      screen.getByText(
+        'Every user below your role and all open invitations. Invite new users with an invitation link.',
+      ),
+    ).toBeTruthy();
+  });
+
   it('names only supporters for a moderator', async () => {
     setLanguage('en');
     await render('moderator');
