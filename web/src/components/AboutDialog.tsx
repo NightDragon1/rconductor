@@ -1,9 +1,17 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Info, TriangleAlert } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { licenseUrl, thirdPartyUrl, useAbout, webUrl, type About } from '@/api/about';
+import {
+  licenseUrl,
+  thirdPartyUrl,
+  useAbout,
+  useThirdParty,
+  webUrl,
+  type About,
+  type ThirdParty,
+} from '@/api/about';
 import { useSession } from '@/api/session';
 import { ForeignText } from '@/components/ForeignText';
 import { Logo } from '@/components/Logo';
@@ -80,14 +88,85 @@ function AboutDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
   );
 }
 
-// AboutContent shows one answer of GET /about: build and agents only when
-// the panel sent them.
+type Tab = 'about' | 'thirdParty' | 'agents';
+
+// AboutContent shows one answer of GET /about in tabs: the program, the
+// third-party components of the build, and the agents only when the panel
+// sent them (the RCON admin).
 export function AboutContent({ about }: { about: About }) {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<Tab>('about');
+  const third = useThirdParty(true);
+  const id = useId();
+  const refs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'about', label: t('about.tabAbout') },
+    {
+      key: 'thirdParty',
+      label: third.data
+        ? t('about.tabThirdPartyCount', { count: third.data.length })
+        : t('about.tabThirdParty'),
+    },
+    ...(about.agents !== undefined ? [{ key: 'agents' as Tab, label: t('about.agents') }] : []),
+  ];
+  // Arrow keys move between the tabs (WAI-ARIA tabs pattern).
+  const onKey = (e: KeyboardEvent) => {
+    const i = tabs.findIndex((x) => x.key === tab);
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (step === 0) return;
+    e.preventDefault();
+    const next = tabs[(i + step + tabs.length) % tabs.length]?.key ?? 'about';
+    setTab(next);
+    refs.current[next]?.focus();
+  };
+  return (
+    <div className="flex flex-col gap-4 text-sm">
+      <div
+        role="tablist"
+        aria-label={t('about.title')}
+        className="flex flex-wrap gap-1 border-b border-border"
+        onKeyDown={onKey}
+      >
+        {tabs.map((x) => (
+          <button
+            key={x.key}
+            ref={(el) => {
+              refs.current[x.key] = el;
+            }}
+            type="button"
+            role="tab"
+            id={`${id}-${x.key}-tab`}
+            aria-controls={`${id}-${x.key}`}
+            aria-selected={tab === x.key}
+            tabIndex={tab === x.key ? 0 : -1}
+            onClick={() => setTab(x.key)}
+            className={cn(
+              '-mb-px min-h-11 border-b-2 px-3 text-sm',
+              tab === x.key
+                ? 'border-accent font-semibold text-text'
+                : 'border-transparent text-muted',
+            )}
+          >
+            {x.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id={`${id}-${tab}`} aria-labelledby={`${id}-${tab}-tab`} tabIndex={0}>
+        {tab === 'about' && <Program about={about} />}
+        {tab === 'thirdParty' && <ThirdPartyList list={third.data} failed={third.isError} />}
+        {tab === 'agents' && <AgentVersions about={about} />}
+      </div>
+    </div>
+  );
+}
+
+// Program is the tab About: name, version, build, author and license.
+function Program({ about }: { about: About }) {
   const { t } = useTranslation();
   const repo = webUrl(about.repo_url);
   const built = about.build_date && !Number.isNaN(Date.parse(about.build_date));
   return (
-    <div className="flex flex-col gap-4 text-sm">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-2 text-center">
         <Logo />
         <p className="text-base font-semibold text-text">
@@ -143,9 +222,43 @@ export function AboutContent({ about }: { about: About }) {
           <External href={thirdPartyUrl}>{t('about.thirdParty')}</External>
         </p>
       </div>
-
-      {about.agents !== undefined && <AgentVersions about={about} />}
     </div>
+  );
+}
+
+// ThirdPartyList shows the components of the build with license and
+// copyright; without a copyright line the license text opens below.
+function ThirdPartyList({ list, failed }: { list?: ThirdParty[]; failed: boolean }) {
+  const { t } = useTranslation();
+  if (!list) return <p className="text-muted">{t(failed ? 'app.error' : 'app.loading')}</p>;
+  if (list.length === 0) return <p className="text-muted">{t('about.noThirdParty')}</p>;
+  return (
+    <ul className="space-y-2" aria-label={t('about.thirdParty')}>
+      {list.map((c, i) => (
+        <li key={`${c.name}@${c.version}#${i}`} className="rounded-md border border-border p-2">
+          <p className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <bdi className="font-medium wrap-anywhere text-text">
+              {c.name} {c.version}
+            </bdi>
+            <bdi className="text-xs text-muted">{c.license}</bdi>
+          </p>
+          {c.copyright.length > 0 ? (
+            c.copyright.map((l) => (
+              <p key={l} className="text-muted wrap-anywhere">
+                <bdi>{l}</bdi>
+              </p>
+            ))
+          ) : (
+            <details className="text-muted">
+              <summary className="tap cursor-pointer">{t('about.seeLicense')}</summary>
+              <pre className="mt-1 max-h-64 overflow-auto text-xs whitespace-pre-wrap wrap-anywhere">
+                {c.text}
+              </pre>
+            </details>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -154,10 +267,7 @@ function AgentVersions({ about }: { about: About }) {
   const agents = about.agents ?? [];
   const panelMajor = majorVersion(about.version);
   return (
-    <section aria-labelledby="about-agents" className="space-y-2">
-      <h2 id="about-agents" className="font-semibold text-text">
-        {t('about.agents')}
-      </h2>
+    <section aria-label={t('about.agents')} className="space-y-2">
       {agents.length === 0 ? (
         <p className="text-muted">{t('about.noAgents')}</p>
       ) : (

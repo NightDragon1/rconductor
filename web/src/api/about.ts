@@ -31,3 +31,79 @@ export const thirdPartyUrl = 'third-party-licenses.txt';
 export function webUrl(url: string): string | undefined {
   return /^https?:\/\//i.test(url) ? url : undefined;
 }
+
+// The license list of the Go modules linked into the panel; the image build
+// puts it next to the UI (Dockerfile). A build without it shows only the
+// list of the UI.
+export const thirdPartyGoUrl = 'third-party-go.txt';
+
+// ThirdParty is one component of the license lists (UI-024, NFR-021).
+export type ThirdParty = {
+  name: string;
+  version: string;
+  license: string;
+  // The copyright lines of the license text; empty when it has none.
+  copyright: string[];
+  text: string;
+};
+
+// Both lists start each component with "== <name> <version> (<license>)",
+// the license text follows up to the next header.
+const header = /^== (.+?) (\S+) \((.*)\)$/;
+// A copyright line, but not the placeholder of a license template such as
+// the appendix of the Apache license.
+const copyrightLine = /^(Copyright\b|COPYRIGHT\b|\([cC]\)|©)/;
+const placeholder = /[[{<]yyyy[\]}>]|\[year\]|<year>/i;
+
+// parseThirdParty reads one license list; text before the first header is
+// no component.
+export function parseThirdParty(list: string): ThirdParty[] {
+  const out: ThirdParty[] = [];
+  let lines: string[] = [];
+  let cur: Omit<ThirdParty, 'copyright' | 'text'> | undefined;
+  const close = () => {
+    if (!cur) return;
+    const text = lines.join('\n').trim();
+    const copyright = [
+      ...new Set(
+        lines.map((l) => l.trim()).filter((l) => copyrightLine.test(l) && !placeholder.test(l)),
+      ),
+    ];
+    out.push({ ...cur, copyright, text });
+  };
+  for (const line of list.split('\n')) {
+    const m = header.exec(line.trimEnd());
+    if (m) {
+      close();
+      cur = { name: m[1] ?? '', version: m[2] ?? '', license: m[3] ?? '' };
+      lines = [];
+    } else if (cur) {
+      lines.push(line);
+    }
+  }
+  close();
+  return out;
+}
+
+// fetchList reads one list below the base path; a missing list is empty.
+async function fetchList(url: string): Promise<string> {
+  try {
+    const r = await fetch(url, { cache: 'no-cache' });
+    return r.ok ? await r.text() : '';
+  } catch {
+    return '';
+  }
+}
+
+// useThirdParty reads the lists of the Go modules and of the UI once.
+export function useThirdParty(enabled: boolean) {
+  return useQuery({
+    queryKey: ['third-party'],
+    queryFn: async () => {
+      const [go, ui] = await Promise.all([fetchList(thirdPartyGoUrl), fetchList(thirdPartyUrl)]);
+      return [...parseThirdParty(go), ...parseThirdParty(ui)];
+    },
+    staleTime: Infinity,
+    enabled,
+  });
+}
