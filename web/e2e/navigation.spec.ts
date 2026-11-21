@@ -228,6 +228,10 @@ test('explanations in the settings can be hidden (UI-014)', async ({ page, state
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto('admin/settings');
+  const system = page
+    .getByRole('navigation', { name: 'Settings groups' })
+    .getByRole('button', { name: 'System' });
+  await system.click();
   const help = page.getByText('Audit entries older than this are removed.');
   await expect(help).toBeVisible();
   await page.getByLabel('Show explanations').uncheck();

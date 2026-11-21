@@ -80,10 +80,11 @@ test('hostile answers stay text in the audit log (SEC-006)', async ({ page, stat
   await open(page, state, 'console');
   await run(page, 'say audited');
   await page.goto('audit');
-  const entry = page.getByRole('listitem').filter({ hasText: 'cmd.result' }).first();
-  await entry.getByText('Details').click();
+  // From 1024 px the log is a table: the payload opens in the row below (O6).
+  const entry = page.getByRole('row').filter({ hasText: 'cmd.result' }).first();
+  await entry.getByRole('button', { name: 'Details' }).click();
   // The payload is JSON, so the quotes of the markup stand escaped.
-  const box = entry.locator('pre');
+  const box = entry.locator('xpath=following-sibling::tr[1]').locator('pre');
   await expect(box).toContainText('<script>window.__xss=1</script>');
   await expect(box.locator('img, script')).toHaveCount(0);
   expect(await page.evaluate(() => '__xss' in window)).toBe(false);

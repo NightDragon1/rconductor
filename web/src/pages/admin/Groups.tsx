@@ -15,6 +15,7 @@ import {
   type UserGroup,
 } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { cell, headCell } from '@/components/DenseTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePhone, useReveal } from '@/lib/phone';
@@ -460,10 +461,10 @@ export function GroupsPage() {
             <table className="w-full text-sm">
               <thead className="text-left text-muted">
                 <tr>
-                  <th className="p-3 font-medium">{t('groups.name')}</th>
-                  <th className="p-3 font-medium">{t('groups.kindLabel')}</th>
-                  <th className="p-3 font-medium">{t('groups.list')}</th>
-                  <th className="p-3 font-medium">{t('groups.members')}</th>
+                  <th className={headCell}>{t('groups.name')}</th>
+                  <th className={headCell}>{t('groups.kindLabel')}</th>
+                  <th className={headCell}>{t('groups.list')}</th>
+                  <th className={headCell}>{t('groups.members')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -472,7 +473,7 @@ export function GroupsPage() {
                     key={g.id}
                     className={cn('border-t border-border', open === g.id && 'bg-surface-raised')}
                   >
-                    <td className="p-3">
+                    <td className={cell}>
                       <button
                         type="button"
                         className="hover:underline"
@@ -481,11 +482,11 @@ export function GroupsPage() {
                         <bdi>{g.name}</bdi>
                       </button>
                     </td>
-                    <td className="p-3">{t(`groups.kind.${g.kind}`)}</td>
-                    <td className="p-3">
+                    <td className={cell}>{t(`groups.kind.${g.kind}`)}</td>
+                    <td className={cell}>
                       <bdi>{listName(g.command_list_id)}</bdi>
                     </td>
-                    <td className="p-3">{t('groups.memberCount', { count: g.members.length })}</td>
+                    <td className={cell}>{t('groups.memberCount', { count: g.members.length })}</td>
                   </tr>
                 ))}
                 {shown.length === 0 && (
