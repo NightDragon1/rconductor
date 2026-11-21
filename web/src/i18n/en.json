@@ -1146,6 +1146,11 @@
   "audit": {
     "explain": "Who did what and when. Server admins see their scope.",
     "kind": "Kind",
+    "time": "Time",
+    "action": "Action",
+    "user": "User",
+    "role": "Role",
+    "result": "Result",
     "allKinds": "Kind: all",
     "server": "Server",
     "allServers": "Server: all",

@@ -57,14 +57,18 @@ test('the RCON admin switches shortcuts on for everyone (UI-008)', async ({ page
 
 test('audit with filters; the server admin sees his scope (AUD-001)', async ({ page, state }) => {
   await as(page, state, 'admin', 'audit', 'Audit');
-  const entries = page.getByRole('list', { name: 'Audit entries' }).getByRole('listitem');
+  // From 1024 px the log is a table, one row per entry (O6).
+  const entries = page
+    .getByRole('table', { name: 'Audit entries' })
+    .locator('tbody')
+    .getByRole('row');
   await expect(entries.first()).toBeVisible();
   await page.getByLabel('Kind').selectOption('command');
   await expect(entries.first()).toContainText('Command');
   await expect(entries.filter({ hasText: 'Administration' })).toHaveCount(0);
   await page.context().clearCookies();
   await as(page, state, 'sadmin', 'audit', 'Audit');
-  await expect(page.getByRole('list', { name: 'Audit entries' })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Audit entries' })).toBeVisible();
   // The admin's sign-ins are not in the server admin's scope.
   await page.getByLabel('Kind').selectOption('auth');
   await expect(entries.filter({ hasText: 'admin' }).filter({ hasText: 'RCON admin' })).toHaveCount(
