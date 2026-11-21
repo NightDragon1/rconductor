@@ -280,7 +280,7 @@ test('the administration reads on a phone (UI-012)', async ({ page, state }) => 
   await page.getByRole('button', { name: 'moderation', exact: true }).tap();
   await readsOnly(page);
 
-  await page.goto('admin/servers');
+  await page.goto('servers/manage');
   await expect(page.getByRole('button', { name: 'New server' })).toHaveCount(0);
   await readsOnly(page);
   const server = page.getByRole('list', { name: 'Servers' }).getByRole('listitem');

@@ -83,7 +83,6 @@ export const adminNav: NavEntry[] = [
   },
   { to: '/admin/groups', key: 'groups', icon: ShieldCheck, allowed: admins },
   { to: '/admin/command-lists', key: 'commandLists', icon: ListChecks, allowed: admins },
-  { to: '/admin/servers', key: 'serverAdmin', icon: Server, allowed: admins },
   { to: '/admin/agents', key: 'agents', icon: Bot, allowed: rconAdmin },
   { to: '/admin/settings', key: 'settings', icon: Settings, allowed: rconAdmin },
   // System log of the panel and of the agents (UI-025, D-091).
@@ -96,6 +95,14 @@ export const adminNav: NavEntry[] = [
   },
 ];
 
+// The tabs of the main entry Servers: the cards for every role, the
+// management of servers and server groups for the admins, read only for
+// the server admin as before (Design 6.2). The keys sit below servers.tab.
+export const serverViews: NavEntry[] = [
+  { to: '/servers', key: 'cards', icon: LayoutGrid, allowed: () => true },
+  { to: '/servers/manage', key: 'manage', icon: Server, allowed: admins },
+];
+
 export function entryFor(path: string): NavEntry | undefined {
-  return [...mainNav, ...adminNav].find((e) => e.to === path);
+  return [...mainNav, ...adminNav, ...serverViews].find((e) => e.to === path);
 }

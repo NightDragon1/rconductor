@@ -33,7 +33,7 @@ test.describe('server number on', () => {
     await expect(
       page.getByRole('heading', { level: 1, name: new RegExp(`^${badge}`) }),
     ).toBeVisible();
-    await page.goto('admin/servers');
+    await page.goto('servers/manage');
     await expect(page.getByRole('columnheader').first()).toHaveText('ID');
     await expect(
       page.getByRole('row').filter({ hasText: 'survival' }).getByRole('cell').first(),
@@ -82,7 +82,7 @@ test.describe('flag off', () => {
     await expect(page.getByRole('article', { name: 'survival' }).getByText(/^#\d+$/)).toHaveCount(
       0,
     );
-    await page.goto('admin/servers');
+    await page.goto('servers/manage');
     await expect(page.getByRole('columnheader', { name: 'ID', exact: true })).toHaveCount(0);
     await page.goto(`servers/${state.servers.survival}/overview`);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

@@ -145,7 +145,7 @@ for (const theme of ['dark', 'light']) {
         `servers/${state.server_id}/console`,
         'audit',
         'admin/users',
-        'admin/servers',
+        'servers/manage',
       ]) {
         await page.goto(path);
         await page.waitForLoadState('networkidle').catch(() => undefined);
@@ -164,7 +164,7 @@ for (const theme of ['dark', 'light']) {
       await page.goto('admin/users');
       await page.getByRole('button', { name: 'mod', exact: true }).click();
       await check(page, theme, 'open user row');
-      await page.goto('admin/servers');
+      await page.goto('servers/manage');
       await page.getByRole('button', { name: 'arena', exact: true }).click();
       await check(page, theme, 'open server row');
     });

@@ -710,6 +710,11 @@
     }
   },
   "servers": {
+    "tabs": "Server views",
+    "tab": {
+      "cards": "Cards",
+      "manage": "Manage servers and server groups"
+    },
     "id": "ID",
     "numberLabel": "Server number {{number}}",
     "new": "New server",
