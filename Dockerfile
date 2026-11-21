@@ -14,12 +14,35 @@ COPY web/ ./
 COPY internal/webui/dist/.gitkeep /src/internal/webui/dist/.gitkeep
 RUN npm run build
 
+# /licenses in each image (NFR-021): the license and the licenses of the
+# linked Go modules, for the panel also those of the bundled UI. A stage of
+# its own, so that the license tool never sees the built binaries; the build
+# stage embeds the list of the panel's Go modules into the UI.
+FROM --platform=$BUILDPLATFORM golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9 AS licenses
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY tools/go.mod tools/go.sum tools/
+RUN go mod download \
+ && go -C tools build -o /usr/local/bin/go-licenses github.com/google/go-licenses/v2
+COPY . .
+COPY --from=ui /src/internal/webui/dist/third-party-licenses.txt /tmp/third-party-ui.txt
+ARG TARGETOS TARGETARCH
+RUN mkdir -p /out/panel /out/agent /out/webui \
+ && cp LICENSE /out/panel/LICENSE && cp LICENSE /out/agent/LICENSE \
+ && export GOOS=$TARGETOS GOARCH=$TARGETARCH \
+ && scripts/third-party-go.sh go-licenses ./cmd/panel > /out/webui/third-party-go.txt \
+ && { cat /out/webui/third-party-go.txt && echo && cat /tmp/third-party-ui.txt; } > /out/panel/THIRD_PARTY \
+ && scripts/third-party-go.sh go-licenses ./cmd/agent > /out/agent/THIRD_PARTY
+
 FROM --platform=$BUILDPLATFORM golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=ui /src/internal/webui/dist/ internal/webui/dist/
+# The licenses of the Go modules of the panel next to the UI, so that the
+# About dialog lists them too (UI-024, NFR-021).
+COPY --from=licenses /out/webui/third-party-go.txt internal/webui/dist/third-party-go.txt
 ARG TARGETOS TARGETARCH
 ARG VERSION=0.0.0-dev
 ARG COMMIT=unknown
@@ -35,24 +58,6 @@ RUN ldflags="-s -w -X github.com/NightDragon1/rconductor/internal/buildinfo.Vers
 # writable; /secrets is private to that user.
 RUN mkdir -p /out/panel-root/data /out/panel-root/backups /out/agent-root \
  && install -d -m 0700 /out/panel-root/secrets /out/agent-root/secrets
-
-# /licenses in each image (NFR-021): the license and the licenses of the
-# linked Go modules, for the panel also those of the bundled UI. A stage of
-# its own, so that the license tool never sees the built binaries.
-FROM --platform=$BUILDPLATFORM golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9 AS licenses
-WORKDIR /src
-COPY go.mod go.sum ./
-COPY tools/go.mod tools/go.sum tools/
-RUN go mod download \
- && go -C tools build -o /usr/local/bin/go-licenses github.com/google/go-licenses/v2
-COPY . .
-COPY --from=ui /src/internal/webui/dist/third-party-licenses.txt /tmp/third-party-ui.txt
-ARG TARGETOS TARGETARCH
-RUN mkdir -p /out/panel /out/agent \
- && cp LICENSE /out/panel/LICENSE && cp LICENSE /out/agent/LICENSE \
- && export GOOS=$TARGETOS GOARCH=$TARGETARCH \
- && { scripts/third-party-go.sh go-licenses ./cmd/panel && echo && cat /tmp/third-party-ui.txt; } > /out/panel/THIRD_PARTY \
- && scripts/third-party-go.sh go-licenses ./cmd/agent > /out/agent/THIRD_PARTY
 
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS panel
 ARG VERSION=0.0.0-dev
