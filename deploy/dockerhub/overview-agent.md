@@ -2,8 +2,6 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/NightDragon1/rconductor/ci.yml?branch=main&label=CI)](https://github.com/NightDragon1/rconductor/actions/workflows/ci.yml?query=branch%3Amain)
 [![Release](https://img.shields.io/github/v/release/NightDragon1/rconductor)](https://github.com/NightDragon1/rconductor/releases/latest)
-[![Panel pulls](https://img.shields.io/docker/pulls/nightdragon1/rconductor-panel?label=panel%20pulls)](https://hub.docker.com/r/nightdragon1/rconductor-panel)
-[![Agent pulls](https://img.shields.io/docker/pulls/nightdragon1/rconductor-agent?label=agent%20pulls)](https://hub.docker.com/r/nightdragon1/rconductor-agent)
 [![License AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](https://github.com/NightDragon1/rconductor/blob/main/LICENSE)
 ![Platforms amd64 and arm64](https://img.shields.io/badge/platforms-amd64%20%7C%20arm64-informational)
 
