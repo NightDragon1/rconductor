@@ -92,45 +92,114 @@ function data(role: string, features: string[] = []) {
   ] as [readonly unknown[], unknown][];
 }
 
-// host finds the node of a host: the link to the agent for the RCON admin,
-// the box in the list of hosts otherwise.
+// The hosts list, its branches (host with its servers) and the node of a
+// host: the link to the agent for the RCON admin.
 const hosts = () => screen.getByRole('list', { name: 'Hosts' });
-const hostLink = (name: RegExp) => within(hosts()).getByRole('link', { name });
+const branches = () => [...hosts().children] as [HTMLElement, HTMLElement, HTMLElement];
+const agentLink = (id: string) =>
+  hosts().querySelector(`a[href="/admin/agents#${id}"]`) as HTMLElement;
 
 describe('topology (UI-010)', () => {
-  it('shows the RCON admin panel → host → server, the host links its agent', async () => {
+  it('shows the tree panel → hosts → servers, one branch per host', async () => {
     setLanguage('en');
     await renderPage(TopologyPage, data('rcon_admin'));
     expect(document.body.textContent).toContain('Panel');
-    expect(document.body.textContent).toContain('1.2.0');
-    const one = hostLink(/host-1/);
-    expect(one.getAttribute('href')).toBe('/admin/agents#a1');
-    // The display name as text (SEC-006, D-089), agent, address, version, state.
-    expect(one.textContent).toContain('Rack <i>A</i>');
+    expect(document.body.textContent).toContain('1.2.0 · :8080 web · :8443 agents');
+    // One branch per host, the servers without agent last; each branch
+    // holds its host node and the list of its servers.
+    const bs = branches();
+    expect(bs.map((b) => b.tagName)).toEqual(['LI', 'LI', 'LI']);
+    const serversOf = (b: HTMLElement) =>
+      within(b.querySelector('ul') as HTMLElement)
+        .getAllByRole('link')
+        .map((a) => a.textContent);
+    expect(serversOf(bs[0])).toEqual(['alpha']);
+    expect(serversOf(bs[1])).toEqual(['beta']);
+    expect(serversOf(bs[2])).toEqual(['gamma']);
+    expect(bs[0].contains(agentLink('a1'))).toBe(true);
+    expect(bs[1].contains(agentLink('a2'))).toBe(true);
+    expect(bs[2].textContent).toContain('Without agent');
+  });
+
+  it('gives the RCON admin name, agent version and state in the node, linked to the agent', async () => {
+    setLanguage('en');
+    await renderPage(TopologyPage, data('rcon_admin'));
+    const one = agentLink('a1');
+    // The display name as text (SEC-006, D-089), then agent version and state.
+    expect(one.textContent).toBe('Rack <i>A</i>Agent 1.2.3 · connected');
     expect(one.querySelector('i')).toBeNull();
-    expect(one.textContent).toContain('10.0.0.5');
-    expect(one.textContent).toContain('1.2.3');
-    expect(one.textContent).toContain('connected');
-    expect(one.textContent).not.toContain('Major version');
-    const branch = one.closest('li') as HTMLElement;
-    expect(within(branch).getByRole('link', { name: 'alpha' }).getAttribute('href')).toBe(
-      '/servers/s1',
-    );
-    const two = hostLink(/host-2/);
+    expect(within(one).getByText('connected').className).toContain('text-ok');
+    const two = agentLink('a2');
     expect(two.textContent).toContain('Host 1');
-    expect(two.textContent).toContain('disconnected');
-    const rest = screen.getByText('Without agent').closest('li') as HTMLElement;
-    expect(within(rest).getByRole('link', { name: 'gamma' })).toBeTruthy();
+    expect(two.textContent).toContain('Agent 2.0.0 · disconnected');
+    expect(within(two).getByText('disconnected').className).toContain('text-danger');
+    // Neither agent ID nor host name nor address in the node.
+    for (const [node, name, addr] of [
+      [one, 'host-1', '10.0.0.5'],
+      [two, 'host-2', '10.0.0.9'],
+    ] as const) {
+      expect(node.textContent).not.toContain(name);
+      expect(node.textContent).not.toContain(addr);
+      expect(node.textContent).not.toMatch(/\ba[12]\b/);
+    }
+  });
+
+  it('shows the servers as cards with the status colour, linked to the server', async () => {
+    setLanguage('en');
+    await renderPage(TopologyPage, data('rcon_admin'));
+    const alpha = within(hosts()).getByRole('link', { name: 'alpha' });
+    expect(alpha.getAttribute('href')).toBe('/servers/s1');
+    expect(alpha.className).toContain('font-mono');
+    const card = alpha.parentElement as HTMLElement;
+    expect(card.className).toContain('border-l-ok');
+    expect(within(card).getByText('· running').className).toContain('text-ok');
+    const gamma = within(hosts()).getByRole('link', { name: 'gamma' }).parentElement as HTMLElement;
+    expect(gamma.className).toContain('border-l-danger');
+    expect(within(gamma).getByText('· offline').className).toContain('text-danger');
+  });
+
+  it('colours each server status by its tone (UI-004)', async () => {
+    setLanguage('en');
+    const one = (id: string, c: Record<string, unknown>): Server => ({
+      ...(servers[0] as Server),
+      id,
+      name: id,
+      runtime: { kind: 'runtime', server_id: id, container: { ...container(true), ...c } },
+    });
+    const list = [
+      one('h', { health: 'healthy' }),
+      one('u', { health: 'unhealthy' }),
+      one('st', { health: 'starting' }),
+      one('r', { state: 'restarting' }),
+      one('x', { state: 'exited' }),
+    ];
+    await renderPage(TopologyPage, [
+      [sessionKey, session('rcon_admin')],
+      [serversKey, list],
+      [agentsKey, agents],
+    ]);
+    for (const [id, status, tone] of [
+      ['h', 'healthy', 'ok'],
+      ['u', 'unhealthy', 'danger'],
+      ['st', 'starting', 'warn'],
+      ['r', 'restarting', 'warn'],
+      ['x', 'stopped', 'muted'],
+    ]) {
+      const card = within(hosts()).getByRole('link', { name: id }).parentElement as HTMLElement;
+      expect(within(card).getByText(`· ${status}`).className).toContain(`text-${tone}`);
+      expect(card.className).toContain(tone === 'muted' ? 'border-l-border' : `border-l-${tone}`);
+    }
   });
 
   it('marks an agent whose major version differs from the panel', async () => {
     setLanguage('en');
     await renderPage(TopologyPage, data('rcon_admin'));
-    expect(hostLink(/host-2/).textContent).toContain('Major version differs from the panel (1)');
+    expect(agentLink('a2').textContent).toContain('Major version differs from the panel (1)');
+    expect(agentLink('a1').textContent).not.toContain('Major version');
     expect(screen.getAllByText(/Major version differs/)).toHaveLength(1);
   });
 
-  it('gives the server admin the display name, no agent data and no link (F10, D-089)', async () => {
+  it('gives the server admin name and state, no agent version and no link (F10, D-089)', async () => {
     setLanguage('en');
     // The cache would hold no agents for him; even so no agent data shows.
     await renderPage(TopologyPage, data('server_admin'));
@@ -139,9 +208,9 @@ describe('topology (UI-010)', () => {
     expect(page).not.toContain('10.0.0.5');
     expect(page).not.toContain('1.2.3');
     expect(page).not.toContain('Major version');
-    expect(page).toContain('Rack <i>A</i>');
-    expect(page).toContain('Host 1');
-    expect(page).toContain('disconnected');
+    const bs = branches();
+    expect(bs[0].textContent).toContain('Rack <i>A</i>Agent · connected');
+    expect(bs[1].textContent).toContain('Host 1Agent · disconnected');
     expect(document.querySelector('a[href^="/admin/agents"]')).toBeNull();
     expect(
       within(hosts())
@@ -150,43 +219,23 @@ describe('topology (UI-010)', () => {
     ).toEqual(['alpha', 'beta', 'gamma']);
   });
 
-  it('shows the agent address and no Docker host while docker_host is off (AGT-014)', async () => {
+  it('keeps Docker host and address out of the node, also with docker_host (AGT-014)', async () => {
     setLanguage('en');
-    await renderPage(TopologyPage, data('rcon_admin'));
-    const one = hostLink(/host-1/);
-    expect(one.textContent).toContain('10.0.0.5');
-    expect(one.textContent).not.toContain('192.168.1.5');
-  });
-
-  it('shows the Docker host as text in place of the agent address with docker_host (AGT-014)', async () => {
-    setLanguage('en');
-    await renderPage(TopologyPage, data('rcon_admin', ['docker_host']));
-    const one = hostLink(/host-1/);
-    expect(one.textContent).toContain('<b>nas</b> (192.168.1.5)');
-    expect(one.querySelector('b')).toBeNull();
-    // host-1 has a host address: no connection address (AGT-014).
-    expect(one.textContent).not.toContain('10.0.0.5');
-    // host-2 has none: the connection address the backend sent, marked.
-    const two = hostLink(/host-2/);
-    expect(two.textContent).toContain('box');
-    expect(two.textContent).toContain('Connected from 10.0.0.9');
-  });
-
-  it('gives the server admin no Docker host, also with docker_host (AGT-014)', async () => {
-    setLanguage('en');
-    await renderPage(TopologyPage, data('server_admin', ['docker_host']));
-    const page = document.body.textContent ?? '';
-    expect(page).not.toContain('nas');
-    expect(page).not.toContain('192.168.1.5');
-    expect(page).not.toContain('10.0.0.9');
-    expect(page).not.toContain('Connected from');
+    for (const role of ['rcon_admin', 'server_admin']) {
+      const { unmount } = await renderPage(TopologyPage, data(role, ['docker_host']));
+      const page = document.body.textContent ?? '';
+      expect(page).not.toContain('nas');
+      expect(page).not.toContain('192.168.1.5');
+      expect(page).not.toContain('10.0.0.9');
+      expect(page).not.toContain('Connected from');
+      unmount();
+    }
   });
 
   it('has no text outside the language files (NFR-007)', async () => {
     setLanguage('xx');
     const { container: el } = await renderPage(TopologyPage, data('rcon_admin', ['docker_host']));
-    const names =
-      /^(Rack <i>A<\/i>|host-[12]|box|<b>nas<\/b>|\(192\.168\.1\.5\)|10\.0\.0\.9|1\.2\.[03]|2\.0\.0|alpha|beta|gamma)$/;
+    const names = /^(Rack <i>A<\/i>|1\.2\.3|2\.0\.0|alpha|beta|gamma)$/;
     expect(unmarked(el).filter((s) => !names.test(s.trim()))).toEqual([]);
   });
 });
