@@ -280,7 +280,8 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     expect(within(item).getByText('Restart at 8')).toBeTruthy();
     expect(item.textContent).not.toContain('Details follow');
     // Nothing chosen yet: a hint stands for the message.
-    expect(screen.getByText('Choose a message to read it.')).toBeTruthy();
+    expect(screen.getByText('No message selected.')).toBeTruthy();
+    expect(screen.getByText('Choose a message on the left to read it.')).toBeTruthy();
     const view = await openMessage();
     expect(view.textContent).toContain('Details follow');
     expect(within(item).getByRole('button').getAttribute('aria-current')).toBe('true');
@@ -289,13 +290,26 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     expect(within(item).getByRole('button').getAttribute('aria-current')).toBeNull();
   });
 
-  it('shows the empty panes with a hint when there is no message', async () => {
+  it('names an empty list and no selection in words, without placeholder bars', async () => {
     setLanguage('en');
     mock({ '/messages': list([]) });
-    const { container } = await renderPage(MessagesPage, [[sessionKey, session('moderator')]]);
+    const { container } = await renderPage(MessagesPage, [[sessionKey, session()]]);
     expect(await screen.findByText('No messages yet.')).toBeTruthy();
+    expect(screen.getByText('No message selected.')).toBeTruthy();
+    expect(screen.getByText('Choose a message on the left to read it.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'New message' })).toBeTruthy();
     expect(screen.queryByRole('list')).toBeNull();
-    expect(container.querySelectorAll('[aria-hidden="true"] .rounded').length).toBeGreaterThan(4);
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(container.querySelector('[aria-hidden="true"] .rounded')).toBeNull();
+  });
+
+  it('shows only a short hint while the list loads', async () => {
+    setLanguage('en');
+    vi.spyOn(api, 'GET').mockImplementation((() => new Promise(() => undefined)) as never);
+    const { container } = await renderPage(MessagesPage, [[sessionKey, session('moderator')]]);
+    expect(await screen.findByText('Loading…')).toBeTruthy();
+    expect(screen.queryByText('No messages yet.')).toBeNull();
+    expect(container.querySelector('[aria-hidden="true"] .rounded')).toBeNull();
   });
 
   it('cuts a long first line and keeps a character whole', () => {

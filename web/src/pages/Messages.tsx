@@ -121,10 +121,9 @@ export function MessagesPage() {
             </ol>
           )}
           {empty && (
-            <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
-              <p className="text-center text-muted">{t('messages.none')}</p>
-              <ListSkeleton />
-            </div>
+            <p className="rounded-lg border border-border bg-surface p-6 text-center text-muted">
+              {t('messages.none')}
+            </p>
           )}
           {list.isPending && <p className="p-6 text-center text-muted">{t('app.loading')}</p>}
           {list.isError && (
@@ -147,39 +146,13 @@ export function MessagesPage() {
           {current ? (
             <MessageView key={current.id} message={current} onBack={() => setOpen(null)} />
           ) : (
-            <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4">
-              {items.length > 0 && <p className="text-center text-muted">{t('messages.pick')}</p>}
-              <ViewSkeleton />
+            <div className="flex min-h-48 flex-col items-center justify-center gap-1 rounded-lg border border-border bg-surface p-6 text-center">
+              <p className="text-muted">{t('messages.noneSelected')}</p>
+              <p className="text-sm text-muted">{t('messages.pick')}</p>
             </div>
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-// The skeletons stand in for the list and the message while there is
-// nothing to show; they carry no content.
-function ListSkeleton() {
-  return (
-    <div aria-hidden className="flex flex-col gap-3">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="flex flex-col gap-1.5">
-          <div className="h-3 w-3/4 rounded bg-surface-raised" />
-          <div className="h-2.5 w-1/2 rounded bg-surface-raised" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ViewSkeleton() {
-  return (
-    <div aria-hidden className="flex flex-col gap-3">
-      <div className="h-3 w-1/3 rounded bg-surface-raised" />
-      <div className="h-16 rounded bg-surface-raised" />
-      <div className="ml-6 h-10 rounded bg-surface-raised" />
-      <div className="mt-4 h-11 rounded bg-surface-raised" />
     </div>
   );
 }

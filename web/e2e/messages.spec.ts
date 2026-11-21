@@ -60,6 +60,9 @@ test('the RCON admin writes, the moderator reads and replies in the thread', asy
       const mod = await other.newPage();
       await enter(mod, state, 'mod');
       const item = mod.getByTestId('message').filter({ hasText: subject });
+      // Nothing chosen yet: words, centred, no placeholder bars.
+      await expect(mod.getByText('No message selected.')).toBeVisible();
+      await expect(mod.getByText('Choose a message on the left to read it.')).toBeVisible();
       // Unread: bold, with its mark; the title is the first line only.
       await expect(item.getByRole('button')).toHaveClass(/font-semibold/);
       await expect(item).toContainText('new');
@@ -94,6 +97,26 @@ test('the RCON admin writes, the moderator reads and replies in the thread', asy
   } finally {
     await cleanup(playwright, state, subject);
   }
+});
+
+test('while loading a short hint, an empty list in words', async ({ page, state }) => {
+  // The list answer is held, then answered empty, so both states show
+  // regardless of the messages other specs leave behind.
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route('**/api/v1/messages?*', async (route) => {
+    await held;
+    await route.fulfill({ json: { items: [], unread: 0 } });
+  });
+  await login(page, 'admin', secret(state, 'admin'));
+  await page.goto('messages');
+  await expect(page.getByText('Loading…')).toBeVisible();
+  release();
+  await expect(page.getByText('No messages yet.')).toBeVisible();
+  await expect(page.getByText('Loading…')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New message' })).toBeVisible();
+  await expect(page.getByText('No message selected.')).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Messages' })).toHaveCount(0);
 });
 
 test('the server admin writes to his servers, a supporter writes nothing', async ({
@@ -131,6 +154,9 @@ test.describe('on a phone', () => {
       await dialog.getByRole('button', { name: 'Close' }).click();
 
       const list = page.getByRole('list', { name: 'Messages' });
+      // Only the list shows until a message is chosen.
+      await expect(list).toBeVisible();
+      await expect(page.getByText('No message selected.')).toBeHidden();
       await list.getByTestId('message').filter({ hasText: subject }).getByRole('button').click();
       const view = page.getByRole('article', { name: 'Message' });
       // One pane at a time: the list gives way to the message.
