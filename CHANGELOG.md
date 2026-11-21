@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.2
+
+### New
+- Messages in the panel, with comments and unread count (MSG-001 to MSG-003).
+- System log page and a diagnostic export as ZIP for the RCON admin, blacked out (UI-025, NFR-018).
+- Secrets masked in container logs; the RCON admin adds own texts (UI-022).
+- say with the sender's name and a prefix per server group (CMD-020).
+- Game profile browser, command palette, Minecraft color codes as styles (UI-020, CMD-016, CMD-017).
+- Overview grouped by host, server number, Docker host for the RCON admin, Save as New, two-part log filter (UI-021, UI-018, AGT-014, UI-017, UI-019).
+- About dialog and version line; versions and licenses in the images (UI-024, AGT-016, NFR-021).
+
+### Changed
+- The new functions are on; the RCON admin can switch each off under Settings, Features (NFR-019).
+- A say on Minecraft goes out as tellraw with the sender (CMD-020).
+- Update the panel before the agents; agents 1.1 keep working, Docker host and agent log need agent 1.2 (AGT-013, AGT-014, UI-025).
+
+### Fixed
+- The password change comes before the setup of the second factor (AUTH-010).
+- Logo with enough contrast in the light design (UI-023).
+
+### Security
+- An unreadable security setting no longer opens the protection: the two-factor duty and limits keep their last or default value (AUTH-008).
+- Scope and grant targets are checked in the same transaction as the write (ROLE-003, ROLE-004).
+- Game ports in the profile list only for admins (UI-005).
+- Updated dependencies.
+
 ## 1.1
 
 ### New
