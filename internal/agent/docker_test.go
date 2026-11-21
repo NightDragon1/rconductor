@@ -49,8 +49,10 @@ type fakeDocker struct {
 	// info answers Info, infoErr fails it.
 	info    system.Info
 	infoErr error
-	// health is the healthcheck state Inspect reports, nil for none.
-	health *container.Health
+	// health is the healthcheck state Inspect reports, nil for none;
+	// inspectErr fails Inspect.
+	health     *container.Health
+	inspectErr error
 }
 
 func (f *fakeDocker) Info(context.Context, client.InfoOptions) (client.SystemInfoResult, error) {
@@ -84,10 +86,12 @@ func (f *fakeDocker) ContainerList(_ context.Context, o client.ContainerListOpti
 }
 
 func (f *fakeDocker) ContainerInspect(context.Context, string, client.ContainerInspectOptions) (client.ContainerInspectResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return client.ContainerInspectResult{Container: container.InspectResponse{
 		Config: &container.Config{Tty: f.tty}, RestartCount: 2,
 		State: &container.State{StartedAt: "2026-11-03T10:00:00.5Z", Health: f.health},
-	}}, nil
+	}}, f.inspectErr
 }
 
 func (f *fakeDocker) record(a string) {
@@ -734,5 +738,34 @@ func TestHealth(t *testing.T) {
 	ev, _ := agentproto.Payload[agentproto.ContainerEvent](rec.of(agentproto.TypeContainerEvent)[0])
 	if ev.Container.Health != "unhealthy" || ev.Gone {
 		t.Errorf("event = %+v", ev)
+	}
+
+	// Without the inspect the health comes from the event; a value outside
+	// the known ones does not (other values never pass the action filter).
+	for action, want := range map[events.Action]string{
+		events.ActionHealthStatusHealthy:   "healthy",
+		events.ActionHealthStatusUnhealthy: "unhealthy",
+		events.ActionHealthStatusRunning:   "",
+	} {
+		d, fd, _ := newTestDocker(t)
+		d.metrics = time.Hour
+		rec := &recorder{}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- d.Run(ctx, rec) }()
+		waitFor(t, "snapshot", func() bool { return len(rec.of(agentproto.TypeSnapshot)) == 1 })
+		fd.mu.Lock()
+		fd.inspectErr = errors.New("inspect timed out")
+		fd.mu.Unlock()
+		fd.events <- events.Message{Type: "container", Action: action, Actor: events.Actor{ID: "id-mc", Attributes: map[string]string{"name": "mc"}}}
+		waitFor(t, "health event", func() bool { return len(rec.of(agentproto.TypeContainerEvent)) == 1 })
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+		ev, _ := agentproto.Payload[agentproto.ContainerEvent](rec.of(agentproto.TypeContainerEvent)[0])
+		if ev.Container.Health != want {
+			t.Errorf("%s without inspect: health %q, want %q", action, ev.Container.Health, want)
+		}
 	}
 }

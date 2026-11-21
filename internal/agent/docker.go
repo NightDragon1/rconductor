@@ -341,6 +341,12 @@ func (d *Docker) event(ctx context.Context, out Sender, m events.Message) {
 	ev := agentproto.ContainerEvent{}
 	if len(items) == 1 {
 		ev.Container = d.withStart(ctx, toContainer(items[0]))
+		// Docker reports a health change once; without the inspect the
+		// event itself names the new health, so it is not lost.
+		if h, ok := strings.CutPrefix(string(m.Action), string(events.ActionHealthStatus)+": "); ok && ev.Container.Health == "" {
+			ev.Container.Health = h
+			ev.Container.Clean()
+		}
 	} else {
 		ev.Container = agentproto.Container{ID: m.Actor.ID, Name: name}
 		ev.Container.Clean()

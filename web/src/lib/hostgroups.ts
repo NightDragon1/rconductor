@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { Server } from '@/api/servers';
-import { cardStatus } from '@/lib/status';
+import { cardStatus, summaryOf } from '@/lib/status';
 
 // HOST_GROUPS_FLAG groups the overview by host (UI-021, D-089).
 export const HOST_GROUPS_FLAG = 'host_groups';
@@ -17,14 +17,11 @@ export type HostGroup = {
 };
 
 // hostCounts sums the card status of the servers into running, stopped
-// and error (UI-021); a state that is neither up nor stopped is an error.
+// and error (UI-021) as summaryOf assigns them.
 export function hostCounts(servers: Server[]): HostCounts {
   const out = { running: 0, stopped: 0, error: 0 };
   for (const s of servers) {
-    const st = cardStatus(s);
-    if (st === 'running' || st === 'online') out.running++;
-    else if (st === 'stopped') out.stopped++;
-    else out.error++;
+    out[summaryOf(cardStatus(s))]++;
   }
   return out;
 }

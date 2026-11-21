@@ -39,6 +39,16 @@ export const toneOf: Record<CardStatus, Tone> = {
   unknown: 'muted',
 };
 
+// summaryOf puts a card status into the running, stopped or error part of
+// a summary (UI-021): a healthy or still starting container runs, a paused
+// or restarting one is stopped for now, unhealthy and dead are errors.
+export function summaryOf(st: CardStatus): 'running' | 'stopped' | 'error' {
+  if (st === 'running' || st === 'online' || st === 'healthy' || st === 'starting')
+    return 'running';
+  if (st === 'stopped' || st === 'paused' || st === 'restarting') return 'stopped';
+  return 'error';
+}
+
 // isUp: the server runs and answers over RCON.
 export const isUp = (s: Server) => toneOf[cardStatus(s)] === 'ok';
 
