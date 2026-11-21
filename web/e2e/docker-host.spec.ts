@@ -16,9 +16,14 @@ async function as(page: Page, state: StackState, user: string) {
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
 }
 
-// agentNode is the node of a host with its agent in the topology.
-const agentNode = (page: Page, agent: string) =>
-  page.getByRole('list', { name: 'Hosts' }).getByRole('link').filter({ hasText: agent }).first();
+// agentNode is the node of the host of a server with its agent in the
+// topology.
+const agentNode = (page: Page, server: string) =>
+  page
+    .getByRole('list', { name: 'Hosts' })
+    .locator(':scope > li')
+    .filter({ has: page.getByRole('link', { name: server, exact: true }) })
+    .locator('a[href*="admin/agents"]');
 
 // connectedFrom: the connection address shows, marked, exactly when the
 // agent has no host address and the backend sends one; it does so only
@@ -32,7 +37,7 @@ async function connectedFrom(at: Locator, a?: { remote?: string; docker_host?: {
 test.describe('docker host on', () => {
   test.use({ flags: ['docker_host'] });
 
-  test('the RCON admin sees the Docker host as text in topology and agent list', async ({
+  test('the RCON admin sees the Docker host as text in agent list and server page, not in the topology', async ({
     page,
     state,
   }) => {
@@ -46,13 +51,13 @@ test.describe('docker host on', () => {
     expect(host1?.docker_host).toEqual({ name: hostName, ip: hostIP });
     expect(items.find((a) => a.name === 'host-legacy')?.docker_host).toBeUndefined();
 
+    // The topology node names the host by its display name only (UI-010).
     await page.goto('topology');
-    const node = agentNode(page, 'host-1');
-    await expect(node).toContainText(`${hostName} (${hostIP})`);
-    // Markup stays text (SEC-006); a connection address only marked as
-    // such, and only when the backend sends one (D-084).
-    await expect(node.locator('b')).toHaveCount(0);
-    await connectedFrom(node, host1);
+    const node = agentNode(page, 'survival');
+    await expect(node).toContainText('connected');
+    await expect(node).not.toContainText(hostIP);
+    await expect(node).not.toContainText('nas');
+    await expect(node).not.toContainText('Connected from');
 
     // The server page names the host of its agent (AGT-014: each server with agent).
     await page.goto(`servers/${state.servers.survival}/overview`);
@@ -97,7 +102,8 @@ test.describe('flag off', () => {
     const { items } = (await r.json()) as { items: { docker_host?: unknown }[] };
     expect(items.every((a) => a.docker_host === undefined)).toBe(true);
     await page.goto('topology');
-    await expect(agentNode(page, 'host-1')).not.toContainText(hostIP);
+    await expect(agentNode(page, 'survival')).toContainText('connected');
+    await expect(agentNode(page, 'survival')).not.toContainText(hostIP);
     await page.goto('admin/agents');
     await expect(page.getByRole('row').filter({ hasText: 'host-1' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Docker host' })).toHaveCount(0);

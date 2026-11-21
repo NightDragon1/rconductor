@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import type { Page } from '@playwright/test';
 import { expect, login, secret, test } from './fixtures';
 
 // survival runs on host-1 with the game port 25565 and the map port 8100
@@ -38,17 +39,29 @@ test('ports and volumes per role (UI-005)', async ({ page, state }) => {
   }
 });
 
+// hostOf is the branch of the topology with the host of a server and its
+// servers.
+const hostOf = (page: Page, server: string) =>
+  page
+    .getByRole('list', { name: 'Hosts' })
+    .locator(':scope > li')
+    .filter({ has: page.getByRole('link', { name: server, exact: true }) });
+
 test('topology per role, live without reload (UI-010)', async ({ page, state, browser }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto('topology');
   // Panel → host → server from left to right (UI-010).
   await expect(page.getByRole('main')).toContainText('Panel');
+  await expect(page.getByRole('main')).toContainText(/ · :8080 web · :8443 agents/);
   const hosts = page.getByRole('list', { name: 'Hosts' });
-  const host1 = hosts.getByRole('link').filter({ hasText: 'host-1' });
-  await expect(host1).toContainText('connected');
+  // The node of host-1 names display name, agent version and state, not
+  // the agent's name (UI-010).
+  const host1 = hostOf(page, 'survival').locator('a[href*="admin/agents"]');
+  await expect(host1).toContainText(/Agent \S+ · connected/);
+  await expect(host1).not.toContainText('host-1');
   await expect(host1).not.toContainText('Major version');
-  await expect(hosts.getByRole('link', { name: 'survival' })).toBeVisible();
+  await expect(hosts.getByRole('link', { name: 'survival', exact: true })).toBeVisible();
   const rest = hosts.getByRole('listitem').filter({ hasText: 'Without agent' });
   const outpost = rest.getByRole('listitem').filter({ hasText: /^outpost/ });
   await expect(outpost).toContainText('online');
@@ -89,7 +102,7 @@ test('topology per role, live without reload (UI-010)', async ({ page, state, br
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto('topology');
   await expect(page.getByRole('link', { name: 'survival' })).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Hosts' })).toContainText('connected');
+  await expect(hostOf(page, 'survival')).toContainText('Agent · connected');
   await expect(page.getByRole('main')).not.toContainText('host-1');
   // No link to the agents for him.
   await expect(page.locator('a[href*="admin/agents"]')).toHaveCount(0);
@@ -101,12 +114,34 @@ test('the topology opens agent and server (UI-010)', async ({ page, state }) => 
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto('topology');
   const hosts = page.getByRole('list', { name: 'Hosts' });
-  await hosts.getByRole('link').filter({ hasText: 'host-1' }).click();
+  await hostOf(page, 'survival').locator('a[href*="admin/agents"]').click();
   await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible();
   await expect(page).toHaveURL(/admin\/agents#/);
   await page.goBack();
   await hosts.getByRole('link', { name: 'survival' }).click();
   await expect(page).toHaveURL(new RegExp(`servers/${state.servers.survival}`));
+});
+
+// UI-010: from 1024 px on the servers stand right of their host, below it
+// they stack under the host card.
+test('the topology stacks below 1024 px (UI-010)', async ({ page, state }) => {
+  await login(page, 'admin', secret(state, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await page.goto('topology');
+  const host = hostOf(page, 'survival').locator('a[href*="admin/agents"]');
+  const card = hostOf(page, 'survival').getByRole('link', { name: 'survival', exact: true });
+  for (const [width, right] of [
+    [1280, true],
+    [1000, false],
+  ] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(host).toBeVisible();
+    const h = await host.boundingBox();
+    const c = await card.boundingBox();
+    if (!h || !c) throw new Error('topology node not laid out');
+    if (right) expect(c.x).toBeGreaterThan(h.x + h.width);
+    else expect(c.y).toBeGreaterThan(h.y + h.height);
+  }
 });
 
 // O5: the cards on the server list carry the game ports for the roles that

@@ -296,8 +296,9 @@
   "topology": {
     "explain": "The panel, its hosts with their agent and the servers you may see on each, as a live tree.",
     "panel": "Panel",
+    "panelInfo": "{{version}} · {{web}} web · {{agents}} agents",
     "hosts": "Hosts",
-    "version": "Version",
+    "sep": "·",
     "majorDiffers": "Major version differs from the panel ({{major}})",
     "agent": "Agent",
     "noAgent": "Without agent",
