@@ -142,3 +142,63 @@ func TestWhoMayInvite(t *testing.T) {
 		t.Errorf("delete own invite: %v", err)
 	}
 }
+
+// TestInviterSeesInviteeAfterRedeem: whoever invites sees the open
+// invitation from the start and, once it is redeemed, the new user in his
+// user list instead of an open invitation (UI-007, UI-008, ROLE-006).
+func TestInviterSeesInviteeAfterRedeem(t *testing.T) {
+	f := withMore(t)
+	iv := newInvites(t, f)
+	ctx := context.Background()
+	f.exec(`UPDATE settings SET value = 'true' WHERE key = ?`, perm.SettingSupportersEnabled)
+	f.exec(`UPDATE users SET supporters_allowed = 1 WHERE id = ?`, f.ids["m"])
+
+	for name, tc := range map[string]struct {
+		inviter   string
+		role      perm.Role
+		pseudonym string
+	}{
+		"server admin invites a moderator": {"sa", perm.Moderator, "Fresh Mod"},
+		"moderator invites a supporter":    {"m", perm.Supporter, "Fresh Sup"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := f.as(tc.inviter)
+			inv, token, err := iv.Create(ctx, req, tc.role, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			open := func() bool {
+				list, err := iv.List(ctx, req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, i := range list {
+					if i.ID == inv.ID {
+						return i.UsedAt == nil
+					}
+				}
+				return false
+			}
+			if !open() {
+				t.Fatal("the new invitation is not open for its inviter")
+			}
+			u, err := iv.Redeem(ctx, token, tc.pseudonym, goodPassword, "req-"+tc.pseudonym)
+			if err != nil {
+				t.Fatal(err)
+			}
+			users, err := f.svc.List(ctx, req, Filter{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Contains(names(users), tc.pseudonym) {
+				t.Errorf("%s does not see %s: %v", tc.inviter, tc.pseudonym, names(users))
+			}
+			if open() {
+				t.Error("the redeemed invitation is still open")
+			}
+			if u.Role != tc.role {
+				t.Errorf("role = %s, want %s", u.Role, tc.role)
+			}
+		})
+	}
+}

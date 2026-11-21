@@ -297,3 +297,65 @@ describe('server scope in the panel (O1)', () => {
     ).toEqual(['MC GTNH 2.9.0']);
   });
 });
+
+// Open invitations stand in the list from the moment they are made (UI-008):
+// role, age, expiry and, for the RCON admin, who made them; withdrawing one
+// asks first (Design 6.1).
+describe('open invitations in the user list (UI-008)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+  const earlier = new Date(Date.now() - 7200_000).toISOString();
+  const invites = [
+    { id: 'i1', created_by: 'a', role: 'supporter', created_at: earlier, expires_at: later },
+    { id: 'i2', created_by: 'u1', role: 'supporter', created_at: earlier, expires_at: earlier },
+  ];
+  const render = (who = session.user) =>
+    renderPage(UsersPage, [
+      [sessionKey, { ...session, user: who }],
+      [managedUsersKey, users],
+      [invitesKey, invites],
+      [userGroupsKey, []],
+      [serversKey, []],
+      [serverGroupsKey, []],
+      [assignmentsKey('u1'), assignments],
+      [assignmentsKey('u2'), { ...assignments, role: 'supporter', groups: [] }],
+    ]);
+  const rows = () => screen.getAllByTestId('invite') as [HTMLElement, HTMLElement];
+
+  it('shows status, role, age, expiry and the inviter', async () => {
+    setLanguage('en');
+    await render();
+    const [own, other] = rows();
+    expect(own.textContent).toContain('Invitation open');
+    expect(own.textContent).toContain('Supporter');
+    expect(own.textContent).toContain('Created 2 h ago');
+    expect(own.textContent).toContain('expires in');
+    expect(own.textContent).not.toContain('Invited by');
+    expect(other.textContent).toContain('expired');
+    expect(other.textContent).toContain('Invited by nyx');
+  });
+
+  it('withdraws only after the question', async () => {
+    setLanguage('en');
+    const del = vi.spyOn(api, 'DELETE').mockResolvedValue({
+      data: undefined,
+      response: new Response(null, { status: 204 }),
+    } as never);
+    await render();
+    fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Withdraw' }));
+    expect(screen.getByRole('dialog').textContent).toContain('Withdraw the invitation?');
+    expect(del).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Withdraw' }));
+    await waitFor(() => expect(del).toHaveBeenCalledOnce());
+  });
+
+  it('a moderator withdraws his own, not those of others', async () => {
+    setLanguage('en');
+    await render({ id: 'u1', pseudonym: 'nyx', role: 'moderator' });
+    const [foreign, own] = rows();
+    expect(within(foreign).queryByRole('button', { name: 'Withdraw' })).toBeNull();
+    expect(within(own).getByRole('button', { name: 'Withdraw' })).not.toBeNull();
+  });
+});

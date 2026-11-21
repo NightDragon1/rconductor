@@ -8,6 +8,7 @@ import { agentsKey, serversKey, useAgents, type Agent } from '@/api/servers';
 import { outcome } from '@/api/users';
 import type { components } from '@/api/schema';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { cell, headCell, rowButton } from '@/components/DenseTable';
 import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -291,25 +292,25 @@ export function AgentsPage() {
           <table className="w-full text-sm">
             <thead className="text-left text-muted">
               <tr>
-                <th className="p-3 font-medium">{t('agents.name')}</th>
-                <th className="p-3 font-medium">{t('admin.statusLabel')}</th>
-                <th className="p-3 font-medium">{t('agents.version')}</th>
-                {dockerHost && <th className="p-3 font-medium">{t('agents.dockerHost')}</th>}
-                {hostGroups && <th className="p-3 font-medium">{t('agents.displayName')}</th>}
-                <th className="p-3 font-medium">{t('agents.fingerprint')}</th>
-                <th className="p-3 font-medium">{t('agents.lastSeen')}</th>
-                <th className="p-3" />
+                <th className={headCell}>{t('agents.name')}</th>
+                <th className={headCell}>{t('admin.statusLabel')}</th>
+                <th className={headCell}>{t('agents.version')}</th>
+                {dockerHost && <th className={headCell}>{t('agents.dockerHost')}</th>}
+                {hostGroups && <th className={headCell}>{t('agents.displayName')}</th>}
+                <th className={headCell}>{t('agents.fingerprint')}</th>
+                <th className={headCell}>{t('agents.lastSeen')}</th>
+                <th className={cell} />
               </tr>
             </thead>
             <tbody>
               {shown.map((a) => (
                 <tr key={a.id} id={a.id} className="border-t border-border">
-                  <td className="p-3 font-mono">
+                  <td className={`${cell} font-mono`}>
                     <ForeignText text={a.name} />
                   </td>
                   <td
                     className={cn(
-                      'p-3',
+                      cell,
                       a.status === 'pending'
                         ? 'text-warn'
                         : a.connected
@@ -323,37 +324,43 @@ export function AgentsPage() {
                       ? t(a.connected ? 'agents.connected' : 'agents.disconnected')
                       : t(`agents.status.${a.status}`)}
                   </td>
-                  <td className="p-3 font-mono">
+                  <td className={`${cell} font-mono`}>
                     <bdi>{a.version}</bdi>
                   </td>
                   {dockerHost && (
-                    <td className="p-3">
+                    <td className={cell}>
                       <DockerHost agent={a} />
                     </td>
                   )}
                   {hostGroups && (
-                    <td className="p-3">
+                    <td className={cell}>
                       {a.display_name && <ForeignText text={a.display_name} />}
                     </td>
                   )}
                   <td
-                    className="max-w-56 wrap-anywhere md:truncate p-3 font-mono text-xs"
+                    className={`max-w-56 wrap-anywhere md:truncate ${cell} font-mono text-xs`}
                     title={a.fingerprint}
                   >
                     {a.fingerprint}
                   </td>
-                  <td className="p-3 text-muted">
+                  <td className={`${cell} text-muted`}>
                     {a.last_seen_at ? ago(t, a.last_seen_at, now) : ''}
                   </td>
-                  <td className="p-3 text-right">
+                  <td className={`${cell} text-right`}>
                     {hostGroups && a.status !== 'revoked' && (
-                      <Button variant="ghost" size="sm" onClick={() => setNaming(a)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={rowButton}
+                        onClick={() => setNaming(a)}
+                      >
                         {t('agents.displayNameEdit')}
                       </Button>
                     )}
                     {a.status === 'pending' && (
                       <Button
                         size="sm"
+                        className={rowButton}
                         onClick={() =>
                           void act(
                             a.id,
@@ -374,7 +381,7 @@ export function AgentsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="ml-2 text-danger"
+                        className={cn('ml-2 text-danger', rowButton)}
                         onClick={() => setRevoke(a)}
                       >
                         {t(a.status === 'pending' ? 'agents.reject' : 'agents.revoke')}

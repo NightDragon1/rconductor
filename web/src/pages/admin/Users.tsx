@@ -19,11 +19,13 @@ import {
   useUserGroups,
   type Assignments,
   type AssignmentsUpdate,
+  type Invite,
   type Outcome,
   type Role,
   type User,
 } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { cell, headCell, rowButton } from '@/components/DenseTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ago, span, useNow } from '@/lib/format';
@@ -82,6 +84,7 @@ export function UsersPage() {
   const [invite, setInvite] = useState<{ template?: User; key: number } | null>(null);
   const [results, setResults] = useState<{ title: string; items: Outcome[] } | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [withdrawing, setWithdrawing] = useState<Invite | null>(null);
   const search = useRef<HTMLInputElement>(null);
   const roleId = useId();
   const statusId = useId();
@@ -135,6 +138,19 @@ export function UsersPage() {
       (status === 'all' || status === 'invited'),
   );
   const chosen = list.filter((u) => selected.has(u.id));
+  // Who made an invitation: only the RCON admin sees those of others.
+  const inviter = (i: Invite) =>
+    i.created_by === session?.user.id
+      ? ''
+      : (list.find((u) => u.id === i.created_by)?.pseudonym ?? '');
+  // The backend lets the RCON admin withdraw any, everyone else his own.
+  const mayWithdraw = (i: Invite) => role === 'rcon_admin' || i.created_by === session?.user.id;
+  const withdraw = async (i: Invite) => {
+    await outcome(i.id, async () =>
+      must(await api.DELETE('/invites/{id}', { params: { path: { id: i.id } } })),
+    );
+    void qc.invalidateQueries({ queryKey: invitesKey });
+  };
   const panelUser = list.find((u) => u.id === open);
 
   // A mass action runs per user and reports each outcome (UI-007): no
@@ -399,15 +415,28 @@ export function UsersPage() {
               return (
                 <Card
                   key={i.id}
-                  mono
                   title={t('admin.invitation')}
                   facts={[
                     { label: t('admin.role'), value: t(`role.${i.role}`) },
                     {
                       label: t('admin.statusLabel'),
-                      value: t(expired ? 'admin.expired' : 'admin.status.invited'),
+                      value: t(expired ? 'admin.expired' : 'admin.inviteOpen'),
                       className: expired ? 'text-muted' : 'text-warn',
                     },
+                    { label: t('admin.inviteCreated'), value: ago(t, i.created_at, now) },
+                    ...(expired
+                      ? []
+                      : [
+                          {
+                            label: t('admin.inviteExpires'),
+                            value: t('admin.expiresIn', {
+                              span: span(t, Date.parse(i.expires_at) - now),
+                            }),
+                          },
+                        ]),
+                    ...(inviter(i)
+                      ? [{ label: t('admin.invitedBy'), value: <bdi>{inviter(i)}</bdi> }]
+                      : []),
                   ]}
                 />
               );
@@ -418,7 +447,7 @@ export function UsersPage() {
             <table className="w-full text-sm">
               <thead className="text-left text-muted">
                 <tr>
-                  <th className="w-10 p-3">
+                  <th className={`w-10 ${cell}`}>
                     <input
                       type="checkbox"
                       aria-label={t('admin.selectAll')}
@@ -428,11 +457,11 @@ export function UsersPage() {
                       }
                     />
                   </th>
-                  <th className="p-3 font-medium">{t('login.pseudonym')}</th>
-                  <th className="p-3 font-medium">{t('admin.role')}</th>
-                  <th className="p-3 font-medium">{t('admin.groupsScope')}</th>
-                  <th className="p-3 font-medium">{t('admin.lastActive')}</th>
-                  <th className="p-3 font-medium">{t('admin.statusLabel')}</th>
+                  <th className={headCell}>{t('login.pseudonym')}</th>
+                  <th className={headCell}>{t('admin.role')}</th>
+                  <th className={headCell}>{t('admin.groupsScope')}</th>
+                  <th className={headCell}>{t('admin.lastActive')}</th>
+                  <th className={headCell}>{t('admin.statusLabel')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -445,7 +474,7 @@ export function UsersPage() {
                       (selected.has(u.id) || open === u.id) && 'bg-surface-raised',
                     )}
                   >
-                    <td className="p-3">
+                    <td className={cell}>
                       <input
                         type="checkbox"
                         aria-label={t('admin.select', { name: u.pseudonym })}
@@ -453,14 +482,14 @@ export function UsersPage() {
                         onChange={() => toggle(u.id)}
                       />
                     </td>
-                    <td className="p-3">
+                    <td className={cell}>
                       <button
                         type="button"
                         className="flex items-center gap-2 font-mono hover:underline"
                         onClick={() => guard(() => setOpen(u.id))}
                       >
                         <span
-                          className="flex size-7 items-center justify-center rounded-full bg-surface-raised text-xs"
+                          className="flex size-7 items-center justify-center rounded-full bg-surface-raised text-xs lg:size-5 lg:text-[0.625rem]"
                           aria-hidden
                         >
                           {initials(u.pseudonym)}
@@ -468,18 +497,18 @@ export function UsersPage() {
                         <bdi>{u.pseudonym}</bdi>
                       </button>
                     </td>
-                    <td className="p-3">
+                    <td className={cell}>
                       <span className="rounded border border-border px-1.5 text-xs">
                         {t(`role.${u.role}`)}
                       </span>
                     </td>
-                    <td className="max-w-64 wrap-anywhere md:truncate p-3">
+                    <td className={`max-w-64 wrap-anywhere md:truncate ${cell}`}>
                       <bdi>{scopeText(u)}</bdi>
                     </td>
-                    <td className="p-3 text-muted">
+                    <td className={`${cell} text-muted`}>
                       {u.last_login_at ? ago(t, u.last_login_at, now) : t('admin.never')}
                     </td>
-                    <td className={cn('p-3', u.disabled ? 'text-danger' : 'text-ok')}>
+                    <td className={cn(cell, u.disabled ? 'text-danger' : 'text-ok')}>
                       {t(u.disabled ? 'admin.status.locked' : 'admin.status.active')}
                     </td>
                   </tr>
@@ -487,40 +516,41 @@ export function UsersPage() {
                 {openInvites.map((i) => {
                   const expired = Date.parse(i.expires_at) <= now;
                   return (
-                    <tr key={i.id} className="border-t border-border">
-                      <td className="p-3" />
-                      <td className="p-3 font-mono text-muted">{t('admin.invitation')}</td>
-                      <td className="p-3">
+                    <tr key={i.id} data-testid="invite" className="border-t border-border">
+                      <td className={cell} />
+                      <td className={`${cell} font-medium`}>{t('admin.invitation')}</td>
+                      <td className={cell}>
                         <span className="rounded border border-border px-1.5 text-xs">
                           {t(`role.${i.role}`)}
                         </span>
                       </td>
-                      <td className="p-3" />
-                      <td className="p-3 text-muted">
+                      <td className={`${cell} text-muted`}>
+                        {t('admin.inviteCreatedAgo', { when: ago(t, i.created_at, now) })}
+                        {inviter(i) && (
+                          <>
+                            {' · '}
+                            {t('admin.invitedBy')} <bdi>{inviter(i)}</bdi>
+                          </>
+                        )}
+                      </td>
+                      <td className={`${cell} text-muted`}>
                         {!expired &&
                           t('admin.expiresIn', { span: span(t, Date.parse(i.expires_at) - now) })}
                       </td>
-                      <td className="p-3">
+                      <td className={cell}>
                         <span className={expired ? 'text-muted' : 'text-warn'}>
-                          {t(expired ? 'admin.expired' : 'admin.status.invited')}
+                          {t(expired ? 'admin.expired' : 'admin.inviteOpen')}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="ml-2"
-                          onClick={async () => {
-                            await outcome(i.id, async () =>
-                              must(
-                                await api.DELETE('/invites/{id}', {
-                                  params: { path: { id: i.id } },
-                                }),
-                              ),
-                            );
-                            void qc.invalidateQueries({ queryKey: invitesKey });
-                          }}
-                        >
-                          {t('admin.withdraw')}
-                        </Button>
+                        {mayWithdraw(i) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn('ml-2', rowButton)}
+                            onClick={() => setWithdrawing(i)}
+                          >
+                            {t('admin.withdraw')}
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -587,6 +617,18 @@ export function UsersPage() {
             must(await api.DELETE('/users/{id}', { params: { path: { id: u.id } } }));
             return undefined;
           });
+        }}
+      />
+      <ConfirmDialog
+        open={!!withdrawing}
+        title={t('admin.withdrawTitle')}
+        text={t('admin.withdrawText')}
+        action={t('admin.withdraw')}
+        onClose={() => setWithdrawing(null)}
+        onConfirm={() => {
+          const i = withdrawing;
+          setWithdrawing(null);
+          if (i) void withdraw(i);
         }}
       />
       <ConfirmDialog
