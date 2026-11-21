@@ -62,15 +62,6 @@ beforeEach(async () => {
 });
 
 describe('command palette (CMD-016)', () => {
-  it('has no button and ignores Ctrl+K while its flag is off', async () => {
-    ui.features = [];
-    ui.shortcuts = true;
-    await show();
-    expect(screen.queryByRole('button', { name: 'Command palette' })).toBeNull();
-    ctrlK();
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
   it('opens by the button; Ctrl+K has no effect while shortcuts are off', async () => {
     await show();
     ctrlK();

@@ -22,8 +22,6 @@ async function as(page: Page, state: StackState, user: string) {
 }
 
 test.describe('log masking on', () => {
-  test.use({ flags: ['log_masking_ui'] });
-
   test('the RCON admin stores a text; it is never shown again', async ({ page, state }) => {
     await as(page, state, 'admin');
     await system(page);
@@ -62,21 +60,5 @@ test.describe('log masking on', () => {
     await as(page, state, 'sadmin');
     const r = await page.request.get('api/v1/settings/log-masking');
     expect(r.status()).toBe(403);
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['log_masking_ui'] });
-
-  test('flag off: no masking settings on the page, the API answers 404', async ({
-    page,
-    state,
-  }) => {
-    await as(page, state, 'admin');
-    await system(page);
-    await expect(page.getByRole('region', { name: 'Mail (SMTP)' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Log masking' })).toHaveCount(0);
-    const r = await page.request.get('api/v1/settings/log-masking');
-    expect(r.status()).toBe(404);
   });
 });

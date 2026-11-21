@@ -25,7 +25,6 @@ export type Role = components['schemas']['Role'];
 export interface NavContext {
   supportersEnabled: boolean;
   supportersAllowed: boolean;
-  features: readonly string[]; // flags that are on (NFR-019)
 }
 
 export interface NavEntry {
@@ -35,7 +34,6 @@ export interface NavEntry {
   // allowed decides per role (Design 6.2); entries without right are
   // hidden, not greyed. The backend checks every request anyway.
   allowed: (role: Role, me: NavContext) => boolean;
-  feature?: string; // while this flag is off, entry and page do not exist
 }
 
 // navContext takes what the entries need from the session.
@@ -43,13 +41,12 @@ export function navContext(ui: components['schemas']['Session']['ui']): NavConte
   return {
     supportersEnabled: ui.supporters_enabled,
     supportersAllowed: ui.supporters_allowed,
-    features: ui.features ?? [],
   };
 }
 
-// shown decides by the entry's flag, if any, and its rule.
+// shown decides by the entry's rule.
 export function shown(e: NavEntry, role: Role, me: NavContext): boolean {
-  return (e.feature === undefined || me.features.includes(e.feature)) && e.allowed(role, me);
+  return e.allowed(role, me);
 }
 
 const admins = (r: Role) => r === 'rcon_admin' || r === 'server_admin';
@@ -61,16 +58,10 @@ export const mainNav: NavEntry[] = [
   { to: '/topology', key: 'topology', icon: Network, allowed: admins },
   { to: '/audit', key: 'audit', icon: FileClock, allowed: admins },
   // Read only for every role (UI-020); the backend shows each role what it may see.
-  {
-    to: '/profiles',
-    key: 'profiles',
-    icon: BookOpen,
-    allowed: () => true,
-    feature: 'profile_browser',
-  },
+  { to: '/profiles', key: 'profiles', icon: BookOpen, allowed: () => true },
   // Every role receives messages (MSG-001 to MSG-003); the backend shows
   // each role its own.
-  { to: '/messages', key: 'messages', icon: Mail, allowed: () => true, feature: 'messages' },
+  { to: '/messages', key: 'messages', icon: Mail, allowed: () => true },
 ];
 
 export const adminNav: NavEntry[] = [
@@ -86,13 +77,7 @@ export const adminNav: NavEntry[] = [
   { to: '/admin/agents', key: 'agents', icon: Bot, allowed: rconAdmin },
   { to: '/admin/settings', key: 'settings', icon: Settings, allowed: rconAdmin },
   // System log of the panel and of the agents (UI-025, D-091).
-  {
-    to: '/admin/system-log',
-    key: 'systemLog',
-    icon: ScrollText,
-    allowed: rconAdmin,
-    feature: 'diagnostics_export',
-  },
+  { to: '/admin/system-log', key: 'systemLog', icon: ScrollText, allowed: rconAdmin },
 ];
 
 // The tabs of the main entry Servers: the cards for every role, the

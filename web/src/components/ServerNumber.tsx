@@ -2,23 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { useTranslation } from 'react-i18next';
-import { useSession } from '@/api/session';
 
-// SERVER_NUMBER_FLAG switches the server number on (UI-018).
-export const SERVER_NUMBER_FLAG = 'server_number';
-
-// useServerNumbers tells whether the flag server_number is on.
-export function useServerNumbers(): boolean {
-  const { data: session } = useSession();
-  return (session?.ui.features ?? []).includes(SERVER_NUMBER_FLAG);
-}
-
-// ServerNumber is the badge of a server's number before its name, with the
-// flag server_number only (UI-018).
+// ServerNumber is the badge of a server's number before its name (UI-018).
 export function ServerNumber({ number }: { number?: number }) {
   const { t } = useTranslation();
-  const on = useServerNumbers();
-  if (!on || !number) return null;
+  if (!number) return null;
   // The visible "#n" is hidden from screen readers, which read the label
   // instead: aria-label on a span without role is not allowed (ARIA 1.2).
   return (

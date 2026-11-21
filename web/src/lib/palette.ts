@@ -3,9 +3,6 @@
 import type { components } from '@/api/schema';
 import type { Template } from '@/lib/templates';
 
-// The palette takes the flag name the backend reports in ui.features.
-export const PALETTE_FLAG = 'command_palette';
-
 // MAX_RESULTS caps the rendered results: a catalog of thousands of
 // commands stays usable, the search narrows it down (CMD-016).
 export const MAX_RESULTS = 50;

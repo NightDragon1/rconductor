@@ -378,13 +378,6 @@ describe('messages behind the flag messages (NFR-019)', () => {
     return get;
   }
 
-  it('does not exist while the flag is off: no menu entry, no page, no request', async () => {
-    const get = await open([]);
-    expect(await screen.findByText('Page not found')).toBeTruthy();
-    expect(screen.queryByRole('link', { name: /Messages/ })).toBeNull();
-    expect(get.mock.calls.map((c) => c[0])).not.toContain('/messages');
-  });
-
   it('shows the menu entry with the unread count while the flag is on', async () => {
     await open(['messages']);
     expect(await screen.findByRole('heading', { name: 'Messages' })).toBeTruthy();

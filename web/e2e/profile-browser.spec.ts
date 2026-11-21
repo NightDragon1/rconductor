@@ -32,8 +32,6 @@ async function openBrowser(page: Page) {
 }
 
 test.describe('profile browser on', () => {
-  test.use({ flags: ['profile_browser'] });
-
   test('admin searches the catalog and reads the effective profile with ports', async ({
     page,
     state,
@@ -111,23 +109,5 @@ test.describe('profile browser on', () => {
       'Nothing matches.',
     );
     expect(errors).toEqual([]);
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['profile_browser'] });
-
-  test('profile browser off: no menu entry and 404', async ({ page, playwright, state }) => {
-    await login(page, 'admin', secret(state, 'admin'));
-    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
-    await expect(
-      page.getByRole('navigation').getByRole('link', { name: 'Game profiles' }),
-    ).toHaveCount(0);
-    const mod = await api(playwright, state, 'mod');
-    try {
-      expect((await mod.get(`api/v1/servers/${state.server_id}/profile`)).status()).toBe(404);
-    } finally {
-      await mod.dispose();
-    }
   });
 });

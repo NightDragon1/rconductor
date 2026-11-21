@@ -50,10 +50,6 @@ export interface ConsoleBuffer {
 // GAP_LINE marks lines that passed while nobody followed.
 export const GAP_LINE = '⋯';
 
-// LOG_MASKING_FLAG is the flag name the backend reports in ui.features
-// (UI-022); with it a gap names the number of lines omitted.
-export const LOG_MASKING_FLAG = 'log_masking_ui';
-
 // A delivery of log lines; first numbers its first line within run.
 export interface LogDelivery {
   lines: string[];

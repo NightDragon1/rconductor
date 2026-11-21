@@ -44,8 +44,6 @@ async function shortcuts(playwright: Playwright, state: StackState, on: boolean)
 }
 
 test.describe('command palette on', () => {
-  test.use({ flags: ['command_palette'] });
-
   test('the button opens it; a command goes into the input line', async ({ page, state }) => {
     await openConsole(page, state, 'sadmin');
     await button(page).click();
@@ -90,16 +88,5 @@ test.describe('command palette on', () => {
     await search(page).fill('\u0007\u202e' + 'k'.repeat(10 * 1024));
     await expect(page.getByRole('dialog')).toContainText('Nothing matches.');
     expect(errors).toEqual([]);
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['command_palette'] });
-
-  test('command palette off: no button, Ctrl+K without effect', async ({ page, state }) => {
-    await openConsole(page, state, 'sadmin');
-    await expect(button(page)).toHaveCount(0);
-    await page.keyboard.press('Control+k');
-    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });

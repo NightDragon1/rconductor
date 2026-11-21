@@ -28,8 +28,6 @@ async function api(
 const entry = (page: Page) => page.getByRole('navigation').getByRole('link', { name: title });
 
 test.describe('system log on', () => {
-  test.use({ flags: ['diagnostics_export'] });
-
   test('admin opens the page, filters, sees the notice and downloads the package', async ({
     page,
     state,
@@ -81,25 +79,6 @@ test.describe('system log on', () => {
       const long = await admin.get(`api/v1/system-log?source=${'x'.repeat(10 * 1024)}`);
       expect([400, 414, 431], `long source ${long.status()}`).toContain(long.status());
       expect((await admin.get('api/v1/system-log?limit=100000')).status()).toBe(400);
-    } finally {
-      await admin.dispose();
-    }
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['diagnostics_export'] });
-
-  test('system log off: no menu entry, no page, 404', async ({ page, playwright, state }) => {
-    await login(page, 'admin', secret(state, 'admin'));
-    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
-    await expect(entry(page)).toHaveCount(0);
-    await page.goto('admin/system-log');
-    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
-    const admin = await api(playwright, state, 'admin');
-    try {
-      expect((await admin.get('api/v1/system-log')).status()).toBe(404);
-      expect((await admin.get('api/v1/diagnostics')).status()).toBe(404);
     } finally {
       await admin.dispose();
     }

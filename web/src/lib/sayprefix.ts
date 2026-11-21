@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// The flag name the backend reports in ui.features (CMD-020).
-export const SAY_SENDER_FLAG = 'say_sender';
-
 // The bound of a prefix as the backend checks it (CMD-020, D-082).
 export const MAX_SAY_PREFIX = 16;
 

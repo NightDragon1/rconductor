@@ -17,7 +17,6 @@ import {
   type ServerGroup,
 } from '@/api/servers';
 import { useSession } from '@/api/session';
-import { useServerNumbers } from '@/components/ServerNumber';
 import { outcome } from '@/api/users';
 import type { components } from '@/api/schema';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -25,7 +24,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
 import { topProfile } from '@/lib/profiles';
-import { SAY_SENDER_FLAG } from '@/lib/sayprefix';
 import { stripCodes } from '@/lib/serverpage';
 import { cardStatus } from '@/lib/status';
 import { usePhone, useReveal } from '@/lib/phone';
@@ -110,7 +108,7 @@ const draftOf = (s?: Server): Draft => ({
 // RCON admin; a server admin may change only the profile list of a server
 // in his scope (SRV-008), the backend checks it; a phone sees it read-only.
 // The password is only set, never shown. Agent and container come from the agent's list
-// (revision 2.4 candidate 22). With saveAsNew (flag server_save_as_new) the
+// (revision 2.4 candidate 22). With saveAsNew (who may create servers) the
 // panel stays open after creating: Save changes the server just created,
 // Save as New creates another one from the form (UI-017).
 function ServerPanel({
@@ -635,14 +633,12 @@ function ServerPanel({
 }
 
 // GroupPanel changes a server group (SRV-003): its servers, as a whole
-// with If-Match; a server may be in several groups. With sayPrefix (flag
-// say_sender) it also holds the prefix of messages to the players
-// (CMD-020); whether it shows and may be changed the backend decides.
+// with If-Match; a server may be in several groups. It also holds the
+// prefix of messages to the players (CMD-020); whether it shows and may be changed the backend decides.
 function GroupPanel({
   group,
   groups,
   canEdit,
-  sayPrefix,
   readOnly,
   servers,
   onClose,
@@ -650,7 +646,6 @@ function GroupPanel({
   group: ServerGroup;
   groups: ServerGroup[];
   canEdit: boolean;
-  sayPrefix: boolean;
   readOnly: boolean;
   servers: Server[];
   onClose: () => void;
@@ -794,19 +789,17 @@ function GroupPanel({
           {t('admin.save')}
         </Button>
       )}
-      {sayPrefix && (
-        <SayPrefixField
-          group={group}
-          groups={groups}
-          servers={servers}
-          readOnly={readOnly}
-          onVersion={(version) => {
-            setBase((b) => ({ ...b, version }));
-            setDraft((d) => ({ ...d, version }));
-            void qc.invalidateQueries({ queryKey: serverGroupsKey });
-          }}
-        />
-      )}
+      <SayPrefixField
+        group={group}
+        groups={groups}
+        servers={servers}
+        readOnly={readOnly}
+        onVersion={(version) => {
+          setBase((b) => ({ ...b, version }));
+          setDraft((d) => ({ ...d, version }));
+          void qc.invalidateQueries({ queryKey: serverGroupsKey });
+        }}
+      />
       {canEdit && (
         <Button
           variant="outline"
@@ -850,16 +843,13 @@ export function ServersAdminPage() {
   // A server admin changes the profile list of the servers in his scope;
   // the list shows only those (SRV-008, Design 6.2).
   const canEditProfiles = session?.user.role === 'server_admin' && !phone;
-  // Save as New only for who may create servers (UI-017, NFR-019).
-  const saveAsNew = canEdit && (session?.ui.features ?? []).includes('server_save_as_new');
-  // The number as first column ID, with the flag server_number (UI-018).
-  const numbers = useServerNumbers();
-  // The say prefix of a group (CMD-020) behind the flag say_sender.
-  const sayPrefix = (session?.ui.features ?? []).includes(SAY_SENDER_FLAG);
   const servers = useServers();
   const groups = useServerGroups(true);
   const profiles = useProfiles();
   const [open, setOpen] = useState<{ kind: 'server' | 'group'; id: string } | null>(null);
+  // Each New server opens a fresh form, also after a create kept the panel
+  // open with Save as New (UI-017).
+  const [fresh, setFresh] = useState(0);
   const { guard } = useUndo();
   const [groupName, setGroupName] = useState('');
   const [error, setError] = useState('');
@@ -914,7 +904,14 @@ export function ServersAdminPage() {
           )}
           actions={
             canEdit && (
-              <Button onClick={() => guard(() => setOpen({ kind: 'server', id: 'new' }))}>
+              <Button
+                onClick={() =>
+                  guard(() => {
+                    setFresh((n) => n + 1);
+                    setOpen({ kind: 'server', id: 'new' });
+                  })
+                }
+              >
                 {t('servers.new')}
               </Button>
             )
@@ -956,7 +953,7 @@ export function ServersAdminPage() {
             <table className="w-full text-sm">
               <thead className="text-left text-muted">
                 <tr>
-                  {numbers && <th className="p-3 font-medium">{t('servers.id')}</th>}
+                  <th className="p-3 font-medium">{t('servers.id')}</th>
                   <th className="p-3 font-medium">{t('servers.name')}</th>
                   <th className="p-3 font-medium">{t('servers.profile')}</th>
                   {canSeeAgents && <th className="p-3 font-medium">{t('servers.address')}</th>}
@@ -973,7 +970,7 @@ export function ServersAdminPage() {
                       open?.id === s.id && 'bg-surface-raised',
                     )}
                   >
-                    {numbers && <td className="p-3 font-mono text-muted">{s.number}</td>}
+                    <td className="p-3 font-mono text-muted">{s.number}</td>
                     <td className="p-3">
                       <button
                         type="button"
@@ -1106,12 +1103,12 @@ export function ServersAdminPage() {
       </div>
       {open?.kind === 'server' && (open.id === 'new' || current) && (
         <ServerPanel
-          key={open.id}
+          key={open.id === 'new' ? `new-${fresh}` : open.id}
           server={current}
           canEdit={canEdit}
           canEditProfiles={canEditProfiles}
           canSeeAgents={canSeeAgents}
-          saveAsNew={saveAsNew}
+          saveAsNew={canEdit}
           onClose={() => guard(() => setOpen(null))}
           onCreated={() => setOpen(null)}
         />
@@ -1122,7 +1119,6 @@ export function ServersAdminPage() {
           group={currentGroup}
           groups={groups.data ?? []}
           canEdit={canEdit}
-          sayPrefix={sayPrefix}
           readOnly={phone}
           servers={all}
           onClose={() => guard(() => setOpen(null))}

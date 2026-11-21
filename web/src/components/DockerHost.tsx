@@ -5,10 +5,6 @@ import { useTranslation } from 'react-i18next';
 import type { Agent } from '@/api/servers';
 import { ForeignText } from '@/components/ForeignText';
 
-// DOCKER_HOST_FLAG switches the Docker host in place of the agent's own
-// address (AGT-014).
-export const DOCKER_HOST_FLAG = 'docker_host';
-
 // dockerHostParts are the parts of an agent's Docker host the interface
 // shows: name and address as the agent gave them, and the address the agent
 // connected from only when there is no host address (AGT-014). The backend

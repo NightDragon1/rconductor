@@ -77,11 +77,4 @@ describe('display name of a host', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(await within(dialog).findByRole('alert')).toBeTruthy();
   });
-
-  it('has no column and no button with the flag off', async () => {
-    setLanguage('en');
-    await renderPage(AgentsPage, data([]));
-    expect(screen.queryByRole('columnheader', { name: 'Display name' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Display name' })).toBeNull();
-  });
 });

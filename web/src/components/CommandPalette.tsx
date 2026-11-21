@@ -10,7 +10,7 @@ import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { PALETTE_FLAG, paletteEntries, searchPalette, type PaletteEntry } from '@/lib/palette';
+import { paletteEntries, searchPalette, type PaletteEntry } from '@/lib/palette';
 import { usePaletteKey } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
 
@@ -66,11 +66,9 @@ export function CommandPalette({
 }) {
   const { t } = useTranslation();
   const { data: session } = useSession();
-  const flagOn = !!session?.ui.features?.includes(PALETTE_FLAG);
   const shortcuts = !!session?.ui.shortcuts_enabled;
   const [open, setOpen] = useState(false);
-  usePaletteKey(flagOn, () => setOpen(true));
-  if (!flagOn) return null;
+  usePaletteKey(true, () => setOpen(true));
   return (
     <>
       <Button

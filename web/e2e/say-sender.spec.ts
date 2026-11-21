@@ -86,8 +86,6 @@ async function cleanup(playwright: Playwright, state: StackState) {
 }
 
 test.describe('say with sender on', () => {
-  test.use({ flags: ['say_sender'] });
-
   test('the RCON admin sets a prefix; a say reaches the server as tellraw', async ({
     page,
     playwright,
@@ -209,22 +207,5 @@ test.describe('say with sender on', () => {
     } finally {
       await cleanup(playwright, state);
     }
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['say_sender'] });
-
-  test('flag off: no prefix field and no request for it', async ({ page, state }) => {
-    const reads: string[] = [];
-    page.on('request', (r) => {
-      if (r.url().includes('/say-prefix')) reads.push(r.url());
-    });
-    await as(page, state, 'admin');
-    await openGroup(page);
-    await expect(groupPanel(page)).toBeVisible();
-    await page.waitForLoadState('networkidle');
-    await expect(field(page)).toHaveCount(0);
-    expect(reads).toEqual([]);
   });
 });

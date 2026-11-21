@@ -113,7 +113,7 @@ function adminData(role = 'rcon_admin') {
 }
 
 // Data, not texts: names, numbers and the image.
-const data = /^(aria-label=)?(alpha|beta|main|host-2|kiwi|itzg\/mc|beta, |[\d\s/]+|, )+$/;
+const data = /^(aria-label=)?(alpha|beta|main|host-2|kiwi|itzg\/mc|beta, |#|[\d\s/]+|, )+$/;
 
 describe('landing pages', () => {
   it('shows the RCON admin the health overview with links (UI-003)', async () => {
@@ -183,22 +183,16 @@ describe('landing pages', () => {
     expect(rows[0]?.textContent).not.toContain('container running');
   });
 
-  it('groups the cards and shows agent data to admins (UI-004)', async () => {
+  it('shows agent data on the cards to admins (UI-004)', async () => {
     setLanguage('en');
     await renderPage(HomePage, adminData('server_admin'));
     expect(screen.queryByRole('region', { name: 'Notices' })).toBeNull();
-    const main = screen.getByRole('region', { name: 'main' });
-    const alpha = within(main).getByRole('article', { name: 'alpha' });
+    const alpha = screen.getByRole('article', { name: 'alpha' });
     // A bare digest shows the profile instead.
     expect(within(alpha).getByText('Profile: Minecraft Java')).toBeTruthy();
     expect(within(alpha).getAllByRole('meter')).toHaveLength(2);
     expect(within(alpha).getByText(/Values stale/)).toBeTruthy();
-    const beta = within(screen.getByRole('region', { name: 'Other servers' })).getByRole(
-      'article',
-      {
-        name: 'beta',
-      },
-    );
+    const beta = screen.getByRole('article', { name: 'beta' });
     expect(beta.dataset.status).toBe('restartLoop');
     expect(within(beta).getByText('itzg/mc')).toBeTruthy();
   });

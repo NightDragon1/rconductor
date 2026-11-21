@@ -60,16 +60,4 @@ describe('overview by host', () => {
     expect(within(none).getByText('delta')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /collapse|expand/i })).toBeNull();
   });
-
-  it('shows the cards as before with the flag off', async () => {
-    setLanguage('en');
-    await renderPage(HomePage, [
-      [sessionKey, session([])],
-      [serversKey, servers],
-      [profilesKey, []],
-    ]);
-    expect(screen.getByText('gamma')).toBeTruthy();
-    expect(screen.queryByRole('region', { name: 'Host 1' })).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Servers without agent' })).toBeNull();
-  });
 });

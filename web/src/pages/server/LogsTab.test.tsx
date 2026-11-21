@@ -62,19 +62,6 @@ async function renderLogs(features: string[]) {
 }
 
 describe('two-part log filter (UI-019)', () => {
-  it('keeps the single filter while the flag is off', async () => {
-    await renderLogs([]);
-    expect(screen.getByRole('searchbox', { name: 'Filter the logs' })).toBeTruthy();
-    expect(screen.queryByRole('searchbox', { name: 'Filter the bracket part' })).toBeNull();
-    expect(screen.queryByRole('combobox')).toBeNull();
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Filter the logs' }), {
-      target: { value: 'thread' },
-    });
-    const text = screen.getByLabelText('Log lines').textContent ?? '';
-    expect(text).toContain('Steve joined');
-    expect(text).not.toContain('tick');
-  });
-
   it('filters bracket part and text with and, or, xor while the flag is on', async () => {
     await renderLogs(['log_filter_split']);
     expect(screen.queryByRole('searchbox', { name: 'Filter the logs' })).toBeNull();

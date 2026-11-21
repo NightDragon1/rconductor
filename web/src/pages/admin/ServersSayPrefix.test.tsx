@@ -99,15 +99,6 @@ describe('say prefix of a server group (CMD-020, D-082)', () => {
     expect(prefixReads(get).some((c) => JSON.stringify(c[1]).includes('"g1"'))).toBe(true);
   });
 
-  it('flag off: no field and no request', async () => {
-    setLanguage('en');
-    const get = readPrefixes({ g1: { say_prefix: '[A]', version: '1' } });
-    const panel = await open('alpha', 'rcon_admin', []);
-    await new Promise((r) => setTimeout(r, 0));
-    expect(within(panel).queryByLabelText('Message prefix')).toBeNull();
-    expect(prefixReads(get)).toHaveLength(0);
-  });
-
   it('no field when the backend refuses the read (403, 404)', async () => {
     setLanguage('en');
     const get = readPrefixes({ g1: 404, g2: 403 });

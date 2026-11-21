@@ -293,13 +293,6 @@ describe('system log behind the flag diagnostics_export (NFR-018, NFR-019)', () 
     return get;
   }
 
-  it('does not exist while the flag is off: no menu entry, no page, no request', async () => {
-    const get = await at('rcon_admin', []);
-    expect(await screen.findByText('Page not found')).toBeTruthy();
-    expect(screen.queryByRole('link', { name: /System log/ })).toBeNull();
-    expect(get.mock.calls.map((c) => c[0])).not.toContain('/system-log');
-  });
-
   it('does not exist for a server admin with the flag on', async () => {
     const get = await at('server_admin', [flag]);
     expect(await screen.findByText('Page not found')).toBeTruthy();
