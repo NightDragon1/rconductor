@@ -11,14 +11,14 @@ const design62: Record<string, { main: string[]; admin: string[] }> = {
   // RCON admin: everything.
   admin: {
     main: ['Overview', 'Servers', 'Topology', 'Audit', 'Game profiles', 'Messages'],
-    admin: ['Users', 'Moderator groups', 'Command lists', 'Agents', 'Settings', 'System log'],
+    admin: ['Users', 'Groups', 'Command lists', 'Agents', 'Settings', 'System log'],
   },
   // Server admin: users (his moderators and supporters), moderator
   // groups, own lists; servers read-only in scope (a tab of Servers); no
   // agents, no settings.
   sadmin: {
     main: ['Overview', 'Servers', 'Topology', 'Audit', 'Game profiles', 'Messages'],
-    admin: ['Users', 'Moderator groups', 'Command lists'],
+    admin: ['Users', 'Groups', 'Command lists'],
   },
   // Moderator with supporters on (global and for him): his supporters.
   mod: { main: ['Overview', 'Servers', 'Game profiles', 'Messages'], admin: ['Users'] },
