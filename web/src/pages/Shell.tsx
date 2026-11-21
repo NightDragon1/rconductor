@@ -144,7 +144,11 @@ function Navigation({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?
           'flex min-h-11 items-center gap-3 rounded-md px-3 text-sm text-muted hover:bg-surface-raised hover:text-text',
           collapsed && 'justify-center px-0',
         )}
-        activeProps={{ className: 'bg-surface-raised text-text', 'aria-current': 'page' }}
+        // The active entry in the accent (UI-021): sage on the raised surface.
+        activeProps={{
+          className: 'bg-surface-raised text-accent! font-semibold',
+          'aria-current': 'page',
+        }}
         title={collapsed ? t(`nav.${e.key}`) : undefined}
       >
         <e.icon aria-hidden className="size-5 shrink-0" />

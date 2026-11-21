@@ -22,7 +22,7 @@ import { HistoryTab } from '@/pages/server/HistoryTab';
 import { LogsTab } from '@/pages/server/LogsTab';
 import { OverviewTab } from '@/pages/server/OverviewTab';
 import { ServerLayout } from '@/pages/server/ServerLayout';
-import { ServersPage } from '@/pages/Servers';
+import { ServersManagePage, ServersPage } from '@/pages/Servers';
 import { AgentsPage } from '@/pages/admin/Agents';
 import { SettingsPage } from '@/pages/admin/Settings';
 import { SystemLogPage } from '@/pages/admin/SystemLog';
@@ -34,7 +34,6 @@ import { RecoverPage } from '@/pages/Recover';
 import { SetupSecondFactorPage } from '@/pages/SetupSecondFactor';
 import { ProfilePage } from '@/pages/Profile';
 import { CommandListsPage } from '@/pages/admin/CommandLists';
-import { ServersAdminPage } from '@/pages/admin/ServersAdmin';
 import { GroupsPage } from '@/pages/admin/Groups';
 import { UsersPage } from '@/pages/admin/Users';
 import { InvitePage } from '@/pages/Invite';
@@ -136,11 +135,25 @@ const pages = [
   guarded('/admin/users', 'users', UsersPage),
   guarded('/admin/groups', 'groups', GroupsPage),
   guarded('/admin/command-lists', 'commandLists', CommandListsPage),
-  guarded('/admin/servers', 'serverAdmin', ServersAdminPage),
   guarded('/admin/agents', 'agents', AgentsPage),
   guarded('/admin/settings', 'settings', SettingsPage),
   guarded('/admin/system-log', 'systemLog', SystemLogPage),
+  // The management of servers and server groups is the second tab of
+  // Servers; the static segment ranks before servers/$serverId, and server
+  // IDs are UUIDs.
+  guarded('/servers/manage', 'serverAdmin', ServersManagePage),
 ];
+
+// The former address of the management leads to its tab; the tab's guard
+// decides for the role.
+const manageTab: string = '/servers/manage';
+const oldServersAdminRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: 'admin/servers',
+  beforeLoad: () => {
+    throw redirect({ to: manageTab, replace: true });
+  },
+});
 const serversRoute = createRoute({
   getParentRoute: () => appRoute,
   path: 'servers',
@@ -215,6 +228,7 @@ const routeTree = rootRoute.addChildren([
     serversRoute,
     serverRoute.addChildren([serverIndexRoute, ...serverTabs]),
     profileRoute,
+    oldServersAdminRoute,
     ...pages,
   ]),
 ]);

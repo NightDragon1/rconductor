@@ -287,7 +287,10 @@
     "notNumber": "The limits must be whole numbers."
   },
   "topology": {
-    "host": "Host",
+    "panel": "Panel",
+    "hosts": "Hosts",
+    "version": "Version",
+    "majorDiffers": "Major version differs from the panel ({{major}})",
     "agent": "Agent",
     "noAgent": "Without agent",
     "state": {
@@ -710,6 +713,11 @@
     }
   },
   "servers": {
+    "tabs": "Server views",
+    "tab": {
+      "cards": "Cards",
+      "manage": "Manage servers and server groups"
+    },
     "id": "ID",
     "numberLabel": "Server number {{number}}",
     "new": "New server",

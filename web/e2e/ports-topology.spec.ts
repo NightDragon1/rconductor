@@ -42,11 +42,14 @@ test('topology per role, live without reload (UI-010)', async ({ page, state, br
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto('topology');
-  const group = page.getByRole('region', { name: 'minecraft' });
-  await expect(group).toContainText('host-1');
-  await expect(group.getByRole('link', { name: 'survival' })).toBeVisible();
-  const rest = page.getByRole('region', { name: 'Other servers' });
-  await expect(rest).toContainText('Without agent');
+  // Panel → host → server from left to right (UI-010).
+  await expect(page.getByRole('main')).toContainText('Panel');
+  const hosts = page.getByRole('list', { name: 'Hosts' });
+  const host1 = hosts.getByRole('link').filter({ hasText: 'host-1' });
+  await expect(host1).toContainText('connected');
+  await expect(host1).not.toContainText('Major version');
+  await expect(hosts.getByRole('link', { name: 'survival' })).toBeVisible();
+  const rest = hosts.getByRole('listitem').filter({ hasText: 'Without agent' });
   const outpost = rest.getByRole('listitem').filter({ hasText: /^outpost/ });
   await expect(outpost).toContainText('online');
 
@@ -86,8 +89,24 @@ test('topology per role, live without reload (UI-010)', async ({ page, state, br
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto('topology');
   await expect(page.getByRole('link', { name: 'survival' })).toBeVisible();
-  await expect(page.getByRole('main')).toContainText('Agent');
+  await expect(page.getByRole('list', { name: 'Hosts' })).toContainText('connected');
   await expect(page.getByRole('main')).not.toContainText('host-1');
+  // No link to the agents for him.
+  await expect(page.locator('a[href*="admin/agents"]')).toHaveCount(0);
+});
+
+// UI-010: a host opens its agent, a server its page.
+test('the topology opens agent and server (UI-010)', async ({ page, state }) => {
+  await login(page, 'admin', secret(state, 'admin'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await page.goto('topology');
+  const hosts = page.getByRole('list', { name: 'Hosts' });
+  await hosts.getByRole('link').filter({ hasText: 'host-1' }).click();
+  await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/admin\/agents#/);
+  await page.goBack();
+  await hosts.getByRole('link', { name: 'survival' }).click();
+  await expect(page).toHaveURL(new RegExp(`servers/${state.servers.survival}`));
 });
 
 // O5: the cards on the server list carry the game ports for the roles that

@@ -10,13 +10,22 @@ const urls: Record<string, string> = {
   'admin/users': 'Users',
   'admin/groups': 'Groups',
   'admin/command-lists': 'Command lists',
+  'servers/manage': 'Servers and groups',
+  // The former address leads to the tab of Servers.
   'admin/servers': 'Servers and groups',
   'admin/agents': 'Agents',
   'admin/settings': 'Settings',
 };
 const allowed: Record<string, string[]> = {
   admin: Object.keys(urls),
-  sadmin: ['audit', 'admin/users', 'admin/groups', 'admin/command-lists', 'admin/servers'],
+  sadmin: [
+    'audit',
+    'admin/users',
+    'admin/groups',
+    'admin/command-lists',
+    'servers/manage',
+    'admin/servers',
+  ],
   mod: ['admin/users'],
   mod2: [],
   sup: [],
