@@ -54,3 +54,40 @@ export function byHost(servers: Server[]): { hosts: HostGroup[]; rest: Server[] 
   named.sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''));
   return { hosts: [...named, ...hosts.filter((g) => !g.displayName)], rest };
 }
+
+export type AgentHost = {
+  agentId: string;
+  // displayName is foreign data (SEC-006); undefined shows a placeholder.
+  displayName?: string;
+  servers: Server[];
+};
+
+// byAgent sorts the servers by their agent for the topology (UI-010): the
+// display name of the host comes from the agent, if the role may read it,
+// else from the host group of its servers (D-089). Named hosts first by
+// name, the others after them in the order of the answer; servers without
+// an agent come apart as the rest.
+export function byAgent(
+  servers: Server[],
+  names: Map<string, string | undefined> = new Map(),
+): { hosts: AgentHost[]; rest: Server[] } {
+  const groups = new Map<string, AgentHost>();
+  const rest: Server[] = [];
+  for (const s of servers) {
+    if (!s.agent_id) {
+      rest.push(s);
+      continue;
+    }
+    let g = groups.get(s.agent_id);
+    if (!g) {
+      g = { agentId: s.agent_id, servers: [] };
+      groups.set(s.agent_id, g);
+    }
+    g.displayName ??= names.get(s.agent_id) ?? s.host_group?.display_name;
+    g.servers.push(s);
+  }
+  const hosts = [...groups.values()];
+  const named = hosts.filter((g) => g.displayName);
+  named.sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''));
+  return { hosts: [...named, ...hosts.filter((g) => !g.displayName)], rest };
+}

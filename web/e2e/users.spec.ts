@@ -30,8 +30,8 @@ test('search and filters (UI-007)', async ({ page, state }) => {
   // The stack's expired invitation shows as such.
   await expect(
     page
-      .getByRole('row')
-      .filter({ hasText: '(invitation)' })
+      .getByTestId('invite')
+      .filter({ hasText: 'Invitation' })
       .filter({ hasText: 'expired' })
       .first(),
   ).toBeVisible();
@@ -98,6 +98,63 @@ test('undo restores a change; shortcuts are off by default (UI-008)', async ({ p
   await expect(page.getByRole('searchbox', { name: 'Search users' })).not.toBeFocused();
   await page.locator('body').press('i');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+// Whoever invites sees the open invitation from the start and, once it is
+// accepted, the new user as a normal row (UI-007, UI-008).
+test('the server admin sees his invitation open, then the new user (UI-008)', async ({
+  page,
+  browser,
+  state,
+}) => {
+  await openUsers(page, state, 'sadmin');
+  const open = page
+    .getByTestId('invite')
+    .filter({ hasText: 'Invitation open' })
+    .filter({ hasText: 'Moderator' });
+  const before = await open.count();
+  await page.getByRole('button', { name: 'Create invitation link' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Role').selectOption('moderator');
+  await dialog.getByRole('button', { name: 'Create link' }).click();
+  const url = (await dialog.locator('p.font-mono').textContent()) ?? '';
+  expect(url).toMatch(/\/invite#/);
+  await dialog.getByRole('button', { name: 'Close' }).click();
+  await expect(open).toHaveCount(before + 1);
+  await expect(open.last()).toContainText('Created');
+  await expect(open.last()).toContainText('expires in');
+
+  const name = `k1-${Date.now() % 100000}`;
+  const guest = await browser.newContext();
+  const invitee = await guest.newPage();
+  await invitee.goto(url);
+  await invitee.getByLabel('Pseudonym').fill(name);
+  await invitee.getByLabel('Password', { exact: true }).fill('a fine invited password');
+  await invitee.getByLabel('Repeat the new password').fill('a fine invited password');
+  await invitee.getByRole('button', { name: 'Create my account' }).click();
+  await expect(invitee.getByRole('status')).toContainText('Your account is ready');
+  await guest.close();
+
+  await page.reload();
+  await expect(row(page, name)).toContainText('Moderator');
+  await expect(open).toHaveCount(before);
+});
+
+test('misuse: a moderator without supporter release has no users and no invitation', async ({
+  page,
+  state,
+}) => {
+  await login(page, 'mod2', secret(state, 'mod2'));
+  await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+  await expect(page.getByRole('navigation').getByRole('link', { name: 'Users' })).toHaveCount(0);
+  const status = await page.evaluate(() =>
+    fetch('api/v1/invites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'supporter' }),
+    }).then((r) => r.status),
+  );
+  expect(status).toBe(403);
 });
 
 test('a user from a template gets its assignments; a role change warns (UI-008)', async ({

@@ -13,11 +13,11 @@ export const pages: Record<string, string[]> = {
     'admin/users',
     'admin/groups',
     'admin/command-lists',
-    'admin/servers',
+    'servers/manage',
     'admin/agents',
     'admin/settings',
   ],
-  sadmin: ['', 'topology', 'admin/users', 'admin/groups', 'admin/command-lists', 'admin/servers'],
+  sadmin: ['', 'topology', 'admin/users', 'admin/groups', 'admin/command-lists', 'servers/manage'],
   mod: ['', 'servers', 'admin/users'],
   sup: ['', 'servers'],
 };

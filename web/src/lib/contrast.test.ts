@@ -36,7 +36,8 @@ const parts: Record<string, string[]> = {
   'control frames': ['control-border'],
   'focus ring': ['focus'],
   'status dots': ['ok', 'warn', 'danger', 'text-muted'],
-  'group frames': ['group-1', 'group-2', 'group-3', 'group-4', 'group-5', 'group-6'],
+  'group frames': ['frame'],
+  bars: ['group-1', 'group-4'],
 };
 
 describe.each([
@@ -64,6 +65,21 @@ describe.each([
       const [fg = '', bg = ''] = [colors[name], colors[surface]];
       expect(contrast(fg, bg), `${name} on ${surface}`).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+// Design 6.1: the text on a filled accent or danger button reaches 4.5:1.
+describe.each([
+  ['dark', tokens(dark)],
+  ['light', tokens(light)],
+])('text on filled colours in the %s design', (_, colors) => {
+  it.each([
+    ['accent-text', 'accent'],
+    ['danger-text', 'danger'],
+  ])('%s on %s reaches 4.5:1', (fg, bg) => {
+    const [a = '', b = ''] = [colors[fg], colors[bg]];
+    expect(a, fg).not.toBe('');
+    expect(contrast(a, b)).toBeGreaterThanOrEqual(4.5);
   });
 });
 

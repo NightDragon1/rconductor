@@ -11,21 +11,14 @@ const design62: Record<string, { main: string[]; admin: string[] }> = {
   // RCON admin: everything.
   admin: {
     main: ['Overview', 'Servers', 'Topology', 'Audit', 'Game profiles', 'Messages'],
-    admin: [
-      'Users',
-      'Groups',
-      'Command lists',
-      'Servers and groups',
-      'Agents',
-      'Settings',
-      'System log',
-    ],
+    admin: ['Users', 'Groups', 'Command lists', 'Agents', 'Settings', 'System log'],
   },
   // Server admin: users (his moderators and supporters), moderator
-  // groups, own lists, servers read-only in scope; no agents, no settings.
+  // groups, own lists; servers read-only in scope (a tab of Servers); no
+  // agents, no settings.
   sadmin: {
     main: ['Overview', 'Servers', 'Topology', 'Audit', 'Game profiles', 'Messages'],
-    admin: ['Users', 'Groups', 'Command lists', 'Servers and groups'],
+    admin: ['Users', 'Groups', 'Command lists'],
   },
   // Moderator with supporters on (global and for him): his supporters.
   mod: { main: ['Overview', 'Servers', 'Game profiles', 'Messages'], admin: ['Users'] },
@@ -104,6 +97,50 @@ test('pages outside the role do not exist', async ({ page, state }) => {
   await page.goto('admin/users');
   await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
 });
+
+// Servers has two tabs: the cards for every role, the management of
+// servers and server groups for the admins only; the old address leads to
+// the tab (Design 6.2). Moderator and supporter see no tabs and the tab's
+// address does not exist for them.
+const manage = 'Manage servers and server groups';
+for (const user of ['admin', 'sadmin']) {
+  test(`the servers tabs of ${user}`, async ({ page, state }) => {
+    await login(page, user, secret(state, user));
+    await page.getByRole('navigation').getByRole('link', { name: 'Servers', exact: true }).click();
+    const tabs = page.getByRole('navigation', { name: 'Server views' });
+    await expect(tabs.getByRole('link')).toHaveText(['Cards', manage]);
+    await expect(tabs.getByRole('link', { name: 'Cards' })).toHaveAttribute('aria-current', 'page');
+    await tabs.getByRole('link', { name: manage }).click();
+    await expect(page).toHaveURL(/servers\/manage$/);
+    await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Main navigation' })
+        .getByRole('link', { name: 'Servers', exact: true }),
+    ).toHaveAttribute('aria-current', 'page');
+    // Read only for the server admin, as before.
+    await expect(page.getByRole('button', { name: 'New server' })).toHaveCount(
+      user === 'admin' ? 1 : 0,
+    );
+    await page.goto('admin/servers');
+    await expect(page).toHaveURL(/servers\/manage$/);
+    await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+  });
+}
+
+for (const user of ['mod', 'sup']) {
+  test(`${user} has no management tab`, async ({ page, state }) => {
+    await login(page, user, secret(state, user));
+    await page.getByRole('navigation').getByRole('link', { name: 'Servers', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Servers', level: 1 })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Server views' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: manage })).toHaveCount(0);
+    for (const path of ['servers/manage', 'admin/servers']) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
+    }
+  });
+}
 
 test('the sidebar collapses and stays collapsed', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
@@ -228,6 +265,10 @@ test('explanations in the settings can be hidden (UI-014)', async ({ page, state
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto('admin/settings');
+  const system = page
+    .getByRole('navigation', { name: 'Settings groups' })
+    .getByRole('button', { name: 'System' });
+  await system.click();
   const help = page.getByText('Audit entries older than this are removed.');
   await expect(help).toBeVisible();
   await page.getByLabel('Show explanations').uncheck();

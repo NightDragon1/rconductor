@@ -16,11 +16,16 @@
     "version": "Version",
     "commit": "Commit",
     "buildDate": "Build date",
-    "author": "NightDragon",
+    "author": "\u00a9 2026 NightDragon",
     "license": "Licensed under AGPL-3.0-or-later. This program comes with ABSOLUTELY NO WARRANTY.",
     "more": "For more see",
     "licenseText": "License text",
     "thirdParty": "Third-party licenses",
+    "tabAbout": "About",
+    "tabThirdParty": "Third-party",
+    "tabThirdPartyCount": "Third-party ({{count}})",
+    "noThirdParty": "This build has no list of third-party components.",
+    "seeLicense": "see license text",
     "agents": "Agents",
     "noAgents": "No agents are paired.",
     "connected": "connected",
@@ -282,7 +287,10 @@
     "notNumber": "The limits must be whole numbers."
   },
   "topology": {
-    "host": "Host",
+    "panel": "Panel",
+    "hosts": "Hosts",
+    "version": "Version",
+    "majorDiffers": "Major version differs from the panel ({{major}})",
     "agent": "Agent",
     "noAgent": "Without agent",
     "state": {
@@ -546,10 +554,17 @@
     "lastActive": "Last active",
     "never": "never",
     "allServers": "all servers",
-    "invitation": "(invitation)",
+    "invitation": "Invitation",
+    "inviteOpen": "Invitation open",
+    "inviteCreated": "Created",
+    "inviteCreatedAgo": "Created {{when}}",
+    "inviteExpires": "Expires",
+    "invitedBy": "Invited by",
     "expired": "expired",
     "expiresIn": "expires in {{span}}",
     "withdraw": "Withdraw",
+    "withdrawTitle": "Withdraw the invitation?",
+    "withdrawText": "The link stops working at once.",
     "selectAll": "Select all",
     "select": "Select {{name}}",
     "noMatch": "No user matches.",
@@ -705,6 +720,11 @@
     }
   },
   "servers": {
+    "tabs": "Server views",
+    "tab": {
+      "cards": "Cards",
+      "manage": "Manage servers and server groups"
+    },
     "id": "ID",
     "numberLabel": "Server number {{number}}",
     "new": "New server",
@@ -881,8 +901,22 @@
       "mail": "Mail",
       "other": "Other",
       "twofactor": "Two-factor sign-in",
-      "features": "Features"
+      "features": "Features",
+      "messages": "Messages",
+      "diagnostics": "Diagnostics"
     },
+    "group": {
+      "security": "Security",
+      "users": "Users",
+      "messages": "Messages",
+      "servers": "Servers and commands",
+      "agents": "Agents",
+      "system": "System",
+      "features": "Features",
+      "other": "Other"
+    },
+    "groupsLabel": "Settings groups",
+    "advanced": "Advanced",
     "key": {
       "backup_interval": {
         "label": "Backup interval",
@@ -1134,6 +1168,11 @@
   "audit": {
     "explain": "Who did what and when. Server admins see their scope.",
     "kind": "Kind",
+    "time": "Time",
+    "action": "Action",
+    "user": "User",
+    "role": "Role",
+    "result": "Result",
     "allKinds": "Kind: all",
     "server": "Server",
     "allServers": "Server: all",
@@ -1166,6 +1205,7 @@
   },
   "profiles": {
     "all": "All game profiles",
+    "details": "Details of the game profile",
     "search": "Search profiles and commands",
     "searchLabel": "Search game profiles by name, command or description",
     "empty": "No game profiles yet.",
@@ -1252,7 +1292,11 @@
   "messages": {
     "explain": "Messages to you and from you, newest first.",
     "list": "Messages",
-    "none": "No messages.",
+    "none": "No messages yet.",
+    "pick": "Choose a message to read it.",
+    "message": "Message",
+    "back": "Back to messages",
+    "close": "Close",
     "more": "Load more",
     "new": "New message",
     "to": "To",
@@ -1261,8 +1305,8 @@
       "server_admins": "Server admins",
       "moderators": "Moderators",
       "users": "Chosen users",
-      "scope": "Everyone in my scope",
-      "scope_moderators": "Moderators in my scope"
+      "scope": "Everyone on my servers",
+      "scope_moderators": "Moderators on my servers"
     },
     "users": "Recipients",
     "noUsers": "No users to choose.",
@@ -1287,8 +1331,8 @@
     "commentsLabel": "Comments",
     "noComments": "No comments yet.",
     "moreComments": "More comments",
-    "comment": "Your comment",
-    "sendComment": "Comment",
+    "comment": "Your reply",
+    "sendComment": "Reply",
     "deleteComment": "Delete"
   },
   "systemLog": {

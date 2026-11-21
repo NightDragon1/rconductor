@@ -8,22 +8,12 @@ import { ForeignText } from '@/components/ForeignText';
 import { useProfiles, useServerGroups, type Server } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { useLiveServers } from '@/api/live-servers';
+import { GroupFrame } from '@/components/GroupFrame';
 import { ServerCard } from '@/components/ServerCard';
 import { Input } from '@/components/ui/input';
 import { useNow } from '@/lib/format';
 import { topProfile } from '@/lib/profiles';
 import { isUp } from '@/lib/status';
-import { cn } from '@/lib/utils';
-
-const frames = [
-  'border-group-1 text-group-1',
-  'border-group-2 text-group-2',
-  'border-group-3 text-group-3',
-  'border-group-4 text-group-4',
-  'border-group-5 text-group-5',
-  'border-group-6 text-group-6',
-];
-const dots = ['bg-group-1', 'bg-group-2', 'bg-group-3', 'bg-group-4', 'bg-group-5', 'bg-group-6'];
 
 function Cards({
   servers,
@@ -46,56 +36,6 @@ function Cards({
         />
       ))}
     </div>
-  );
-}
-
-function GroupFrame({
-  name,
-  title,
-  line,
-  index,
-  servers,
-  children,
-}: {
-  name: string;
-  // title and line replace name and the count of servers up, for a host.
-  title?: ReactNode;
-  line?: string;
-  index: number;
-  servers: Server[];
-  children: ReactNode;
-}) {
-  const { t } = useTranslation();
-  const ok = servers.filter(isUp).length;
-  const frame =
-    (index < 0 ? undefined : frames[index % frames.length]) ?? 'border-border text-muted';
-  return (
-    <section
-      aria-label={name}
-      className={cn('rounded-xl border bg-surface/40 p-4', frame.split(' ')[0])}
-    >
-      <div className="mb-3 flex items-center gap-3">
-        <h2
-          className={cn(
-            'flex items-center gap-2 rounded-md border px-2.5 py-1 font-mono text-sm font-semibold uppercase',
-            frame,
-          )}
-        >
-          <span
-            className={cn(
-              'size-2 rounded-full',
-              index < 0 ? 'bg-muted' : dots[index % dots.length],
-            )}
-            aria-hidden
-          />
-          {title ?? <bdi>{name}</bdi>}
-        </h2>
-        <span className="text-sm text-muted">
-          {line ?? t('home.groupSummary', { count: servers.length, ok })}
-        </span>
-      </div>
-      {children}
-    </section>
   );
 }
 
@@ -123,6 +63,8 @@ export function ServerBoard({
   const profiles = useProfiles();
   const now = useNow();
   const [query, setQuery] = useState('');
+  const groupSummary = (list: Server[]) =>
+    t('home.groupSummary', { count: list.length, ok: list.filter(isUp).length });
 
   const all = servers.data ?? [];
   const q = query.trim().toLowerCase();
@@ -150,16 +92,14 @@ export function ServerBoard({
     let unnamed = 0;
     cards = (
       <>
-        {list.map((g, i) => {
+        {list.map((g) => {
           const name = g.displayName ?? t('home.hostUnnamed', { n: ++unnamed });
           return (
             <GroupFrame
               key={g.key}
               name={name}
               title={g.displayName ? <ForeignText text={g.displayName} /> : name}
-              line={t('home.hostSummary', { count: g.servers.length, ...g.counts })}
-              index={i}
-              servers={g.servers}
+              summary={t('home.hostSummary', { count: g.servers.length, ...g.counts })}
             >
               <Cards servers={g.servers} profiles={profileNames} now={now} />
             </GroupFrame>
@@ -168,9 +108,7 @@ export function ServerBoard({
         {rest.length > 0 && (
           <GroupFrame
             name={t('home.withoutAgent')}
-            line={t('home.hostSummary', { count: rest.length, ...hostCounts(rest) })}
-            index={-1}
-            servers={rest}
+            summary={t('home.hostSummary', { count: rest.length, ...hostCounts(rest) })}
           >
             <Cards servers={rest} profiles={profileNames} now={now} />
           </GroupFrame>
@@ -181,13 +119,13 @@ export function ServerBoard({
     const { groups: sections, rest } = byGroups(shown, groups.data);
     cards = (
       <>
-        {sections.map((g, i) => (
-          <GroupFrame key={g.group.id} name={g.group.name} index={i} servers={g.servers}>
+        {sections.map((g) => (
+          <GroupFrame key={g.group.id} name={g.group.name} summary={groupSummary(g.servers)}>
             <Cards servers={g.servers} profiles={profileNames} now={now} />
           </GroupFrame>
         ))}
         {rest.length > 0 && (
-          <GroupFrame name={t('home.ungrouped')} index={-1} servers={rest}>
+          <GroupFrame name={t('home.ungrouped')} summary={groupSummary(rest)}>
             <Cards servers={rest} profiles={profileNames} now={now} />
           </GroupFrame>
         )}

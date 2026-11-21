@@ -19,6 +19,7 @@ var built = fstest.MapFS{
 	".gitkeep":         {Data: nil},
 
 	"third-party-licenses.txt": {Data: []byte("== react 19 (MIT)\n")},
+	"third-party-go.txt":       {Data: []byte("== golang.org/x/net v0.1.0 (BSD-3-Clause)\n")},
 }
 
 func get(t *testing.T, h http.Handler, method, target string) *httptest.ResponseRecorder {
@@ -58,12 +59,14 @@ func TestAssets(t *testing.T) {
 // TestThirdPartyRevalidated: the license list keeps its name from build to
 // build, so it is revalidated instead of cached for a year (NFR-021).
 func TestThirdPartyRevalidated(t *testing.T) {
-	rec := get(t, New(built), http.MethodGet, "/third-party-licenses.txt")
-	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Body.String(), "== react") {
-		t.Fatalf("license list: %d %q", rec.Code, rec.Body.String())
-	}
-	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
-		t.Errorf("Cache-Control = %q, want no-cache", cc)
+	for _, name := range []string{"/third-party-licenses.txt", "/third-party-go.txt"} {
+		rec := get(t, New(built), http.MethodGet, name)
+		if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Body.String(), "== ") {
+			t.Fatalf("license list %s: %d %q", name, rec.Code, rec.Body.String())
+		}
+		if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+			t.Errorf("%s: Cache-Control = %q, want no-cache", name, cc)
+		}
 	}
 }
 
