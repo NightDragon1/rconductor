@@ -3347,6 +3347,13 @@ components:
         state:
           type: string
           description: Docker state, or unknown while the agent is disconnected.
+        health:
+          type: string
+          enum: [starting, healthy, unhealthy]
+          description: >-
+            Result of the container's Docker healthcheck while it runs
+            (UI-021, UI-011); missing without a healthcheck or from an agent
+            that does not report it, then the state alone counts.
         started_at:
           type: string
           format: date-time

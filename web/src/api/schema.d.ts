@@ -1663,6 +1663,11 @@ export interface components {
             image?: string;
             /** @description Docker state, or unknown while the agent is disconnected. */
             state: string;
+            /**
+             * @description Result of the container's Docker healthcheck while it runs (UI-021, UI-011); missing without a healthcheck or from an agent that does not report it, then the state alone counts.
+             * @enum {string}
+             */
+            health?: "starting" | "healthy" | "unhealthy";
             /** Format: date-time */
             started_at?: string;
             restart_count: number;
