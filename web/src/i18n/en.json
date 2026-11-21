@@ -1252,7 +1252,11 @@
   "messages": {
     "explain": "Messages to you and from you, newest first.",
     "list": "Messages",
-    "none": "No messages.",
+    "none": "No messages yet.",
+    "pick": "Choose a message to read it.",
+    "message": "Message",
+    "back": "Back to messages",
+    "close": "Close",
     "more": "Load more",
     "new": "New message",
     "to": "To",
@@ -1261,8 +1265,8 @@
       "server_admins": "Server admins",
       "moderators": "Moderators",
       "users": "Chosen users",
-      "scope": "Everyone in my scope",
-      "scope_moderators": "Moderators in my scope"
+      "scope": "Everyone on my servers",
+      "scope_moderators": "Moderators on my servers"
     },
     "users": "Recipients",
     "noUsers": "No users to choose.",
@@ -1287,8 +1291,8 @@
     "commentsLabel": "Comments",
     "noComments": "No comments yet.",
     "moreComments": "More comments",
-    "comment": "Your comment",
-    "sendComment": "Comment",
+    "comment": "Your reply",
+    "sendComment": "Reply",
     "deleteComment": "Delete"
   },
   "systemLog": {

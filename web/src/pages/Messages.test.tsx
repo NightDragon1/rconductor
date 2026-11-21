@@ -9,6 +9,7 @@ import { api } from '@/api/client';
 import { sessionKey } from '@/api/session';
 import { makeRouter } from '@/router';
 import { renderPage, setLanguage, unmarked } from '@/test/render';
+import { messageTitle } from '@/api/messages';
 import { MessagesPage } from './Messages';
 
 vi.mock('@/lib/live', () => ({
@@ -82,6 +83,18 @@ function mock(
 }
 
 const list = (items: unknown[], unread = 0) => ({ status: 200, body: { items, unread } });
+
+// openMessage chooses the first conversation of the list.
+async function openMessage() {
+  fireEvent.click(within(await screen.findByTestId('message')).getByRole('button'));
+  return screen.findByRole('article');
+}
+
+// compose opens the form of a new message in its dialog.
+function compose() {
+  fireEvent.click(screen.getByRole('button', { name: 'New message' }));
+  return screen.getByRole('form', { name: 'New message' });
+}
 const noComments = { status: 200, body: { items: [] } };
 
 afterEach(() => {
@@ -104,7 +117,11 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
       () => ({ status: 201, body: { ...msg('m2'), recipient_count: 1 } }),
     );
     await renderPage(MessagesPage, [[sessionKey, session()]]);
-    const form = screen.getByRole('form', { name: 'New message' });
+    expect(screen.queryByRole('form', { name: 'New message' })).toBeNull();
+    const form = compose();
+    expect(within(screen.getByRole('dialog', { name: 'New message' })).getByRole('form')).toBe(
+      form,
+    );
     const to = within(form).getByLabelText('To') as HTMLSelectElement;
     expect([...to.options].map((o) => o.value)).toEqual([
       'all',
@@ -128,8 +145,12 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     setLanguage('en');
     mock({ '/messages': list([]) });
     await renderPage(MessagesPage, [[sessionKey, session('server_admin')]]);
-    const to = screen.getByLabelText('To') as HTMLSelectElement;
+    const to = within(compose()).getByLabelText('To') as HTMLSelectElement;
     expect([...to.options].map((o) => o.value)).toEqual(['scope', 'scope_moderators']);
+    expect([...to.options].map((o) => o.text)).toEqual([
+      'Everyone on my servers',
+      'Moderators on my servers',
+    ]);
   });
 
   it('gives a moderator no send form and marks an opened message read', async () => {
@@ -140,11 +161,15 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     });
     const { container } = await renderPage(MessagesPage, [[sessionKey, session('moderator')]]);
     await screen.findByTestId('message');
-    expect(screen.queryByRole('form', { name: 'New message' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New message' })).toBeNull();
     // The text is foreign data: text, never markup (SEC-006).
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getByTestId('message').textContent).toContain(evil);
-    fireEvent.click(within(screen.getByTestId('message')).getAllByRole('button')[0] as HTMLElement);
+    // Unread is bold in the list.
+    expect(within(screen.getByTestId('message')).getByRole('button').className).toContain(
+      'font-semibold',
+    );
+    await openMessage();
     await waitFor(() =>
       expect(calls.post).toHaveBeenCalledWith('/messages/{id}/read', {
         params: { path: { id: 'm1' } },
@@ -161,8 +186,8 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
       '/messages/{id}/comments': noComments,
     });
     await renderPage(MessagesPage, [[sessionKey, session('server_admin')]]);
-    fireEvent.click(await screen.findByRole('button', { expanded: false }));
-    expect(await screen.findByText('4 recipients')).toBeTruthy();
+    const view = await openMessage();
+    expect(within(view).getByText('4 recipients')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Delete message' }));
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete message' }),
@@ -170,6 +195,8 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     await waitFor(() =>
       expect(calls.del).toHaveBeenCalledWith('/messages/{id}', { params: { path: { id: 'm1' } } }),
     );
+    // The view closes with the deleted message.
+    await waitFor(() => expect(screen.queryByRole('article')).toBeNull());
     expect(calls.post).not.toHaveBeenCalled();
   });
 
@@ -180,8 +207,9 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
       body: { title: 'Too Many Requests', status: 429, detail: 'too many messages this hour' },
     }));
     await renderPage(MessagesPage, [[sessionKey, session()]]);
-    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Hello' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    const form = compose();
+    fireEvent.change(within(form).getByLabelText('Text'), { target: { value: 'Hello' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Send' }));
     expect((await screen.findByRole('alert')).textContent).toBe(
       'Failed: too many messages this hour',
     );
@@ -201,15 +229,15 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
       () => ({ status: 501, body: { title: 'Not Implemented', status: 501 } }),
     );
     await renderPage(MessagesPage, [[sessionKey, session('supporter')]]);
-    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+    await openMessage();
     const comments = await screen.findByRole('region', { name: 'Comments' });
     expect((await within(comments).findByRole('alert')).textContent).toBe(
       'Failed: Not Implemented',
     );
-    fireEvent.change(within(comments).getByLabelText('Your comment'), {
+    fireEvent.change(within(comments).getByLabelText('Your reply'), {
       target: { value: 'ok' },
     });
-    fireEvent.click(within(comments).getByRole('button', { name: 'Comment' }));
+    fireEvent.click(within(comments).getByRole('button', { name: 'Reply' }));
     await waitFor(() =>
       expect(calls.post).toHaveBeenCalledWith('/messages/{id}/comments', {
         params: { path: { id: 'm1' } },
@@ -233,12 +261,48 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
       },
     });
     const { container } = await renderPage(MessagesPage, [[sessionKey, session('moderator')]]);
-    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+    await openMessage();
     const [own, other] = (await screen.findAllByTestId('comment')) as [HTMLElement, HTMLElement];
     expect(within(own).queryByRole('button', { name: 'Delete' })).toBeTruthy();
     expect(within(other).queryByRole('button', { name: 'Delete' })).toBeNull();
     expect(other.textContent).toContain(evil);
     expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('titles a message by its first line and leads back to the list', async () => {
+    setLanguage('en');
+    mock({
+      '/messages': list([msg('m1', { text: '\n  Restart at 8\nDetails follow', read: false })]),
+      '/messages/{id}/comments': noComments,
+    });
+    await renderPage(MessagesPage, [[sessionKey, session('supporter')]]);
+    const item = await screen.findByTestId('message');
+    expect(within(item).getByText('Restart at 8')).toBeTruthy();
+    expect(item.textContent).not.toContain('Details follow');
+    // Nothing chosen yet: a hint stands for the message.
+    expect(screen.getByText('Choose a message to read it.')).toBeTruthy();
+    const view = await openMessage();
+    expect(view.textContent).toContain('Details follow');
+    expect(within(item).getByRole('button').getAttribute('aria-current')).toBe('true');
+    fireEvent.click(within(view).getByRole('button', { name: 'Back to messages' }));
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(within(item).getByRole('button').getAttribute('aria-current')).toBeNull();
+  });
+
+  it('shows the empty panes with a hint when there is no message', async () => {
+    setLanguage('en');
+    mock({ '/messages': list([]) });
+    const { container } = await renderPage(MessagesPage, [[sessionKey, session('moderator')]]);
+    expect(await screen.findByText('No messages yet.')).toBeTruthy();
+    expect(screen.queryByRole('list')).toBeNull();
+    expect(container.querySelectorAll('[aria-hidden="true"] .rounded').length).toBeGreaterThan(4);
+  });
+
+  it('cuts a long first line and keeps a character whole', () => {
+    expect(messageTitle('a'.repeat(5000))).toBe(`${'a'.repeat(120)}…`);
+    expect(messageTitle('x'.repeat(119) + '😀😀')).toBe(`${'x'.repeat(119)}😀…`);
+    expect(messageTitle('short')).toBe('short');
+    expect(messageTitle('\n\n')).toBe('');
   });
 
   it('loads older messages with before', async () => {
@@ -261,7 +325,7 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
       '/messages/{id}/comments': noComments,
     });
     const { container } = await renderPage(MessagesPage, [[sessionKey, session()]]);
-    fireEvent.click(await screen.findByRole('button', { expanded: false }));
+    await openMessage();
     await screen.findByRole('region');
     // Names, texts and times are data.
     const texts = unmarked(container).filter(

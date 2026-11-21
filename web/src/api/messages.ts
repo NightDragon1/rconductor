@@ -25,3 +25,14 @@ export function useUnreadMessages(enabled: boolean) {
     enabled,
   });
 }
+
+// titleMax is the length of the list title, cut from the first line.
+const titleMax = 120;
+
+// messageTitle names a message in the list: a message has no subject, so
+// the first line with text stands for it, cut to titleMax characters.
+export function messageTitle(text: string): string {
+  const line = (text.split('\n', 50).find((l) => l.trim() !== '') ?? '').trim();
+  const chars = Array.from(line.slice(0, titleMax * 2));
+  return chars.length > titleMax ? `${chars.slice(0, titleMax).join('')}…` : line;
+}
