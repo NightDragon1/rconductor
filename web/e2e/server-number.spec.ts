@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
 // Server number (UI-018, D-087) behind the flag server_number: first
-// column ID in Servers & Groups, badge before the name on cards and the
+// column ID in Manage servers and server groups, badge before the name on cards and the
 // server page; a number is never given twice.
 
 async function as(page: Page, state: StackState, user: string) {
@@ -33,7 +33,7 @@ test.describe('server number on', () => {
     await expect(
       page.getByRole('heading', { level: 1, name: new RegExp(`^${badge}`) }),
     ).toBeVisible();
-    await page.goto('admin/servers');
+    await page.goto('servers/manage');
     await expect(page.getByRole('columnheader').first()).toHaveText('ID');
     await expect(
       page.getByRole('row').filter({ hasText: 'survival' }).getByRole('cell').first(),
@@ -82,7 +82,7 @@ test.describe('flag off', () => {
     await expect(page.getByRole('article', { name: 'survival' }).getByText(/^#\d+$/)).toHaveCount(
       0,
     );
-    await page.goto('admin/servers');
+    await page.goto('servers/manage');
     await expect(page.getByRole('columnheader', { name: 'ID', exact: true })).toHaveCount(0);
     await page.goto(`servers/${state.servers.survival}/overview`);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

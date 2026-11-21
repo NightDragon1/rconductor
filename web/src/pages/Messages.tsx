@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, must } from '@/api/client';
 import {
   messagesKey,
+  messageTitle,
   type Message,
   type MessageAudience,
   type MessageComment,
@@ -16,8 +18,10 @@ import { useManagedUsers } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { dateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/PageHeader';
 
 const pageSize = 50;
 
@@ -40,9 +44,11 @@ function failText(t: TFunction, e: unknown): string {
 const area =
   'w-full rounded-md border border-control bg-surface px-3 py-2 text-base text-text placeholder:text-muted';
 
-// MessagesPage lists the messages to me and from me, newest first; the
-// RCON admin sees all (MSG-001 to MSG-003, D-085). Texts are foreign data
-// and stand as text (SEC-006). The backend checks every request.
+// MessagesPage shows the messages to me and from me as conversations,
+// newest first: the list on the left, the chosen message with its comments
+// on the right; below 768 px the list and the message take turns. The RCON
+// admin sees all (MSG-001 to MSG-003, D-085). Texts are foreign data and
+// stand as text (SEC-006). The backend checks every request.
 export function MessagesPage() {
   const { t } = useTranslation();
   const { data: session } = useSession();
@@ -59,45 +65,121 @@ export function MessagesPage() {
       last.items.length < pageSize ? undefined : last.items[last.items.length - 1]?.id,
   });
   const [open, setOpen] = useState<string | null>(null);
+  const [compose, setCompose] = useState(false);
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
   const role = session?.user.role ?? '';
+  const choices = audiences[role];
+  // A deleted message is gone from the list, and so from the view.
+  const current = items.find((m) => m.id === open);
+  const empty = list.isSuccess && items.length === 0;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">{t('nav.messages')}</h1>
-        <p className="text-sm text-muted">{t('messages.explain')}</p>
-      </div>
-      {audiences[role] && <SendForm choices={audiences[role]} />}
-      <ol aria-label={t('messages.list')} className="rounded-lg border border-border bg-surface">
-        {items.map((m) => (
-          <MessageItem
-            key={m.id}
-            message={m}
-            open={open === m.id}
-            onToggle={() => setOpen(open === m.id ? null : m.id)}
-          />
-        ))}
-        {list.isSuccess && items.length === 0 && (
-          <li className="p-6 text-center text-muted">{t('messages.none')}</li>
-        )}
-        {list.isPending && <li className="p-6 text-center text-muted">{t('app.loading')}</li>}
-        {list.isError && (
-          <li role="alert" className="p-6 text-center text-danger">
-            {failText(t, list.error)}
-          </li>
-        )}
-      </ol>
-      {list.hasNextPage && (
-        <Button
-          variant="outline"
-          className="self-start"
-          disabled={list.isFetchingNextPage}
-          onClick={() => void list.fetchNextPage()}
-        >
-          {t('messages.more')}
-        </Button>
+    <div className="flex max-w-6xl flex-col gap-4">
+      <PageHeader
+        title={t('nav.messages')}
+        description={t('messages.explain')}
+        actions={
+          choices && (
+            <Button onClick={() => setCompose(true)}>
+              <Plus aria-hidden />
+              {t('messages.new')}
+            </Button>
+          )
+        }
+      />
+      {choices && (
+        <Dialog open={compose} onOpenChange={setCompose}>
+          <DialogContent
+            aria-describedby={undefined}
+            className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
+          >
+            <DialogTitle>{t('messages.new')}</DialogTitle>
+            <SendForm choices={choices} />
+            <div className="flex justify-end">
+              <DialogClose asChild>
+                <Button variant="ghost">{t('messages.close')}</Button>
+              </DialogClose>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
+      <div className="grid gap-4 md:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
+        <div className={cn('flex min-w-0 flex-col gap-2', current && 'max-md:hidden')}>
+          {items.length > 0 && (
+            <ol
+              aria-label={t('messages.list')}
+              className="rounded-lg border border-border bg-surface md:max-h-[70dvh] md:overflow-y-auto"
+            >
+              {items.map((m) => (
+                <MessageItem
+                  key={m.id}
+                  message={m}
+                  active={current?.id === m.id}
+                  onOpen={() => setOpen(m.id)}
+                />
+              ))}
+            </ol>
+          )}
+          {empty && (
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+              <p className="text-center text-muted">{t('messages.none')}</p>
+              <ListSkeleton />
+            </div>
+          )}
+          {list.isPending && <p className="p-6 text-center text-muted">{t('app.loading')}</p>}
+          {list.isError && (
+            <p role="alert" className="p-6 text-center text-danger">
+              {failText(t, list.error)}
+            </p>
+          )}
+          {list.hasNextPage && (
+            <Button
+              variant="outline"
+              className="self-start"
+              disabled={list.isFetchingNextPage}
+              onClick={() => void list.fetchNextPage()}
+            >
+              {t('messages.more')}
+            </Button>
+          )}
+        </div>
+        <div className={cn('min-w-0', !current && 'max-md:hidden')}>
+          {current ? (
+            <MessageView key={current.id} message={current} onBack={() => setOpen(null)} />
+          ) : (
+            <div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4">
+              {items.length > 0 && <p className="text-center text-muted">{t('messages.pick')}</p>}
+              <ViewSkeleton />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The skeletons stand in for the list and the message while there is
+// nothing to show; they carry no content.
+function ListSkeleton() {
+  return (
+    <div aria-hidden className="flex flex-col gap-3">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex flex-col gap-1.5">
+          <div className="h-3 w-3/4 rounded bg-surface-raised" />
+          <div className="h-2.5 w-1/2 rounded bg-surface-raised" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ViewSkeleton() {
+  return (
+    <div aria-hidden className="flex flex-col gap-3">
+      <div className="h-3 w-1/3 rounded bg-surface-raised" />
+      <div className="h-16 rounded bg-surface-raised" />
+      <div className="ml-6 h-10 rounded bg-surface-raised" />
+      <div className="mt-4 h-11 rounded bg-surface-raised" />
     </div>
   );
 }
@@ -145,9 +227,8 @@ function SendForm({ choices }: { choices: MessageAudience[] }) {
     <form
       aria-label={t('messages.new')}
       onSubmit={(e) => void send(e)}
-      className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+      className="flex flex-col gap-3"
     >
-      <h2 className="font-semibold">{t('messages.new')}</h2>
       <label htmlFor={ids.audience} className="text-sm text-muted">
         {t('messages.to')}
       </label>
@@ -231,64 +312,63 @@ function UserPicker({
   );
 }
 
+// MessageItem is one conversation in the list: title, sender and time;
+// an unread one is bold.
 function MessageItem({
   message: m,
-  open,
-  onToggle,
+  active,
+  onOpen,
 }: {
   message: Message;
-  open: boolean;
-  onToggle: () => void;
+  active: boolean;
+  onOpen: () => void;
 }) {
   const { t, i18n } = useTranslation();
-  const { data: session } = useSession();
-  const mine = !!m.sender.id && m.sender.id === session?.user.id;
   return (
     <li className="border-t border-border first:border-t-0" data-testid="message">
       <button
         type="button"
-        aria-expanded={open}
-        onClick={onToggle}
-        className="flex w-full flex-col gap-1 px-4 py-3 text-left text-sm hover:bg-surface-raised"
+        aria-current={active || undefined}
+        onClick={onOpen}
+        className={cn(
+          'flex min-h-11 w-full flex-col gap-1 px-4 py-3 text-left text-sm hover:bg-surface-raised',
+          active && 'bg-surface-raised',
+          !m.read && 'font-semibold',
+        )}
       >
-        <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="truncate">
+          <ForeignText text={messageTitle(m.text)} />
+        </span>
+        <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
           {!m.read && (
-            <span className="rounded bg-accent px-1.5 text-xs text-accent-text">
+            <span className="rounded bg-accent px-1.5 text-accent-text">
               {t('messages.unreadMark')}
             </span>
           )}
-          <bdi className="font-semibold wrap-anywhere">{m.sender.pseudonym}</bdi>
-          {mine && <span className="text-xs text-muted">{t('messages.mine')}</span>}
+          <bdi className="wrap-anywhere">{m.sender.pseudonym}</bdi>
           <time dateTime={m.created_at} className="font-mono text-muted">
             {dateTime(i18n.language, m.created_at)}
           </time>
-          <span className="rounded border border-border px-1.5 text-xs">
-            {t(`messages.audience.${m.audience}`)}
-          </span>
-          <span className="text-xs text-muted">
-            {t('messages.comments', { count: m.comment_count })}
-          </span>
+          {m.comment_count > 0 && (
+            <span className="text-muted">{t('messages.comments', { count: m.comment_count })}</span>
+          )}
         </span>
-        {!open && (
-          <span className="line-clamp-2 whitespace-pre-wrap wrap-anywhere">
-            <ForeignText text={m.text} />
-          </span>
-        )}
       </button>
-      {open && <MessageDetail message={m} mine={mine} />}
     </li>
   );
 }
 
-// MessageDetail shows the whole text, marks it read for a recipient and
-// offers deleting to the sender and the RCON admin (D-085).
-function MessageDetail({ message: m, mine }: { message: Message; mine: boolean }) {
-  const { t } = useTranslation();
+// MessageView shows the whole message on top and its comments below as a
+// thread, marks it read for a recipient and offers deleting to the sender
+// and the RCON admin (D-085). Below 768 px it leads back to the list.
+function MessageView({ message: m, onBack }: { message: Message; onBack: () => void }) {
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const { data: session } = useSession();
   const [confirm, setConfirm] = useState(false);
   const [note, setNote] = useState<Note>(null);
   const admin = session?.user.role === 'rcon_admin';
+  const mine = !!m.sender.id && m.sender.id === session?.user.id;
 
   // A message I did not send is to me; reading it marks it read. A refusal
   // leaves it unread, as the list shows.
@@ -303,6 +383,7 @@ function MessageDetail({ message: m, mine }: { message: Message; mine: boolean }
     setConfirm(false);
     try {
       must(await api.DELETE('/messages/{id}', { params: { path: { id: m.id } } }));
+      onBack();
       await qc.invalidateQueries({ queryKey: messagesKey });
     } catch (err) {
       setNote({ ok: false, text: failText(t, err) });
@@ -310,13 +391,32 @@ function MessageDetail({ message: m, mine }: { message: Message; mine: boolean }
   };
 
   return (
-    <div className="flex flex-col gap-3 px-4 pb-4 text-sm">
+    <article
+      aria-label={t('messages.message')}
+      className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 text-sm"
+    >
+      <Button variant="ghost" className="self-start md:hidden" onClick={onBack}>
+        <ArrowLeft aria-hidden />
+        {t('messages.back')}
+      </Button>
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <bdi className="font-semibold wrap-anywhere">{m.sender.pseudonym}</bdi>
+        {mine && <span className="text-xs text-muted">{t('messages.mine')}</span>}
+        <time dateTime={m.created_at} className="font-mono text-muted">
+          {dateTime(i18n.language, m.created_at)}
+        </time>
+        <span className="rounded border border-border px-1.5 text-xs">
+          {t(`messages.audience.${m.audience}`)}
+        </span>
+        {m.recipient_count !== undefined && (
+          <span className="text-xs text-muted">
+            {t('messages.recipients', { count: m.recipient_count })}
+          </span>
+        )}
+      </header>
       <p className="whitespace-pre-wrap wrap-anywhere">
         <ForeignText text={m.text} />
       </p>
-      {m.recipient_count !== undefined && (
-        <p className="text-muted">{t('messages.recipients', { count: m.recipient_count })}</p>
-      )}
       {note && (
         <p role="alert" className="text-danger wrap-anywhere">
           {note.text}
@@ -336,12 +436,13 @@ function MessageDetail({ message: m, mine }: { message: Message; mine: boolean }
         onClose={() => setConfirm(false)}
       />
       <Comments message={m} mine={mine} />
-    </div>
+    </article>
   );
 }
 
-// Comments of a message (MSG-003): recipients and the sender comment;
-// the author, the sender and the RCON admin delete a comment.
+// Comments of a message (MSG-003) as a thread, the reply field at the
+// bottom: a reply is a comment. Recipients and the sender comment; the
+// author, the sender and the RCON admin delete a comment.
 function Comments({ message: m, mine }: { message: Message; mine: boolean }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
@@ -405,15 +506,18 @@ function Comments({ message: m, mine }: { message: Message; mine: boolean }) {
   };
 
   return (
-    <section aria-label={t('messages.commentsLabel')} className="flex flex-col gap-2">
-      <h3 className="font-semibold">{t('messages.commentsLabel')}</h3>
+    <section
+      aria-label={t('messages.commentsLabel')}
+      className="flex flex-col gap-2 border-t border-border pt-3"
+    >
+      <h2 className="font-semibold">{t('messages.commentsLabel')}</h2>
       {list.isError && (
         <p role="alert" className="text-danger wrap-anywhere">
           {failText(t, list.error)}
         </p>
       )}
       {items.length > 0 && (
-        <ol className="flex flex-col gap-2">
+        <ol className="flex flex-col gap-2 border-l-2 border-border pl-3">
           {items.map((c) => (
             <li
               key={c.id}

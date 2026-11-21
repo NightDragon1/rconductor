@@ -9,6 +9,11 @@ test('SMTP setup and test mail (NFR-017)', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto('admin/settings');
+  // The mail setup is part of the group System (O8).
+  await page
+    .getByRole('navigation', { name: 'Settings groups' })
+    .getByRole('button', { name: 'System' })
+    .click();
   const panel = page.getByRole('region', { name: 'Mail (SMTP)' });
   await panel.getByLabel('SMTP host').fill('127.0.0.1');
   await panel.getByLabel('Port').fill('1');

@@ -11,6 +11,7 @@ import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { dateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/PageHeader';
 
 type Level = components['schemas']['SystemLogLevel'];
 type LogPage = components['schemas']['SystemLogPage'];
@@ -124,13 +125,11 @@ export function SystemLogPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">{t('nav.systemLog')}</h1>
-        <p className="text-sm text-muted">{t('systemLog.explain')}</p>
+      <PageHeader title={t('nav.systemLog')} description={t('systemLog.explain')}>
         <p id={ids.notice} role="note" className="mt-1 text-sm text-warn">
           {t('systemLog.notice')}
         </p>
-      </div>
+      </PageHeader>
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <label htmlFor={ids.source} className="text-sm">

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Agent, Server, User } from '@/api/servers';
 import { clock } from '@/lib/format';
-import { cardStatus, isUp, rconFailing } from '@/lib/status';
+import { cardStatus, isUp, rconFailing, summaryOf } from '@/lib/status';
 import { cn } from '@/lib/utils';
 
 function Tile({
@@ -73,7 +73,7 @@ export function HealthOverview({
   const lng = i18n.language;
   const statuses = servers.map(cardStatus);
   const up = servers.filter(isUp).length;
-  const stopped = statuses.filter((s) => s === 'stopped').length;
+  const stopped = statuses.filter((s) => summaryOf(s) === 'stopped').length;
   const loops = servers.filter((s) => s.runtime?.container?.restart_loop);
   const failing = servers.filter(rconFailing);
   const active = agents.filter((a) => a.status === 'active');

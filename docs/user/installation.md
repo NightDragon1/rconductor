@@ -18,7 +18,7 @@ RCON port, and none of yours should.
 
 The files use `docker.io/nightdragon1/...:1`. The same tags are on ghcr.io; to
 use it, set `RCD_IMAGE_REPO=ghcr.io/nightdragon1`. Panel and agent must have the same major version, the first number of the version; the
-tag `1` gives you that. Versions have two parts: `1.0`, `1.1`. The first number
+tag `1` gives you that. Versions have two parts: `1.1`, `1.2`. The first number
 rises when something is incompatible. See [Updating](#updating).
 
 Values come from the environment or an `.env` file next to the Compose file:
@@ -67,7 +67,7 @@ the panel keep working in the meantime, only the agent functions are gone. So a
 panel `1.0` with an agent `0.9` does not work, and neither does the other way round.
 
 Within a major version a panel works with every agent of it, also with an older
-one: a panel `1.1` works with an agent `1.0`. An older agent reports what it can do
+one: a panel `1.2` works with an agent `1.1`. An older agent reports what it can do
 when it connects; what it cannot do, the panel hides, and the API answers `409` with
 the reason `agent_unsupported`. Only an update of the agent helps then. A newer agent
 with an older panel is not supported, so update the panel before the agents.
@@ -93,7 +93,7 @@ To go back, stop the panel, restore the backup as described under
 [Volumes and files](#volumes-and-files) and start the old version.
 
 To install a certain version instead of the newest, put it into `.env` before the
-first start: `RCD_VERSION=1.0`.
+first start: `RCD_VERSION=1.2`.
 
 ## Reverse proxy
 

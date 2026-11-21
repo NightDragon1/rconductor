@@ -16,13 +16,9 @@ async function as(page: Page, state: StackState, user: string) {
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
 }
 
-// agentNode is the line of an agent in the topology.
+// agentNode is the node of a host with its agent in the topology.
 const agentNode = (page: Page, agent: string) =>
-  page
-    .getByRole('region', { name: 'minecraft' })
-    .getByRole('listitem')
-    .filter({ hasText: agent })
-    .first();
+  page.getByRole('list', { name: 'Hosts' }).getByRole('link').filter({ hasText: agent }).first();
 
 // connectedFrom: the connection address shows, marked, exactly when the
 // agent has no host address and the backend sends one; it does so only
@@ -79,7 +75,7 @@ test.describe('docker host on', () => {
     expect((await page.request.get('api/v1/agents')).status()).toBe(403);
     await page.goto('topology');
     await expect(page.getByRole('link', { name: 'survival' })).toBeVisible();
-    await expect(page.getByRole('main')).toContainText('Agent');
+    await expect(page.getByRole('list', { name: 'Hosts' })).toContainText('connected');
     let html = await page.content();
     expect(html).not.toContain(hostIP);
     expect(html).not.toContain('nas</b>');

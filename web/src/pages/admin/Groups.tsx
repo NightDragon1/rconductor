@@ -15,6 +15,7 @@ import {
   type UserGroup,
 } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { cell, headCell } from '@/components/DenseTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePhone, useReveal } from '@/lib/phone';
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { reasonText } from '@/lib/admin';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
+import { PageHeader } from '@/components/PageHeader';
 
 type Kind = UserGroup['kind'];
 
@@ -380,10 +382,9 @@ export function GroupsPage() {
   return (
     <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('nav.groups')}</h1>
+        <PageHeader title={t('nav.groups')} description={t('groups.explain')}>
           <p className="text-sm text-muted">{t('groups.summary', { count: all.length })}</p>
-        </div>
+        </PageHeader>
         <PhoneNote />
         <div className="flex flex-wrap gap-2">
           <Input
@@ -460,10 +461,10 @@ export function GroupsPage() {
             <table className="w-full text-sm">
               <thead className="text-left text-muted">
                 <tr>
-                  <th className="p-3 font-medium">{t('groups.name')}</th>
-                  <th className="p-3 font-medium">{t('groups.kindLabel')}</th>
-                  <th className="p-3 font-medium">{t('groups.list')}</th>
-                  <th className="p-3 font-medium">{t('groups.members')}</th>
+                  <th className={headCell}>{t('groups.name')}</th>
+                  <th className={headCell}>{t('groups.kindLabel')}</th>
+                  <th className={headCell}>{t('groups.list')}</th>
+                  <th className={headCell}>{t('groups.members')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -472,7 +473,7 @@ export function GroupsPage() {
                     key={g.id}
                     className={cn('border-t border-border', open === g.id && 'bg-surface-raised')}
                   >
-                    <td className="p-3">
+                    <td className={cell}>
                       <button
                         type="button"
                         className="hover:underline"
@@ -481,11 +482,11 @@ export function GroupsPage() {
                         <bdi>{g.name}</bdi>
                       </button>
                     </td>
-                    <td className="p-3">{t(`groups.kind.${g.kind}`)}</td>
-                    <td className="p-3">
+                    <td className={cell}>{t(`groups.kind.${g.kind}`)}</td>
+                    <td className={cell}>
                       <bdi>{listName(g.command_list_id)}</bdi>
                     </td>
-                    <td className="p-3">{t('groups.memberCount', { count: g.members.length })}</td>
+                    <td className={cell}>{t('groups.memberCount', { count: g.members.length })}</td>
                   </tr>
                 ))}
                 {shown.length === 0 && (

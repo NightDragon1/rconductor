@@ -16,7 +16,7 @@ test('a server with profile, host, port, password and an agent container (SRV-00
   page,
   state,
 }) => {
-  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  await as(page, state, 'admin', 'servers/manage', 'Servers and server groups');
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
   await panel.getByLabel('Name').fill('e2e-new');
@@ -46,7 +46,7 @@ test('a server with profile, host, port, password and an agent container (SRV-00
 });
 
 test('servers, server groups and agents can be searched (UI-007)', async ({ page, state }) => {
-  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  await as(page, state, 'admin', 'servers/manage', 'Servers and server groups');
   const server = (name: string) => page.getByRole('button', { name, exact: true });
   const search = page.getByRole('searchbox', { name: 'Search servers and server groups' });
   await search.fill('SURV');
@@ -69,7 +69,7 @@ test('servers, server groups and agents can be searched (UI-007)', async ({ page
 });
 
 test('a server needs no agent (SRV-001)', async ({ page, state }) => {
-  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  await as(page, state, 'admin', 'servers/manage', 'Servers and server groups');
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
   await panel.getByLabel('Name').fill('e2e-plain');
@@ -107,9 +107,9 @@ test('a server needs no agent (SRV-001)', async ({ page, state }) => {
 });
 
 test('a server can be in several server groups (SRV-003)', async ({ page, state }) => {
-  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  await as(page, state, 'admin', 'servers/manage', 'Servers and server groups');
   await page.getByPlaceholder('Name of a new server group').fill('e2e-group');
-  await page.getByRole('button', { name: 'Create group' }).click();
+  await page.getByRole('button', { name: 'Create server group' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of e2e-group' });
   await panel.getByLabel('+ Server').selectOption({ label: 'survival' });
   await panel.getByLabel('+ Server').selectOption({ label: 'arena' });
@@ -121,8 +121,8 @@ test('a server can be in several server groups (SRV-003)', async ({ page, state 
   await expect(survival).toContainText('minecraft');
   await expect(survival).toContainText('e2e-group');
 
-  await panel.getByRole('button', { name: 'Delete group …' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete group …' }).click();
+  await panel.getByRole('button', { name: 'Delete server group …' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete server group …' }).click();
   await expect(survival).not.toContainText('e2e-group');
 });
 
@@ -130,7 +130,7 @@ test('the server admin changes only the profile list (Design 6.2, SRV-008)', asy
   page,
   state,
 }) => {
-  await as(page, state, 'sadmin', 'admin/servers', 'Servers and groups');
+  await as(page, state, 'sadmin', 'servers/manage', 'Servers and server groups');
   await expect(page.getByRole('button', { name: 'New server' })).toHaveCount(0);
   await page.getByRole('button', { name: 'survival', exact: true }).click();
   const panel = page.getByRole('complementary', { name: 'Details of survival' });
@@ -179,7 +179,7 @@ test('the RCON admin reaches every administration page (ROLE-002)', async ({ pag
     ['admin/users', 'Users'],
     ['admin/groups', 'Groups'],
     ['admin/command-lists', 'Command lists'],
-    ['admin/servers', 'Servers and groups'],
+    ['servers/manage', 'Servers and server groups'],
     ['admin/agents', 'Agents'],
     ['admin/settings', 'Settings'],
     ['audit', 'Audit'],
@@ -194,7 +194,7 @@ test('the RCON admin reaches every administration page (ROLE-002)', async ({ pag
 });
 
 test('test connection reports the state without saving (SRV-007)', async ({ page, state }) => {
-  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  await as(page, state, 'admin', 'servers/manage', 'Servers and server groups');
   await page.getByRole('button', { name: 'New server' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of New server' });
   await panel.getByLabel('Add a game profile').selectOption({ label: 'Minecraft (Java Edition)' });
@@ -219,7 +219,7 @@ test.describe('server_save_as_new off', () => {
   test.use({ flagsOff: ['server_save_as_new'] });
 
   test('a refused input shows the reason of the backend (UI-016)', async ({ page, state }) => {
-    await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+    await as(page, state, 'admin', 'servers/manage', 'Servers and server groups');
     const panel = page.getByRole('complementary', { name: 'Details of New server' });
     const row = page.getByRole('row').filter({ hasText: 'e2e-twice' });
     for (const first of [true, false]) {
@@ -283,7 +283,7 @@ test.describe('server_save_as_new off', () => {
     page,
     state,
   }) => {
-    await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+    await as(page, state, 'admin', 'servers/manage', 'Servers and server groups');
     const { release, answered } = await hold(page);
     const panel = await fillNewServer(page, 'e2e-saving');
     await panel.getByRole('button', { name: 'Create server' }).click();
@@ -313,7 +313,7 @@ test('a navigation during a save that fails asks with the reason (UI-008)', asyn
   page,
   state,
 }) => {
-  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+  await as(page, state, 'admin', 'servers/manage', 'Servers and server groups');
   const { release, answered } = await hold(page);
   const panel = await fillNewServer(page, 'survival');
   await panel.getByRole('button', { name: 'Create server' }).click();
@@ -327,7 +327,9 @@ test('a navigation during a save that fails asks with the reason (UI-008)', asyn
   await expect(question).toBeVisible();
   await expect(question.getByRole('alert')).toHaveText('a server with this name exists');
   await question.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Servers and server groups', level: 1 }),
+  ).toBeVisible();
   await panel.getByRole('button', { name: 'Close the details' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Discard changes' }).click();
   await expect(panel).toHaveCount(0);

@@ -11,8 +11,11 @@ import {
   type EffectiveProfile,
   type GameProfile,
 } from '@/api/servers';
+import { useWide } from '@/components/DenseTable';
 import { ForeignText } from '@/components/ForeignText';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/PageHeader';
 
 type Param = components['schemas']['ProfileParam'];
 type Port = components['schemas']['GamePort'];
@@ -182,32 +185,50 @@ function Syntax({ p }: { p: GameProfile | EffectiveProfile }) {
   );
 }
 
-function ProfileCard({ p, q }: { p: GameProfile; q: string }) {
+// ProfileDetails shows the syntax, ports and catalog of one profile. A
+// match on the name shows the whole catalog, else only matching commands.
+function ProfileDetails({ p, q }: { p: GameProfile; q: string }) {
   const { t } = useTranslation();
-  // A match on the name shows the whole catalog, else only matching commands.
   const commands =
     !q || matches(p.name, q) ? p.catalog : p.catalog.filter((c) => commandMatches(c, q));
+  return (
+    <>
+      <dl className="flex flex-col gap-1 text-sm">
+        <Syntax p={p} />
+        {p.default_port !== undefined && (
+          <Field label={t('profiles.defaultPort')}>{p.default_port}</Field>
+        )}
+        <Ports ports={p.game_ports} />
+      </dl>
+      <Catalog commands={commands} label={t('profiles.catalogOf', { name: p.name })} />
+    </>
+  );
+}
+
+function ProfileHead({ p }: { p: GameProfile }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <span className="font-semibold">
+        <ForeignText text={p.name} />
+      </span>
+      <span className="text-sm text-muted">{t(`profiles.kind.${p.kind}`)}</span>
+      <span className="text-sm text-muted">
+        {t('profiles.commandCount', { count: p.catalog.length })}
+      </span>
+    </>
+  );
+}
+
+function ProfileCard({ p, q }: { p: GameProfile; q: string }) {
   return (
     <li data-testid="profile" className="rounded-lg border border-border bg-surface">
       <details open={q !== ''}>
         <summary className="tap flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 p-3">
-          <span className="font-semibold">
-            <ForeignText text={p.name} />
-          </span>
-          <span className="text-sm text-muted">{t(`profiles.kind.${p.kind}`)}</span>
-          <span className="text-sm text-muted">
-            {t('profiles.commandCount', { count: p.catalog.length })}
-          </span>
+          <ProfileHead p={p} />
         </summary>
         <div className="flex flex-col gap-3 border-t border-border p-3">
-          <dl className="flex flex-col gap-1 text-sm">
-            <Syntax p={p} />
-            {p.default_port !== undefined && (
-              <Field label={t('profiles.defaultPort')}>{p.default_port}</Field>
-            )}
-            <Ports ports={p.game_ports} />
-          </dl>
-          <Catalog commands={commands} label={t('profiles.catalogOf', { name: p.name })} />
+          <ProfileDetails p={p} q={q} />
         </div>
       </details>
     </li>
@@ -278,42 +299,50 @@ export function ProfilesPage() {
     ? all.filter((p) => matches(p.name, q) || p.catalog.some((c) => commandMatches(c, q)))
     : all;
   const inScope = servers.data ?? [];
+  const wide = useWide();
+  const [picked, setPicked] = useState('');
+  const current = list.find((p) => p.id === picked) ?? list[0];
+
+  const effective = (
+    <section
+      aria-label={t('profiles.effective')}
+      className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+    >
+      <h2 className="text-lg font-semibold">{t('profiles.effective')}</h2>
+      {servers.isPending ? (
+        <p className="text-sm text-muted">{t('app.loading')}</p>
+      ) : inScope.length === 0 ? (
+        <p className="text-sm text-muted">{t('home.empty')}</p>
+      ) : (
+        <>
+          <label htmlFor={pickId} className="text-sm text-muted">
+            {t('profiles.pickServer')}
+          </label>
+          <select
+            id={pickId}
+            className="h-11 self-start rounded-md border border-control bg-surface px-3 text-sm"
+            value={server}
+            onChange={(e) => setServer(e.target.value)}
+          >
+            <option value="">{t('profiles.pickServerOption')}</option>
+            {inScope.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          {server && <Effective id={server} profiles={all} />}
+        </>
+      )}
+    </section>
+  );
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t('nav.profiles')}</h1>
-
-      <section
-        aria-label={t('profiles.effective')}
-        className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
-      >
-        <h2 className="text-lg font-semibold">{t('profiles.effective')}</h2>
-        {servers.isPending ? (
-          <p className="text-sm text-muted">{t('app.loading')}</p>
-        ) : inScope.length === 0 ? (
-          <p className="text-sm text-muted">{t('home.empty')}</p>
-        ) : (
-          <>
-            <label htmlFor={pickId} className="text-sm text-muted">
-              {t('profiles.pickServer')}
-            </label>
-            <select
-              id={pickId}
-              className="h-11 self-start rounded-md border border-control bg-surface px-3 text-sm"
-              value={server}
-              onChange={(e) => setServer(e.target.value)}
-            >
-              <option value="">{t('profiles.pickServerOption')}</option>
-              {inScope.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            {server && <Effective id={server} profiles={all} />}
-          </>
-        )}
-      </section>
+      <PageHeader title={t('nav.profiles')} description={t('profiles.explain')} />
+      {/* Below 1024 px the merged view of a server comes first, as before;
+          from 1024 px the list with its details leads and it follows. */}
+      {!wide && effective}
 
       <section aria-label={t('profiles.all')} className="flex flex-col gap-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -332,14 +361,54 @@ export function ProfilesPage() {
         {profiles.isSuccess && list.length === 0 && (
           <p className="text-muted">{t(q ? 'profiles.noMatch' : 'profiles.empty')}</p>
         )}
-        {list.length > 0 && (
+        {list.length > 0 && !wide && (
           <ul aria-label={t('profiles.all')} className="flex flex-col gap-2">
             {list.map((p) => (
               <ProfileCard key={p.id} p={p} q={q} />
             ))}
           </ul>
         )}
+        {list.length > 0 && wide && current && (
+          // From 1024 px: the list on the left, the chosen profile on the right (O6).
+          <div className="grid grid-cols-[18rem_minmax(0,1fr)] items-start gap-4">
+            <ul
+              aria-label={t('profiles.all')}
+              className="flex flex-col overflow-hidden rounded-lg border border-border bg-surface"
+            >
+              {list.map((p) => (
+                <li
+                  key={p.id}
+                  data-testid="profile"
+                  className="border-t border-border first:border-t-0"
+                >
+                  <button
+                    type="button"
+                    aria-current={p.id === current.id}
+                    className={cn(
+                      'flex w-full flex-wrap items-baseline gap-x-3 px-3 py-1.5 text-left hover:bg-surface-raised',
+                      p.id === current.id && 'bg-surface-raised',
+                    )}
+                    onClick={() => setPicked(p.id)}
+                  >
+                    <ProfileHead p={p} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div
+              role="region"
+              aria-label={t('profiles.details')}
+              className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-surface p-4"
+            >
+              <h3 className="text-lg font-semibold">
+                <ForeignText text={current.name} />
+              </h3>
+              <ProfileDetails p={current} q={q} />
+            </div>
+          </div>
+        )}
       </section>
+      {wide && effective}
     </div>
   );
 }

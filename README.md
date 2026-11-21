@@ -115,7 +115,7 @@ docker compose up -d agent
 1. Open `http://<host>:8080`, sign in as `admin` with the password from the log and set a new one.
 2. Under **Agents**, **Pair an agent**, **Make token**; give the token to the agent and start it.
 3. Give your game containers the label `rconductor.manage=true`; the agent manages only those.
-4. Under **Servers and groups**, **New server**: name, game profile, host, RCON port and password.
+4. Under **Servers**, tab **Manage servers and server groups**, **New server**: name, game profile, host, RCON port and password.
 
 ## Important variables
 

@@ -84,7 +84,7 @@ test('a moderator group gives its members servers and commands (ROLE-004, ROLE-0
   const panel = page.getByRole('complementary', { name: 'Details of event-mods' });
   await panel.getByLabel('Command list').selectOption({ label: 'event-cmds' });
   await panel.getByLabel('+ Member').selectOption({ label: 'mod2' });
-  await panel.getByLabel('+ Server or group').selectOption({ label: 'arena' });
+  await panel.getByLabel('+ Server or server group').selectOption({ label: 'arena' });
   await panel.getByRole('button', { name: 'Save' }).click();
   await expect(panel.getByRole('status')).toHaveText('Saved.', saved);
   await expect(page.getByRole('row').filter({ hasText: 'event-mods' })).toContainText('event-cmds');

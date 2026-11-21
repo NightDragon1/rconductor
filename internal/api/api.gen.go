@@ -133,6 +133,27 @@ func (e ConnectionTestResultResult) Valid() bool {
 	}
 }
 
+// Defines values for ContainerRuntimeHealth.
+const (
+	Healthy   ContainerRuntimeHealth = "healthy"
+	Starting  ContainerRuntimeHealth = "starting"
+	Unhealthy ContainerRuntimeHealth = "unhealthy"
+)
+
+// Valid indicates whether the value is a known member of the ContainerRuntimeHealth enum.
+func (e ContainerRuntimeHealth) Valid() bool {
+	switch e {
+	case Healthy:
+		return true
+	case Starting:
+		return true
+	case Unhealthy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Formatting.
 const (
 	Minecraft Formatting = "minecraft"
@@ -965,6 +986,9 @@ type ContainerRuntime struct {
 	Capabilities *[]string `json:"capabilities,omitempty"`
 	CpuPercent   *float64  `json:"cpu_percent,omitempty"`
 
+	// Health Result of the container's Docker healthcheck while it runs (UI-021, UI-011); missing without a healthcheck or from an agent that does not report it, then the state alone counts.
+	Health *ContainerRuntimeHealth `json:"health,omitempty"`
+
 	// Image Foreign data from the agent (SEC-006).
 	Image     *string    `json:"image,omitempty"`
 	MemBytes  *int64     `json:"mem_bytes,omitempty"`
@@ -987,6 +1011,9 @@ type ContainerRuntime struct {
 	// Volumes Named volumes of the container (AGT-007); the size only once the agent measured it, without the capability volumes.size never.
 	Volumes *[]VolumeRuntime `json:"volumes,omitempty"`
 }
+
+// ContainerRuntimeHealth Result of the container's Docker healthcheck while it runs (UI-021, UI-011); missing without a healthcheck or from an agent that does not report it, then the state alone counts.
+type ContainerRuntimeHealth string
 
 // DockerHost Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Only while the feature flag docker_host is on; each field is missing when the agent does not give it.
 type DockerHost struct {

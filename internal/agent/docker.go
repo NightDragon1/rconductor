@@ -179,8 +179,8 @@ func toContainer(s container.Summary) agentproto.Container {
 	return c
 }
 
-// withStart adds start time and restart count from an inspect; without
-// them the panel shows neither (revision 2.4 candidate 2).
+// withStart adds start time, restart count and health from an inspect;
+// without them the panel shows none of them (revision 2.4 candidate 2).
 func (d *Docker) withStart(ctx context.Context, c agentproto.Container) agentproto.Container {
 	ictx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -189,6 +189,10 @@ func (d *Docker) withStart(ctx context.Context, c agentproto.Container) agentpro
 		return c
 	}
 	c.RestartCount = r.Container.RestartCount
+	if r.Container.State != nil && r.Container.State.Health != nil {
+		c.Health = string(r.Container.State.Health.Status) // "none" is cleaned away
+		c.Clean()
+	}
 	if r.Container.State != nil {
 		if t, err := time.Parse(time.RFC3339Nano, r.Container.State.StartedAt); err == nil && t.Year() > 1 {
 			c.StartedAt = t.UTC()
@@ -320,6 +324,8 @@ func (d *Docker) events(ctx context.Context, res client.EventsResult, out Sender
 var statusActions = map[events.Action]bool{
 	"create": true, "start": true, "stop": true, "die": true, "kill": true, "restart": true,
 	"pause": true, "unpause": true, "destroy": true, "rename": true,
+	events.ActionHealthStatusHealthy: true, events.ActionHealthStatusUnhealthy: true,
+	events.ActionHealthStatusRunning: true, events.ActionHealthStatus: true,
 }
 
 func (d *Docker) event(ctx context.Context, out Sender, m events.Message) {
@@ -335,6 +341,12 @@ func (d *Docker) event(ctx context.Context, out Sender, m events.Message) {
 	ev := agentproto.ContainerEvent{}
 	if len(items) == 1 {
 		ev.Container = d.withStart(ctx, toContainer(items[0]))
+		// Docker reports a health change once; without the inspect the
+		// event itself names the new health, so it is not lost.
+		if h, ok := strings.CutPrefix(string(m.Action), string(events.ActionHealthStatus)+": "); ok && ev.Container.Health == "" {
+			ev.Container.Health = h
+			ev.Container.Clean()
+		}
 	} else {
 		ev.Container = agentproto.Container{ID: m.Actor.ID, Name: name}
 		ev.Container.Clean()

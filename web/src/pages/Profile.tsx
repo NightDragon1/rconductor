@@ -12,6 +12,7 @@ import { PasswordInput } from '@/components/PasswordInput';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
 import { ProfileSecondFactor } from './ProfileSecondFactor';
+import { PageHeader } from '@/components/PageHeader';
 
 type Message = { ok: boolean; text: string } | null;
 
@@ -110,10 +111,7 @@ export function ProfilePage() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-semibold">{t('nav.profile')}</h1>
-        <p className="text-sm text-muted">{t('profile.explain')}</p>
-      </div>
+      <PageHeader title={t('nav.profile')} description={t('profile.explain')} />
 
       <form
         onSubmit={saveInfo}

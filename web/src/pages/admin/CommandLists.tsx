@@ -8,6 +8,7 @@ import { api, must, patchVersioned } from '@/api/client';
 import { useProfiles } from '@/api/servers';
 import { commandListsKey, outcome, useCommandLists, type CommandList } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { cell, headCell } from '@/components/DenseTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePhone, useReveal } from '@/lib/phone';
@@ -17,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { lockedOk, reasonText } from '@/lib/admin';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
+import { PageHeader } from '@/components/PageHeader';
 
 function ListPanel({
   list,
@@ -301,10 +303,9 @@ export function CommandListsPage() {
   return (
     <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('nav.commandLists')}</h1>
+        <PageHeader title={t('nav.commandLists')} description={t('lists.intro')}>
           <p className="text-sm text-muted">{t('lists.summary', { count: all.length })}</p>
-        </div>
+        </PageHeader>
         <PhoneNote />
         <div className="flex flex-wrap gap-2">
           <Input
@@ -372,9 +373,9 @@ export function CommandListsPage() {
             <table className="w-full text-sm">
               <thead className="text-left text-muted">
                 <tr>
-                  <th className="p-3 font-medium">{t('lists.name')}</th>
-                  <th className="p-3 font-medium">{t('lists.entries')}</th>
-                  <th className="p-3 font-medium">{t('lists.passable')}</th>
+                  <th className={headCell}>{t('lists.name')}</th>
+                  <th className={headCell}>{t('lists.entries')}</th>
+                  <th className={headCell}>{t('lists.passable')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -383,7 +384,7 @@ export function CommandListsPage() {
                     key={l.id}
                     className={cn('border-t border-border', open === l.id && 'bg-surface-raised')}
                   >
-                    <td className="p-3">
+                    <td className={cell}>
                       <button
                         type="button"
                         className="hover:underline"
@@ -392,10 +393,10 @@ export function CommandListsPage() {
                         <bdi>{l.name}</bdi>
                       </button>
                     </td>
-                    <td className="max-w-80 wrap-anywhere md:truncate p-3 font-mono">
+                    <td className={`max-w-80 wrap-anywhere md:truncate ${cell} font-mono`}>
                       <bdi>{l.entries.map((e) => e.path).join(', ')}</bdi>
                     </td>
-                    <td className="p-3">
+                    <td className={cell}>
                       {t('lists.passableCount', {
                         count: l.entries.filter((e) => e.passable).length,
                       })}
