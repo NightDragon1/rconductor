@@ -8,11 +8,11 @@ import { expect, login, secret, test } from './fixtures';
 const urls: Record<string, string> = {
   audit: 'Audit',
   'admin/users': 'Users',
-  'admin/groups': 'Groups',
+  'admin/groups': 'Moderator groups',
   'admin/command-lists': 'Command lists',
-  'servers/manage': 'Servers and groups',
+  'servers/manage': 'Servers and server groups',
   // The former address leads to the tab of Servers.
-  'admin/servers': 'Servers and groups',
+  'admin/servers': 'Servers and server groups',
   'admin/agents': 'Agents',
   'admin/settings': 'Settings',
 };

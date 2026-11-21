@@ -3,18 +3,21 @@
 ## 1.2
 
 ### New
-- Messages in the panel, with comments and unread count (MSG-001 to MSG-003).
+- Messages in the panel as conversations, with comments and unread count (MSG-001 to MSG-003).
 - System log page and a diagnostic export as ZIP for the RCON admin, blacked out (UI-025, NFR-018).
 - Secrets masked in container logs; the RCON admin adds own texts (UI-022).
 - say with the sender's name and a prefix per server group (CMD-020).
-- Game profile browser, command palette, Minecraft color codes as styles (UI-020, CMD-016, CMD-017).
+- Game profile browser with list and details, command palette, Minecraft color codes as styles (UI-020, CMD-016, CMD-017).
 - Overview grouped by host, server number, Docker host for the RCON admin, Save as New, two-part log filter (UI-021, UI-018, AGT-014, UI-017, UI-019).
-- About dialog and version line; versions and licenses in the images (UI-024, AGT-016, NFR-021).
+- About with tabs, version line and the full third-party list for Go and UI; versions and licenses in the images (UI-024, AGT-016, NFR-021).
+- Container health (healthy, starting, unhealthy) when a container has a healthcheck; paused, restarting and dead shown by name (UI-021, UI-011).
 
 ### Changed
 - The new functions are on; the RCON admin can switch each off under Settings, Features (NFR-019).
+- Sage accent and corner frames; Servers has the tabs Cards and Manage servers and server groups, the old entry under Administration is gone and its address leads there; topology as a tree panel → host → server (UI-021, UI-011, UI-010).
+- Settings in groups with Advanced, dense tables from 1024 px, open invitations in the user list with Withdraw (UI-014, UI-007, UI-008).
 - A say on Minecraft goes out as tellraw with the sender (CMD-020).
-- Update the panel before the agents; agents 1.1 keep working, Docker host and agent log need agent 1.2 (AGT-013, AGT-014, UI-025).
+- Update the panel before the agents; agents 1.1 keep working, Docker host, agent log and container health need agent 1.2 (AGT-013, AGT-014, UI-025).
 
 ### Fixed
 - The password change comes before the setup of the second factor (AUTH-010).

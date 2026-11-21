@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { reasonText } from '@/lib/admin';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
+import { PageHeader } from '@/components/PageHeader';
 
 type Kind = UserGroup['kind'];
 
@@ -381,10 +382,9 @@ export function GroupsPage() {
   return (
     <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('nav.groups')}</h1>
+        <PageHeader title={t('nav.groups')} description={t('groups.explain')}>
           <p className="text-sm text-muted">{t('groups.summary', { count: all.length })}</p>
-        </div>
+        </PageHeader>
         <PhoneNote />
         <div className="flex flex-wrap gap-2">
           <Input

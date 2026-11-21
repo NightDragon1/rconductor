@@ -37,6 +37,7 @@ import { PhoneNote } from './PhoneNote';
 import { ProfileList } from './ProfileList';
 import { SayPrefixField } from './SayPrefix';
 import { ForeignText } from '@/components/ForeignText';
+import { PageHeader } from '@/components/PageHeader';
 
 type GamePort = components['schemas']['GamePort'];
 type Message = { ok: boolean; text: string } | null;
@@ -902,25 +903,23 @@ export function ServersAdminPage() {
   return (
     <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-6">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold">{t('nav.serverAdmin')}</h1>
-            <p className="text-sm text-muted">
-              {t(
-                canEdit
-                  ? 'servers.explainAdmin'
-                  : canEditProfiles
-                    ? 'servers.explainProfiles'
-                    : 'servers.explainRead',
-              )}
-            </p>
-          </div>
-          {canEdit && (
-            <Button onClick={() => guard(() => setOpen({ kind: 'server', id: 'new' }))}>
-              {t('servers.new')}
-            </Button>
+        <PageHeader
+          title={t('nav.serverAdmin')}
+          description={t(
+            canEdit
+              ? 'servers.explainAdmin'
+              : canEditProfiles
+                ? 'servers.explainProfiles'
+                : 'servers.explainRead',
           )}
-        </div>
+          actions={
+            canEdit && (
+              <Button onClick={() => guard(() => setOpen({ kind: 'server', id: 'new' }))}>
+                {t('servers.new')}
+              </Button>
+            )
+          }
+        />
 
         <PhoneNote />
 

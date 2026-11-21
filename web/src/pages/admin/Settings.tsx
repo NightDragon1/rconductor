@@ -20,6 +20,7 @@ import { useUndo, useUnsaved } from '@/lib/undo';
 import { PhoneNote } from './PhoneNote';
 import { LogMaskingPanel } from './LogMaskingPanel';
 import { SmtpPanel } from './SmtpPanel';
+import { PageHeader } from '@/components/PageHeader';
 
 type Values = Record<string, unknown>;
 export const settingsKey = ['settings'] as const;
@@ -230,9 +231,7 @@ export function SettingsPage() {
   const system = group === null || group === 'system';
 
   const head = (
-    <div>
-      <h1 className="text-2xl font-semibold">{t('nav.settings')}</h1>
-      <p className="text-sm text-muted">{t('settings.explain')}</p>
+    <PageHeader title={t('nav.settings')} description={t('settings.explain')}>
       {!phone && (
         <label className="mt-2 flex min-h-11 items-center gap-2 text-sm">
           <input
@@ -247,7 +246,7 @@ export function SettingsPage() {
           {t('settings.showHelp')}
         </label>
       )}
-    </div>
+    </PageHeader>
   );
   const content = (
     <div className="flex min-w-0 flex-col gap-5">

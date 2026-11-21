@@ -15,6 +15,7 @@ import { useWide } from '@/components/DenseTable';
 import { ForeignText } from '@/components/ForeignText';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/PageHeader';
 
 type Param = components['schemas']['ProfileParam'];
 type Port = components['schemas']['GamePort'];
@@ -338,7 +339,7 @@ export function ProfilesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t('nav.profiles')}</h1>
+      <PageHeader title={t('nav.profiles')} description={t('profiles.explain')} />
       {/* Below 1024 px the merged view of a server comes first, as before;
           from 1024 px the list with its details leads and it follows. */}
       {!wide && effective}

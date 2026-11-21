@@ -37,7 +37,7 @@ const data = (role: string, features: string[]): [readonly unknown[], unknown][]
 ];
 
 describe('server number (UI-018)', () => {
-  it('is the first column ID in Servers & Groups with the flag server_number', async () => {
+  it('is the first column ID in Manage servers and server groups with the flag server_number', async () => {
     setLanguage('en');
     await renderPage(
       () => (

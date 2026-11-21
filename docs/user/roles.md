@@ -17,7 +17,7 @@ The chain is RCON admin → server admin → moderator → supporter.
 
 1. The RCON admin assigns server groups or single servers to a server admin.
 2. The server admin creates a command list and a moderator group, links the two
-   and gives the group servers.
+   and gives the moderator group servers.
 3. A moderator with the supporter release assigns supporters to servers. This
    needs the global setting `supporters.enabled` too.
 
@@ -29,7 +29,7 @@ The chain is RCON admin → server admin → moderator → supporter.
 
 ## What ends a session
 
-Locking or removing a user, and every change of role, scope, group membership,
+Locking or removing a user, and every change of role, scope, moderator group membership,
 grants or supporter release, ends that user's sessions at once, open WebSockets
 included. A role change also removes the assignments of the old role. Changes to
 the content of a command list work from the next request, without a new sign-in.

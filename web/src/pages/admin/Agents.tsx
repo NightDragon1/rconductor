@@ -29,6 +29,7 @@ import { ForeignText } from '@/components/ForeignText';
 import { DOCKER_HOST_FLAG, DockerHost } from '@/components/DockerHost';
 import { useSession } from '@/api/session';
 import { HOST_GROUPS_FLAG } from '@/lib/hostgroups';
+import { PageHeader } from '@/components/PageHeader';
 
 type Token = components['schemas']['AgentToken'];
 const settingsKey = ['settings'] as const;
@@ -203,18 +204,18 @@ export function AgentsPage() {
   const shown = all.filter((a) => !needle || a.name.toLowerCase().includes(needle));
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('nav.agents')}</h1>
-          <p className="text-sm text-muted">
-            {t('agents.summary', {
-              count: all.filter((a) => a.status === 'active').length,
-              connected: all.filter((a) => a.connected).length,
-            })}
-          </p>
-        </div>
-        {!phone && <Button onClick={() => setPairing(true)}>{t('agents.pair')}</Button>}
-      </div>
+      <PageHeader
+        title={t('nav.agents')}
+        description={t('agents.explain')}
+        actions={!phone && <Button onClick={() => setPairing(true)}>{t('agents.pair')}</Button>}
+      >
+        <p className="text-sm text-muted">
+          {t('agents.summary', {
+            count: all.filter((a) => a.status === 'active').length,
+            connected: all.filter((a) => a.connected).length,
+          })}
+        </p>
+      </PageHeader>
       <PhoneNote />
       <Input
         type="search"

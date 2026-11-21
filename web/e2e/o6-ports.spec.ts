@@ -44,10 +44,12 @@ test('O6 host and ports per role on the server pages (UI-005, UI-006)', async ({
   expect(conn.host).toBeTruthy();
   expect(conn.port).toBeGreaterThan(0);
 
-  // RCON admin: host and RCON port on Servers and groups, every port on
+  // RCON admin: host and RCON port on Servers and server groups, every port on
   // the server.
   await page.goto('admin/servers');
-  await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Servers and server groups', level: 1 }),
+  ).toBeVisible();
   await expect(page.getByRole('row', { name: /^\d+ survival / })).toContainText(
     `${conn.host}:${conn.port}`,
   );
@@ -68,7 +70,9 @@ test('O6 host and ports per role on the server pages (UI-005, UI-006)', async ({
     await page.goto('');
     await expect(page.getByRole('article', { name: 'survival', exact: true })).toBeVisible();
     await page.goto('admin/servers');
-    await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Servers and server groups', level: 1 }),
+    ).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Address' })).toHaveCount(0);
     await page.getByRole('button', { name: 'survival', exact: true }).click();
     const panel = page.getByRole('complementary', { name: 'Details of survival' });
@@ -90,7 +94,7 @@ test('O6 host and ports per role on the server pages (UI-005, UI-006)', async ({
     page.removeAllListeners('websocket');
   }
 
-  // Moderator and supporter: no Servers and groups page, no ports, and
+  // Moderator and supporter: no Servers and server groups page, no ports, and
   // neither host nor any port in what the pages receive.
   for (const user of ['mod', 'sup']) {
     const seen = record(page);

@@ -58,7 +58,9 @@ async function savedIds(api: APIRequestContext, id: string): Promise<string[]> {
 
 // open shows the details of a server on the admin page.
 async function open(page: Page, name: string): Promise<Locator> {
-  await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Servers and server groups', level: 1 }),
+  ).toBeVisible();
   await page.getByRole('button', { name, exact: true }).click();
   const panel = page.getByRole('complementary', { name: `Details of ${name}` });
   await expect(panel.getByTestId('profile-item').first()).toBeVisible();

@@ -1,28 +1,39 @@
 # Interface
 
-> **Version:** applies to RCONductor 1.1. Parts marked (new in 1.1)
-> are not in 1.0.
+> **Version:** applies to RCONductor 1.2. Parts marked (new in 1.2)
+> are not in 1.1, parts marked (new in 1.1) are not in 1.0.
 
 The interface is in English and comes in a dark design (default) and a light one.
-Entries you may not use are hidden, not greyed out.
+Entries you may not use are hidden, not greyed out. (new in 1.2) Below the heading
+of every page one grey line says what the page is for.
+
+The words keep one meaning: a host is a machine, a server is a game server, a server
+group is a group of game servers, and a moderator group is a group of users with a
+command list.
 
 ## Navigation
 
 | Entry | RCON admin | Server admin | Moderator | Supporter |
 | --- | --- | --- | --- | --- |
 | Overview | yes | yes | yes | yes |
-| Servers | all | in scope | own | own |
-| Topology (new in 1.1) | yes | in scope, agents without name | – | – |
+| Servers, tab Cards | all | in scope | own | own |
+| Servers, tab Manage servers and server groups (new in 1.2) | yes | read-only, in scope; game profiles of a server | – | – |
+| Topology (new in 1.1) | yes | in scope, hosts without agent details | – | – |
 | Audit | yes | in scope | – | – |
+| Game profiles (new in 1.2) | yes | yes | yes | yes |
+| Messages (new in 1.2) | yes | yes | yes | yes |
 | Users | yes | moderators, supporters | supporters, if released | – |
-| Groups | yes | moderator groups | – | – |
+| Moderator groups | yes | yes | – | – |
 | Command lists | yes | own | – | – |
-| Servers and groups | yes | read-only, in scope; game profiles of a server | – | – |
 | Agents | yes | – | – | – |
 | Settings | yes | – | – | – |
+| System log (new in 1.2) | yes | – | – | – |
 
 Your own profile is at the bottom of the side bar: real name, contacts, picture,
 password, and (new in 1.1) two-factor sign-in and the address for its recovery.
+(new in 1.2) About, also in the side bar, has two tabs: About with version, commit,
+build date and the paired agents, and Third-party with the full list of the Go and
+UI components and their licenses.
 
 ## Two-factor sign-in (new in 1.1)
 
@@ -45,12 +56,26 @@ Cards show each server with status, load and players, (new in 1.1) the game vers
 and, for admins, the game ports. The RCON admin also gets a
 health overview: restart loops, disconnected agents, RCON errors and locked users,
 each with a link to the object. Values that are out of date are marked, not hidden.
+(new in 1.2) If a container has a healthcheck, its card shows healthy, starting or
+unhealthy instead of running; paused, restarting and dead are shown by name.
+
+## Servers (new in 1.2)
+
+Servers has two tabs. Cards shows every server you may see as a card, with a search.
+Manage servers and server groups, for the RCON admin and the server admin, is where
+servers are created and edited and server groups are formed; the server admin only
+reads it, apart from the game profiles of a server. It replaces the entry Servers and
+groups under Administration; its old address leads to the tab.
 
 ## Topology (new in 1.1)
 
-The topology shows host → agent → game server, by server group, and follows
-status changes live. Servers without an agent are listed on their own. The server
-admin sees the agents of his servers as "Agent" with their state, without names.
+(new in 1.2) The topology is a tree from left to right: the panel with its version,
+then each host with its agent, then the game servers on that host. It follows status
+changes live. Servers without an agent hang on a branch of their own. A host shows
+its display name, or "Host 1", "Host 2" and so on without one. The RCON admin also
+sees agent name, address and version, and a host opens its agent; an agent whose
+major version differs from the panel is marked. The server admin sees the hosts of
+his servers with their state, without agent details.
 
 ## Ports and volumes (new in 1.1)
 
@@ -103,10 +128,25 @@ first placeholder, is a command of their list, by whole words: `kick` allows
 `kick {player}`, not `kickall {player}`. A filled template is checked like a typed
 command, so a value the list or the game profile does not allow is refused.
 
+## Messages (new in 1.2)
+
+Messages lists your messages, newest first, with unread ones marked; a message opens
+as a conversation with its comments, where you can reply. The RCON admin writes to
+all users, the server admins, the moderators or chosen users; the server admin to
+everyone on his servers or to their moderators. Deleting a message removes it and its
+comments for every recipient.
+
 ## Administration
 
-Lists can be searched. The user list also has filters and multiple selection with
+Lists can be searched. (new in 1.2) From 1024 px wide they are dense tables. The user list also has filters and multiple selection with
 mass actions. Details open in a panel at the side, the list stays visible.
+(new in 1.2) Open invitations stand in the user list too; whoever made one, and the
+RCON admin, can withdraw it.
+
+(new in 1.2) Settings are in groups such as Security, Users, Servers and commands,
+Agents, System and Features. From 1024 px wide one group shows at a time, picked from
+the list at the side; below that all groups follow each other. Values that are
+rarely needed sit folded under Advanced in their section.
 
 Changes wait five seconds, so you can undo them; leaving the page sends them at once.
 Deleting, revoking, a change of role and switching supporters off ask first. If

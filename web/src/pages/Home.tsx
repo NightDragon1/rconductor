@@ -24,6 +24,7 @@ export function HomePage() {
   return (
     <ServerBoard
       title={t('home.title')}
+      description={t('home.explain')}
       hosts={hosts}
       summary={[
         rconAdmin && agents.data

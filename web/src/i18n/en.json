@@ -82,9 +82,9 @@
     "profiles": "Game profiles",
     "admin": "Administration",
     "users": "Users",
-    "groups": "Groups",
+    "groups": "Moderator groups",
     "commandLists": "Command lists",
-    "serverAdmin": "Servers and groups",
+    "serverAdmin": "Servers and server groups",
     "agents": "Agents",
     "settings": "Settings",
     "profile": "Your profile",
@@ -92,6 +92,7 @@
     "systemLog": "System log"
   },
   "home": {
+    "explain": "The servers you may see at a glance, with their state kept live.",
     "title": "Overview",
     "summaryServers_one": "{{count}} server",
     "summaryServers_other": "{{count}} servers",
@@ -287,6 +288,7 @@
     "notNumber": "The limits must be whole numbers."
   },
   "topology": {
+    "explain": "The panel, its hosts with their agent and the servers you may see on each, as a live tree.",
     "panel": "Panel",
     "hosts": "Hosts",
     "version": "Version",
@@ -526,6 +528,8 @@
     "leave": "Discard changes"
   },
   "admin": {
+    "explainModerator": "Your supporters and your open invitations. Invite new supporters with an invitation link.",
+    "explain": "Users with rights on your servers, such as moderators and supporters, and your open invitations. Invite new users with an invitation link.",
     "save": "Save",
     "phoneReadOnly": "Read-only on a phone. Use a larger screen to make changes.",
     "phoneReadOnlyUsers": "Read-only on a phone, apart from locking, unlocking and ending sessions. Use a larger screen for other changes.",
@@ -537,7 +541,7 @@
     "unlockText": "This user can sign in again.",
     "sessionsTitle": "End the sessions of {{name}}?",
     "sessionsText": "This user is signed out everywhere and has to sign in again.",
-    "search": "Pseudonym, group, server …",
+    "search": "Pseudonym, moderator group, server …",
     "searchLabel": "Search users",
     "filterRole": "Filter by role",
     "filterStatus": "Filter by status",
@@ -550,7 +554,7 @@
     },
     "statusLabel": "Status",
     "role": "Role",
-    "groupsScope": "Groups / scope",
+    "groupsScope": "Moderator groups / scope",
     "lastActive": "Last active",
     "never": "never",
     "allServers": "all servers",
@@ -571,9 +575,9 @@
     "bulk": {
       "label": "Mass actions",
       "selected": "{{count}} selected",
-      "group": "Assign group",
+      "group": "Assign moderator group",
       "scope": "Assign server scope",
-      "groupTitle": "Group {{name}} assigned",
+      "groupTitle": "Moderator group {{name}} assigned",
       "scopeTitle": "Server scope {{name}} assigned",
       "results": "Result per user",
       "allDone": "Done for every user.",
@@ -603,9 +607,9 @@
     "lastLogin": "last sign-in {{time}}",
     "realName": "Real name",
     "groups": "Moderator groups",
-    "addGroup": "+ Group",
+    "addGroup": "+ Moderator group",
     "scope": "Server scope",
-    "addScope": "+ Server or group",
+    "addScope": "+ Server or server group",
     "supportersAllowed": "May manage supporters",
     "supportersAllowedHint": "Only passable commands of the own list",
     "supportersOf": "Supporters of this moderator",
@@ -614,7 +618,7 @@
     "none": "none",
     "unknownServer": "unknown server",
     "unknownServerGroup": "unknown server group",
-    "unknownGroup": "unknown group",
+    "unknownGroup": "unknown moderator group",
     "removeItem": "Remove {{name}}",
     "useTemplate": "Use as template",
     "endSessions": "End sessions",
@@ -663,6 +667,7 @@
     "resetFactorDone": "Second factor reset."
   },
   "lists": {
+    "intro": "Lists of the commands a moderator group may send; passable commands can also be given to supporters.",
     "summary_one": "{{count}} command list",
     "summary_other": "{{count}} command lists",
     "search": "Name or command …",
@@ -691,6 +696,7 @@
     }
   },
   "groups": {
+    "explain": "A bundle of members and a command list. Which servers they work on is set by the grant.",
     "summary_one": "{{count}} group",
     "summary_other": "{{count}} groups",
     "search": "Group name …",
@@ -710,7 +716,7 @@
     "memberCount_other": "{{count}} members",
     "addMember": "+ Member",
     "grants": "Servers and server groups",
-    "addGrant": "+ Server or group",
+    "addGrant": "+ Server or server group",
     "none": "No groups.",
     "delete": "Delete group …",
     "deleteTitle": "Delete the group {{name}}?",
@@ -720,6 +726,7 @@
     }
   },
   "servers": {
+    "explainCards": "Every server you may see as a card; open one to send commands and see its history.",
     "tabs": "Server views",
     "tab": {
       "cards": "Cards",
@@ -760,7 +767,7 @@
     "certExpired": "The trusted certificate ended on {{date}}. The trust holds; when the server makes a new certificate, test and trust it again.",
     "delete": "Delete server …",
     "deleteTitle": "Delete the server {{name}}?",
-    "deleteText": "Its history stays in the audit; groups and grants lose it at once. This cannot be undone.",
+    "deleteText": "Its history stays in the audit; server groups and grants lose it at once. This cannot be undone.",
     "name": "Name",
     "profile": "Game profile",
     "specificProfile": "{{name}} (specific)",
@@ -791,12 +798,12 @@
     "portName": "Name",
     "addPort": "+ Port",
     "address": "Address",
-    "groups": "Groups",
+    "groups": "Server groups",
     "serverGroups": "Server groups",
-    "groupServers": "Servers of the group",
+    "groupServers": "Servers of the server group",
     "addToGroup": "+ Server",
     "newGroupName": "Name of a new server group",
-    "createGroup": "Create group",
+    "createGroup": "Create server group",
     "noGroups": "No server groups.",
     "sayPrefix": {
       "label": "Message prefix",
@@ -809,14 +816,14 @@
       "cleared": "Prefix cleared.",
       "invalid": "Not saved: at most 16 printable characters, no §.",
       "undo": "Message prefix of {{name}} changed",
-      "several": "Servers in several groups use the prefix of the first group by name.",
+      "several": "Servers in several server groups use the prefix of the first server group by name.",
       "uses": "{{server}} uses the prefix of {{group}}.",
-      "usesNone": "{{server}} has no prefix in any of its groups."
+      "usesNone": "{{server}} has no prefix in any of its server groups."
     },
-    "deleteGroup": "Delete group …",
+    "deleteGroup": "Delete server group …",
     "deleteGroupTitle": "Delete the server group {{name}}?",
-    "deleteGroupText": "Grants and scopes on this group end at once; the servers stay. This cannot be undone.",
-    "explainAdmin": "Create servers, set agent and container, form server groups.",
+    "deleteGroupText": "Grants and scopes on this server group end at once; the servers stay. This cannot be undone.",
+    "explainAdmin": "Create servers, set their agent and container, and form server groups.",
     "explainRead": "The servers and server groups of your scope, read only.",
     "explainProfiles": "The servers and server groups of your scope; you may change the game profiles of a server.",
     "credentials": {
@@ -835,6 +842,7 @@
     "searchLabel": "Search servers and server groups"
   },
   "agents": {
+    "explain": "One agent per host, the machine your game servers run on. Pair new agents and give each host its display name.",
     "summary": "{{count}} paired · {{connected}} connected",
     "displayName": "Display name",
     "displayNameEdit": "Display name",
@@ -843,7 +851,7 @@
     "displayNameSave": "Save",
     "pair": "Pair an agent",
     "pairTitle": "Pair an agent",
-    "pairExplain": "Make a one-time token. The Compose service below starts the agent on the game host with it.",
+    "pairExplain": "Make a one-time token. The Compose service below starts the agent on the host with it.",
     "makeToken": "Make token",
     "compose": "Compose service",
     "copyCompose": "Copy the Compose service",
@@ -876,7 +884,7 @@
   },
   "settings": {
     "showHelp": "Show explanations",
-    "explain": "Global settings of the panel (Design 5.6). Changes wait a few seconds for Undo.",
+    "explain": "Global settings of the panel in groups, rarely needed values under Advanced; changes wait a few seconds for Undo.",
     "save_one": "Save {{count}} change",
     "save_other": "Save {{count}} changes",
     "discard": "Discard",
@@ -1156,7 +1164,7 @@
       },
       "features_server_number": {
         "label": "Server numbers",
-        "help": "Shows the consecutive number of each server: as the first column ID in Servers & Groups and as a badge before the name on cards and the server page."
+        "help": "Shows the consecutive number of each server: as the first column ID in Manage servers and server groups and as a badge before the name on cards and the server page."
       },
       "features_docker_host": {
         "label": "Docker host",
@@ -1166,7 +1174,7 @@
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
   },
   "audit": {
-    "explain": "Who did what and when. Server admins see their scope.",
+    "explain": "Who did what and when; server admins see only the entries of their scope.",
     "kind": "Kind",
     "time": "Time",
     "action": "Action",
@@ -1187,7 +1195,7 @@
     "none": "No entries."
   },
   "profile": {
-    "explain": "Others see you by your pseudonym; real name, picture and contacts only those who manage you.",
+    "explain": "Your details, picture, password and second factor; others see you by your pseudonym, your real name, picture and contacts only those who manage you.",
     "about": "About you",
     "contacts": "Contacts",
     "contactKind": "Kind of contact",
@@ -1204,6 +1212,7 @@
     "passwordChanged": "Password changed."
   },
   "profiles": {
+    "explain": "The game profiles with their commands and ports, and the merged profile that each of your servers uses.",
     "all": "All game profiles",
     "details": "Details of the game profile",
     "search": "Search profiles and commands",
@@ -1290,7 +1299,7 @@
     "toLogin": "To sign-in"
   },
   "messages": {
-    "explain": "Messages to you and from you, newest first.",
+    "explain": "Messages to and from the panel users on your servers.",
     "list": "Messages",
     "none": "No messages yet.",
     "pick": "Choose a message to read it.",
@@ -1336,7 +1345,7 @@
     "deleteComment": "Delete"
   },
   "systemLog": {
-    "explain": "Events of the panel, oldest first, and on demand the log of an agent. Refreshes on its own.",
+    "explain": "Events of the panel, oldest first and refreshed on its own, and on demand the log of an agent.",
     "notice": "May contain chat messages of players.",
     "source": "Source",
     "panel": "Panel",
