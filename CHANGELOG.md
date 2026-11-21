@@ -14,12 +14,16 @@
 ### Changed
 - The new functions are on; the RCON admin can switch each off under Settings, Features (NFR-019).
 - A say on Minecraft goes out as tellraw with the sender (CMD-020).
+- Update the panel before the agents; agents 1.1 keep working, Docker host and agent log need agent 1.2 (AGT-013, AGT-014, UI-025).
 
 ### Fixed
 - The password change comes before the setup of the second factor (AUTH-010).
 - Logo with enough contrast in the light design (UI-023).
 
 ### Security
+- An unreadable security setting no longer opens the protection: the two-factor duty and limits keep their last or default value (AUTH-008).
+- Scope and grant targets are checked in the same transaction as the write (ROLE-003, ROLE-004).
+- Game ports in the profile list only for admins (UI-005).
 - Updated dependencies.
 
 ## 1.1
