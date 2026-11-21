@@ -14,7 +14,9 @@ async function as(page: Page, state: StackState, user: string) {
   await login(page, user, secret(state, user));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
   await page.goto('servers/manage');
-  await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Servers and server groups', level: 1 }),
+  ).toBeVisible();
 }
 
 async function createOne(page: Page, name: string) {

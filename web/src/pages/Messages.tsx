@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { dateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/PageHeader';
 
 const pageSize = 50;
 
@@ -74,18 +75,18 @@ export function MessagesPage() {
 
   return (
     <div className="flex max-w-6xl flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{t('nav.messages')}</h1>
-          <p className="text-sm text-muted">{t('messages.explain')}</p>
-        </div>
-        {choices && (
-          <Button onClick={() => setCompose(true)}>
-            <Plus aria-hidden />
-            {t('messages.new')}
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title={t('nav.messages')}
+        description={t('messages.explain')}
+        actions={
+          choices && (
+            <Button onClick={() => setCompose(true)}>
+              <Plus aria-hidden />
+              {t('messages.new')}
+            </Button>
+          )
+        }
+      />
       {choices && (
         <Dialog open={compose} onOpenChange={setCompose}>
           <DialogContent

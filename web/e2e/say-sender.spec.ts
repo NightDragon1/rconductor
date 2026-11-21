@@ -24,7 +24,9 @@ async function as(page: Page, state: StackState, user: string) {
 
 async function openGroup(page: Page, name = 'minecraft') {
   await page.goto('admin/servers');
-  await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Servers and server groups', level: 1 }),
+  ).toBeVisible();
   await page
     .getByRole('region', { name: 'Server groups' })
     .getByRole('button', { name: new RegExp(`^${name}$`, 'i') })
@@ -147,7 +149,7 @@ test.describe('say with sender on', () => {
       await expect(field(page)).toHaveValue('[M]');
       const hint = groupPanel(page).getByTestId('say-prefix-several');
       await expect(hint).toContainText(
-        'Servers in several groups use the prefix of the first group by name.',
+        'Servers in several server groups use the prefix of the first server group by name.',
       );
       await expect(hint).toContainText('survival uses the prefix of aaa-e2e-say.');
     } finally {

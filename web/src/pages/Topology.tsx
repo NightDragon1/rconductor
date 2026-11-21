@@ -13,6 +13,7 @@ import { byAgent } from '@/lib/hostgroups';
 import { cardStatus, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
 import { majorDiffers, majorVersion } from '@/lib/version';
+import { PageHeader } from '@/components/PageHeader';
 
 const dot: Record<Tone, string> = {
   ok: 'bg-ok',
@@ -154,7 +155,7 @@ export function TopologyPage() {
   let unnamed = 0;
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-2xl font-semibold">{t('nav.topology')}</h1>
+      <PageHeader title={t('nav.topology')} description={t('topology.explain')} />
       {servers.isPending && <p className="text-muted">{t('app.loading')}</p>}
       {!servers.isPending && all.length === 0 && <p className="text-muted">{t('home.empty')}</p>}
       {all.length > 0 && (

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { dateTime } from '@/lib/format';
 import { stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/PageHeader';
 
 type Kind = 'command' | 'agent' | 'admin' | 'auth';
 
@@ -81,10 +82,7 @@ export function AuditPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">{t('nav.audit')}</h1>
-        <p className="text-sm text-muted">{t('audit.explain')}</p>
-      </div>
+      <PageHeader title={t('nav.audit')} description={t('audit.explain')} />
       <div className="flex flex-wrap gap-2">
         <label htmlFor={kindId} className="sr-only">
           {t('audit.kind')}

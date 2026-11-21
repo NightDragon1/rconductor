@@ -359,3 +359,38 @@ describe('open invitations in the user list (UI-008)', () => {
     expect(within(own).getByRole('button', { name: 'Withdraw' })).not.toBeNull();
   });
 });
+
+// The description under the heading stays true for the role (O4): the
+// moderator sees his supporters only.
+describe('page description (O4)', () => {
+  const render = (role: string) =>
+    renderPage(UsersPage, [
+      [sessionKey, { ...session, user: { ...session.user, role } }],
+      [managedUsersKey, users],
+      [invitesKey, []],
+      [userGroupsKey, []],
+      [serversKey, []],
+      [serverGroupsKey, []],
+    ]);
+
+  it('names moderators and supporters for an admin', async () => {
+    setLanguage('en');
+    await render('server_admin');
+    expect(screen.getByRole('heading', { level: 1, name: 'Users' })).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Users with rights on your servers, such as moderators and supporters, and your open invitations. Invite new users with an invitation link.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('names only supporters for a moderator', async () => {
+    setLanguage('en');
+    await render('moderator');
+    expect(
+      screen.getByText(
+        'Your supporters and your open invitations. Invite new supporters with an invitation link.',
+      ),
+    ).toBeTruthy();
+  });
+});

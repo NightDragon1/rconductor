@@ -234,7 +234,7 @@ describe('say prefix of a server group (CMD-020, D-082)', () => {
     const panel = await open('alpha');
     const hint = await within(panel).findByTestId('say-prefix-several');
     expect(hint.textContent).toContain(
-      'Servers in several groups use the prefix of the first group by name.',
+      'Servers in several server groups use the prefix of the first server group by name.',
     );
     // survival is in both: Zeta comes first in byte order.
     await waitFor(() => expect(hint.textContent).toContain('survival uses the prefix of Zeta.'));
@@ -262,7 +262,7 @@ describe('say prefix of a server group (CMD-020, D-082)', () => {
     const panel = await open('alpha', 'server_admin');
     const hint = await within(panel).findByTestId('say-prefix-several');
     expect(hint.textContent).toBe(
-      'Servers in several groups use the prefix of the first group by name.',
+      'Servers in several server groups use the prefix of the first server group by name.',
     );
     // Only the prefix of the open group is read, none of the others.
     await waitFor(() => expect(prefixReads(get).length).toBe(1));

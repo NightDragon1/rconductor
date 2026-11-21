@@ -13,7 +13,7 @@ async function as(page: Page, state: StackState, user: string, path: string, tit
 }
 
 test('groups and command lists can be searched (UI-007)', async ({ page, state }) => {
-  await as(page, state, 'admin', 'admin/groups', 'Groups');
+  await as(page, state, 'admin', 'admin/groups', 'Moderator groups');
   await page.getByRole('searchbox', { name: 'Search groups' }).fill('moder');
   await expect(page.getByRole('button', { name: 'moderators', exact: true })).toBeVisible();
   await page.getByRole('searchbox', { name: 'Search groups' }).fill('no such group');
@@ -78,13 +78,13 @@ test('a moderator group gives its members servers and commands (ROLE-004, ROLE-0
   browser,
   state,
 }) => {
-  await as(page, state, 'admin', 'admin/groups', 'Groups');
+  await as(page, state, 'admin', 'admin/groups', 'Moderator groups');
   await page.getByPlaceholder('Name of a new group').fill('event-mods');
   await page.getByRole('button', { name: 'Create group' }).click();
   const panel = page.getByRole('complementary', { name: 'Details of event-mods' });
   await panel.getByLabel('Command list').selectOption({ label: 'event-cmds' });
   await panel.getByLabel('+ Member').selectOption({ label: 'mod2' });
-  await panel.getByLabel('+ Server or group').selectOption({ label: 'arena' });
+  await panel.getByLabel('+ Server or server group').selectOption({ label: 'arena' });
   await panel.getByRole('button', { name: 'Save' }).click();
   await expect(panel.getByRole('status')).toHaveText('Saved.', saved);
   await expect(page.getByRole('row').filter({ hasText: 'event-mods' })).toContainText('event-cmds');
@@ -113,7 +113,7 @@ test('a moderator group gives its members servers and commands (ROLE-004, ROLE-0
 });
 
 test('a server admin sees only his own groups and lists', async ({ page, state }) => {
-  await as(page, state, 'sadmin', 'admin/groups', 'Groups');
+  await as(page, state, 'sadmin', 'admin/groups', 'Moderator groups');
   await expect(page.getByRole('row').filter({ hasText: 'moderators' })).toHaveCount(0);
   await page.goto('admin/command-lists');
   await expect(page.getByRole('row').filter({ hasText: 'moderation' })).toHaveCount(0);

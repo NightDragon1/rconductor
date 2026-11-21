@@ -38,6 +38,7 @@ import { Card, Cards } from './Cards';
 import { InviteDialog } from './InviteDialog';
 import { PhoneNote } from './PhoneNote';
 import { UserPanel } from './UserPanel';
+import { PageHeader } from '@/components/PageHeader';
 
 type Status = 'all' | 'active' | 'locked' | 'invited';
 
@@ -244,30 +245,32 @@ export function UsersPage() {
   return (
     <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold">{t('nav.users')}</h1>
-            <p className="text-sm text-muted">
-              {[
-                t('admin.summary', { count: list.length, locked }),
-                t('admin.invitesOpen', { count: pendingInvites }),
-              ].join(' · ')}
-            </p>
-          </div>
-          {!phone && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setInvite({ key: Date.now(), template: chosen[0] ?? list[0] })}
-              >
-                {t('admin.invite.fromTemplate')}
-              </Button>
-              <Button onClick={() => setInvite({ key: Date.now() })}>
-                {t('admin.invite.title')}
-              </Button>
-            </div>
-          )}
-        </div>
+        <PageHeader
+          title={t('nav.users')}
+          description={t(role === 'moderator' ? 'admin.explainModerator' : 'admin.explain')}
+          actions={
+            !phone && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setInvite({ key: Date.now(), template: chosen[0] ?? list[0] })}
+                >
+                  {t('admin.invite.fromTemplate')}
+                </Button>
+                <Button onClick={() => setInvite({ key: Date.now() })}>
+                  {t('admin.invite.title')}
+                </Button>
+              </div>
+            )
+          }
+        >
+          <p className="text-sm text-muted">
+            {[
+              t('admin.summary', { count: list.length, locked }),
+              t('admin.invitesOpen', { count: pendingInvites }),
+            ].join(' · ')}
+          </p>
+        </PageHeader>
         <PhoneNote users />
 
         <div className="flex flex-wrap gap-2">

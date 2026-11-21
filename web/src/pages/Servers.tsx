@@ -50,7 +50,7 @@ export function ServersPage() {
   const { t } = useTranslation();
   return (
     <ServerViews>
-      <ServerBoard title={t('nav.servers')} />
+      <ServerBoard title={t('nav.servers')} description={t('servers.explainCards')} />
     </ServerViews>
   );
 }

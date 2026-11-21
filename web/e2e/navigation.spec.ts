@@ -11,14 +11,14 @@ const design62: Record<string, { main: string[]; admin: string[] }> = {
   // RCON admin: everything.
   admin: {
     main: ['Overview', 'Servers', 'Topology', 'Audit', 'Game profiles', 'Messages'],
-    admin: ['Users', 'Groups', 'Command lists', 'Agents', 'Settings', 'System log'],
+    admin: ['Users', 'Moderator groups', 'Command lists', 'Agents', 'Settings', 'System log'],
   },
   // Server admin: users (his moderators and supporters), moderator
   // groups, own lists; servers read-only in scope (a tab of Servers); no
   // agents, no settings.
   sadmin: {
     main: ['Overview', 'Servers', 'Topology', 'Audit', 'Game profiles', 'Messages'],
-    admin: ['Users', 'Groups', 'Command lists'],
+    admin: ['Users', 'Moderator groups', 'Command lists'],
   },
   // Moderator with supporters on (global and for him): his supporters.
   mod: { main: ['Overview', 'Servers', 'Game profiles', 'Messages'], admin: ['Users'] },
@@ -112,7 +112,9 @@ for (const user of ['admin', 'sadmin']) {
     await expect(tabs.getByRole('link', { name: 'Cards' })).toHaveAttribute('aria-current', 'page');
     await tabs.getByRole('link', { name: manage }).click();
     await expect(page).toHaveURL(/servers\/manage$/);
-    await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Servers and server groups', level: 1 }),
+    ).toBeVisible();
     await expect(
       page
         .getByRole('navigation', { name: 'Main navigation' })
@@ -124,7 +126,9 @@ for (const user of ['admin', 'sadmin']) {
     );
     await page.goto('admin/servers');
     await expect(page).toHaveURL(/servers\/manage$/);
-    await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Servers and server groups', level: 1 }),
+    ).toBeVisible();
   });
 }
 

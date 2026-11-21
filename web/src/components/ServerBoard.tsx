@@ -9,6 +9,7 @@ import { useProfiles, useServerGroups, type Server } from '@/api/servers';
 import { useSession } from '@/api/session';
 import { useLiveServers } from '@/api/live-servers';
 import { GroupFrame } from '@/components/GroupFrame';
+import { PageHeader } from '@/components/PageHeader';
 import { ServerCard } from '@/components/ServerCard';
 import { Input } from '@/components/ui/input';
 import { useNow } from '@/lib/format';
@@ -45,11 +46,13 @@ function Cards({
 // head come from the page.
 export function ServerBoard({
   title,
+  description,
   summary = [],
   head,
   hosts = false,
 }: {
   title: string;
+  description: string;
   summary?: (string | undefined)[];
   head?: ReactNode;
   hosts?: boolean;
@@ -138,10 +141,9 @@ export function ServerBoard({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{title}</h1>
+        <PageHeader title={title} description={description}>
           <p className="text-sm text-muted">{line.join(' · ')}</p>
-        </div>
+        </PageHeader>
         <Input
           type="search"
           className="w-full sm:w-64"
