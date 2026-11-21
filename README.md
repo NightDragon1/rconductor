@@ -1,4 +1,13 @@
 <p align="center">
+  <a href="https://github.com/NightDragon1/rconductor/actions/workflows/ci.yml?query=branch%3Amain"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/NightDragon1/rconductor/ci.yml?branch=main&label=CI"></a>
+  <a href="https://github.com/NightDragon1/rconductor/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/NightDragon1/rconductor"></a>
+  <a href="https://hub.docker.com/r/nightdragon1/rconductor-panel"><img alt="Panel pulls" src="https://img.shields.io/docker/pulls/nightdragon1/rconductor-panel?label=panel%20pulls"></a>
+  <a href="https://hub.docker.com/r/nightdragon1/rconductor-agent"><img alt="Agent pulls" src="https://img.shields.io/docker/pulls/nightdragon1/rconductor-agent?label=agent%20pulls"></a>
+  <a href="LICENSE"><img alt="License AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue"></a>
+  <img alt="Platforms amd64 and arm64" src="https://img.shields.io/badge/platforms-amd64%20%7C%20arm64-informational">
+</p>
+
+<p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo/rconductor-logo-dark.svg">
     <img src="assets/logo/rconductor-logo.svg" alt="ShadowGhost.NET RCONductor" width="375">
@@ -14,65 +23,128 @@ agent per game host; the panel never touches the Docker socket.
 Run it only in your LAN or behind a VPN. The web port speaks plain HTTP; TLS
 is the job of a reverse proxy. Never publish the RCON port of a game server.
 
+<p align="center">
+  <img src="assets/architecture.svg" alt="Browser to reverse proxy to the panel on port 8080; the agent on each game host connects to the panel's agent port 8443 over TLS and reaches only labelled containers through the Docker socket; the panel talks to game servers over RCON or an HTTPS API" width="820">
+</p>
+
 ## Quick start
 
-Panel and agent on one host, with Docker Compose:
+Images: `docker.io/nightdragon1/rconductor-panel` and `rconductor-agent`, for amd64
+and arm64. The same images are on ghcr.io: use `ghcr.io/nightdragon1/` instead.
+Use the exact version such as `1.2`, or `1` for the newest 1.x.
+
+### How to run – A: docker run
+
+Panel:
 
 ```sh
-curl -O https://raw.githubusercontent.com/NightDragon1/rconductor/main/deploy/compose/all-in-one.yaml
-echo "DOCKER_GID=$(stat -c %g /var/run/docker.sock)" > .env
-docker compose -f all-in-one.yaml up -d
-docker compose -f all-in-one.yaml logs panel | grep password:
+docker network create rconductor
+docker run -d --name rconductor-panel --network rconductor --restart unless-stopped \
+  --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  -p 8080:8080 -e RCD_AGENT_PUBLIC_ADDR=rconductor-panel:8443 \
+  -v rconductor-data:/data -v rconductor-secrets:/secrets -v rconductor-backups:/backups \
+  docker.io/nightdragon1/rconductor-panel:1.2
+until docker logs rconductor-panel 2>&1 | grep password:; do sleep 1; done
 ```
 
-`DOCKER_GID` is the group that owns the Docker socket on your host. The agent
-runs as a non-root user and reaches the socket through this group.
+Agent, with the pairing token from the panel (see first steps):
 
-1. Open `http://<host>:8080` and sign in as `admin` with the password from the
-   log. You are asked for a new one; the initial password is shown only once.
-2. Under **Agents**, choose **Pair an agent**, then **Make token**, and add the
-   token to `.env`:
+```sh
+docker run -d --name rconductor-agent --network rconductor --restart unless-stopped \
+  --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --group-add "$(stat -c %g /var/run/docker.sock)" \
+  -e RCD_PAIRING_TOKEN=rcd1.... \
+  -v /var/run/docker.sock:/var/run/docker.sock -v rconductor-agent-secrets:/secrets \
+  docker.io/nightdragon1/rconductor-agent:1.2
+```
 
-   ```sh
-   echo 'RCD_PAIRING_TOKEN=rcd1....' >> .env
-   docker compose -f all-in-one.yaml up -d agent
-   ```
+The agent runs as a non-root user and reaches the Docker socket through the
+socket's group (`--group-add`).
 
-   Until it has a token the agent waits and says so in its log.
-3. Give your game containers the label `rconductor.manage=true`; the agent manages
-   only those.
-4. Under **Servers**, tab **Manage servers and server groups**, choose **New server**: name, game profile,
-   host, RCON port and password, and optionally agent and container.
+### How to run – B: Docker Compose
 
-The images are on Docker Hub and ghcr.io (`nightdragon1/rconductor-panel`,
-`nightdragon1/rconductor-agent`) for amd64 and arm64. The tag `1` follows all
-1.x releases, so panel and agent stay compatible.
+`compose.yaml`:
+
+```yaml
+services:
+  panel:
+    image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-panel:1.2
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      - "8080:8080"
+    environment:
+      # Agents reach the panel over the Compose network; 8443 stays unpublished.
+      RCD_AGENT_PUBLIC_ADDR: panel:8443
+      RCD_IMAGE_REPO: "${RCD_IMAGE_REPO:-docker.io/nightdragon1}"
+    volumes:
+      - data:/data
+      - secrets:/secrets
+      - backups:/backups
+  agent:
+    image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-agent:1.2
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    group_add: ["${DOCKER_GID:-999}"]
+    environment:
+      RCD_PAIRING_TOKEN: "${RCD_PAIRING_TOKEN:-}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - agent-secrets:/secrets
+volumes:
+  data:
+  secrets:
+  backups:
+  agent-secrets:
+```
+
+```sh
+echo "DOCKER_GID=$(stat -c %g /var/run/docker.sock)" > .env
+docker compose up -d
+until docker compose logs panel | grep password:; do sleep 1; done
+echo 'RCD_PAIRING_TOKEN=rcd1....' >> .env    # token from the panel, see first steps
+docker compose up -d agent
+```
+
+### First steps
+
+1. Open `http://<host>:8080`, sign in as `admin` with the password from the log and set a new one.
+2. Under **Agents**, **Pair an agent**, **Make token**; give the token to the agent and start it.
+3. Give your game containers the label `rconductor.manage=true`; the agent manages only those.
+4. Under **Servers**, tab **Manage servers and server groups**, **New server**: name, game profile, host, RCON port and password.
 
 ## Important variables
 
+### Panel
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DOCKER_GID` | `999` | group of `/var/run/docker.sock`; lets the agent reach the socket |
-| `RCD_PAIRING_TOKEN` | empty | pairing token of the agent, made in the panel |
 | `RCD_AGENT_PUBLIC_ADDR` | empty | `host:port` under which agents reach the panel's agent port 8443 |
 | `RCD_PUBLIC_URL` | empty | public URL of the panel, such as `https://rcon.example.org`, behind a reverse proxy |
 | `RCD_TRUSTED_PROXIES` | empty | addresses of your reverse proxy; only from those `X-Forwarded-For` and `X-Forwarded-Proto` count |
-| `RCD_VERSION` | `1` | image tag in the Compose files, such as `1` or `1.0` |
-| `RCD_IMAGE_REPO` | `docker.io/nightdragon1` | registry in the Compose files; `ghcr.io/nightdragon1` selects ghcr.io |
+| `RCD_IMAGE_REPO` | `docker.io/nightdragon1` | registry the pairing dialog names; `ghcr.io/nightdragon1` selects ghcr.io |
 
-## Documentation
+### Agent
 
-The [wiki](https://github.com/NightDragon1/rconductor/wiki) has the examples
-and the full list of variables and settings:
-[docker run](https://github.com/NightDragon1/rconductor/wiki/Installation-with-docker-run),
-[Docker Compose](https://github.com/NightDragon1/rconductor/wiki/Installation-with-Docker-Compose),
-[reverse proxy with Let's Encrypt](https://github.com/NightDragon1/rconductor/wiki/Reverse-proxy-with-Lets-Encrypt),
-[agent on another host](https://github.com/NightDragon1/rconductor/wiki/Agent-on-another-host),
-[things to note](https://github.com/NightDragon1/rconductor/wiki/Things-to-note),
-[configuration](https://github.com/NightDragon1/rconductor/wiki/Configuration) and
-[supported games](https://github.com/NightDragon1/rconductor/wiki/Supported-games).
-The guides in [docs/user](docs/user) describe the code on `main`. Releases are
-listed in the [changelog](CHANGELOG.md).
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DOCKER_GID` | `999` | group of `/var/run/docker.sock` in the Compose file; lets the agent reach the socket |
+| `RCD_PAIRING_TOKEN` | empty | pairing token, made in the panel; ignored after the pairing |
+| `RCD_PANEL_ADDR` | empty | `host:port` of the panel's agent port, for pairing by fingerprint or to override the token's address |
+| `RCD_AGENT_NAME` | host name | name shown in the panel |
+| `RCD_HOST_IP` | empty | address of the game host the RCON admin sees |
+| `RCD_DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker API, also a socket proxy such as `tcp://socket-proxy:2375` |
+
+All variables and settings: [configuration](docs/user/configuration.md).
+
+## Links
+
+- Documentation: [docs/user](docs/user), and the [changelog](CHANGELOG.md).
+- Wiki with examples (reverse proxy, agent on another host, supported games): [wiki](https://github.com/NightDragon1/rconductor/wiki).
 
 ## Development
 
