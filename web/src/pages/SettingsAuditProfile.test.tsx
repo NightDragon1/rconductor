@@ -214,7 +214,7 @@ describe('audit as a table from 1024 px (O6)', () => {
     result: 'denied',
     reason: 'forbidden',
   };
-  const render = async (lang: string) => {
+  const render = async (lang: 'en' | 'xx') => {
     vi.stubGlobal('matchMedia', (q: string) => ({
       matches: q.includes('min-width'),
       addEventListener: () => undefined,

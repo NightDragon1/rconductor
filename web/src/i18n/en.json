@@ -1183,6 +1183,7 @@
   },
   "profiles": {
     "all": "All game profiles",
+    "details": "Details of the game profile",
     "search": "Search profiles and commands",
     "searchLabel": "Search game profiles by name, command or description",
     "empty": "No game profiles yet.",

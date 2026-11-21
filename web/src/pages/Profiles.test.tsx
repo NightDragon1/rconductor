@@ -296,6 +296,58 @@ describe('profile browser (UI-020)', () => {
   });
 });
 
+// From 1024 px the profiles stand as a list on the left and the chosen one
+// on the right; the effective profile of a server follows below (O6).
+describe('profile browser from 1024 px (UI-020, O6)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const wide = () =>
+    vi.stubGlobal('matchMedia', (q: string) => ({
+      matches: q.includes('min-width'),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+
+  it('shows the first profile, another one on a click, and filters the list', async () => {
+    wide();
+    setLanguage('en');
+    const { container } = await renderPage(ProfilesPage, data());
+    const all = screen.getByRole('list', { name: 'All game profiles' });
+    const [mc, pack] = within(all).getAllByRole('button') as [HTMLElement, HTMLElement];
+    expect(mc.getAttribute('aria-current')).toBe('true');
+    const details = screen.getByRole('region', { name: 'Details of the game profile' });
+    expect(within(details).getByRole('list', { name: 'Commands of Minecraft' })).toBeTruthy();
+    expect(within(details).queryByText('Game ports')).toBeNull();
+    fireEvent.click(pack);
+    expect(pack.getAttribute('aria-current')).toBe('true');
+    expect(within(details).getByRole('list', { name: 'Game ports' }).textContent).toContain(
+      '25565/tcp',
+    );
+    expect(container.querySelector('img')).toBeNull();
+    fireEvent.change(screen.getByRole('searchbox', { name: /Search game profiles/ }), {
+      target: { value: 'kick' },
+    });
+    await waitFor(() => expect(within(all).getAllByRole('button')).toHaveLength(1));
+    // The chosen profile is filtered out: the first match shows.
+    expect(within(details).getAllByTestId('catalog-entry')).toHaveLength(1);
+    // The effective profile comes after the list.
+    const effectiveRegion = screen.getByRole('region', { name: 'Effective profile of a server' });
+    expect(all.compareDocumentPosition(effectiveRegion) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it('takes every text from the language file', async () => {
+    wide();
+    setLanguage('xx');
+    const { container } = await renderPage(ProfilesPage, data());
+    const names = new Set(['alpha', 'beta']);
+    const data_ = new Set([...container.querySelectorAll('bdi')].map((b) => b.textContent?.trim()));
+    const texts = unmarked(container).filter((s) => !names.has(s));
+    expect(texts.filter((s) => !data_.has(s) && /\p{L}/u.test(s))).toEqual([]);
+    setLanguage('en');
+  });
+});
+
 describe('profile browser behind the flag profile_browser (UI-020, NFR-019)', () => {
   it('has its navigation entry only while the flag is on', () => {
     const entry = mainNav.find((e) => e.to === '/profiles');
