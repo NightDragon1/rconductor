@@ -88,9 +88,14 @@ test('cards show only fields with a source (UI-004)', async ({ page, state }) =>
   await expect(survival).toContainText('Version 26.3');
   await expect(card(page, 'creative')).not.toContainText('Version');
   await expect(card(page, 'outpost')).not.toContainText('Version');
-  // The groups frame the cards.
-  await expect(page.getByRole('region', { name: 'minecraft' }).getByRole('article')).toHaveCount(3);
-  await expect(page.getByRole('region', { name: 'events' }).getByRole('article')).toHaveCount(1);
+  // The hosts frame the cards, on by default since 1.2 (UI-021); a server
+  // without agent stands in its own group.
+  await expect(page.getByRole('region').filter({ has: survival })).toHaveCount(1);
+  await expect(
+    page.getByRole('region', { name: 'Servers without agent' }).getByRole('article', {
+      name: 'outpost',
+    }),
+  ).toBeVisible();
 });
 
 test('moderator cards have no agent data (UI-006)', async ({ page, state }) => {

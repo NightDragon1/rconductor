@@ -32,7 +32,6 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
-	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/rcon/rcontest"
 )
 
@@ -440,8 +439,8 @@ func matrix() []matrixOp {
 		}, false},
 		{"GET", "/servers/{id}/players", "OONOOOUP", serverPath("/players"), false},
 		{"GET", "/servers/{id}/history", "OONOOOUP", serverPath("/history"), false},
-		// Behind the flag profile_browser, off by default: 404 for every role.
-		{"GET", "/servers/{id}/profile", "NNNNNNUP", serverPath("/profile"), false},
+		// Behind the flag profile_browser (UI-020): roles with access to the server.
+		{"GET", "/servers/{id}/profile", "OONOOOUP", serverPath("/profile"), false},
 		{"POST", "/servers/{id}/actions", "OONFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/servers/" + f.server + "/actions", body: map[string]string{"action": "restart"}}
 		}, false},
@@ -456,10 +455,10 @@ func matrix() []matrixOp {
 		{"GET", "/server-groups/{id}", "OONFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/server-groups/" + f.serverGroup}
 		}, false},
-		// Behind the flag messages, off by default: 404 for every role
-		// (MSG-001 to MSG-003).
-		{"GET", "/messages", "NNNNNNUP", at("/messages"), false},
-		{"POST", "/messages", "NNNNNNUP", func(*rightsFixture, string) request {
+		// Behind the flag messages (MSG-001 to MSG-003): only the RCON admin
+		// writes to all; the messages of the other paths do not exist.
+		{"GET", "/messages", "OOOOOOUP", at("/messages"), false},
+		{"POST", "/messages", "OFFFFFUP", func(*rightsFixture, string) request {
 			return request{path: "/messages", body: map[string]any{"text": "hi", "audience": "all"}}
 		}, false},
 		{"GET", "/messages/{id}", "NNNNNNUP", at("/messages/00000000-0000-4000-8000-000000000001"), false},
@@ -470,11 +469,11 @@ func matrix() []matrixOp {
 			return request{path: "/messages/00000000-0000-4000-8000-000000000001/comments", body: map[string]any{"text": "ok"}}
 		}, false},
 		{"DELETE", "/messages/{id}/comments/{comment_id}", "NNNNNNUP", at("/messages/00000000-0000-4000-8000-000000000001/comments/00000000-0000-4000-8000-000000000002"), false},
-		// Behind the flag say_sender, off by default: 404 for every role.
-		{"GET", "/server-groups/{id}/say-prefix", "NNNNNNUP", func(f *rightsFixture, _ string) request {
+		// Behind the flag say_sender (CMD-020): admins of the group.
+		{"GET", "/server-groups/{id}/say-prefix", "OONFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/server-groups/" + f.serverGroup + "/say-prefix"}
 		}, false},
-		{"PUT", "/server-groups/{id}/say-prefix", "NNNNNNUP", func(f *rightsFixture, _ string) request {
+		{"PUT", "/server-groups/{id}/say-prefix", "OONFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/server-groups/" + f.serverGroup + "/say-prefix", body: map[string]any{"say_prefix": "[R]"}}
 		}, false},
 		{"PATCH", "/server-groups/{id}", "OFFFFFUP", func(f *rightsFixture, _ string) request {
@@ -626,15 +625,15 @@ func matrix() []matrixOp {
 			return request{path: "/settings", body: map[string]any{"ui.shortcuts_enabled": false}}
 		}, false},
 		// Behind the flags host_groups (UI-021) and diagnostics_export
-		// (NFR-018, UI-025): 404 for every role.
-		{"PATCH", "/agents/{id}", "NNNNNNUP", func(f *rightsFixture, _ string) request {
+		// (NFR-018, UI-025): RCON admin only.
+		{"PATCH", "/agents/{id}", "OFFFFFUP", func(f *rightsFixture, _ string) request {
 			return request{path: "/agents/" + f.agentRow("active"), body: map[string]any{"display_name": "Rack"}}
 		}, false},
-		{"GET", "/diagnostics", "NNNNNNUP", at("/diagnostics"), false},
-		{"GET", "/system-log", "NNNNNNUP", at("/system-log"), false},
-		// Behind the flag log_masking_ui (UI-022): 404 for every role.
-		{"GET", "/settings/log-masking", "NNNNNNUP", at("/settings/log-masking"), false},
-		{"PUT", "/settings/log-masking", "NNNNNNUP", func(*rightsFixture, string) request {
+		{"GET", "/diagnostics", "OFFFFFUP", at("/diagnostics"), false},
+		{"GET", "/system-log", "OFFFFFUP", at("/system-log"), false},
+		// Behind the flag log_masking_ui (UI-022): RCON admin only.
+		{"GET", "/settings/log-masking", "OFFFFFUP", at("/settings/log-masking"), false},
+		{"PUT", "/settings/log-masking", "OFFFFFUP", func(*rightsFixture, string) request {
 			return request{path: "/settings/log-masking", body: map[string]any{"enabled": true}}
 		}, false},
 		// SMTP (NFR-017): RCON admin only; the test mail needs a set-up
@@ -1256,11 +1255,6 @@ func TestIfMatchRequiredFromSpec(t *testing.T) {
 	const ref = "#/components/parameters/IfMatch"
 	var versioned []string
 	paths := map[string]bool{}
-	// Writes behind a feature flag, off by default, answer 404 for every
-	// role (NFR-019): no role may write them here, the rest holds. With the
-	// flag on, the order of D-051 needs a test in the backend of the
-	// feature; the exception ends when the flags go before the release.
-	flagged := map[string]bool{}
 	for path, ops := range doc.Paths {
 		for method, raw := range ops {
 			op, _ := raw.(map[string]any)
@@ -1269,11 +1263,6 @@ func TestIfMatchRequiredFromSpec(t *testing.T) {
 				if m, _ := p.(map[string]any); m["$ref"] == ref {
 					versioned = append(versioned, strings.ToUpper(method)+" "+path)
 					paths[path] = true
-					if id, _ := op["operationId"].(string); id != "" {
-						if _, ok := features.Default().ForOperation(strings.ToUpper(id[:1]) + id[1:]); ok {
-							flagged[strings.ToUpper(method)+" "+path] = true
-						}
-					}
 				}
 			}
 		}
@@ -1338,7 +1327,7 @@ func TestIfMatchRequiredFromSpec(t *testing.T) {
 				t.Errorf("%s as %s without If-Match = %d %s, want %c of the rights matrix", name, role, st, reason, want)
 			}
 		}
-		if allowed == 0 && !flagged[name] {
+		if allowed == 0 {
 			t.Errorf("%s: no role may write it in the rights matrix", name)
 		}
 	}

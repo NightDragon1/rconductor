@@ -113,7 +113,7 @@ test('a server can be in several server groups (SRV-003)', async ({ page, state 
   const panel = page.getByRole('complementary', { name: 'Details of e2e-group' });
   await panel.getByLabel('+ Server').selectOption({ label: 'survival' });
   await panel.getByLabel('+ Server').selectOption({ label: 'arena' });
-  await panel.getByRole('button', { name: 'Save' }).click();
+  await panel.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(panel.getByRole('status')).toHaveText('Saved.', saved);
   const survival = page
     .getByRole('row')
@@ -214,35 +214,40 @@ test('test connection reports the state without saving (SRV-007)', async ({ page
   await expect(open.getByText('Connection works')).toBeVisible();
 });
 
-test('a refused input shows the reason of the backend (UI-016)', async ({ page, state }) => {
-  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
-  const panel = page.getByRole('complementary', { name: 'Details of New server' });
-  const row = page.getByRole('row').filter({ hasText: 'e2e-twice' });
-  for (const first of [true, false]) {
-    await page.getByRole('button', { name: 'New server' }).click();
-    await panel.getByLabel('Name').fill('e2e-twice');
-    await panel
-      .getByLabel('Add a game profile')
-      .selectOption({ label: 'Minecraft (Java Edition)' });
-    await panel.getByLabel('Host').fill('twice.example');
-    await panel.getByLabel('RCON port').fill('25575');
-    await panel.getByLabel('RCON password').fill('a secret rcon password');
-    await panel.getByRole('button', { name: 'Create server' }).click();
-    if (first) {
-      // The second server is made only once the first one exists.
-      await expect(row).toHaveCount(1);
-      await expect(panel).toHaveCount(0);
+test.describe('server_save_as_new off', () => {
+  // The dialog closes after create; Save as New has its own flow.
+  test.use({ flagsOff: ['server_save_as_new'] });
+
+  test('a refused input shows the reason of the backend (UI-016)', async ({ page, state }) => {
+    await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+    const panel = page.getByRole('complementary', { name: 'Details of New server' });
+    const row = page.getByRole('row').filter({ hasText: 'e2e-twice' });
+    for (const first of [true, false]) {
+      await page.getByRole('button', { name: 'New server' }).click();
+      await panel.getByLabel('Name').fill('e2e-twice');
+      await panel
+        .getByLabel('Add a game profile')
+        .selectOption({ label: 'Minecraft (Java Edition)' });
+      await panel.getByLabel('Host').fill('twice.example');
+      await panel.getByLabel('RCON port').fill('25575');
+      await panel.getByLabel('RCON password').fill('a secret rcon password');
+      await panel.getByRole('button', { name: 'Create server' }).click();
+      if (first) {
+        // The second server is made only once the first one exists.
+        await expect(row).toHaveCount(1);
+        await expect(panel).toHaveCount(0);
+      }
     }
-  }
-  await expect(panel.getByText('a server with this name exists')).toBeVisible();
-  await expect(panel.getByText('Not possible this way')).toHaveCount(0);
-  await panel.getByRole('button', { name: 'Close the details' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes' }).click();
-  await row.getByRole('button', { name: 'e2e-twice' }).click();
-  const opened = page.getByRole('complementary', { name: 'Details of e2e-twice' });
-  await opened.getByRole('button', { name: 'Delete server …' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
-  await expect(row).toHaveCount(0);
+    await expect(panel.getByText('a server with this name exists')).toBeVisible();
+    await expect(panel.getByText('Not possible this way')).toHaveCount(0);
+    await panel.getByRole('button', { name: 'Close the details' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Discard changes' }).click();
+    await row.getByRole('button', { name: 'e2e-twice' }).click();
+    const opened = page.getByRole('complementary', { name: 'Details of e2e-twice' });
+    await opened.getByRole('button', { name: 'Delete server …' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
+    await expect(row).toHaveCount(0);
+  });
 });
 
 // hold keeps every create request of a server back until release.
@@ -270,33 +275,38 @@ async function fillNewServer(page: Page, name: string) {
   return panel;
 }
 
-test('leaving waits for a running save and goes on once saved (UI-008)', async ({
-  page,
-  state,
-}) => {
-  await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
-  const { release, answered } = await hold(page);
-  const panel = await fillNewServer(page, 'e2e-saving');
-  await panel.getByRole('button', { name: 'Create server' }).click();
-  // The next panel is asked for before the create is answered.
-  await page.getByRole('button', { name: 'New server' }).click();
-  const question = page.getByRole('dialog', { name: 'Leave without saving?' });
-  await expect(question).toHaveCount(0);
+test.describe('server_save_as_new off', () => {
+  // The dialog closes after create; Save as New has its own flow.
+  test.use({ flagsOff: ['server_save_as_new'] });
 
-  release();
-  expect((await answered).status()).toBe(201);
-  const row = page.getByRole('row').filter({ hasText: 'e2e-saving' });
-  await expect(row).toHaveCount(1);
-  await expect(panel.getByLabel('Name')).toHaveValue('');
-  await expect(question).toHaveCount(0);
-  await panel.getByRole('button', { name: 'Close the details' }).click();
-  await expect(panel).toHaveCount(0);
+  test('leaving waits for a running save and goes on once saved (UI-008)', async ({
+    page,
+    state,
+  }) => {
+    await as(page, state, 'admin', 'admin/servers', 'Servers and groups');
+    const { release, answered } = await hold(page);
+    const panel = await fillNewServer(page, 'e2e-saving');
+    await panel.getByRole('button', { name: 'Create server' }).click();
+    // The next panel is asked for before the create is answered.
+    await page.getByRole('button', { name: 'New server' }).click();
+    const question = page.getByRole('dialog', { name: 'Leave without saving?' });
+    await expect(question).toHaveCount(0);
 
-  await row.getByRole('button', { name: 'e2e-saving' }).click();
-  const opened = page.getByRole('complementary', { name: 'Details of e2e-saving' });
-  await opened.getByRole('button', { name: 'Delete server …' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
-  await expect(row).toHaveCount(0);
+    release();
+    expect((await answered).status()).toBe(201);
+    const row = page.getByRole('row').filter({ hasText: 'e2e-saving' });
+    await expect(row).toHaveCount(1);
+    await expect(panel.getByLabel('Name')).toHaveValue('');
+    await expect(question).toHaveCount(0);
+    await panel.getByRole('button', { name: 'Close the details' }).click();
+    await expect(panel).toHaveCount(0);
+
+    await row.getByRole('button', { name: 'e2e-saving' }).click();
+    const opened = page.getByRole('complementary', { name: 'Details of e2e-saving' });
+    await opened.getByRole('button', { name: 'Delete server …' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete server …' }).click();
+    await expect(row).toHaveCount(0);
+  });
 });
 
 test('a navigation during a save that fails asks with the reason (UI-008)', async ({

@@ -4,26 +4,35 @@ import type { Page } from '@playwright/test';
 import { expect, login, secret, test } from './fixtures';
 
 // UI-011: the visible entries per role are exactly those of the table in
-// Design 6.2 (topology since 1.1, UI-010; messages are not built yet). Entries
-// without the right are hidden, not greyed.
+// Design 6.2 (topology since 1.1, UI-010; messages since 1.2, MSG-001), with
+// game profiles (UI-020) and the system log of the RCON admin (UI-025), on by
+// default since 1.2. Entries without the right are hidden, not greyed.
 const design62: Record<string, { main: string[]; admin: string[] }> = {
   // RCON admin: everything.
   admin: {
-    main: ['Overview', 'Servers', 'Topology', 'Audit'],
-    admin: ['Users', 'Groups', 'Command lists', 'Servers and groups', 'Agents', 'Settings'],
+    main: ['Overview', 'Servers', 'Topology', 'Audit', 'Game profiles', 'Messages'],
+    admin: [
+      'Users',
+      'Groups',
+      'Command lists',
+      'Servers and groups',
+      'Agents',
+      'Settings',
+      'System log',
+    ],
   },
   // Server admin: users (his moderators and supporters), moderator
   // groups, own lists, servers read-only in scope; no agents, no settings.
   sadmin: {
-    main: ['Overview', 'Servers', 'Topology', 'Audit'],
+    main: ['Overview', 'Servers', 'Topology', 'Audit', 'Game profiles', 'Messages'],
     admin: ['Users', 'Groups', 'Command lists', 'Servers and groups'],
   },
   // Moderator with supporters on (global and for him): his supporters.
-  mod: { main: ['Overview', 'Servers'], admin: ['Users'] },
+  mod: { main: ['Overview', 'Servers', 'Game profiles', 'Messages'], admin: ['Users'] },
   // Moderator without his own release: no administration.
-  mod2: { main: ['Overview', 'Servers'], admin: [] },
+  mod2: { main: ['Overview', 'Servers', 'Game profiles', 'Messages'], admin: [] },
   // Supporter: no administration.
-  sup: { main: ['Overview', 'Servers'], admin: [] },
+  sup: { main: ['Overview', 'Servers', 'Game profiles', 'Messages'], admin: [] },
 };
 
 async function visibleEntries(page: Page) {
@@ -73,7 +82,10 @@ test('moderator without the global supporter switch', async ({ page, playwright,
   await set(false);
   try {
     await login(page, 'mod', secret(state, 'mod'));
-    expect(await visibleEntries(page)).toEqual({ main: ['Overview', 'Servers'], admin: [] });
+    expect(await visibleEntries(page)).toEqual({
+      main: ['Overview', 'Servers', 'Game profiles', 'Messages'],
+      admin: [],
+    });
     await page.goto('admin/users');
     await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   } finally {

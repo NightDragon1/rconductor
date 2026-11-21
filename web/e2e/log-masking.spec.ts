@@ -56,11 +56,18 @@ test.describe('log masking on', () => {
   });
 });
 
-test('flag off: no masking settings on the page, the API answers 404', async ({ page, state }) => {
-  await as(page, state, 'admin');
-  await page.goto('admin/settings');
-  await expect(page.getByRole('region', { name: 'Mail (SMTP)' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Log masking' })).toHaveCount(0);
-  const r = await page.request.get('api/v1/settings/log-masking');
-  expect(r.status()).toBe(404);
+test.describe('flag off', () => {
+  test.use({ flagsOff: ['log_masking_ui'] });
+
+  test('flag off: no masking settings on the page, the API answers 404', async ({
+    page,
+    state,
+  }) => {
+    await as(page, state, 'admin');
+    await page.goto('admin/settings');
+    await expect(page.getByRole('region', { name: 'Mail (SMTP)' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Log masking' })).toHaveCount(0);
+    const r = await page.request.get('api/v1/settings/log-masking');
+    expect(r.status()).toBe(404);
+  });
 });

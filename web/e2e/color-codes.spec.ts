@@ -77,8 +77,12 @@ test.describe('flag on', () => {
   });
 });
 
-test('flag off: codes are removed, no style (CMD-017, SEC-006)', async ({ page, state }) => {
-  const pre = await answer(page, state, 'off');
-  await stillText(page, pre);
-  await expect(pre.locator('[class*="text-mc-"]')).toHaveCount(0);
+test.describe('flag off', () => {
+  test.use({ flagsOff: ['color_codes'] });
+
+  test('flag off: codes are removed, no style (CMD-017, SEC-006)', async ({ page, state }) => {
+    const pre = await answer(page, state, 'off');
+    await stillText(page, pre);
+    await expect(pre.locator('[class*="text-mc-"]')).toHaveCount(0);
+  });
 });

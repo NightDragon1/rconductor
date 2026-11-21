@@ -210,15 +210,19 @@ test.describe('say with sender on', () => {
   });
 });
 
-test('flag off: no prefix field and no request for it', async ({ page, state }) => {
-  const reads: string[] = [];
-  page.on('request', (r) => {
-    if (r.url().includes('/say-prefix')) reads.push(r.url());
+test.describe('flag off', () => {
+  test.use({ flagsOff: ['say_sender'] });
+
+  test('flag off: no prefix field and no request for it', async ({ page, state }) => {
+    const reads: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().includes('/say-prefix')) reads.push(r.url());
+    });
+    await as(page, state, 'admin');
+    await openGroup(page);
+    await expect(groupPanel(page)).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expect(field(page)).toHaveCount(0);
+    expect(reads).toEqual([]);
   });
-  await as(page, state, 'admin');
-  await openGroup(page);
-  await expect(groupPanel(page)).toBeVisible();
-  await page.waitForLoadState('networkidle');
-  await expect(field(page)).toHaveCount(0);
-  expect(reads).toEqual([]);
 });

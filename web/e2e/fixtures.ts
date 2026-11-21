@@ -22,6 +22,7 @@ interface Fixtures {
   state: StackState;
   csp: string[];
   flags: string[];
+  flagsOff: string[];
   flagSwitch: undefined;
 }
 
@@ -35,13 +36,15 @@ export const test = base.extend<Fixtures>({
   baseURL: async ({ state }, use) => {
     await use(state.base_url);
   },
-  // flags names the feature flags a test needs (NFR-019). The RCON admin
-  // switches them on through the settings API before the test and off
-  // again afterwards, also when the test fails: no back door in the panel.
+  // flags names the feature flags a test needs on, flagsOff those it needs
+  // off (NFR-019). The flags are on by default. The RCON admin switches them
+  // through the settings API before the test and back on afterwards, also
+  // when the test fails: no back door in the panel.
   flags: [[], { option: true }],
+  flagsOff: [[], { option: true }],
   flagSwitch: [
-    async ({ flags, playwright, state }, use) => {
-      if (flags.length === 0) {
+    async ({ flags, flagsOff, playwright, state }, use) => {
+      if (flags.length === 0 && flagsOff.length === 0) {
         await use(undefined);
         return;
       }
@@ -54,11 +57,12 @@ export const test = base.extend<Fixtures>({
           data: { pseudonym: 'admin', password: secret(state, 'admin') },
         });
         expect(r.status(), 'admin login for the flag switch').toBe(200);
-        await setFlags(admin, flags, true);
+        if (flags.length > 0) await setFlags(admin, flags, true);
+        if (flagsOff.length > 0) await setFlags(admin, flagsOff, false);
         try {
           await use(undefined);
         } finally {
-          await setFlags(admin, flags, false);
+          if (flagsOff.length > 0) await setFlags(admin, flagsOff, true);
         }
       } finally {
         await admin.dispose();

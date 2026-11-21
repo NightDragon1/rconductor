@@ -74,12 +74,18 @@ test.describe('server number on', () => {
   });
 });
 
-test('server number off: no column ID and no badge', async ({ page, state }) => {
-  await as(page, state, 'admin');
-  await expect(page.getByRole('article', { name: 'survival' }).getByText(/^#\d+$/)).toHaveCount(0);
-  await page.goto('admin/servers');
-  await expect(page.getByRole('columnheader', { name: 'ID', exact: true })).toHaveCount(0);
-  await page.goto(`servers/${state.servers.survival}/overview`);
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1 }).getByText(/Server number/)).toHaveCount(0);
+test.describe('flag off', () => {
+  test.use({ flagsOff: ['server_number'] });
+
+  test('server number off: no column ID and no badge', async ({ page, state }) => {
+    await as(page, state, 'admin');
+    await expect(page.getByRole('article', { name: 'survival' }).getByText(/^#\d+$/)).toHaveCount(
+      0,
+    );
+    await page.goto('admin/servers');
+    await expect(page.getByRole('columnheader', { name: 'ID', exact: true })).toHaveCount(0);
+    await page.goto(`servers/${state.servers.survival}/overview`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 }).getByText(/Server number/)).toHaveCount(0);
+  });
 });

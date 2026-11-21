@@ -48,7 +48,7 @@ test('O6 host and ports per role on the server pages (UI-005, UI-006)', async ({
   // the server.
   await page.goto('admin/servers');
   await expect(page.getByRole('heading', { name: 'Servers and groups', level: 1 })).toBeVisible();
-  await expect(page.getByRole('row', { name: /^survival / })).toContainText(
+  await expect(page.getByRole('row', { name: /^\d+ survival / })).toContainText(
     `${conn.host}:${conn.port}`,
   );
   await page.goto(`servers/${survival}/overview`);

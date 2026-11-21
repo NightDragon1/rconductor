@@ -26,7 +26,8 @@ test('container logs live, earlier lines, filter (UI-009)', async ({ page, state
   expect(text.split('Steve joined the game')).toHaveLength(2);
   await expect(page.getByRole('button', { name: 'Load earlier lines' })).toHaveCount(0);
 
-  await page.getByRole('searchbox', { name: 'Filter the logs' }).fill('tick');
+  // The text filter of the two-part filter, on by default since 1.2 (UI-019).
+  await page.getByRole('searchbox', { name: 'Filter the text after the brackets' }).fill('tick');
   await expect(lines).not.toContainText('Steve');
   await expect(lines).toContainText('tick');
 

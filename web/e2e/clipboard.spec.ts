@@ -5,6 +5,8 @@ import { expect, login, secret, test } from './fixtures';
 // Over http to a name that is not localhost, as to a LAN address (D-011),
 // the page is no secure context and has no clipboard API: copying selects
 // the text and asks for Ctrl+C (revision 2.4 candidate 17).
+// A say goes out with its sender as tellraw (CMD-020).
+const sayAnswer = 'Done: tellraw @a {"text":"","extra":[{"text":"mod: "},{"text":"hi from mod"}]}';
 test('copying without a secure context selects the text', async ({ page, state }) => {
   await login(page, 'admin', secret(state, 'admin'));
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
@@ -16,9 +18,7 @@ test('copying without a secure context selects the text', async ({ page, state }
   const b = page.getByRole('article', { name: 'say hi from mod' });
   await b.getByRole('button', { name: 'Copy the block' }).click();
   await expect(b.getByRole('status')).toHaveText('Selected. Press Ctrl+C to copy.');
-  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
-    'Done: say hi from mod',
-  );
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(sayAnswer);
 
   // History entry.
   await page.goto(`servers/${state.servers.survival}/history`);
@@ -29,7 +29,5 @@ test('copying without a secure context selects the text', async ({ page, state }
   await entry.getByText('Answer', { exact: true }).click();
   await entry.getByRole('button', { name: 'Copy the answer' }).click();
   await expect(entry.getByRole('status')).toHaveText('Selected. Press Ctrl+C to copy.');
-  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(
-    'Done: say hi from mod',
-  );
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe(sayAnswer);
 });
