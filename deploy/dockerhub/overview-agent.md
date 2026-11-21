@@ -39,6 +39,7 @@ The image is also on ghcr.io: use `ghcr.io/nightdragon1/` instead of
 ```sh
 docker run -d --name rconductor-agent --restart unless-stopped \
   --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --memory 1g --pids-limit 256 \
   --group-add "$(stat -c %g /var/run/docker.sock)" \
   -e RCD_PAIRING_TOKEN=rcd1.... \
   -v /var/run/docker.sock:/var/run/docker.sock -v rconductor-agent-secrets:/secrets \
@@ -55,6 +56,8 @@ services:
     image: docker.io/nightdragon1/rconductor-agent:{version}
     restart: unless-stopped
     read_only: true
+    mem_limit: 1g
+    pids_limit: 256
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     group_add: ["${DOCKER_GID:-999}"]

@@ -1,6 +1,6 @@
 # Configuration
 
-> **Version:** applies to RCONductor 1.1. Parts marked (new in 1.1)
+> **Version:** applies to RCONductor 1.2. Parts marked (new in 1.1)
 > are not in 1.0.
 
 Only start-up and infrastructure are set by environment variables; everything

@@ -41,6 +41,7 @@ Panel:
 docker network create rconductor
 docker run -d --name rconductor-panel --network rconductor --restart unless-stopped \
   --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --memory 1g --pids-limit 256 \
   -p 8080:8080 -e RCD_AGENT_PUBLIC_ADDR=rconductor-panel:8443 \
   -v rconductor-data:/data -v rconductor-secrets:/secrets -v rconductor-backups:/backups \
   docker.io/nightdragon1/rconductor-panel:1.2
@@ -52,6 +53,7 @@ Agent, with the pairing token from the panel (see first steps):
 ```sh
 docker run -d --name rconductor-agent --network rconductor --restart unless-stopped \
   --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --memory 1g --pids-limit 256 \
   --group-add "$(stat -c %g /var/run/docker.sock)" \
   -e RCD_PAIRING_TOKEN=rcd1.... \
   -v /var/run/docker.sock:/var/run/docker.sock -v rconductor-agent-secrets:/secrets \
@@ -59,7 +61,8 @@ docker run -d --name rconductor-agent --network rconductor --restart unless-stop
 ```
 
 The agent runs as a non-root user and reaches the Docker socket through the
-socket's group (`--group-add`).
+socket's group (`--group-add`). The memory limit also sets the panel's Go
+memory limit; raise it together with `RCD_MAX_CONNECTIONS`.
 
 ### How to run – B: Docker Compose
 
@@ -71,6 +74,8 @@ services:
     image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-panel:1.2
     restart: unless-stopped
     read_only: true
+    mem_limit: 1g
+    pids_limit: 256
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     ports:
@@ -87,6 +92,8 @@ services:
     image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-agent:1.2
     restart: unless-stopped
     read_only: true
+    mem_limit: 1g
+    pids_limit: 256
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     group_add: ["${DOCKER_GID:-999}"]
@@ -110,6 +117,10 @@ echo 'RCD_PAIRING_TOKEN=rcd1....' >> .env    # token from the panel, see first s
 docker compose up -d agent
 ```
 
+Ready-made Compose files for panel and agent on separate hosts, or both on
+one, are in [deploy/compose](https://github.com/NightDragon1/rconductor/tree/main/deploy/compose) (`panel.yaml`, `agent.yaml`,
+`all-in-one.yaml`).
+
 ### First steps
 
 1. Open `http://<host>:8080`, sign in as `admin` with the password from the log and set a new one.
@@ -126,7 +137,7 @@ docker compose up -d agent
 | `RCD_AGENT_PUBLIC_ADDR` | empty | `host:port` under which agents reach the panel's agent port 8443 |
 | `RCD_PUBLIC_URL` | empty | public URL of the panel, such as `https://rcon.example.org`, behind a reverse proxy |
 | `RCD_TRUSTED_PROXIES` | empty | addresses of your reverse proxy; only from those `X-Forwarded-For` and `X-Forwarded-Proto` count |
-| `RCD_IMAGE_REPO` | `docker.io/nightdragon1` | registry the pairing dialog names; `ghcr.io/nightdragon1` selects ghcr.io |
+| `RCD_IMAGE_REPO` | `docker.io/nightdragon1` | registry the pairing dialog names and, in the Compose example, of the images; `ghcr.io/nightdragon1` selects ghcr.io |
 
 ### Agent
 
