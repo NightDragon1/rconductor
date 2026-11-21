@@ -15,6 +15,14 @@
   },
   "permissions": {
     "deny": [
+      "Agent(fork)",
+      "Agent(general-purpose)",
+      "Agent(claude)",
+      "Agent(claude-code-guide)",
+      "Agent(Explore)",
+      "Agent(Plan)",
+      "Agent(statusline-setup)",
+      "Agent(web-fetch)",
       "Bash(git push --force*)",
       "Bash(git push -f*)",
       "Bash(git push --force-with-lease*)",
