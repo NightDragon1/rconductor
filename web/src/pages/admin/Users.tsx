@@ -247,7 +247,13 @@ export function UsersPage() {
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <PageHeader
           title={t('nav.users')}
-          description={t(role === 'moderator' ? 'admin.explainModerator' : 'admin.explain')}
+          description={t(
+            role === 'moderator'
+              ? 'admin.explainModerator'
+              : role === 'rcon_admin'
+                ? 'admin.explainRcon'
+                : 'admin.explain',
+          )}
           actions={
             !phone && (
               <div className="flex flex-wrap gap-2">

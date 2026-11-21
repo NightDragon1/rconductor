@@ -528,6 +528,7 @@
     "leave": "Discard changes"
   },
   "admin": {
+    "explainRcon": "Every user below your role and all open invitations. Invite new users with an invitation link.",
     "explainModerator": "Your supporters and your open invitations. Invite new supporters with an invitation link.",
     "explain": "Users with rights on your servers, such as moderators and supporters, and your open invitations. Invite new users with an invitation link.",
     "save": "Save",
@@ -575,7 +576,7 @@
     "bulk": {
       "label": "Mass actions",
       "selected": "{{count}} selected",
-      "group": "Assign moderator group",
+      "group": "Assign group",
       "scope": "Assign server scope",
       "groupTitle": "Moderator group {{name}} assigned",
       "scopeTitle": "Server scope {{name}} assigned",
@@ -1212,7 +1213,7 @@
     "passwordChanged": "Password changed."
   },
   "profiles": {
-    "explain": "The game profiles with their commands and ports, and the merged profile that each of your servers uses.",
+    "explain": "The game profiles with their commands, and the merged profile that each of your servers uses.",
     "all": "All game profiles",
     "details": "Details of the game profile",
     "search": "Search profiles and commands",
