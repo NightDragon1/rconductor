@@ -41,7 +41,7 @@ runs as a non-root user and reaches the socket through this group.
    Until it has a token the agent waits and says so in its log.
 3. Give your game containers the label `rconductor.manage=true`; the agent manages
    only those.
-4. Under **Servers and groups**, choose **New server**: name, game profile,
+4. Under **Servers**, tab **Manage servers and server groups**, choose **New server**: name, game profile,
    host, RCON port and password, and optionally agent and container.
 
 The images are on Docker Hub and ghcr.io (`nightdragon1/rconductor-panel`,
