@@ -49,6 +49,8 @@ type fakeDocker struct {
 	// info answers Info, infoErr fails it.
 	info    system.Info
 	infoErr error
+	// health is the healthcheck state Inspect reports, nil for none.
+	health *container.Health
 }
 
 func (f *fakeDocker) Info(context.Context, client.InfoOptions) (client.SystemInfoResult, error) {
@@ -84,7 +86,7 @@ func (f *fakeDocker) ContainerList(_ context.Context, o client.ContainerListOpti
 func (f *fakeDocker) ContainerInspect(context.Context, string, client.ContainerInspectOptions) (client.ContainerInspectResult, error) {
 	return client.ContainerInspectResult{Container: container.InspectResponse{
 		Config: &container.Config{Tty: f.tty}, RestartCount: 2,
-		State: &container.State{StartedAt: "2026-11-03T10:00:00.5Z"},
+		State: &container.State{StartedAt: "2026-11-03T10:00:00.5Z", Health: f.health},
 	}}, nil
 }
 
@@ -687,5 +689,50 @@ func TestOwnContainerID(t *testing.T) {
 	}
 	if got := ownContainerID(out) + ownContainerID(filepath.Join(dir, "none")); got != "" {
 		t.Errorf("outside: %q", got)
+	}
+}
+
+// TestHealth covers UI-021 and UI-011: the agent reports the result of a
+// Docker healthcheck, nothing without one, and forwards health changes.
+func TestHealth(t *testing.T) {
+	for name, tc := range map[string]struct {
+		health *container.Health
+		want   string
+	}{
+		"no healthcheck": {nil, ""},
+		"none":           {&container.Health{Status: container.NoHealthcheck}, ""},
+		"starting":       {&container.Health{Status: container.Starting}, "starting"},
+		"healthy":        {&container.Health{Status: container.Healthy}, "healthy"},
+		"unhealthy":      {&container.Health{Status: container.Unhealthy}, "unhealthy"},
+		"unknown value":  {&container.Health{Status: "sick\u202e"}, ""},
+	} {
+		d, fd, _ := newTestDocker(t)
+		fd.health = tc.health
+		rec := &recorder{}
+		if err := d.snapshot(context.Background(), rec); err != nil {
+			t.Fatal(err)
+		}
+		snap, _ := agentproto.Payload[agentproto.Snapshot](rec.of(agentproto.TypeSnapshot)[0])
+		if got := snap.Containers[0].Health; got != tc.want || snap.Containers[0].State != "running" {
+			t.Errorf("%s: health %q state %q, want %q running", name, got, snap.Containers[0].State, tc.want)
+		}
+	}
+
+	d, fd, _ := newTestDocker(t)
+	fd.health = &container.Health{Status: container.Unhealthy}
+	d.metrics = time.Hour
+	rec := &recorder{}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- d.Run(ctx, rec) }()
+	fd.events <- events.Message{Type: "container", Action: events.ActionHealthStatusUnhealthy, Actor: events.Actor{ID: "id-mc", Attributes: map[string]string{"name": "mc"}}}
+	waitFor(t, "health event", func() bool { return len(rec.of(agentproto.TypeContainerEvent)) == 1 })
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	ev, _ := agentproto.Payload[agentproto.ContainerEvent](rec.of(agentproto.TypeContainerEvent)[0])
+	if ev.Container.Health != "unhealthy" || ev.Gone {
+		t.Errorf("event = %+v", ev)
 	}
 }
