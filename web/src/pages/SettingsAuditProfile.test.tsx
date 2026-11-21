@@ -194,3 +194,71 @@ describe('audit entries of migration 00018 (O1)', () => {
     ).toEqual(['', 's1']);
   });
 });
+
+// From 1024 px the audit log is a dense table; the payload opens below its
+// row and stays text (O6, AUD-001, SEC-006).
+describe('audit as a table from 1024 px (O6)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+  const entry = {
+    id: 'e1',
+    ts: now,
+    kind: 'admin',
+    action: 'user.update',
+    actor_id: 'a',
+    actor_role: 'rcon_admin',
+    server_id: 's1',
+    payload: { name: '<b>x</b>' },
+    result: 'denied',
+    reason: 'forbidden',
+  };
+  const render = async (lang: 'en' | 'xx') => {
+    vi.stubGlobal('matchMedia', (q: string) => ({
+      matches: q.includes('min-width'),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    setLanguage(lang);
+    return renderPage(AuditPage, [
+      [sessionKey, session],
+      [serversKey, [{ id: 's1', name: 'Alpha' }]],
+      [managedUsersKey, []],
+      [['audit', '', ''], { pages: [{ items: [entry] }], pageParams: [undefined] }],
+    ]);
+  };
+
+  it('shows one row per entry with its columns and opens the payload', async () => {
+    await render('en');
+    const table = screen.getByRole('table', { name: 'Audit entries' });
+    const rows = within(table).getAllByRole('row');
+    expect(rows.map((r) => r.querySelectorAll('th, td').length)).toEqual([8, 8]);
+    const row = rows[1] as HTMLElement;
+    for (const text of [
+      'Administration',
+      'user.update',
+      'boss',
+      'RCON admin',
+      'Alpha',
+      'forbidden',
+    ])
+      expect(row.textContent).toContain(text);
+    const details = within(row).getByRole('button', { name: 'Details' });
+    expect(details.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(details);
+    expect(details.getAttribute('aria-expanded')).toBe('true');
+    const pre = table.querySelector('pre');
+    expect(pre?.textContent).toContain('<b>x</b>');
+    expect(pre?.querySelector('b')).toBeNull();
+    fireEvent.click(details);
+    expect(table.querySelector('pre')).toBeNull();
+  });
+
+  it('has no text outside the language files (NFR-007)', async () => {
+    const { container } = await render('xx');
+    fireEvent.click(screen.getByRole('button', { name: /Details/ }));
+    const data = /^(user\.update|boss|Alpha|forbidden|\(|\)|aria-label=.*|[\d.,:/ APM]+)$/;
+    expect(unmarked(container).filter((s) => !data.test(s) && !/^[{}"]/.test(s))).toEqual([]);
+  });
+});
