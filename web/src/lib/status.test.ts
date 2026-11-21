@@ -84,3 +84,30 @@ describe('shownImage', () => {
     expect(shownImage(base)).toBeUndefined();
   });
 });
+
+// UI-021, UI-011: a running container with a healthcheck shows its result
+// instead of running; without one, or from an agent that does not send it,
+// running stays. Paused, restarting and dead keep their own name.
+describe('container health and states', () => {
+  it('shows the health of a running container', () => {
+    expect(cardStatus(withContainer('running', { health: 'healthy' }))).toBe('healthy');
+    expect(cardStatus(withContainer('running', { health: 'starting' }))).toBe('starting');
+    expect(cardStatus(withContainer('running', { health: 'unhealthy' }))).toBe('unhealthy');
+    expect(cardStatus(withContainer('running'))).toBe('running');
+  });
+  it('keeps restart loop and RCON error ahead of the health', () => {
+    expect(cardStatus(withContainer('running', { health: 'healthy', restart_loop: true }))).toBe(
+      'restartLoop',
+    );
+    expect(cardStatus(withContainer('running', { health: 'healthy' }, 'offline'))).toBe(
+      'rconError',
+    );
+  });
+  it('names paused, restarting and dead, and stops the rest', () => {
+    expect(cardStatus(withContainer('paused'))).toBe('paused');
+    expect(cardStatus(withContainer('restarting'))).toBe('restarting');
+    expect(cardStatus(withContainer('dead'))).toBe('dead');
+    expect(cardStatus(withContainer('exited', { health: 'unhealthy' }))).toBe('stopped');
+    expect(cardStatus(withContainer('created'))).toBe('stopped');
+  });
+});

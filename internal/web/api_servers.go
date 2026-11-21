@@ -358,6 +358,10 @@ func (s *apiServer) withRuntime(ctx context.Context, sv servers.Server) api.Serv
 		if c.Image != "" {
 			ac.Image = &c.Image
 		}
+		if c.Health != "" {
+			h := api.ContainerRuntimeHealth(c.Health)
+			ac.Health = &h
+		}
 		if len(c.Volumes) > 0 {
 			vols := make([]api.VolumeRuntime, 0, len(c.Volumes))
 			for _, vv := range c.Volumes {

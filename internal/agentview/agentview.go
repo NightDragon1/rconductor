@@ -44,6 +44,7 @@ type ContainerRuntime struct {
 	Name           string     `json:"name"`
 	Image          string     `json:"image,omitempty"`
 	State          string     `json:"state"`
+	Health         string     `json:"health,omitempty"` // healthcheck result, empty without one
 	StartedAt      *time.Time `json:"started_at,omitempty"`
 	RestartCount   int        `json:"restart_count"`
 	RestartLoop    bool       `json:"restart_loop"`
@@ -165,6 +166,9 @@ func (v *View) RuntimeFor(ctx context.Context, serverID string, level Level) Run
 	}
 	if c, ok := v.data.Container(agentID, name); ok {
 		cr.State, cr.Image, cr.RestartCount, cr.RestartLoop = c.State, c.Image, c.RestartCount, c.RestartLoop
+		if c.State == "running" {
+			cr.Health = c.Health
+		}
 		if len(c.Volumes) > 0 {
 			cr.Volumes = v.volumesOf(agentID, c.Volumes)
 		}

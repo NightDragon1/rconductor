@@ -198,3 +198,25 @@ func TestC5NumbersGoOnAfterARecreate(t *testing.T) {
 		})
 	}
 }
+
+// TestHealthEventsKeepLogsAndStarts covers UI-021 and UI-011 in order:
+// health changes of a running container replace its health, keep its log
+// ring and count no new start, so they never make a restart loop.
+func TestHealthEventsKeepLogsAndStarts(t *testing.T) {
+	d, _, _ := newAgentData(t)
+	c := running("1", "mc")
+	c.StartedAt = time.Now().UTC().Add(-time.Minute)
+	d.Snapshot("a1", agentproto.Snapshot{Containers: []agentproto.Container{c}})
+	d.Lines("a1", agentproto.LogLines{Container: "mc", Lines: []string{"a", "b"}})
+	for _, h := range []string{"starting", "healthy", "unhealthy", "healthy", "unhealthy"} {
+		c.Health = h
+		d.Event("a1", agentproto.ContainerEvent{Container: c})
+		v, ok := d.Container("a1", "mc")
+		if !ok || v.Health != h || v.RestartLoop {
+			t.Fatalf("after %s: health %q, loop %v", h, v.Health, v.RestartLoop)
+		}
+	}
+	if got := lines(d, "a1", "mc"); len(got) != 2 {
+		t.Errorf("log ring after health events = %v", got)
+	}
+}

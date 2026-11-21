@@ -215,9 +215,14 @@ type Container struct {
 	// RestartCount counts restarts by the restart policy; with StartedAt
 	// it is new within major version 1 (capability restart_info, revision
 	// 2.4 candidate 2).
-	RestartCount int      `json:"restart_count,omitempty"`
-	Ports        []Port   `json:"ports,omitempty"`
-	Volumes      []string `json:"volumes,omitempty"`
+	RestartCount int `json:"restart_count,omitempty"`
+	// Health is the result of the container's Docker healthcheck:
+	// starting, healthy or unhealthy; empty without a healthcheck. New
+	// within major version 1: an agent that does not send it leaves the
+	// state alone (UI-021, UI-011).
+	Health  string   `json:"health,omitempty"`
+	Ports   []Port   `json:"ports,omitempty"`
+	Volumes []string `json:"volumes,omitempty"`
 }
 
 // Snapshot lists all allowed containers.
@@ -445,12 +450,25 @@ func (h *Hello) Clean() error {
 	return nil
 }
 
+// healthValues are the health states the panel takes from an agent.
+var healthValues = []string{HealthStarting, HealthHealthy, HealthUnhealthy}
+
+// Health states of a container with a healthcheck.
+const (
+	HealthStarting  = "starting"
+	HealthHealthy   = "healthy"
+	HealthUnhealthy = "unhealthy"
+)
+
 // Clean bounds and cleans a container from the agent (SEC-006).
 func (c *Container) Clean() {
 	c.ID = foreign.Name(c.ID, 128)
 	c.Name = foreign.Name(c.Name, maxName)
 	c.Image = foreign.Name(c.Image, maxName)
 	c.State = foreign.Name(c.State, 32)
+	if !slices.Contains(healthValues, c.Health) {
+		c.Health = ""
+	}
 	if len(c.Ports) > 64 {
 		c.Ports = c.Ports[:64]
 	}

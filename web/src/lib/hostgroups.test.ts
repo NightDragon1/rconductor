@@ -67,6 +67,25 @@ describe('host groups (UI-021)', () => {
     ).toEqual({ running: 2, stopped: 1, error: 3 });
   });
 
+  it('counts the health and the named Docker states (UI-021, UI-011)', () => {
+    const s = (id: string, state: string, health?: 'healthy' | 'starting' | 'unhealthy') => {
+      const v = server(id, { key: '1' }, state);
+      const c = v.runtime?.container;
+      if (c) c.health = health;
+      return v;
+    };
+    expect(
+      hostCounts([
+        s('ok', 'running', 'healthy'),
+        s('boot', 'running', 'starting'),
+        s('sick', 'running', 'unhealthy'),
+        s('pause', 'paused'),
+        s('again', 'restarting'),
+        s('dead', 'dead'),
+      ]),
+    ).toEqual({ running: 2, stopped: 2, error: 2 });
+  });
+
   it('keeps 500 servers on 50 hosts in order and fast', () => {
     const list = Array.from({ length: 500 }, (_, i) => server(`s${i}`, { key: String(i % 50) }));
     const t0 = performance.now();
