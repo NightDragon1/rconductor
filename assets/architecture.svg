@@ -1,0 +1,82 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 400" role="img" aria-label="RCONductor architecture: browser, reverse proxy, panel, agent, Docker socket and game servers">
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #111827; font-size: 14px; }
+    .small { font-size: 12px; fill: #4B5563; }
+    .title { font-weight: 600; }
+    .box { fill: #F9FAFB; stroke: #4B5563; stroke-width: 1.5; }
+    .panel { fill: #F9FAFB; stroke: #8B5CF6; stroke-width: 2.5; }
+    .agent { fill: #F9FAFB; stroke: #22D3EE; stroke-width: 2.5; }
+    .host { fill: none; stroke: #9CA3AF; stroke-width: 1.2; stroke-dasharray: 6 5; }
+    .line { stroke: #4B5563; stroke-width: 1.8; fill: none; }
+    .tls { stroke: #22D3EE; stroke-width: 2.2; fill: none; }
+    .head { fill: #4B5563; }
+    .headtls { fill: #22D3EE; }
+    @media (prefers-color-scheme: dark) {
+      text { fill: #F3F4F6; }
+      .small { fill: #9CA3AF; }
+      .box, .panel, .agent { fill: #1F2937; }
+      .box { stroke: #9CA3AF; }
+      .line { stroke: #9CA3AF; }
+      .head { fill: #9CA3AF; }
+    }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="head" d="M0 0L10 5L0 10z"/>
+    </marker>
+    <marker id="t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="headtls" d="M0 0L10 5L0 10z"/>
+    </marker>
+  </defs>
+
+  <!-- browser and reverse proxy -->
+  <rect class="box" x="20" y="45" width="130" height="56" rx="8"/>
+  <text class="title" x="85" y="78" text-anchor="middle">Browser</text>
+  <rect class="box" x="200" y="45" width="160" height="56" rx="8"/>
+  <text class="title" x="280" y="70" text-anchor="middle">Reverse proxy</text>
+  <text class="small" x="280" y="88" text-anchor="middle">TLS for the web</text>
+  <path class="line" d="M150 73H198" marker-end="url(#a)"/>
+
+  <!-- panel -->
+  <rect class="panel" x="420" y="25" width="230" height="130" rx="10"/>
+  <text class="title" x="535" y="52" text-anchor="middle">Panel</text>
+  <text x="440" y="80">:8080 web, HTTP</text>
+  <text x="440" y="104">:8443 agent port, TLS</text>
+  <text class="small" x="440" y="134">no Docker socket</text>
+  <path class="line" d="M360 73H418" marker-end="url(#a)"/>
+  <text class="small" x="389" y="64" text-anchor="middle">HTTP</text>
+
+  <!-- panel volumes -->
+  <rect class="box" x="420" y="180" width="230" height="40" rx="8"/>
+  <text x="535" y="205" text-anchor="middle">/data · /secrets · /backups</text>
+  <path class="line" d="M535 155V178" marker-end="url(#a)"/>
+
+  <!-- game servers -->
+  <rect class="box" x="770" y="45" width="140" height="56" rx="8"/>
+  <text class="title" x="840" y="70" text-anchor="middle">Game servers</text>
+  <text class="small" x="840" y="88" text-anchor="middle">RCON port not public</text>
+  <path class="line" d="M650 73H768" marker-end="url(#a)"/>
+  <text class="small" x="710" y="64" text-anchor="middle">RCON (TCP)</text>
+  <text class="small" x="710" y="92" text-anchor="middle">or HTTPS API</text>
+
+  <!-- game host with agent -->
+  <rect class="host" x="180" y="250" width="730" height="130" rx="12"/>
+  <text class="small" x="894" y="272" text-anchor="end">game host (one agent each)</text>
+  <rect class="agent" x="200" y="290" width="160" height="70" rx="10"/>
+  <text class="title" x="280" y="320" text-anchor="middle">Agent</text>
+  <text class="small" x="280" y="340" text-anchor="middle">opens no port</text>
+  <rect class="box" x="420" y="290" width="230" height="70" rx="8"/>
+  <text x="535" y="318" text-anchor="middle">Docker socket</text>
+  <text class="small" x="535" y="340" text-anchor="middle">optional over a socket proxy</text>
+  <rect class="box" x="710" y="290" width="180" height="70" rx="8"/>
+  <text x="800" y="318" text-anchor="middle">Containers</text>
+  <text class="small" x="800" y="340" text-anchor="middle">rconductor.manage=true</text>
+  <path class="line" d="M360 325H418" marker-end="url(#a)"/>
+  <path class="line" d="M650 325H708" marker-end="url(#a)"/>
+
+  <!-- agent connects out to the panel -->
+  <path class="tls" d="M300 290L470 157" marker-end="url(#t)"/>
+  <text class="small" x="330" y="196" text-anchor="end">TLS to :8443,</text>
+  <text class="small" x="330" y="212" text-anchor="end">opened by the agent</text>
+</svg>
