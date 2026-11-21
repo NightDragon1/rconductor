@@ -79,6 +79,9 @@ test('cards show only fields with a source (UI-004)', async ({ page, state }) =>
   await expect(card(page, 'creative')).toContainText('itzg/minecraft-server:java21');
   await expect(card(page, 'creative')).toHaveAttribute('data-status', 'restartLoop');
   await expect(card(page, 'arena')).toHaveAttribute('data-status', 'rconError');
+  // A running container with a healthcheck shows its result (UI-021, UI-011).
+  await expect(card(page, 'hostile')).toHaveAttribute('data-status', 'healthy');
+  await expect(card(page, 'hostile')).toContainText('healthy');
   const lobby = card(page, 'lobby');
   await expect(lobby).toHaveAttribute('data-status', 'stopped');
   await expect(lobby.getByRole('meter')).toHaveCount(0);

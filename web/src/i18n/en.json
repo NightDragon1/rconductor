@@ -164,6 +164,12 @@
   },
   "status": {
     "running": "running",
+    "healthy": "healthy",
+    "starting": "starting",
+    "unhealthy": "unhealthy",
+    "paused": "paused",
+    "restarting": "restarting",
+    "dead": "dead",
     "restartLoop": "restart loop",
     "rconError": "RCON error",
     "stopped": "stopped",
