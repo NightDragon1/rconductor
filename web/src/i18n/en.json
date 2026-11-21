@@ -287,7 +287,10 @@
     "notNumber": "The limits must be whole numbers."
   },
   "topology": {
-    "host": "Host",
+    "panel": "Panel",
+    "hosts": "Hosts",
+    "version": "Version",
+    "majorDiffers": "Major version differs from the panel ({{major}})",
     "agent": "Agent",
     "noAgent": "Without agent",
     "state": {
