@@ -15,8 +15,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
+	"github.com/NightDragon1/rconductor/internal/commands/limits"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
-	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -142,7 +142,6 @@ type Service struct {
 	exec    Executor
 	log     *slog.Logger
 	limiter *limiter
-	flags   *features.Set
 	now     func() time.Time
 	// timeout overrides Timeout, for tests.
 	timeout time.Duration
@@ -155,10 +154,6 @@ type Service struct {
 func NewService(st *store.Store, c *perm.Checker, exec Executor, log *slog.Logger) *Service {
 	return &Service{st: st, perm: c, exec: exec, log: log, limiter: newLimiter(), now: time.Now, timeout: Timeout}
 }
-
-// UseFeatures names the feature flags the pipeline checks (say_sender);
-// without, every flag counts as off.
-func (s *Service) UseFeatures(f *features.Set) { s.flags = f }
 
 // SetTimeout replaces Timeout; zero keeps it.
 func (s *Service) SetTimeout(d time.Duration) {
@@ -354,7 +349,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	// profile, with the sender and the prefix of the server group; the
 	// checks above ran on the input, the built command is not checked
 	// against the list again (CMD-020, D-081).
-	sent, err := s.message(ctx, req, serverID, cmd, syn)
+	sent, err := s.message(ctx, req, serverID, cmd, syn, !sr.AllCommands)
 	if err != nil {
 		return Result{}, err
 	}
@@ -464,9 +459,9 @@ func (s *Service) History(ctx context.Context, req users.Request, serverID strin
 		return nil, "", users.ErrNotFound
 	}
 	if limit <= 0 {
-		limit = users.DefaultAuditLimit
+		limit = limits.DefaultAuditLimit
 	}
-	limit = min(limit, users.MaxAuditLimit)
+	limit = min(limit, limits.MaxAuditLimit)
 	cts, cid, err := users.DecodeCursor(cursor)
 	if err != nil {
 		return nil, "", err

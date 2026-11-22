@@ -48,19 +48,25 @@ check "stage 2 at 401" 1 "stage-2 input 401" "modified 200 100 internal/pattern/
 check "stage 1 over 400" 0 "stage-1  5000" "modified 5000 0 internal/servers/servers.go"
 check "lockfiles not counted" 0 "stage-2 boundary 2" "modified 1 1 .github/workflows/ci.yml" \
   "modified 600 20 web/package-lock.json" "modified 20 2 tools/go.sum" "modified 10 0 go.sum"
-check "move into generated counts" 0 "stage-2 cmd 7" "renamed 7 0 internal/api/c.go internal/commands/c.go"
+check "move into generated counts" 0 "stage-2 boundary,cmd 7" "renamed 7 0 internal/api/c.go internal/commands/c.go"
 check "workflow change" 0 "stage-2 boundary 2" "modified 1 1 .github/workflows/ci.yml"
 check "class file change" 0 "stage-2 boundary 1" "modified 1 0 .github/core-paths.yml"
 check "rules files" 0 "stage-2 rules 4" "modified 1 0 CLAUDE.md" "modified 1 0 scripts/release-notes.sh" \
   "modified 1 0 .githooks/pre-push" "modified 1 0 tools/claudeguard/x/y.go"
-check "not a release script" 0 "stage-1  1" "modified 1 0 scripts/check-spdx.sh"
+check "not a release script" 0 "stage-1  1" "modified 1 0 scripts/check-format.sh"
+check "license check" 0 "stage-2 rules 4" "modified 1 0 scripts/check-spdx.sh" "modified 1 0 REUSE.toml" \
+  "added 1 0 LICENSES/MIT.txt" "added 1 0 .reuse/dep5"
 check "gate scripts and test data" 0 "stage-2 rules 4" "modified 1 0 scripts/classify.sh" \
   "modified 1 0 scripts/ci-scope-test.sh" "modified 1 0 scripts/go-test-shard.sh" \
   "added 1 0 web/scripts/testdata/render-narrow/src/Hidden.tsx"
 check "npm config" 0 "stage-2 rules 2" "added 1 0 web/.npmrc" "added 1 0 .npmrc"
 check "tool and bundler config" 0 "stage-2 rules 4" "added 1 0 web/redocly.yaml" \
   "added 1 0 web/.redocly.yml" "modified 1 0 web/index.html" "modified 1 0 web/vite.config.ts"
-check "exact file only" 0 "stage-1  2" "modified 1 0 internal/logging/witness_eventlog.go" "added 1 0 docs/CLAUDE.md"
+check "build config" 0 "stage-2 rules 3" "modified 1 0 Makefile" "added 1 0 web/vite.config.js" \
+  "added 1 0 web/vite.config.mjs"
+check "hand file next to the sqlc code counts" 0 "stage-1  1" "added 1 0 internal/store/sqlitedb/helper.go"
+check "exact file only" 0 "stage-1  1" "added 1 0 docs/CLAUDE.md"
+check "whole logging package" 0 "stage-2 redact 1" "modified 1 0 internal/logging/witness_eventlog.go"
 check "several areas" 0 "stage-2 audit,redact 2" "modified 1 0 internal/logging/events.go" \
   "modified 1 0 internal/logging/redact.go"
 check "migration" 0 "stage-2 boundary 9" "added 9 0 migrations/sqlite/00099_x.sql"
@@ -77,9 +83,48 @@ check "message handlers and actor" 0 "stage-2 authz 2" "modified 1 0 internal/we
   "modified 1 0 internal/web/api_users.go"
 check "other web handler" 0 "stage-1  1" "modified 1 0 internal/web/api_servers.go"
 check "log masking" 0 "stage-2 redact 1" "added 1 0 internal/logmask/x.go"
+check "diagnostics" 0 "stage-2 redact 1" "added 1 0 internal/diag/x.go"
+check "system log" 0 "stage-2 redact 1" "added 1 0 internal/syslog/x.go"
 check "sqlc config" 0 "stage-2 rules 1" "modified 1 0 sqlc.yaml"
 check "other profile and query files" 0 "stage-1  2" "modified 1 0 internal/profiles/catalog.go" \
   "modified 1 0 internal/store/queries/sqlite/smtp.sql"
+check "every cmd path" 0 "stage-2 cmd 23" "modified 1 0 internal/profiles/profile.go" \
+  "modified 1 0 internal/profiles/effective.go" \
+  "modified 1 0 internal/profiles/forserver.go" \
+  "modified 1 0 internal/profiles/importer.go" \
+  "modified 1 0 internal/profiles/presence.go" \
+  "modified 1 0 internal/profiles/effective_test.go" \
+  "modified 1 0 internal/profiles/combination_test.go" \
+  "modified 1 0 internal/profiles/slash_test.go" \
+  "modified 1 0 internal/profiles/profile_test.go" \
+  "modified 1 0 internal/profiles/message_test.go" \
+  "modified 1 0 internal/profiles/c7_test.go" \
+  "modified 1 0 internal/commands/multi.go" \
+  "modified 1 0 internal/rcon/x.go" \
+  "modified 1 0 internal/connmgr/x.go" \
+  "modified 1 0 internal/agentproto/x.go" \
+  "modified 1 0 internal/store/queries/sqlite/perm.sql" \
+  "modified 1 0 internal/store/queries/sqlite/audit.sql" \
+  "modified 1 0 internal/store/queries/sqlite/settings.sql" \
+  "modified 1 0 internal/store/queries/sqlite/profiles.sql" \
+  "modified 1 0 internal/store/queries/sqlite/servers.sql" \
+  "modified 1 0 internal/store/queries/sqlite/commands.sql" \
+  "modified 1 0 internal/store/queries/sqlite/templates.sql" \
+  "modified 1 0 internal/agent/docker.go"
+check "no cmd path" 0 "stage-1  6" "modified 1 0 internal/profiles/catalog.go" \
+  "modified 1 0 internal/profiles/importer_test.go" \
+  "modified 1 0 internal/profiles/check_test.go" \
+  "modified 1 0 internal/agent/agent.go" \
+  "modified 1 0 internal/store/queries/sqlite/smtp.sql" \
+    "modified 1 0 internal/store/queries/sqlite/agents.sql"
+check "queries and handler of the rights check" 0 "stage-2 authz 5" "modified 1 0 internal/store/queries/sqlite/commandlists.sql" \
+  "modified 1 0 internal/store/queries/sqlite/assignments.sql" \
+  "modified 1 0 internal/store/queries/sqlite/groups.sql" \
+  "modified 1 0 internal/web/api_secondfactor.go" \
+  "modified 1 0 internal/store/queries/sqlite/users.sql"
+check "hand-written code of the API package" 0 "stage-2 boundary 1" "added 1 0 internal/api/x.go"
+check "generated API code alone" 0 "stage-1  0" "modified 1 0 internal/api/api.gen.go"
+check "move onto the generated name counts" 0 "stage-2 cmd 7" "renamed 7 0 internal/api/api.gen.go internal/commands/c.go"
 check "bad line" 2 "" "modified x 0 a.go"
 
 # The class file is read strictly: a line outside the format fails.

@@ -10,18 +10,8 @@ import (
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/api"
-	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
-
-func sayFlags(t *testing.T) *features.Set {
-	t.Helper()
-	flags, err := features.New(features.Flag{Name: "say_sender", Operations: []string{"GetServerGroupSayPrefix", "SetServerGroupSayPrefix"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return flags
-}
 
 // sayPrefixOf reads the prefix of a group as c, with status.
 func sayPrefixOf(t *testing.T, f *apiFixture, c *http.Cookie, group string) (api.SayPrefix, int) {
@@ -48,13 +38,12 @@ func putSayPrefix(t *testing.T, f *apiFixture, c *http.Cookie, group, body, ifMa
 	return rec.Code, rec.Body.String()
 }
 
-// TestSayPrefixBehindFlag: GET and PUT /server-groups/{id}/say-prefix
-// (CMD-020, D-082) are 404 while the flag say_sender is off and for an
-// unknown group; with the flag on the RCON admin reads, sets and clears the
+// TestSayPrefix: GET and PUT /server-groups/{id}/say-prefix (CMD-020,
+// D-082) are 404 for an unknown group; the RCON admin reads, sets and clears the
 // prefix; invalid prefixes are 400, a stale version 409, and every change
 // is in the audit.
-func TestSayPrefixBehindFlag(t *testing.T) {
-	f := newAPIFixtureFeatures(t, Proxies{}, sayFlags(t))
+func TestSayPrefix(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
 	admin := f.login(t, "Boss")
 	const origin = "http://panel.lan"
 	rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/server-groups", cookies: []*http.Cookie{admin}, origin: origin,
@@ -64,16 +53,6 @@ func TestSayPrefixBehindFlag(t *testing.T) {
 		t.Fatalf("group = %d %s", rec.Code, rec.Body.String())
 	}
 	id := g.Id.String()
-	if _, got := sayPrefixOf(t, f, admin, id); got != http.StatusNotFound {
-		t.Errorf("GET with the flag off = %d, want 404", got)
-	}
-	if got, _ := putSayPrefix(t, f, admin, id, `{"say_prefix":"[R]"}`, "1"); got != http.StatusNotFound {
-		t.Errorf("PUT with the flag off = %d, want 404", got)
-	}
-	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
-		body: `{"features.say_sender":true}`}).Code; got != http.StatusOK {
-		t.Fatalf("switch flag on = %d", got)
-	}
 	if got := f.do(t, call{method: http.MethodGet, path: "/api/v1/server-groups/" + id + "/say-prefix"}).Code; got != http.StatusUnauthorized {
 		t.Errorf("without session = %d, want 401", got)
 	}
@@ -92,6 +71,12 @@ func TestSayPrefixBehindFlag(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{"say_prefix": bad})
 		if got, b := putSayPrefix(t, f, admin, id, string(body), p.Version); got != http.StatusBadRequest {
 			t.Errorf("prefix %q = %d %s, want 400", bad, got, b)
+		}
+	}
+	// CMD-020: a missing or null say_prefix removes nothing; "" does.
+	for _, body := range []string{`{}`, `{"say_prefix":null}`} {
+		if got, b := putSayPrefix(t, f, admin, id, body, p.Version); got != http.StatusBadRequest || !strings.Contains(b, "required") {
+			t.Errorf("%s = %d %s, want 400", body, got, b)
 		}
 	}
 	if got, b := putSayPrefix(t, f, admin, id, `{"say_prefix":" [R] "}`, p.Version); got != http.StatusOK || !strings.Contains(b, `"say_prefix":"[R]"`) {
@@ -116,14 +101,14 @@ func TestSayPrefixBehindFlag(t *testing.T) {
 	}
 }
 
-// TestSayPrefixRolesWithFlag: with the flag on, the RCON admin and a server
+// TestSayPrefixRoles: the RCON admin and a server
 // admin with every server of the group in scope read and write the prefix;
 // a server admin with only part of the group in scope gets 404 as outside
 // the scope; moderators and supporters get 403 (D-082). The rights come
 // before the version: without If-Match only those who may write get 428
 // (D-051).
-func TestSayPrefixRolesWithFlag(t *testing.T) {
-	f := newAPIFixtureFeatures(t, Proxies{}, sayFlags(t))
+func TestSayPrefixRoles(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
 	var hash string
 	if err := f.st.DB.QueryRow(`SELECT password_hash FROM users WHERE id = ?`, f.userID).Scan(&hash); err != nil {
 		t.Fatal(err)
@@ -132,10 +117,6 @@ func TestSayPrefixRolesWithFlag(t *testing.T) {
 	storetest.CreateUser(t, f.st, storetest.User{Pseudonym: "Sup", Role: "supporter", PasswordHash: hash, CreatedBy: f.adminID})
 	admin := f.login(t, "Boss")
 	const origin = "http://panel.lan"
-	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
-		body: `{"features.say_sender":true}`}).Code; got != http.StatusOK {
-		t.Fatalf("switch flag on = %d", got)
-	}
 	var list api.ProfileList
 	_ = json.Unmarshal(f.do(t, call{method: http.MethodGet, path: "/api/v1/profiles", cookies: []*http.Cookie{admin}}).Body.Bytes(), &list)
 	server := func(name string) string {

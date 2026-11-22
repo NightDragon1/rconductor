@@ -86,8 +86,9 @@ type insightFixture struct {
 	clock time.Time
 }
 
-// newInsightFixture has the servers s1 and s2 on the container mc of
-// agent a1 with a version pattern in their profile.
+// newInsightFixture has the servers s1 on the container mc and s2 on mc2
+// of agent a1 (one server per container, D-105), with a version pattern in
+// their profile.
 func newInsightFixture(t *testing.T, caps ...string) *insightFixture {
 	t.Helper()
 	st := storetest.New(t)
@@ -104,8 +105,8 @@ func newInsightFixture(t *testing.T, caps ...string) *insightFixture {
 	exec(`INSERT INTO game_profiles (id, slug, name, protocol, default_port, rules, source_file, content_hash, imported_at)
 		VALUES ('p1', 'mc', 'mc', 'source-rcon', 25575, '{"version":{"pattern":"version (\\S+)"}}', 'f', 'h', 't')`)
 	exec(`INSERT INTO agents (id, name, public_key, fingerprint, status, created_at) VALUES ('a1', 'host', x'00', 'fp', 'active', 't')`)
-	for _, id := range []string{"s1", "s2"} {
-		exec(`INSERT INTO servers (id, name, created_at, updated_at, agent_id, container_name) VALUES (?, ?, 't', 't', 'a1', 'mc')`, id, id)
+	for id, container := range map[string]string{"s1": "mc", "s2": "mc2"} {
+		exec(`INSERT INTO servers (id, name, created_at, updated_at, agent_id, container_name) VALUES (?, ?, 't', 't', 'a1', ?)`, id, id, container)
 		exec(`INSERT INTO server_profiles (server_id, profile_id, position) VALUES (?, 'p1', 0)`, id)
 	}
 	log := slog.New(slog.DiscardHandler)
@@ -119,6 +120,7 @@ func newInsightFixture(t *testing.T, caps ...string) *insightFixture {
 func (f *insightFixture) start(at time.Time) {
 	f.data.Snapshot("a1", agentproto.Snapshot{Containers: []agentproto.Container{
 		{ID: "c-" + at.Format("150405"), Name: "mc", Image: "img", State: "running", StartedAt: at, Volumes: []string{"mc-data", "mc-logs"}},
+		{ID: "d-" + at.Format("150405"), Name: "mc2", Image: "img", State: "running", StartedAt: at, Volumes: []string{"mc-data", "mc-logs"}},
 	}})
 }
 

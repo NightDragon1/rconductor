@@ -11,10 +11,12 @@ package connmgr
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"math/rand/v2"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -155,6 +157,36 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Unlock()
 	for _, t := range targets {
 		m.ensure(t)
+	}
+	return nil
+}
+
+// Refresh reads all servers again and reconnects those whose connection
+// changed, such as by a changed game profile (end marker, dialect); the
+// others keep their connection (PROT-001, PROT-003).
+func (m *Manager) Refresh(ctx context.Context) error {
+	m.mu.Lock()
+	started := m.ctx != nil
+	m.mu.Unlock()
+	if !started {
+		return nil
+	}
+	targets, err := m.source.Targets(ctx)
+	if err != nil {
+		return err
+	}
+	for _, t := range targets {
+		m.mu.Lock()
+		w, ok := m.workers[t.ID]
+		m.mu.Unlock()
+		if ok && w.current() == t {
+			continue
+		}
+		// Read the server again right before taking it over, as Reload
+		// does: a change or deletion in the meantime wins over the list.
+		if err := m.Reload(ctx, t.ID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -499,8 +531,7 @@ func (w *worker) run(ctx context.Context) {
 					w.m.opts.OnCertificate(t.ID, c)
 				}
 			}
-			reason := w.serve(ctx, conn)
-			_ = conn.Close()
+			reason := w.serve(ctx, conn) // closes conn
 			if reason == reasonCertMismatch {
 				// The status is cert_mismatch already; the next attempt
 				// dials again after the backoff.
@@ -529,8 +560,11 @@ func (w *worker) run(ctx context.Context) {
 }
 
 // serve runs commands on an open connection until it breaks, a reload
-// comes or the worker ends (empty reason).
-func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
+// comes or the worker ends (empty reason), and closes it. Unless the worker
+// ends, the next connection does not wait for the commands still running:
+// they end on the old one, which closes after them and no longer sets the
+// status (PROT-003).
+func (w *worker) serve(ctx context.Context, conn rcon.Conn) (reason string) {
 	probe := time.NewTicker(w.m.opts.ProbeInterval)
 	defer probe.Stop()
 	used := time.Now() // last traffic with an answer
@@ -538,11 +572,30 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 	// own goroutine; it bounds them itself (PROT-002 holds for RCON only).
 	_, concurrent := conn.(rcon.Concurrent)
 	var running sync.WaitGroup
-	defer running.Wait()
+	var active atomic.Bool // the worker still serves this connection
+	active.Store(true)
+	defer func() {
+		active.Store(false)
+		if reason != "" {
+			w.m.wg.Go(func() {
+				running.Wait()
+				_ = conn.Close()
+			})
+			return
+		}
+		running.Wait()
+		_ = conn.Close()
+	}()
 	// A request refused for the certificate sets the status before its
-	// answer goes out and ends the connection.
+	// answer goes out and ends the connection; a broken connection of a
+	// concurrent request ends it as well, so the next dial comes at once
+	// and not with the next command (PROT-003).
 	mismatch := make(chan struct{}, 1)
+	broken := make(chan struct{}, 1)
 	refused := func(err error) {
+		if !active.Load() {
+			return // only the caller learns of it
+		}
 		if errors.Is(err, rcon.ErrCertMismatch) {
 			w.certMismatch()
 			select {
@@ -555,6 +608,8 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 		select {
 		case <-mismatch:
 			return reasonCertMismatch
+		case <-broken:
+			return "connection_error"
 		case <-ctx.Done():
 			w.failPending()
 			return ""
@@ -579,6 +634,11 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 					refused(err)
 					if err != nil && j.ctx.Err() != nil {
 						err = j.ctx.Err()
+					} else if transportLost(err) && active.Load() {
+						select {
+						case broken <- struct{}{}:
+						default:
+						}
 					}
 					j.reply <- result{players: p, err: err}
 				})
@@ -591,6 +651,11 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 					refused(err)
 					if err != nil && j.ctx.Err() != nil {
 						err = j.ctx.Err()
+					} else if transportLost(err) && active.Load() {
+						select {
+						case broken <- struct{}{}:
+						default:
+						}
 					}
 					j.reply <- result{answer: answer, err: err}
 				})
@@ -611,7 +676,7 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 				continue
 			}
 			j.reply <- result{answer: answer, err: err}
-			if err != nil && (errors.Is(err, rcon.ErrBroken) || (!errors.Is(err, rcon.ErrTooLarge) && !errors.Is(err, rcon.ErrCommandFailed))) {
+			if lostWith(err) {
 				return "connection_error"
 			}
 			used = time.Now()
@@ -636,4 +701,22 @@ func (w *worker) serve(ctx context.Context, conn rcon.Conn) string {
 			}
 		}
 	}
+}
+
+// lostWith reports whether a command error means the connection is gone:
+// anything but a too large or a failed command.
+func lostWith(err error) bool {
+	return err != nil && (errors.Is(err, rcon.ErrBroken) || (!errors.Is(err, rcon.ErrTooLarge) && !errors.Is(err, rcon.ErrCommandFailed)))
+}
+
+// transportLost reports whether an error of a concurrent connection means
+// its transport is gone (EOF on an old keep-alive connection, a refused
+// socket); an error answer of the game keeps the connection (PROT-003).
+func transportLost(err error) bool {
+	if err == nil || errors.Is(err, rcon.ErrCertMismatch) {
+		return false
+	}
+	var ne net.Error
+	return errors.Is(err, rcon.ErrBroken) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		(errors.As(err, &ne) && !ne.Timeout())
 }

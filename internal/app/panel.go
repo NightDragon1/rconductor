@@ -158,7 +158,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	importer.OnImported(masking.ProfilesChanged)
 	sctx, stopSink := context.WithCancel(ctx)
 	sinkDone := make(chan struct{})
-	go func() { sink.Run(sctx, st, masking, logs.Module("syslog"), time.Now); close(sinkDone) }()
+	go func() { sink.Run(sctx, st, masking.Always(), logs.Module("syslog"), time.Now); close(sinkDone) }()
 	defer func() { stopSink(); <-sinkDone }()
 	if err := importer.Sync(ctx); err != nil {
 		return err
@@ -222,7 +222,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	})
 	runtime = cache.New(st, conns, logs.Module("cache"))
 	runtime.SetRefresh(cfg.PlayersRefresh)
-	hub = eventbus.NewHub(checker, runtime, authSvc, logs.Module("ws"), eventbus.SettingsLimits(st))
+	hub = eventbus.NewHub(checker, runtime, authSvc, logs.Module("ws"), eventbus.SettingsLimits(st, logs.Module("ws")))
 	authSvc.OnSessionsEnded(hub.CloseSessions)
 	serverSvc.SetConnections(conns)
 	if err := conns.Start(ctx); err != nil {
@@ -234,13 +234,20 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	}
 	cmdSvc := commands.NewService(st, checker, conns, logs.Module("cmd"))
 	cmdSvc.SetTimeout(cfg.CommandTimeout)
-	cmdSvc.UseFeatures(features.Default())
 	cmdSvc.Publish = hub.PublishConsole
 
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	wg.Go(func() { backup.Schedule(ctx, st, backups) })
 	wg.Go(func() { cleanup.Schedule(ctx, st, logs.Module("audit")) })
+	// A changed profile can change a connection (end marker, dialect): the
+	// servers concerned reconnect at once, not at the next break (PROT-001).
+	importer.OnImported(func() {
+		masking.ProfilesChanged()
+		if err := conns.Refresh(ctx); err != nil {
+			logs.Module("rcon").Error("connections not refreshed", slog.Any("err", err))
+		}
+	})
 	wg.Go(func() { importer.Watch(ctx) })
 
 	// Agent port with the panel's own key pair (Design 1.1, NFR-001).
@@ -264,15 +271,13 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	views.SetPlayers(runtime)
 	hub.SetAgentViews(views)
 	diagSvc := diag.NewService(st, logs.Module("diag"))
-	diagSvc.Use(agents, masking)
-	hub.SetMessages(func(ctx context.Context) bool { return features.Default().Enabled(ctx, st, "messages") })
+	diagSvc.Use(agents, masking.Always())
 	serverSvc.OnChange(func(string) {
 		masking.ProfilesChanged()
 		views.Wake()
 	})
 	wg.Go(func() { views.Run(ctx) })
 	agentSvc.SetHub(agents)
-	agentSvc.UseFeatures(features.Default())
 	wg.Go(func() { agentSvc.ClosePairing(ctx, time.Minute) })
 	agentAddr := make(chan net.Addr, 1)
 	agentErr := make(chan error, 1)

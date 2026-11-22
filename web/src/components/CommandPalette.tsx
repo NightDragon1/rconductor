@@ -10,7 +10,7 @@ import { ForeignText } from '@/components/ForeignText';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { PALETTE_FLAG, paletteEntries, searchPalette, type PaletteEntry } from '@/lib/palette';
+import { paletteEntries, searchPalette, type PaletteEntry } from '@/lib/palette';
 import { usePaletteKey } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
 
@@ -54,7 +54,7 @@ function Entry({ e }: { e: PaletteEntry }) {
 }
 
 // CommandPalette searches the commands, templates and favorites of the
-// console (CMD-016), behind the flag command_palette. It shows only what
+// console (CMD-016). It shows only what
 // the backend returned for the caller; a command picked goes into the
 // input line, where the backend checks it like a typed one.
 export function CommandPalette({
@@ -66,11 +66,9 @@ export function CommandPalette({
 }) {
   const { t } = useTranslation();
   const { data: session } = useSession();
-  const flagOn = !!session?.ui.features?.includes(PALETTE_FLAG);
   const shortcuts = !!session?.ui.shortcuts_enabled;
   const [open, setOpen] = useState(false);
-  usePaletteKey(flagOn, () => setOpen(true));
-  if (!flagOn) return null;
+  usePaletteKey(true, () => setOpen(true));
   return (
     <>
       <Button

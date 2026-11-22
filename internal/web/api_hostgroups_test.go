@@ -12,21 +12,15 @@ import (
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/api"
-	"github.com/NightDragon1/rconductor/internal/features"
 )
 
 // TestHostGroups covers UI-021 and D-089: the RCON admin sets the display
 // name of a host, foreign data with at most agents.display_name_max
 // characters and no control characters (400); null or "" removes it. The
 // servers of one answer carry their host with a key that is the same per
-// host and not the agent ID; a server without an agent has none. With the
-// flag off the answers are as before and the change is 404.
+// host and not the agent ID; a server without an agent has none.
 func TestHostGroups(t *testing.T) {
-	flags, err := features.New(features.Flag{Name: "host_groups", Operations: []string{"UpdateAgent"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+	f := newAPIFixture(t, Proxies{})
 	admin := f.login(t, "Boss")
 	a, b := "00000000-0000-4000-8000-0000000000a1", "00000000-0000-4000-8000-0000000000b2"
 	for _, q := range []string{
@@ -55,13 +49,12 @@ func TestHostGroups(t *testing.T) {
 		}
 		return out
 	}
-	if groups()["a1"] != nil || patch(`{"features.host_groups":true}`) != http.StatusOK {
-		t.Fatal("flag off: host group shown, or flag not switched on")
-	}
 	for body, want := range map[string]int{
 		`{"display_name":"Rack\u0007"}`: 400, `{"display_name":"Rack\n1"}`: 400, `{"display_name":"\u001b[31mRack"}`: 400,
 		`{"display_name":"` + strings.Repeat("x", 65) + `"}`: 400, `{"display_name":"` + strings.Repeat("x", 1<<20) + `"}`: 400,
 		`{"display_name":"` + strings.Repeat("ä", 64) + `"}`: 200,
+		// UI-021: the field is required; a body without it changes nothing.
+		`{}`: 400, `{"other":"x"}`: 400,
 	} {
 		if got := set(b, body); got != want && (want != 400 || got != http.StatusRequestEntityTooLarge) {
 			t.Errorf("%.40s = %d, want %d", body, got, want)
@@ -104,8 +97,5 @@ func TestHostGroups(t *testing.T) {
 	}
 	if !strings.Contains(agent(), `"display_name":"Rack `) {
 		t.Error("agent without its display name")
-	}
-	if patch(`{"features.host_groups":false}`) != http.StatusOK || groups()["a1"] != nil || strings.Contains(agent(), "display_name") {
-		t.Error("flag off again: host group or display name shown")
 	}
 }

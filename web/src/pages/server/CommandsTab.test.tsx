@@ -4,7 +4,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Command } from '@/lib/commandform';
 import { renderPage, setLanguage, unmarked } from '@/test/render';
-import { CommandCard } from './CommandsTab';
+import { CommandCard, HistoryItem } from './CommandsTab';
 
 const kick: Command = {
   path: 'kick',
@@ -92,5 +92,28 @@ describe('command cards', () => {
     await renderPage(() => card(false));
     expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy();
     expect(screen.getByRole('button', { expanded: true })).toBeTruthy();
+  });
+});
+
+describe('history of the commands', () => {
+  it('C237: names a say refused as too long with its own text (CMD-020)', async () => {
+    setLanguage('en');
+    await renderPage(() => (
+      <ul>
+        <HistoryItem
+          b={{
+            kind: 'cmd',
+            id: 'r1',
+            ts: '2026-11-22T12:00:00Z',
+            command: 'say hello',
+            result: 'denied',
+            reason: 'message_too_long',
+          }}
+        />
+      </ul>
+    ));
+    expect(
+      screen.getByText('The message is too long for the server with your name and the prefix'),
+    ).toBeTruthy();
   });
 });

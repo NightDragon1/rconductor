@@ -24,7 +24,7 @@ vi.mock('@/lib/live', () => ({
 const now = new Date().toISOString();
 const evil = '<img src=x onerror=alert(1)>';
 
-function session(role = 'rcon_admin', features = ['messages']) {
+function session(role = 'rcon_admin') {
   return {
     user: { id: 'me', pseudonym: 'me', role },
     expires_at: now,
@@ -32,7 +32,6 @@ function session(role = 'rcon_admin', features = ['messages']) {
     totp_setup_required: false,
     panel_version: '1.2',
     ui: {
-      features,
       shortcuts_enabled: false,
       supporters_enabled: false,
       supporters_allowed: false,
@@ -246,6 +245,32 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     );
   });
 
+  it('offers the RCON admin no reply where he is no recipient (D-085)', async () => {
+    setLanguage('en');
+    mock({
+      '/messages': list([
+        msg('m1', { audience: 'moderators', sender: { id: 'sa', pseudonym: 'sa' } }),
+      ]),
+      '/messages/{id}/comments': noComments,
+    });
+    await renderPage(MessagesPage, [[sessionKey, session('rcon_admin')]]);
+    await openMessage();
+    const comments = await screen.findByRole('region', { name: 'Comments' });
+    expect(within(comments).queryByLabelText('Your reply')).toBeNull();
+  });
+
+  it('offers the RCON admin a reply on a message to all', async () => {
+    setLanguage('en');
+    mock({
+      '/messages': list([msg('m1', { sender: { id: 'sa', pseudonym: 'sa' } })]),
+      '/messages/{id}/comments': noComments,
+    });
+    await renderPage(MessagesPage, [[sessionKey, session('rcon_admin')]]);
+    await openMessage();
+    const comments = await screen.findByRole('region', { name: 'Comments' });
+    expect(within(comments).getByLabelText('Your reply')).toBeTruthy();
+  });
+
   it('deletes a comment only where author, sender or RCON admin', async () => {
     setLanguage('en');
     mock({
@@ -319,17 +344,28 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     expect(messageTitle('\n\n')).toBe('');
   });
 
-  it('loads older messages with before', async () => {
+  it('loads older messages with the cursor of the backend (MSG-001)', async () => {
     setLanguage('en');
     const page = Array.from({ length: 50 }, (_, i) => msg(`m${i}`));
-    const calls = mock({ '/messages': list(page) });
+    const calls = mock({
+      '/messages': { status: 200, body: { items: page, unread: 0, next_cursor: 'c1' } },
+    });
     await renderPage(MessagesPage, [[sessionKey, session('supporter')]]);
     fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
     await waitFor(() =>
       expect(calls.get).toHaveBeenCalledWith('/messages', {
-        params: { query: { limit: 50, before: 'm49' } },
+        params: { query: { limit: 50, cursor: 'c1' } },
       }),
     );
+  });
+
+  it('offers no more after a last page of exactly 50 (MSG-001)', async () => {
+    setLanguage('en');
+    const page = Array.from({ length: 50 }, (_, i) => msg(`m${i}`));
+    mock({ '/messages': list(page) });
+    await renderPage(MessagesPage, [[sessionKey, session('supporter')]]);
+    await screen.findAllByTestId('message');
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 
   it('takes every text from the language file', async () => {
@@ -350,14 +386,14 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
   });
 });
 
-describe('messages behind the flag messages (NFR-019)', () => {
-  async function open(features: string[]) {
+describe('messages in the menu (MSG-001)', () => {
+  async function open() {
     setLanguage('en');
     const get = vi.spyOn(api, 'GET').mockImplementation(((path: string) =>
       Promise.resolve({
         data:
           path === '/auth/session'
-            ? session('moderator', features)
+            ? session('moderator')
             : path === '/messages'
               ? { items: [], unread: 3 }
               : { items: [] },
@@ -378,15 +414,8 @@ describe('messages behind the flag messages (NFR-019)', () => {
     return get;
   }
 
-  it('does not exist while the flag is off: no menu entry, no page, no request', async () => {
-    const get = await open([]);
-    expect(await screen.findByText('Page not found')).toBeTruthy();
-    expect(screen.queryByRole('link', { name: /Messages/ })).toBeNull();
-    expect(get.mock.calls.map((c) => c[0])).not.toContain('/messages');
-  });
-
-  it('shows the menu entry with the unread count while the flag is on', async () => {
-    await open(['messages']);
+  it('shows the menu entry with the unread count', async () => {
+    await open();
     expect(await screen.findByRole('heading', { name: 'Messages' })).toBeTruthy();
     expect(
       (await screen.findAllByRole('link', { name: /Messages.*3 unread messages/ })).length,

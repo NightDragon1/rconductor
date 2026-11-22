@@ -453,7 +453,7 @@ func (s *Service) DeleteGroup(ctx context.Context, req Request, id string) error
 	if err := s.auditOn(ctx, tx, req, "group.delete", "user_group", id, map[string]string{"name": g.Name}); err != nil {
 		return err
 	}
-	if err := endGroupGrants(ctx, tx, req, id); err != nil {
+	if err := endGroupGrants(ctx, tx, req, id, "group.delete"); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -466,8 +466,9 @@ func (s *Service) DeleteGroup(ctx context.Context, req Request, id string) error
 	return s.rightsChanged(ctx, req, "group.delete", members...)
 }
 
-// endGroupGrants removes the grants of user group id inside tx.
-func endGroupGrants(ctx context.Context, tx *sql.Tx, req Request, id string) error {
+// endGroupGrants removes the grants of user group id inside tx; cause is
+// the action that ended them.
+func endGroupGrants(ctx context.Context, tx *sql.Tx, req Request, id, cause string) error {
 	rows, err := sqlitedb.New(tx).DeleteGroupGrants(ctx, id)
 	if err != nil {
 		return err
@@ -484,7 +485,7 @@ func endGroupGrants(ctx context.Context, tx *sql.Tx, req Request, id string) err
 		list = append(list, Removed{Section: "grants", ID: r.ID, TargetType: tt, Target: t,
 			ServerID: r.ServerID.String, Entry: entry})
 	}
-	return WriteRemoved(ctx, tx, req, "group.delete", list)
+	return WriteRemoved(ctx, tx, req, cause, list)
 }
 
 func keys(m map[string]bool) []string {
@@ -493,4 +494,56 @@ func keys(m map[string]bool) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// deleteOwned deletes the user groups and command lists of user id with
+// him, inside tx (D-106): the groups lose their grants as on their own
+// delete. It returns what it deleted for the audit, and the members of
+// deleted moderator groups, whose rights change.
+func deleteOwned(ctx context.Context, tx *sql.Tx, req Request, id, now string) (map[string]any, []string, error) {
+	q := sqlitedb.New(tx)
+	deleted := sql.NullString{String: now, Valid: true}
+	type named struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	groups, lists := []named{}, []named{}
+	var members []string
+	all, err := q.ListGroups(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, g := range all {
+		if g.OwnerID != id {
+			continue
+		}
+		if g.Kind == KindModerator {
+			m, err := q.ListGroupMembers(ctx, g.ID)
+			if err != nil {
+				return nil, nil, err
+			}
+			members = append(members, m...)
+		}
+		if err := q.SoftDeleteGroup(ctx, sqlitedb.SoftDeleteGroupParams{DeletedAt: deleted, UpdatedAt: now, ID: g.ID}); err != nil {
+			return nil, nil, err
+		}
+		if err := endGroupGrants(ctx, tx, req, g.ID, "user.delete"); err != nil {
+			return nil, nil, err
+		}
+		groups = append(groups, named{g.ID, g.Name})
+	}
+	cls, err := q.ListCommandLists(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, l := range cls {
+		if l.OwnerID != id {
+			continue
+		}
+		if err := q.SoftDeleteCommandList(ctx, sqlitedb.SoftDeleteCommandListParams{DeletedAt: deleted, UpdatedAt: now, ID: l.ID}); err != nil {
+			return nil, nil, err
+		}
+		lists = append(lists, named{l.ID, l.Name})
+	}
+	return map[string]any{"groups": groups, "command_lists": lists}, members, nil
 }

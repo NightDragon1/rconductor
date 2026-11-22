@@ -298,6 +298,7 @@ const (
 	MultiCommandItemResultError    MultiCommandItemResult = "error"
 	MultiCommandItemResultNotFound MultiCommandItemResult = "not_found"
 	MultiCommandItemResultOk       MultiCommandItemResult = "ok"
+	MultiCommandItemResultSkipped  MultiCommandItemResult = "skipped"
 	MultiCommandItemResultTimeout  MultiCommandItemResult = "timeout"
 )
 
@@ -311,6 +312,8 @@ func (e MultiCommandItemResult) Valid() bool {
 	case MultiCommandItemResultNotFound:
 		return true
 	case MultiCommandItemResultOk:
+		return true
+	case MultiCommandItemResultSkipped:
 		return true
 	case MultiCommandItemResultTimeout:
 		return true
@@ -372,15 +375,18 @@ const (
 	ReasonCodeBusy                   ReasonCode = "busy"
 	ReasonCodeCommandFailed          ReasonCode = "command_failed"
 	ReasonCodeConflict               ReasonCode = "conflict"
+	ReasonCodeContainerBound         ReasonCode = "container_bound"
 	ReasonCodeForbidden              ReasonCode = "forbidden"
 	ReasonCodeInvalid                ReasonCode = "invalid"
 	ReasonCodeMessageTooLong         ReasonCode = "message_too_long"
 	ReasonCodeNotFound               ReasonCode = "not_found"
 	ReasonCodeNotInList              ReasonCode = "not_in_list"
+	ReasonCodeOwnTotpRequired        ReasonCode = "own_totp_required"
 	ReasonCodePasswordChangeRequired ReasonCode = "password_change_required"
 	ReasonCodePreconditionRequired   ReasonCode = "precondition_required"
 	ReasonCodeRateLimited            ReasonCode = "rate_limited"
 	ReasonCodeServerUnavailable      ReasonCode = "server_unavailable"
+	ReasonCodeTimeBudget             ReasonCode = "time_budget"
 	ReasonCodeTimeout                ReasonCode = "timeout"
 	ReasonCodeTooManyRecipients      ReasonCode = "too_many_recipients"
 	ReasonCodeTotpSetupRequired      ReasonCode = "totp_setup_required"
@@ -403,6 +409,8 @@ func (e ReasonCode) Valid() bool {
 		return true
 	case ReasonCodeConflict:
 		return true
+	case ReasonCodeContainerBound:
+		return true
 	case ReasonCodeForbidden:
 		return true
 	case ReasonCodeInvalid:
@@ -413,6 +421,8 @@ func (e ReasonCode) Valid() bool {
 		return true
 	case ReasonCodeNotInList:
 		return true
+	case ReasonCodeOwnTotpRequired:
+		return true
 	case ReasonCodePasswordChangeRequired:
 		return true
 	case ReasonCodePreconditionRequired:
@@ -420,6 +430,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeRateLimited:
 		return true
 	case ReasonCodeServerUnavailable:
+		return true
+	case ReasonCodeTimeBudget:
 		return true
 	case ReasonCodeTimeout:
 		return true
@@ -747,10 +759,10 @@ type Agent struct {
 	Connected    bool      `json:"connected"`
 	CreatedAt    time.Time `json:"created_at"`
 
-	// DisplayName Display name of the host, set by the RCON admin (D-089); only while the feature flag host_groups is on.
+	// DisplayName Display name of the host, set by the RCON admin (D-089).
 	DisplayName *string `json:"display_name,omitempty"`
 
-	// DockerHost Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Only while the feature flag docker_host is on; each field is missing when the agent does not give it.
+	// DockerHost Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Each field is missing when the agent does not give it.
 	DockerHost *DockerHost `json:"docker_host,omitempty"`
 
 	// Fingerprint SHA256:<base64> of the agent key.
@@ -762,7 +774,7 @@ type Agent struct {
 	Name     string              `json:"name"`
 	PairedBy *openapi_types.UUID `json:"paired_by,omitempty"`
 
-	// Remote Source address of the agent's last connection to the agent port. While the flag docker_host is on, it is set only when it lies outside the panel's own networks and is shown as "Connected from" (D-084); it is never part of docker_host.
+	// Remote Source address of the agent's last connection to the agent port. It is set only when it lies outside the panel's own networks and is shown as "Connected from" (D-084); it is never part of docker_host.
 	Remote    *string     `json:"remote,omitempty"`
 	RevokedAt *time.Time  `json:"revoked_at,omitempty"`
 	Status    AgentStatus `json:"status"`
@@ -1015,7 +1027,7 @@ type ContainerRuntime struct {
 // ContainerRuntimeHealth Result of the container's Docker healthcheck while it runs (UI-021, UI-011); missing without a healthcheck or from an agent that does not report it, then the state alone counts.
 type ContainerRuntimeHealth string
 
-// DockerHost Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Only while the feature flag docker_host is on; each field is missing when the agent does not give it.
+// DockerHost Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Each field is missing when the agent does not give it.
 type DockerHost struct {
 	// Ip IPv4 or IPv6 address without zone; never loopback, link-local, unspecified or multicast.
 	Ip *string `json:"ip,omitempty"`
@@ -1039,14 +1051,14 @@ type EffectiveProfile struct {
 	CaseSensitive bool               `json:"case_sensitive"`
 	Catalog       []EffectiveCommand `json:"catalog"`
 
-	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list; without the field the codes are removed before display (SEC-006).
 	Formatting *Formatting `json:"formatting,omitempty"`
 
-	// GamePorts Effective game ports; only for the RCON admin and the server admin of this server (D-056), missing for other roles.
+	// GamePorts Game ports of the topmost profile that sets them (D-074), not the ports stored for the server (those are on the server); only for the RCON admin and the server admin of this server (D-056), missing for other roles.
 	GamePorts *[]GamePort `json:"game_ports,omitempty"`
 	MaxLength int         `json:"max_length"`
 
-	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped; while the flag say_sender is off it is sent unchanged.
+	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped.
 	MessageCommand *MessageCommand `json:"message_command,omitempty"`
 
 	// ProfileIds Profiles of the server, top first (SRV-008).
@@ -1071,7 +1083,7 @@ type Favorites struct {
 	ServerIds []openapi_types.UUID `json:"server_ids"`
 }
 
-// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list; without the field the codes are removed before display (SEC-006).
 type Formatting string
 
 // GamePort defines model for GamePort.
@@ -1092,7 +1104,7 @@ type GameProfile struct {
 	// DefaultPort RCON port of the profile; only for the RCON admin (D-056).
 	DefaultPort *int `json:"default_port,omitempty"`
 
-	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list; without the field the codes are removed before display (SEC-006).
 	Formatting *Formatting `json:"formatting,omitempty"`
 
 	// GamePorts Game ports of the profile; only for the RCON admin and server admins (D-056), missing for other roles.
@@ -1108,7 +1120,7 @@ type GameProfile struct {
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
 	MaxLength   int        `json:"max_length"`
 
-	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped; while the flag say_sender is off it is sent unchanged.
+	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped.
 	MessageCommand *MessageCommand `json:"message_command,omitempty"`
 	Name           string          `json:"name"`
 
@@ -1156,7 +1168,7 @@ type HistoryPage struct {
 	NextCursor *string        `json:"next_cursor,omitempty"`
 }
 
-// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name, the address or the agent ID.
+// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Never the host name, the address or the agent ID.
 type HostGroup struct {
 	// DisplayName Missing when none is set; the interface shows a neutral placeholder.
 	DisplayName *string `json:"display_name,omitempty"`
@@ -1295,7 +1307,7 @@ type MessageAuthor struct {
 	Pseudonym string              `json:"pseudonym"`
 }
 
-// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped; while the flag say_sender is off it is sent unchanged.
+// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped.
 type MessageCommand struct {
 	// Path Command path that is rewritten, e.g. say.
 	Path   string               `json:"path"`
@@ -1324,6 +1336,9 @@ type MessageCommentInput struct {
 // MessageCommentList defines model for MessageCommentList.
 type MessageCommentList struct {
 	Items []MessageComment `json:"items"`
+
+	// NextCursor Missing on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
 // MessageInput defines model for MessageInput.
@@ -1341,6 +1356,9 @@ type MessageInput struct {
 // MessageList defines model for MessageList.
 type MessageList struct {
 	Items []Message `json:"items"`
+
+	// NextCursor Missing on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
 
 	// Unread Unread messages to me, over all pages.
 	Unread int `json:"unread"`
@@ -1610,7 +1628,7 @@ type Server struct {
 	// Credentials Admins only. reenter: the credentials were encrypted with another master key and must be entered again (SRV-002).
 	Credentials *ServerCredentials `json:"credentials,omitempty"`
 
-	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list; without the field the codes are removed before display (SEC-006).
 	Formatting *Formatting `json:"formatting,omitempty"`
 
 	// GamePorts Admins only; the override of the server or the profile's ports (SRV-005).
@@ -1621,12 +1639,12 @@ type Server struct {
 	// Host RCON admin only; the server admin sees of the ports only the game ports (D-056).
 	Host *string `json:"host,omitempty"`
 
-	// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name, the address or the agent ID.
+	// HostGroup Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Never the host name, the address or the agent ID.
 	HostGroup *HostGroup         `json:"host_group,omitempty"`
 	Id        openapi_types.UUID `json:"id"`
 	Name      string             `json:"name"`
 
-	// Number Consecutive number of the server, given at creation and never given again, also after a delete (UI-018). Every role in scope gets it; the interface shows it with the flag server_number.
+	// Number Consecutive number of the server, given at creation and never given again, also after a delete (UI-018). Every role in scope gets it; the interface shows it.
 	Number int64 `json:"number"`
 
 	// Port RCON port; RCON admin only (D-056).
@@ -1765,9 +1783,6 @@ type Session struct {
 
 	// Ui Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings.
 	Ui struct {
-		// Features Names of the feature flags that are on (NFR-019); missing means none. The RCON admin switches them with features.<name> in /settings.
-		Features *[]string `json:"features,omitempty"`
-
 		// ShortcutsEnabled Keyboard shortcuts, off by default (UI-008).
 		ShortcutsEnabled bool `json:"shortcuts_enabled"`
 
@@ -2044,14 +2059,26 @@ type GetDiagnosticsParams struct {
 
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
-	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Before Replaced by cursor.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
+
+	// Cursor next_cursor of the page before; the next page follows also when messages of the page before are gone.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // ListMessageCommentsParams defines parameters for ListMessageComments.
 type ListMessageCommentsParams struct {
-	Limit *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// After Replaced by cursor.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	After *openapi_types.UUID `form:"after,omitempty" json:"after,omitempty"`
+
+	// Cursor next_cursor of the page before; the next page follows also when comments of the page before are gone.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // UpdateServerGroupParams defines parameters for UpdateServerGroup.
@@ -3334,6 +3361,19 @@ func (siw *ServerInterfaceWrapper) ListMessages(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListMessages(w, r, params)
 	}))
@@ -3451,6 +3491,19 @@ func (siw *ServerInterfaceWrapper) ListMessageComments(w http.ResponseWriter, r 
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
 		}
 		return
 	}
@@ -9343,6 +9396,22 @@ func (response CreateServer403ApplicationProblemPlusJSONResponse) VisitCreateSer
 	return err
 }
 
+type CreateServer409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServer409ApplicationProblemPlusJSONResponse) VisitCreateServerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateServer422ApplicationProblemPlusJSONResponse struct {
 	InvalidApplicationProblemPlusJSONResponse
 }
@@ -11650,15 +11719,25 @@ func (response ListSystemLog502ApplicationProblemPlusJSONResponse) VisitListSyst
 	return err
 }
 
-type ListSystemLog503ApplicationProblemPlusJSONResponse Problem
+type ListSystemLog503ResponseHeaders struct {
+	RetryAfter *int
+}
+
+type ListSystemLog503ApplicationProblemPlusJSONResponse struct {
+	Body    Problem
+	Headers ListSystemLog503ResponseHeaders
+}
 
 func (response ListSystemLog503ApplicationProblemPlusJSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
 	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err

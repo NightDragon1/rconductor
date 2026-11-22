@@ -12,20 +12,14 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/api"
-	"github.com/NightDragon1/rconductor/internal/features"
 )
 
-// TestSystemLogBehindFlag: the system log (UI-025, D-091) is 404 while
-// diagnostics_export is off. With the flag on, the skeleton refuses every
+// TestSystemLog: for the system log (UI-025, D-091) the skeleton refuses every
 // role but the RCON admin (403, audited), then checks source and period
 // (400); the panel's entries come from the level up and after an ID, an
 // agent that is not connected gives 503.
-func TestSystemLogBehindFlag(t *testing.T) {
-	flags, err := features.New(features.Flag{Name: "diagnostics_export", Operations: []string{"GetDiagnostics", "ListSystemLog"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+func TestSystemLog(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
 	admin, mod := f.login(t, "Boss"), f.login(t, "Mod")
 	const agent = "/api/v1/system-log?source=00000000-0000-4000-8000-000000000001"
 	panel := call{method: http.MethodGet, path: "/api/v1/system-log"}
@@ -37,12 +31,9 @@ func TestSystemLogBehindFlag(t *testing.T) {
 			}
 		}
 	}
-	check(http.StatusNotFound, admin, panel.path, agent)
-	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: "http://panel.lan",
-		body: `{"features.diagnostics_export":true}`}).Code; got != http.StatusOK {
-		t.Fatalf("switch on = %d", got)
-	}
-	check(http.StatusForbidden, mod, panel.path, agent, "/api/v1/system-log?source=nope")
+	// D-051: the role first, also with parameters that are out of range.
+	check(http.StatusForbidden, mod, panel.path, agent, "/api/v1/system-log?source=nope",
+		"/api/v1/system-log?limit=501", "/api/v1/system-log?level=debug", "/api/v1/system-log?after=0")
 	check(http.StatusBadRequest, admin, "/api/v1/system-log?source=nope", "/api/v1/system-log?source=",
 		"/api/v1/system-log?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z",
 		"/api/v1/system-log?from=2026-11-19T00:00:00Z&to=2026-11-18T00:00:00Z",
@@ -80,7 +71,7 @@ func TestSystemLogBehindFlag(t *testing.T) {
 		t.Errorf("audited reads = %d (%v), want 2", viewed, err)
 	}
 	var refused int
-	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'system_log.viewed' AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
-		t.Errorf("audited refusals = %d (%v), want 3", refused, err)
+	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'system_log.viewed' AND result = 'denied'`).Scan(&refused); err != nil || refused != 6 {
+		t.Errorf("audited refusals = %d (%v), want 6", refused, err)
 	}
 }

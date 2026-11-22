@@ -25,7 +25,7 @@ describe('second factor (AUTH-008)', () => {
         reply(202, { second_factor: 'totp', expires_at: new Date().toISOString() }),
       );
     await renderPage(LoginPage);
-    fireEvent.change(screen.getByLabelText('Pseudonym'), { target: { value: 'kiwi' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'kiwi' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret secret' } });
     fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
     await screen.findByRole('heading', { name: 'Enter the code' });
@@ -47,14 +47,14 @@ describe('second factor (AUTH-008)', () => {
       }),
     );
     fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }));
-    await screen.findByLabelText('Pseudonym');
+    await screen.findByLabelText('Username');
   });
 
   it('answers a recovery request alike and redeems a link with the password', async () => {
     setLanguage('en');
     const post = vi.spyOn(api, 'POST').mockResolvedValue(reply(202));
     await renderPage(RecoverPage);
-    fireEvent.change(screen.getByLabelText('Pseudonym'), { target: { value: 'nobody' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'nobody' } });
     fireEvent.submit(screen.getByRole('button', { name: 'Send link' }));
     await screen.findByText(
       'If an account fits, a link is on its way. It is valid for a short time.',

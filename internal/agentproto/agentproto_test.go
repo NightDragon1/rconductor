@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/NightDragon1/rconductor/internal/buildinfo"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -209,5 +211,15 @@ func TestPairingToken(t *testing.T) {
 	}
 	if len(SecretHash(pt.Secret)) != 32 {
 		t.Error("hash is not SHA-256")
+	}
+}
+
+// TestC210HelloVersionLengthBeforeCut: a version over the bound is unknown
+// also when a space sits at the cut (D-080, SEC-006).
+func TestC210HelloVersionLengthBeforeCut(t *testing.T) {
+	h := Hello{Version: strings.Repeat("1", MaxHelloVersion) + " x"}
+	_ = h.Clean() // the version alone is under test
+	if h.Version != buildinfo.Unknown {
+		t.Errorf("version = %q, want unknown", h.Version)
 	}
 }

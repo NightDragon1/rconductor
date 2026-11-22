@@ -45,10 +45,10 @@ describe('formatLines (CMD-017)', () => {
     ]);
   });
 
-  it('keeps unknown and cut codes as text, like with the flag off', () => {
+  it('keeps unknown and cut codes as text, as text', () => {
     expect(formatLines('hello §zworld')).toEqual([[{ text: 'hello §zworld', className: '' }]]);
     expect(formatLines('end §')).toEqual([[{ text: 'end §', className: '' }]]);
-    // The Kelvin sign lowercases to k but is no code, like with the flag off.
+    // The Kelvin sign lowercases to k but is no code.
     expect(formatLines('§\u212Ax')).toEqual([[{ text: '§\u212Ax', className: '' }]]);
     expect(formatLines('§§aa')).toEqual([
       [

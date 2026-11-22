@@ -37,7 +37,7 @@ the content of a command list work from the next request, without a new sign-in.
 ## Who sees what
 
 Real name, picture and contact details are visible to the user, the RCON admin
-and whoever manages that user. Everyone else sees only the pseudonym.
+and whoever manages that user. Everyone else sees only the username.
 
 Moderators and supporters never see agent data such as load or containers.
 

@@ -20,12 +20,18 @@ export function pattern(c: Command): string {
   return [c.path, ...c.params.map((p) => `{${p.name}}`)].join(' ');
 }
 
+// linearPattern: a pattern without group or alternation and with at most
+// one quantifier, which JavaScript matches without runaway backtracking on
+// names from the game server (foreign data, SEC-006).
+const linearPattern = (p: string) => !/[(|]/.test(p) && (p.match(/[*+?{]/g) ?? []).length <= 1;
+
 // playerRule builds the check of a player name from the profile's
 // player_pattern (RE2, which plain patterns share with JavaScript); without
-// one, or if the browser cannot read it, selectors such as @a, quoted
-// forms and control characters are kept out, as in the backend.
+// one, if the browser cannot read it, or if JavaScript could backtrack on
+// it, selectors such as @a, quoted forms and control characters are kept
+// out, as in the backend, which checks the pattern itself.
 export function playerRule(pattern?: string): (name: string) => boolean {
-  if (pattern) {
+  if (pattern && linearPattern(pattern)) {
     try {
       const re = new RegExp(`^(?:${pattern})$`);
       return (name) => re.test(name);
@@ -33,7 +39,6 @@ export function playerRule(pattern?: string): (name: string) => boolean {
       // Fall back below; the backend checks anyway.
     }
   }
-  // eslint-disable-next-line no-control-regex
   return (name) => name !== '' && !/^@|["'`\s\u0000-\u001f\u007f]/.test(name);
 }
 

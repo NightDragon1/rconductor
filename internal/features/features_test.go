@@ -18,30 +18,19 @@ func TestNewRefusesBadFlags(t *testing.T) {
 	}
 }
 
-func TestDefaultKnowsServerSaveAsNew(t *testing.T) {
+// TestDefaultHasNoFlags: the flags of 1.2 left with 1.3; their keys are
+// unknown settings again and guard no operation.
+func TestDefaultHasNoFlags(t *testing.T) {
 	s := Default()
-	if !s.Known(Key("server_save_as_new")) {
-		t.Fatal("flag server_save_as_new missing")
+	for _, name := range []string{"messages", "server_save_as_new", "diagnostics_export"} {
+		if s.Known(Key(name)) || s.Enabled(t.Context(), nil, name) {
+			t.Errorf("flag %s still in the build", name)
+		}
 	}
-	if _, ok := s.ForOperation("CreateServer"); ok {
-		t.Fatal("server_save_as_new must not guard an operation")
-	}
-}
-
-func TestDefaultHoldsTheBuildFlags(t *testing.T) {
-	s := Default()
-	// Frontend-only flags guard no operation (UI-019).
-	if !s.Known(Key("log_filter_split")) {
-		t.Fatal("log_filter_split missing")
-	}
-	for _, op := range []string{"ListServers", "GetServer"} {
+	for _, op := range []string{"ListMessages", "GetServerProfile", "GetDiagnostics"} {
 		if name, ok := s.ForOperation(op); ok {
 			t.Errorf("%s guarded by %s", op, name)
 		}
-	}
-	// The flags of 1.2 are on by default, also without a store.
-	if !s.Enabled(t.Context(), nil, "log_filter_split") {
-		t.Error("flag off without a store")
 	}
 }
 
@@ -63,15 +52,6 @@ func TestDefaultsAndStoredValues(t *testing.T) {
 	for name, want := range map[string]bool{"on_flag": true, "off_flag": false, "kept_off": false, "unknown": false} {
 		if got := s.Enabled(ctx, st, name); got != want {
 			t.Errorf("%s = %v, want %v", name, got, want)
-		}
-	}
-	if got := s.EnabledNames(ctx, st); len(got) != 1 || got[0] != "on_flag" {
-		t.Errorf("enabled names = %v, want [on_flag]", got)
-	}
-	// Every flag of this build is on by default.
-	for _, f := range production {
-		if !f.On {
-			t.Errorf("flag %s is off by default", f.Name)
 		}
 	}
 }

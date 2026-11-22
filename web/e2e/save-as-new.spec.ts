@@ -3,7 +3,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Save as New (UI-017) behind the flag server_save_as_new: after create the
+// Save as New (UI-017): after create the
 // server dialog stays open; Save changes the server just created, Save as
 // New creates another one with the same data and the password typed again;
 // once all is saved it closes without a question.
@@ -56,8 +56,6 @@ async function cleanup(playwright: Playwright, state: StackState, prefix: string
 }
 
 test.describe('Save as New on', () => {
-  test.use({ flags: ['server_save_as_new'] });
-
   test('dialog stays open; Save changes it, Save as New adds one', async ({
     page,
     playwright,
@@ -130,21 +128,6 @@ test.describe('Save as New on', () => {
       await page.getByRole('button', { name: 'survival', exact: true }).click();
       const own = page.getByRole('complementary', { name: 'Details of survival' });
       await expect(own.getByRole('button', { name: 'Save as New' })).toHaveCount(0);
-    } finally {
-      await cleanup(playwright, state, 'e2e-san-');
-    }
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['server_save_as_new'] });
-
-  test('Save as New off: the dialog closes after create', async ({ page, playwright, state }) => {
-    try {
-      await as(page, state, 'admin');
-      await createOne(page, 'e2e-san-off');
-      await expect(page.getByRole('row').filter({ hasText: 'e2e-san-off' })).toBeVisible();
-      await expect(page.getByRole('complementary', { name: /^Details of / })).toHaveCount(0);
     } finally {
       await cleanup(playwright, state, 'e2e-san-');
     }

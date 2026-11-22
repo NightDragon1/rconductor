@@ -37,10 +37,10 @@
   },
   "login": {
     "title": "Sign in",
-    "pseudonym": "Pseudonym",
+    "pseudonym": "Username",
     "password": "Password",
     "submit": "Sign in",
-    "failed": "Pseudonym or password is wrong.",
+    "failed": "Username or password is wrong.",
     "locked": "Too many attempts. Please wait and try again.",
     "busy": "The panel is busy. Please try again in a moment.",
     "codeTitle": "Enter the code",
@@ -367,7 +367,8 @@
       "denied": "denied",
       "error": "error",
       "timeout": "timeout",
-      "not_found": "not found"
+      "not_found": "not found",
+      "skipped": "not sent, time budget used up"
     }
   },
   "templates": {
@@ -492,7 +493,6 @@
     "wrap": "Wrap lines",
     "clear": "Clear view",
     "copy": "Copy the shown lines",
-    "filterLabel": "Filter the logs",
     "earlier": "Load earlier lines",
     "lines": "Log lines",
     "empty": "No log lines yet.",
@@ -519,12 +519,12 @@
   },
   "invite": {
     "title": "Accept the invitation",
-    "explain": "Choose your pseudonym and password. Others see you by your pseudonym.",
+    "explain": "Choose your username and password. Others see you by your username.",
     "submit": "Create my account",
-    "done": "Your account is ready. Sign in with your pseudonym and password.",
+    "done": "Your account is ready. Sign in with your username and password.",
     "noToken": "This link holds no invitation. Open the link you got once more.",
     "expired": "This invitation is not valid or has expired. Ask for a new link.",
-    "rejected": "The pseudonym is taken or not allowed. Choose another one."
+    "rejected": "The username is taken or not allowed. Choose another one."
   },
   "undo": {
     "undo": "Undo",
@@ -549,7 +549,7 @@
     "unlockText": "This user can sign in again.",
     "sessionsTitle": "End the sessions of {{name}}?",
     "sessionsText": "This user is signed out everywhere and has to sign in again.",
-    "search": "Pseudonym, moderator group, server …",
+    "search": "Username, moderator group, server …",
     "searchLabel": "Search users",
     "filterRole": "Filter by role",
     "filterStatus": "Filter by status",
@@ -599,7 +599,9 @@
       "rate_limited": "Too many changes, try again shortly",
       "busy": "The panel is busy, try again",
       "other": "Failed",
-      "conflict": "Changed by someone else – reload"
+      "conflict": "Changed by someone else – reload",
+      "container_bound": "This container already belongs to another server.",
+      "own_totp_required": "Set up two-factor sign-in for yourself first, under Your profile, then require it for everyone."
     },
     "lock": "Lock",
     "unlock": "Unlock",
@@ -608,6 +610,9 @@
     "removeTitle_one": "Remove {{count}} user?",
     "removeTitle_other": "Remove {{count}} users?",
     "removeText": "The users lose their access and assignments at once. This cannot be undone.",
+    "removeOwned": "Their user groups and command lists are deleted with them; groups lose their grants.",
+    "removeGroups": "User groups:",
+    "removeLists": "Command lists:",
     "close": "Close",
     "closePanel": "Close the details",
     "panel": "Details of {{name}}",
@@ -650,7 +655,7 @@
     "invite": {
       "title": "Create invitation link",
       "fromTemplate": "Create from template",
-      "explain": "The invited person chooses pseudonym and password. A template passes on rights and assignments.",
+      "explain": "The invited person chooses username and password. A template passes on rights and assignments.",
       "template": "Template",
       "noTemplate": "No template",
       "create": "Create link",
@@ -798,6 +803,7 @@
     "noAgent": "No agent",
     "agentSet": "set",
     "container": "Container",
+    "containerOnce": "A container belongs to one server only. A container another server uses is refused.",
     "containerOption": "{{name}} · {{state}}",
     "agentAway": "The agent is disconnected; the containers are the last known ones.",
     "ownPorts": "Own game ports instead of the profile's",
@@ -917,7 +923,6 @@
       "mail": "Mail",
       "other": "Other",
       "twofactor": "Two-factor sign-in",
-      "features": "Features",
       "messages": "Messages",
       "diagnostics": "Diagnostics"
     },
@@ -928,7 +933,6 @@
       "servers": "Servers and commands",
       "agents": "Agents",
       "system": "System",
-      "features": "Features",
       "other": "Other"
     },
     "groupsLabel": "Settings groups",
@@ -1129,54 +1133,6 @@
       "auth_recovery_queue": {
         "label": "Recovery queue",
         "help": "Recovery requests waiting in the background; further ones are dropped with the same answer."
-      },
-      "features_server_save_as_new": {
-        "label": "Save as New",
-        "help": "Keeps the server dialog open after creating a server and offers Save and Save as New."
-      },
-      "features_log_filter_split": {
-        "label": "Two-part log filter",
-        "help": "Filters container logs by the bracket part and the text, joined with and, or, xor."
-      },
-      "features_command_palette": {
-        "label": "Command palette",
-        "help": "Shows the command palette in the console (button, Ctrl+K with shortcuts on)."
-      },
-      "features_profile_browser": {
-        "label": "Profile browser",
-        "help": "Shows the game profiles with their command catalog and the effective profile of each server, read only."
-      },
-      "features_color_codes": {
-        "label": "Color codes",
-        "help": "Shows the formatting codes of game server answers (for example Minecraft § codes) as a fixed set of styles instead of removing them."
-      },
-      "features_say_sender": {
-        "label": "Messages with sender",
-        "help": "Messages to the players (for example Minecraft say) show the name of the signed-in user and a prefix per server group instead of [Rcon]."
-      },
-      "features_log_masking_ui": {
-        "label": "Log masking settings",
-        "help": "Settings for the masking of container logs: switch it off or add fixed texts that are masked. Masking itself is on without this flag."
-      },
-      "features_host_groups": {
-        "label": "Overview by host",
-        "help": "Server cards grouped by host in the overview, with a display name the RCON admin gives each agent."
-      },
-      "features_diagnostics_export": {
-        "label": "Diagnostic export",
-        "help": "The RCON admin downloads a package for bug reports, with secrets and host names blacked out."
-      },
-      "features_messages": {
-        "label": "Messages",
-        "help": "Messages from the RCON admin and server admins to users in the panel, with comments of the recipients."
-      },
-      "features_server_number": {
-        "label": "Server numbers",
-        "help": "Shows the consecutive number of each server: as the first column ID in Manage servers and server groups and as a badge before the name on cards and the server page."
-      },
-      "features_docker_host": {
-        "label": "Docker host",
-        "help": "Shows the Docker host of each agent: its name, and its address from the agent setting RCD_HOST_IP or Swarm mode; without an address, the address the agent connected from if it lies outside the panel's networks. Only the RCON admin sees them."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."
@@ -1203,7 +1159,7 @@
     "none": "No entries."
   },
   "profile": {
-    "explain": "Your details, picture, password and second factor; others see you by your pseudonym, your real name, picture and contacts only those who manage you.",
+    "explain": "Your details, picture, password and second factor; others see you by your username, your real name, picture and contacts only those who manage you.",
     "about": "About you",
     "contacts": "Contacts",
     "contactKind": "Kind of contact",
@@ -1297,7 +1253,7 @@
   },
   "recover": {
     "title": "Reset two-factor sign-in",
-    "explain": "Enter your pseudonym. If two-factor sign-in is on and an address is on file, a link goes to that address.",
+    "explain": "Enter your username. If two-factor sign-in is on and an address is on file, a link goes to that address.",
     "send": "Send link",
     "sent": "If an account fits, a link is on its way. It is valid for a short time.",
     "redeemExplain": "Enter your password to reset two-factor sign-in. You sign in afterwards with your password.",

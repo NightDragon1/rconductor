@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +28,8 @@ var (
 	ErrAgentUnavailable = errors.New("the agent is not connected")
 	ErrAgentUnsupported = errors.New("the agent does not send its own log")
 	ErrAgentFailed      = errors.New("the agent could not read its log")
+	// ErrAgentBusy: the agent refused for its rate limit; later again (503).
+	ErrAgentBusy = errors.New("the agent takes no more orders for now")
 )
 
 const agentTimeout = 15 * time.Second
@@ -76,6 +80,15 @@ var ranks = map[string]int{"info": 0, "warn": 1, "error": 2}
 func (s *Service) SystemLog(ctx context.Context, req users.Request, q LogQuery) (Page, error) {
 	if req.Actor.Role != perm.RCONAdmin {
 		return Page{}, s.denied(ctx, req, "system_log.viewed")
+	}
+	_, known := ranks[q.Level]
+	switch {
+	case q.Limit < 1 || q.Limit > maxLogLimit:
+		return Page{}, &users.InvalidError{Detail: "limit is 1 to 500"}
+	case !known:
+		return Page{}, &users.InvalidError{Detail: "level is info, warn or error"}
+	case q.After < 0:
+		return Page{}, &users.InvalidError{Detail: "after is at least 1"}
 	}
 	if q.Source != "panel" {
 		if _, err := uuid.Parse(q.Source); err != nil {
@@ -144,16 +157,33 @@ func (s *Service) agentLog(ctx context.Context, q LogQuery) (Page, error) {
 		return Page{}, err
 	}
 	p := Page{Source: q.Source, Truncated: cut, Items: []Entry{}}
+	held := 0
 	for _, l := range lines {
-		// The agent logs JSON: each value is masked as it was logged.
-		l = syslog.MaskLine(l, s.mask)
+		// The level from the line as it came: masking may change its keys.
 		var head struct {
 			Level string `json:"level"`
 		}
-		if json.Unmarshal([]byte(l), &head) == nil && ranks[head.Level] < ranks[q.Level] {
+		known := json.Unmarshal([]byte(l), &head) == nil
+		// The level is foreign data: only a known one is kept, in the
+		// spelling of the list (slog writes INFO, WARN, ERROR); any other
+		// is none (SEC-006).
+		level := strings.ToLower(head.Level)
+		if _, ok := ranks[level]; !ok {
+			level = ""
+		}
+		// The agent logs JSON: each value is masked as it was logged.
+		var n int
+		l, n = syslog.MaskLineCounted(l, s.mask)
+		if known && level != "" && ranks[level] < ranks[q.Level] {
 			continue
 		}
-		p.Items = append(p.Items, Entry{Level: head.Level, Text: l})
+		held += n // only for the lines shown
+		p.Items = append(p.Items, Entry{Level: level, Text: l})
+	}
+	if held > 0 {
+		// Values held back for the time budget: the page is not whole.
+		p.Truncated = true
+		s.log.Warn("agent log values withheld: masking took too long", slog.String("source", q.Source), slog.Int("values", held))
 	}
 	return p, nil
 }
@@ -182,6 +212,8 @@ func (s *Service) tail(ctx context.Context, agentID string, n int) ([]string, bo
 		return nil, false, ErrAgentUnavailable
 	case err != nil:
 		return nil, false, err
+	case res.Code == agentproto.CodeRateLimited:
+		return nil, false, ErrAgentBusy
 	case res.Code == agentproto.CodeForbidden:
 		return nil, false, ErrAgentUnsupported // an agent before 1.2 or outside a container
 	case res.Code != agentproto.CodeOK:
@@ -190,3 +222,6 @@ func (s *Service) tail(ctx context.Context, agentID string, n int) ([]string, bo
 	lines, cut := agentproto.LimitLines(got.Lines)
 	return lines, got.Truncated || cut, nil
 }
+
+// maxLogLimit bounds a page of the system log as the contract does.
+const maxLogLimit = 500

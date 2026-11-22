@@ -80,7 +80,7 @@ func (s *Store) migrateLocked(ctx context.Context, log *slog.Logger, opts Migrat
 	start := time.Now()
 	log.Info("applying migrations", logging.Event(logging.DBMigrateStart),
 		slog.Int64("from", from), slog.Int64("to", to))
-	results, err := p.Up(ctx)
+	results, err := p.Up(migrations.WithLogger(ctx, log))
 	res.Applied = len(results)
 	if len(results) > 0 {
 		res.To = results[len(results)-1].Source.Version

@@ -100,12 +100,12 @@ func SessionRef(sessionID string) string {
 // is set, the system log, which masks it (D-091).
 func replaceAttr(min slog.Level, answer bool) func([]string, slog.Attr) slog.Attr {
 	return func(groups []string, a slog.Attr) slog.Attr {
+		// An answer goes at every level, also within a group (SEC-012).
+		if a.Key == KeyAnswer && !answer {
+			return slog.Attr{}
+		}
 		if len(groups) == 0 {
 			switch a.Key {
-			case KeyAnswer:
-				if !answer {
-					return slog.Attr{}
-				}
 			case slog.TimeKey:
 				if a.Value.Kind() == slog.KindTime {
 					return slog.String(KeyTS, a.Value.Time().UTC().Format(tsLayout))

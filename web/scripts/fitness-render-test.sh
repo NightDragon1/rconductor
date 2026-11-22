@@ -33,11 +33,33 @@ out=$(node scripts/fitness-render.ts "$t" "$t/openapi.yaml" 2>&1)
 rc=$?
 [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'outside src/: .*lib/away.d.ts' ||
   { echo "render script: exit $rc on types outside src/, want 3" >&2; exit 1; }
+# Calls, element access, template literals, names bound to a field, the
+# elements of a foreign list, attributes and mapped values count (exit 1,
+# nine lines and an alias of plainText); the three lines marked ok in the project are not reported.
+w=scripts/testdata/render-wide
+out=$(node scripts/fitness-render.ts "$w" "$w/openapi.yaml" 2>&1)
+rc=$?
+n=$(printf '%s\n' "$out" | grep -c 'shown without ForeignText')
+[ "$rc" -eq 1 ] && [ "$n" -eq 10 ] && ! printf '%s' "$out" | grep -qE 'App.tsx:(38|40|42) ' ||
+  { echo "render script: exit $rc with $n findings on the wide project, want 1 with 10" >&2; exit 1; }
+# A .jsx file outside src/ enters the program and fails it (exit 3).
+x=scripts/testdata/render-outside-jsx
+out=$(node scripts/fitness-render.ts "$x" "$x/openapi.yaml" 2>&1)
+rc=$?
+[ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'outside src/: .*lib/Away.jsx' ||
+  { echo "render script: exit $rc on a .jsx file outside src/, want 3" >&2; exit 1; }
+# A mark the reader does not see fails the check (exit 2).
+i=scripts/testdata/render-indent
+out=$(node scripts/fitness-render.ts "$i" "$i/openapi.yaml" 2>&1)
+rc=$?
+[ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'x-foreign marks' ||
+  { echo "render script: exit $rc on a mark at another indent, want 2" >&2; exit 1; }
 # ESLint runs with the fixed core config (-c, no lookup) and must report
-# the rule (exit 1; exit 2 is a broken config): in the test project, and
-# below a nested eslint.config.js that turns the rule off.
+# the rule (exit 1; exit 2 is a broken config): in the test project, below
+# a nested eslint.config.js that turns the rule off, and behind an
+# eslint-disable comment.
 eslint() { node node_modules/eslint/bin/eslint.js -c eslint.config.js --no-ignore "$1" 2>&1; }
-for p in "$d/src" scripts/testdata/render-eslint/src; do
+for p in "$d/src" scripts/testdata/render-eslint/src scripts/testdata/render-inline/src; do
   out=$(eslint "$p")
   rc=$?
   [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'Use ForeignText' &&

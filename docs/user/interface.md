@@ -48,7 +48,8 @@ holds once and for a short time; with your password it resets two-factor sign-in
 and ends all your sessions. Without an address, whoever manages your account
 resets it in the user administration. The RCON admin can require two-factor
 sign-in for everyone (setting `auth.totp_required`); who has none yet must set it
-up before anything else, the RCON admin too.
+up before anything else. (changed in 1.3) The RCON admin sets up his own first;
+before that, switching it on is refused with a hint.
 
 ## Overview
 
@@ -142,9 +143,11 @@ Lists can be searched. (new in 1.2) From 1024 px wide they are dense tables. The
 mass actions. Details open in a panel at the side, the list stays visible.
 (new in 1.2) Open invitations stand in the user list too; whoever made one, and the
 RCON admin, can withdraw it.
+(changed in 1.3) Deleting a user deletes his user groups and command lists with
+him; the dialog names them first.
 
 (new in 1.2) Settings are in groups such as Security, Users, Servers and commands,
-Agents, System and Features. From 1024 px wide one group shows at a time, picked from
+Agents and System. From 1024 px wide one group shows at a time, picked from
 the list at the side; below that all groups follow each other. Values that are
 rarely needed sit folded under Advanced in their section.
 
@@ -155,8 +158,11 @@ reload" and nothing is overwritten.
 
 Keyboard shortcuts are off unless the RCON admin switches them on.
 
-The new functions of 1.2 are on. Under Settings, Features, the RCON admin can
-switch each of them off; a switched-off function is gone for every role.
+(changed in 1.3) The functions of 1.2 can no longer be switched off; Settings has no
+group Features.
+
+(changed in 1.3) A container belongs to one server only: the form refuses a
+container that another server uses, and says so.
 
 ### Game profiles of a server
 

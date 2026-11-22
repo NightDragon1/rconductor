@@ -24,6 +24,7 @@ import {
   type Role,
   type User,
 } from '@/api/users';
+import { OwnedObjects } from '@/pages/admin/OwnedObjects';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { cell, headCell, rowButton } from '@/components/DenseTable';
 import { Button } from '@/components/ui/button';
@@ -627,7 +628,9 @@ export function UsersPage() {
             return undefined;
           });
         }}
-      />
+      >
+        <OwnedObjects ids={chosen.map((u) => u.id)} />
+      </ConfirmDialog>
       <ConfirmDialog
         open={!!withdrawing}
         title={t('admin.withdrawTitle')}

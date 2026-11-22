@@ -62,7 +62,7 @@ func TestSettingsRoles(t *testing.T) {
 		if _, err := s.Read(ctx, req); !errors.Is(err, users.ErrForbidden) {
 			t.Errorf("%q get: %v", role, err)
 		}
-		if _, err := s.Write(ctx, req, SettingsInput{SetTexts: true, Texts: []Text{{Value: "x"}}}); !errors.Is(err, users.ErrForbidden) {
+		if _, err := s.Write(ctx, req, SettingsInput{SetTexts: true, Texts: []Text{NewText("x", false)}}); !errors.Is(err, users.ErrForbidden) {
 			t.Errorf("%q update: %v", role, err)
 		}
 	}
@@ -86,11 +86,11 @@ func TestSettingsFlow(t *testing.T) {
 	}
 	off := false
 	st, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), Enabled: &off, SetTexts: true, MaxTexts: num(10),
-		Texts: []Text{{Value: secretText}, {Value: "OTHER-" + secretText, Fold: true}}})
+		Texts: []Text{NewText(secretText, false), NewText("OTHER-"+secretText, true)}})
 	if err != nil || st.Version != 1 || st.Enabled || st.TextCount != 2 || st.MaxTexts != 10 {
 		t.Fatalf("change: %+v %v", st, err)
 	}
-	if texts, err := s.OpenTexts(st); err != nil || len(texts) != 2 || texts[1].Value != "OTHER-"+secretText || !texts[1].Fold {
+	if texts, err := s.OpenTexts(st); err != nil || len(texts) != 2 || texts[1].Value() != "OTHER-"+secretText || !texts[1].Fold {
 		t.Errorf("open: %v %v", texts, err)
 	}
 	if again, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(1)}); err != nil || again.Version != 1 {
@@ -126,13 +126,13 @@ func TestSettingsInput(t *testing.T) {
 	admin := settingsRequest(t, s, perm.RCONAdmin)
 	many := make([]Text, MaxTexts+1)
 	for i := range many {
-		many[i] = Text{Value: secretText}
+		many[i] = NewText(secretText, false)
 	}
 	for name, in := range map[string]SettingsInput{
 		"too many":    {SetTexts: true, Texts: many, MaxTexts: num(MaxTexts)},
-		"too long":    {SetTexts: true, Texts: []Text{{Value: strings.Repeat("s3cr3t", 200)}}, TextRunes: num(MaxTextRunes)},
+		"too long":    {SetTexts: true, Texts: []Text{NewText(strings.Repeat("s3cr3t", 200), false)}, TextRunes: num(MaxTextRunes)},
 		"empty value": {SetTexts: true, Texts: []Text{{}}},
-		"CR":          {SetTexts: true, Texts: []Text{{Value: secretText + "\r"}}},
+		"CR":          {SetTexts: true, Texts: []Text{NewText(secretText+"\r", false)}},
 		"max_texts 0": {MaxTexts: num(0)},
 		"budget low":  {BudgetMS: num(MinBudgetMS - 1)},
 		"budget high": {BudgetMS: num(MaxBudgetMS + 1)},
@@ -151,7 +151,7 @@ func TestSettingsUnreadable(t *testing.T) {
 	s, logs := newSettings(t)
 	ctx := context.Background()
 	admin := settingsRequest(t, s, perm.RCONAdmin)
-	st, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{{Value: secretText}}})
+	st, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{NewText(secretText, false)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestSettingsRepair(t *testing.T) {
 	}
 	on := true
 	st, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(7), Enabled: &on, MaxTexts: num(5), TextRunes: num(64), BudgetMS: num(80),
-		SetTexts: true, Texts: []Text{{Value: secretText}}})
+		SetTexts: true, Texts: []Text{NewText(secretText, false)}})
 	if err != nil || st.Version != 8 || st.BudgetMS != 80 || st.TextCount != 1 {
 		t.Fatalf("repair: %+v %v", st, err)
 	}
@@ -255,7 +255,7 @@ func TestSettingsRepair(t *testing.T) {
 // a masker; %p of a text is the one verb fmt prints without Format.
 func TestTextsRedacted(t *testing.T) {
 	var logs bytes.Buffer
-	texts := []Text{{Value: secretText, Fold: true}}
+	texts := []Text{NewText(secretText, true)}
 	m, err := New(texts, DefaultLimits)
 	if err != nil {
 		t.Fatal(err)
@@ -265,5 +265,49 @@ func TestTextsRedacted(t *testing.T) {
 	out := logs.String() + fmt.Sprintf("%v %+v %#v %d %s %q %+v %v", texts, texts[0], texts[0], texts[0], texts, texts[0], m, *m)
 	if strings.Contains(out, "s3cr3t") {
 		t.Errorf("text shows: %s", out)
+	}
+}
+
+// TestC250ParallelRepairs: parallel complete writes on a broken row repair
+// it once; the others meet the repaired row with a stale version (409),
+// and one audit entry tells of the repair (D-088).
+func TestC250ParallelRepairs(t *testing.T) {
+	s, _ := newSettings(t)
+	admin := settingsRequest(t, s, perm.RCONAdmin)
+	if _, err := s.Write(context.Background(), admin, SettingsInput{IfMatch: version(0), BudgetMS: num(100)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.st.DB.Exec(`UPDATE settings SET value = '{"version":20,"max_texts":0}' WHERE key = ?`, users.SettingLogMasking); err != nil {
+		t.Fatal(err)
+	}
+	on := true
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	ok, conflict := 0, 0
+	for i := range 16 {
+		wg.Go(func() {
+			_, err := s.Write(context.Background(), admin, SettingsInput{IfMatch: version(int64(i)), Enabled: &on, MaxTexts: num(1 + i),
+				TextRunes: num(64), BudgetMS: num(90), SetTexts: true, Texts: []Text{}})
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				ok++
+			case errors.Is(err, users.ErrConflict):
+				conflict++
+			default:
+				t.Errorf("write: %v", err)
+			}
+		})
+	}
+	wg.Wait()
+	st, err := s.Load(context.Background())
+	if ok != 1 || conflict != 15 || err != nil || st.Version != 21 {
+		t.Errorf("ok %d, conflict %d, version %d, %v", ok, conflict, st.Version, err)
+	}
+	var repairs int
+	_ = s.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'log_masking.updated' AND payload LIKE '%"repaired":true%'`).Scan(&repairs)
+	if repairs != 1 {
+		t.Errorf("%d repair audit entries", repairs)
 	}
 }

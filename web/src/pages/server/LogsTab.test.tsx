@@ -42,9 +42,9 @@ describe('logs tab', () => {
   });
 });
 
-const session = (features: string[]) => ({
+const session = () => ({
   user: { id: 'boss', pseudonym: 'boss', role: 'rcon_admin' },
-  ui: { features, shortcuts_enabled: false, supporters_enabled: false, supporters_allowed: false },
+  ui: { shortcuts_enabled: false, supporters_enabled: false, supporters_allowed: false },
   panel_version: '0.10',
 });
 
@@ -54,29 +54,16 @@ const logLines = [
   '[10:00:02] [Worker/INFO]: tick',
 ];
 
-async function renderLogs(features: string[]) {
+async function renderLogs() {
   await setLanguage('en');
   resetBuffers();
   updateBuffer('s1', (b) => addLogLines(b, logLines, '2026-11-03T10:00:00Z'));
-  return renderPage(() => <LogsView server={server} />, [[sessionKey, session(features)]]);
+  return renderPage(() => <LogsView server={server} />, [[sessionKey, session()]]);
 }
 
 describe('two-part log filter (UI-019)', () => {
-  it('keeps the single filter while the flag is off', async () => {
-    await renderLogs([]);
-    expect(screen.getByRole('searchbox', { name: 'Filter the logs' })).toBeTruthy();
-    expect(screen.queryByRole('searchbox', { name: 'Filter the bracket part' })).toBeNull();
-    expect(screen.queryByRole('combobox')).toBeNull();
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Filter the logs' }), {
-      target: { value: 'thread' },
-    });
-    const text = screen.getByLabelText('Log lines').textContent ?? '';
-    expect(text).toContain('Steve joined');
-    expect(text).not.toContain('tick');
-  });
-
-  it('filters bracket part and text with and, or, xor while the flag is on', async () => {
-    await renderLogs(['log_filter_split']);
+  it('filters bracket part and text with and, or, xor', async () => {
+    await renderLogs();
     expect(screen.queryByRole('searchbox', { name: 'Filter the logs' })).toBeNull();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Filter the bracket part' }), {
       target: { value: 'server thread' },
@@ -101,7 +88,7 @@ describe('two-part log filter (UI-019)', () => {
   });
 
   it('shows a hint for a refused filter and keeps all lines', async () => {
-    await renderLogs(['log_filter_split']);
+    await renderLogs();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Filter the bracket part' }), {
       target: { value: 'a\u0007b' },
     });
@@ -120,7 +107,7 @@ describe('two-part log filter (UI-019)', () => {
     updateBuffer('s1', (b) => addLogLines(b, [big], '2026-11-03T10:00:00Z'));
     const { container } = await renderPage(
       () => <LogsView server={server} />,
-      [[sessionKey, session(['log_filter_split'])]],
+      [[sessionKey, session()]],
     );
     fireEvent.change(screen.getByRole('searchbox', { name: 'Filter the bracket part' }), {
       target: { value: 'info' },

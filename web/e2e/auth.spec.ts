@@ -28,7 +28,7 @@ test('signing out closes the live socket at once (AUTH-006)', async ({ page, sta
 
 test('a wrong password is refused', async ({ page }) => {
   await login(page, 'admin', 'not the password');
-  await expect(page.getByRole('alert')).toHaveText('Pseudonym or password is wrong.');
+  await expect(page.getByRole('alert')).toHaveText('Username or password is wrong.');
 });
 
 // AUTH-010: a temporary password allows only the change of the password.

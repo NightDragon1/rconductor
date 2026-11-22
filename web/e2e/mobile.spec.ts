@@ -149,8 +149,9 @@ for (const width of [390, 320]) {
     for (const name of ['Own commands', "Others' commands", 'Logs']) {
       await expect(page.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
     }
-    // The toolbar wraps to more rows; the block is scrolled to, then it fits.
-    await block.getByRole('button', { name: 'Copy the block' }).scrollIntoViewIfNeeded();
+    // The toolbar wraps to more rows; the console still brings the new
+    // block into view by itself (C367, CMD-012).
+    await expect(block).toBeInViewport();
     await expect(block.getByRole('button', { name: 'Copy the block' })).toBeInViewport();
     await fits(page);
 

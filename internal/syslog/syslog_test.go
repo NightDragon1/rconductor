@@ -198,3 +198,134 @@ func TestC174QuotedValuesMasked(t *testing.T) {
 		t.Errorf("stored:\n%s", got)
 	}
 }
+
+// TestHeadFirstOccurrence: an attribute named ts, level or event later in
+// the line does not replace the head the handler wrote first.
+func TestHeadFirstOccurrence(t *testing.T) {
+	h := headOf(`{"ts":"2026-11-22T00:00:00Z","level":"INFO","event":"auth.login.ok","level":"ERROR","event":"x","ts":"1999"}`)
+	if h.TS != "2026-11-22T00:00:00Z" || h.Level != "INFO" || h.Event != "auth.login.ok" {
+		t.Errorf("head = %+v", h)
+	}
+	if h := headOf(`not json`); h != (head{}) {
+		t.Errorf("head of text = %+v", h)
+	}
+}
+
+// TestRewriteKeys: object keys go through f as the values do, so a host
+// or a secret used as a key of foreign JSON is masked too; keys that meet
+// stay apart.
+func TestRewriteKeys(t *testing.T) {
+	got := Rewrite(`{"caps":{"rack1.example.lan":1,"other":"rack1.example.lan"},"a":"x","b":"x"}`, func(in []string) []string {
+		out := make([]string, len(in))
+		for i, s := range in {
+			out[i] = strings.ReplaceAll(s, "rack1.example.lan", "host-1")
+			if s == "a" || s == "b" {
+				out[i] = "k"
+			}
+		}
+		return out
+	})
+	want := `{"caps":{"host-1":1,"other":"host-1"},"k":"x","k~2":"x"}`
+	if got != want {
+		t.Errorf("got %s, want %s", got, want)
+	}
+}
+
+// TestRewriteManyKeysMeet: keys that all become the same text stay apart
+// with a short counter each; the line grows linearly, not with the square.
+func TestRewriteManyKeysMeet(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("{")
+	for i := range 700 {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `"k%03d":1`, i)
+	}
+	b.WriteString("}")
+	got := Rewrite(b.String(), func(in []string) []string {
+		out := make([]string, len(in))
+		for i, s := range in {
+			out[i] = s
+			if strings.HasPrefix(s, "k") {
+				out[i] = "[x]"
+			}
+		}
+		return out
+	})
+	if len(got) > 3*b.Len() || !strings.Contains(got, `"[x]~700":1`) {
+		t.Errorf("%d bytes for %d", len(got), b.Len())
+	}
+}
+
+// TestC312LostLinesTold (D-091, D-077): lines lost to a full queue are
+// told with the event code once per drain, with the number since the last
+// report and in all; a drain without new losses tells nothing.
+func TestC312LostLinesTold(t *testing.T) {
+	sink := NewSink()
+	for range queueSize + 5 {
+		_, _ = sink.Write([]byte(`{"level":"info"}`))
+	}
+	var logs syncBuf
+	log := logging.New(&logs, "panel", config.Log{Format: "json"}).Module("syslog")
+	st := storetest.New(t)
+	sink.drain(context.Background(), st, newBuiltin(t), log)
+	sink.drain(context.Background(), st, newBuiltin(t), log)
+	for range queueSize + 2 {
+		_, _ = sink.Write([]byte(`{"level":"info"}`))
+	}
+	sink.drain(context.Background(), st, newBuiltin(t), log)
+	got := logs.String()
+	if n := strings.Count(got, `"event":"syslog.lines_lost"`); n != 2 {
+		t.Fatalf("told %d times, want 2:\n%s", n, got)
+	}
+	if !strings.Contains(got, `"lost":5,"lost_total":5`) || !strings.Contains(got, `"lost":2,"lost_total":7`) {
+		t.Errorf("numbers: %s", got)
+	}
+}
+
+// syncBuf is a log buffer safe for the writer and the test.
+type syncBuf struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuf) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuf) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+// TestC312LostWhileWritesFail (D-091, D-077): with the logger writing into
+// the sink itself, as in the panel, a failing database neither keeps the
+// report going nor counts it; the lost lines are told once writes work.
+func TestC312LostWhileWritesFail(t *testing.T) {
+	sink := NewSink()
+	var out syncBuf
+	logs := logging.New(&out, "panel", config.Log{Format: "json"})
+	logs.Also(sink)
+	log := logs.Module("syslog")
+	broken := storetest.New(t)
+	_ = broken.DB.Close()
+	for range queueSize + 3 {
+		_, _ = sink.Write([]byte(`{"level":"info"}`))
+	}
+	for range 5 {
+		sink.drain(context.Background(), broken, newBuiltin(t), log)
+	}
+	if n := strings.Count(out.String(), `"event":"syslog.lines_lost"`); n != 0 {
+		t.Fatalf("told %d times while writes fail", n)
+	}
+	// The next line the panel logs is written, then the loss is told.
+	_, _ = sink.Write([]byte(`{"level":"info"}`))
+	sink.drain(context.Background(), storetest.New(t), newBuiltin(t), log)
+	if n := strings.Count(out.String(), `"event":"syslog.lines_lost"`); n != 1 {
+		t.Errorf("told %d times after writes work, want 1:\n%s", n, out.String())
+	}
+}

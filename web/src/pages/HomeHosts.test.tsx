@@ -9,12 +9,12 @@ import { HomePage } from './Home';
 
 const now = new Date().toISOString();
 
-function session(features: string[]) {
+function session() {
   return {
     user: { id: 'u0', pseudonym: 'me', role: 'moderator' },
     expires_at: now,
     must_change_password: false,
-    ui: { shortcuts_enabled: false, supporters_enabled: true, features },
+    ui: { shortcuts_enabled: false, supporters_enabled: true },
   };
 }
 
@@ -39,12 +39,12 @@ const servers = [
 
 // The overview by host (UI-021, D-089): a frame per host with the display
 // name as text or a neutral placeholder, the count and the status summary;
-// servers without agent in their own frame. With the flag off it is as before.
+// servers without agent in their own frame.
 describe('overview by host', () => {
   it('frames the cards per host', async () => {
     setLanguage('en');
     await renderPage(HomePage, [
-      [sessionKey, session(['host_groups'])],
+      [sessionKey, session()],
       [serversKey, servers],
       [profilesKey, []],
     ]);
@@ -59,17 +59,5 @@ describe('overview by host', () => {
     const none = screen.getByRole('region', { name: 'Servers without agent' });
     expect(within(none).getByText('delta')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /collapse|expand/i })).toBeNull();
-  });
-
-  it('shows the cards as before with the flag off', async () => {
-    setLanguage('en');
-    await renderPage(HomePage, [
-      [sessionKey, session([])],
-      [serversKey, servers],
-      [profilesKey, []],
-    ]);
-    expect(screen.getByText('gamma')).toBeTruthy();
-    expect(screen.queryByRole('region', { name: 'Host 1' })).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Servers without agent' })).toBeNull();
   });
 });

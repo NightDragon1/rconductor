@@ -118,7 +118,7 @@ func (v *View) Run(ctx context.Context) {
 // the default or the minimum.
 func (v *View) duration(ctx context.Context, key string, def, low time.Duration) time.Duration {
 	var s string
-	if err := v.st.GlobalSetting(ctx, key, &s); err != nil {
+	if err := v.st.GuardedSetting(ctx, v.log, key, &s); err != nil {
 		return def
 	}
 	d, err := time.ParseDuration(s)

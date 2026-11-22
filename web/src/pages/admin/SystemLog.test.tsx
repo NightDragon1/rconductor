@@ -25,9 +25,8 @@ vi.mock('@/lib/live', () => ({
 
 const now = new Date().toISOString();
 const evil = '<img src=x onerror=alert(1)>';
-const flag = 'diagnostics_export';
 
-function session(role = 'rcon_admin', features = [flag]) {
+function session(role = 'rcon_admin') {
   return {
     user: { id: 'me', pseudonym: 'me', role },
     expires_at: now,
@@ -35,7 +34,6 @@ function session(role = 'rcon_admin', features = [flag]) {
     totp_setup_required: false,
     panel_version: '1.2',
     ui: {
-      features,
       shortcuts_enabled: false,
       supporters_enabled: false,
       supporters_allowed: false,
@@ -265,14 +263,14 @@ describe('system log (UI-025, D-091)', () => {
   });
 });
 
-describe('system log behind the flag diagnostics_export (NFR-018, NFR-019)', () => {
-  async function at(role: string, features: string[]) {
+describe('system log in the menu (NFR-018)', () => {
+  async function at(role: string) {
     setLanguage('en');
     const get = vi.spyOn(api, 'GET').mockImplementation(((path: string) =>
       Promise.resolve({
         data:
           path === '/auth/session'
-            ? session(role, features)
+            ? session(role)
             : path === '/system-log'
               ? { source: 'panel', items: [] }
               : { items: [] },
@@ -293,22 +291,15 @@ describe('system log behind the flag diagnostics_export (NFR-018, NFR-019)', () 
     return get;
   }
 
-  it('does not exist while the flag is off: no menu entry, no page, no request', async () => {
-    const get = await at('rcon_admin', []);
+  it('does not exist for a server admin', async () => {
+    const get = await at('server_admin');
     expect(await screen.findByText('Page not found')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /System log/ })).toBeNull();
     expect(get.mock.calls.map((c) => c[0])).not.toContain('/system-log');
   });
 
-  it('does not exist for a server admin with the flag on', async () => {
-    const get = await at('server_admin', [flag]);
-    expect(await screen.findByText('Page not found')).toBeTruthy();
-    expect(screen.queryByRole('link', { name: /System log/ })).toBeNull();
-    expect(get.mock.calls.map((c) => c[0])).not.toContain('/system-log');
-  });
-
-  it('shows menu entry and page to the RCON admin with the flag on', async () => {
-    await at('rcon_admin', [flag]);
+  it('shows menu entry and page to the RCON admin', async () => {
+    await at('rcon_admin');
     expect(await screen.findByRole('heading', { name: 'System log' })).toBeTruthy();
     expect((await screen.findAllByRole('link', { name: /System log/ })).length).toBeGreaterThan(0);
   });

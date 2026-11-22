@@ -26,9 +26,7 @@ import { cn } from '@/lib/utils';
 import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
 import { ForeignText } from '@/components/ForeignText';
-import { DOCKER_HOST_FLAG, DockerHost } from '@/components/DockerHost';
-import { useSession } from '@/api/session';
-import { HOST_GROUPS_FLAG } from '@/lib/hostgroups';
+import { DockerHost } from '@/components/DockerHost';
 import { PageHeader } from '@/components/PageHeader';
 
 type Token = components['schemas']['AgentToken'];
@@ -155,11 +153,6 @@ function NameDialog({ agent, onClose }: { agent: Agent; onClose: () => void }) {
 // (UI-012).
 export function AgentsPage() {
   const { t } = useTranslation();
-  const { data: session } = useSession();
-  // The Docker host with the flag docker_host (AGT-014).
-  const dockerHost = (session?.ui.features ?? []).includes(DOCKER_HOST_FLAG);
-  // The display name of the host with the flag host_groups (UI-021).
-  const hostGroups = (session?.ui.features ?? []).includes(HOST_GROUPS_FLAG);
   const [naming, setNaming] = useState<Agent | null>(null);
   const phone = usePhone();
   const qc = useQueryClient();
@@ -265,17 +258,11 @@ export function AgentsPage() {
                       : t(`agents.status.${a.status}`),
                 },
                 { label: t('agents.version'), value: <bdi className="font-mono">{a.version}</bdi> },
-                ...(dockerHost
-                  ? [{ label: t('agents.dockerHost'), value: <DockerHost agent={a} /> }]
-                  : []),
-                ...(hostGroups
-                  ? [
-                      {
-                        label: t('agents.displayName'),
-                        value: a.display_name ? <ForeignText text={a.display_name} /> : '',
-                      },
-                    ]
-                  : []),
+                { label: t('agents.dockerHost'), value: <DockerHost agent={a} /> },
+                {
+                  label: t('agents.displayName'),
+                  value: a.display_name ? <ForeignText text={a.display_name} /> : '',
+                },
                 {
                   label: t('agents.fingerprint'),
                   value: <span className="font-mono text-xs">{a.fingerprint}</span>,
@@ -296,8 +283,8 @@ export function AgentsPage() {
                 <th className={headCell}>{t('agents.name')}</th>
                 <th className={headCell}>{t('admin.statusLabel')}</th>
                 <th className={headCell}>{t('agents.version')}</th>
-                {dockerHost && <th className={headCell}>{t('agents.dockerHost')}</th>}
-                {hostGroups && <th className={headCell}>{t('agents.displayName')}</th>}
+                <th className={headCell}>{t('agents.dockerHost')}</th>
+                <th className={headCell}>{t('agents.displayName')}</th>
                 <th className={headCell}>{t('agents.fingerprint')}</th>
                 <th className={headCell}>{t('agents.lastSeen')}</th>
                 <th className={cell} />
@@ -328,16 +315,12 @@ export function AgentsPage() {
                   <td className={`${cell} font-mono`}>
                     <bdi>{a.version}</bdi>
                   </td>
-                  {dockerHost && (
-                    <td className={cell}>
-                      <DockerHost agent={a} />
-                    </td>
-                  )}
-                  {hostGroups && (
-                    <td className={cell}>
-                      {a.display_name && <ForeignText text={a.display_name} />}
-                    </td>
-                  )}
+                  <td className={cell}>
+                    <DockerHost agent={a} />
+                  </td>
+                  <td className={cell}>
+                    {a.display_name && <ForeignText text={a.display_name} />}
+                  </td>
                   <td
                     className={`max-w-56 wrap-anywhere md:truncate ${cell} font-mono text-xs`}
                     title={a.fingerprint}
@@ -348,7 +331,7 @@ export function AgentsPage() {
                     {a.last_seen_at ? ago(t, a.last_seen_at, now) : ''}
                   </td>
                   <td className={`${cell} text-right`}>
-                    {hostGroups && a.status !== 'revoked' && (
+                    {a.status !== 'revoked' && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -393,10 +376,7 @@ export function AgentsPage() {
               ))}
               {all.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={6 + (dockerHost ? 1 : 0) + (hostGroups ? 1 : 0)}
-                    className="p-6 text-center text-muted"
-                  >
+                  <td colSpan={8} className="p-6 text-center text-muted">
                     {t(agents.isPending ? 'app.loading' : 'agents.none')}
                   </td>
                 </tr>

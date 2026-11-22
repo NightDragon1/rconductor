@@ -127,11 +127,14 @@ type Input struct {
 
 // Service administers servers and server groups.
 type Service struct {
-	st    *store.Store
-	perm  *perm.Checker
-	box   *secret.Box
-	log   *slog.Logger
-	conns Connections
+	// beforeWrite runs before a writing transaction of the say prefix; set
+	// by tests only, to change the database in between.
+	beforeWrite func()
+	st          *store.Store
+	perm        *perm.Checker
+	box         *secret.Box
+	log         *slog.Logger
+	conns       Connections
 	// onChange is told about every changed server, after the connection.
 	onChange func(id string)
 	// agents and rcon carry out actions (AGT-003, AGT-009).
@@ -863,6 +866,9 @@ func (s *Service) Create(ctx context.Context, req users.Request, in Input) (Serv
 		Host: f.host, Port: int64(f.port), Secret: sealed, GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
 		TlsFingerprint: f.fingerprint, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
+		if boundTwice(err) {
+			return Server{}, ErrContainerBound
+		}
 		// A number taken twice is a fault of the counter, not of the input.
 		if strings.Contains(err.Error(), "UNIQUE") && !strings.Contains(err.Error(), "servers.number") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
@@ -961,6 +967,9 @@ func (s *Service) Update(ctx context.Context, req users.Request, id string, in I
 		Host: f.host, Port: int64(f.port), GamePorts: f.gamePorts, AgentID: f.agentID, ContainerName: f.container,
 		TlsFingerprint: f.fingerprint, TlsNotAfter: keepNotAfter(r, f.fingerprint), UpdatedAt: now, ID: id,
 	}); err != nil {
+		if boundTwice(err) {
+			return Server{}, ErrContainerBound
+		}
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Server{}, &users.InvalidError{Detail: "a server with this name exists"}
 		}
@@ -1061,4 +1070,14 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 	s.perm.Invalidate()
 	s.changed(ctx, id)
 	return nil
+}
+
+// ErrContainerBound refuses a second server on a container that a server
+// not deleted is bound to (D-105).
+var ErrContainerBound = errors.New("the container is bound to another server")
+
+// boundTwice reports a write the index servers_container refused: in the
+// same statement as the write, so two parallel requests cannot both win.
+func boundTwice(err error) bool {
+	return strings.Contains(err.Error(), "UNIQUE") && strings.Contains(err.Error(), "servers.container_name")
 }

@@ -31,7 +31,7 @@ func TestProviderFollowsSettings(t *testing.T) {
 		t.Errorf("defaults: %q", got)
 	}
 	admin := settingsRequest(t, s, perm.RCONAdmin)
-	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{{Value: secretText}}}); err != nil {
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{NewText(secretText, false)}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := line(p, "token=a "+secretText); got != "token=••• •••" {
@@ -44,6 +44,27 @@ func TestProviderFollowsSettings(t *testing.T) {
 	if got := line(p, "token=a "+secretText); got != "token=a "+secretText {
 		t.Errorf("off: %q", got)
 	}
+	// D-107: the system log and the diagnostic export keep the built-in
+	// list while the masking is off; the fixed texts follow the switch.
+	always := func(m interface {
+		Lines([]string, [][]string) ([]string, int)
+	}) string {
+		out, _ := m.Lines([]string{"token=a " + secretText}, nil)
+		return out[0]
+	}
+	if got := always(p.Always()); got != "token=••• "+secretText {
+		t.Errorf("always, off: %q", got)
+	}
+	if got := always((*Provider)(nil).Always()); got != "token=••• "+secretText {
+		t.Errorf("always without a provider: %q", got)
+	}
+	on := true
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(2), Enabled: &on}); err != nil {
+		t.Fatal(err)
+	}
+	if got := always(p.Always()); got != "token=••• •••" {
+		t.Errorf("always, on: %q", got)
+	}
 }
 
 // TestProviderReadErrors (F-93): a broken row switches masking on and
@@ -54,7 +75,7 @@ func TestProviderReadErrors(t *testing.T) {
 	s, logs := newSettings(t)
 	ctx := context.Background()
 	admin := settingsRequest(t, s, perm.RCONAdmin)
-	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{{Value: secretText}}}); err != nil {
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{NewText(secretText, false)}}); err != nil {
 		t.Fatal(err)
 	}
 	p := NewProvider(ctx, s, nil)

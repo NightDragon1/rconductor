@@ -51,3 +51,19 @@ func TestName(t *testing.T) {
 		}
 	}
 }
+
+// TestBlank: space, control, format and other invisible characters alone
+// are no text; any visible character is one (SEC-006).
+func TestBlank(t *testing.T) {
+	for _, s := range []string{"", " \n\t\r", "\u200B\u200C\u200D\u2060\uFEFF", "\u202E\u2066\u2069\u061C",
+		"\uFE0F\U000E0100", "\u034F\u115F\u1160\u17B4\u17B5\u2800\u3164\uFFA0", "\u00AD", "\x00\x1b"} {
+		if !Blank(s) {
+			t.Errorf("Blank(%q) = false", s)
+		}
+	}
+	for _, s := range []string{"a", "\u200Bx", " . ", "\u00e9", "\U0001F600", "\u3000\u4e00"} {
+		if Blank(s) {
+			t.Errorf("Blank(%q) = true", s)
+		}
+	}
+}

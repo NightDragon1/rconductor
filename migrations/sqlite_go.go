@@ -8,10 +8,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
+
+	"github.com/NightDragon1/rconductor/internal/logging"
 )
 
 // SQLiteGo returns the SQLite migrations written in Go: those that need
@@ -30,6 +33,9 @@ func SQLiteGo() []*goose.Migration {
 			&goose.GoFunc{RunTx: execTx(secondFactorTriggersDown)}),
 		// Removed data does not come back: down does nothing.
 		goose.NewGoMigration(18, &goose.GoFunc{RunTx: removeOrphanAssignments}, nil),
+		// Released bindings do not come back; down drops the index only.
+		goose.NewGoMigration(24, &goose.GoFunc{RunTx: oneBindingPerContainer},
+			&goose.GoFunc{RunTx: execTx(`DROP INDEX servers_container;`)}),
 	}
 }
 
@@ -349,4 +355,83 @@ func removeOrphanAssignments(ctx context.Context, tx *sql.Tx) error {
 		}
 	}
 	return nil
+}
+
+type loggerKey struct{}
+
+// WithLogger hands the migrations the logger of the run; a migration that
+// changes data names each change in the log (D-105).
+func WithLogger(ctx context.Context, log *slog.Logger) context.Context {
+	return context.WithValue(ctx, loggerKey{}, log)
+}
+
+func loggerFrom(ctx context.Context) *slog.Logger {
+	if l, ok := ctx.Value(loggerKey{}).(*slog.Logger); ok && l != nil {
+		return l
+	}
+	return slog.New(slog.DiscardHandler)
+}
+
+// 00024: a container is bound to at most one server not deleted (D-105).
+// Of servers bound to the same container the oldest keeps it (by creation
+// time, ties by ID); the others are released, each with a log line and an
+// audit entry. Then a unique index holds it.
+func oneBindingPerContainer(ctx context.Context, tx *sql.Tx) error {
+	all, err := bindings(ctx, tx)
+	if err != nil {
+		return err
+	}
+	log := loggerFrom(ctx)
+	now := time.Now().UTC().Format(timeLayout)
+	kept := ""
+	for i, b := range all {
+		if i == 0 || b.agent != all[i-1].agent || b.container != all[i-1].container {
+			kept = b.id
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE servers SET agent_id = NULL, container_name = NULL WHERE id = ?`, b.id); err != nil {
+			return err
+		}
+		id, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		payload, err := json.Marshal(map[string]any{"agent_id": b.agent, "kept_by": kept, "cause": "one_binding_per_container"})
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO audit_log (id, ts, kind, server_id, target_type, target_id, action, payload, result)
+			VALUES (?, ?, 'admin', ?, 'server', ?, 'server.binding_released', ?, 'ok')`,
+			id.String(), now, b.id, b.id, string(payload)); err != nil {
+			return err
+		}
+		log.Warn("binding of a container released, another server keeps it",
+			logging.Event(logging.DBBindingReleased),
+			slog.String("server_id", b.id), slog.String("kept_by", kept))
+	}
+	_, err = tx.ExecContext(ctx, `CREATE UNIQUE INDEX servers_container ON servers (agent_id, container_name) WHERE deleted_at IS NULL`)
+	return err
+}
+
+type binding struct{ id, agent, container string }
+
+// bindings lists the servers not deleted that are bound to a container,
+// by container, the oldest first (ties by ID).
+func bindings(ctx context.Context, tx *sql.Tx) ([]binding, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id, agent_id, container_name FROM servers
+		WHERE deleted_at IS NULL AND agent_id IS NOT NULL AND container_name IS NOT NULL
+		ORDER BY agent_id, container_name, created_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var all []binding
+	for rows.Next() {
+		var b binding
+		if err := rows.Scan(&b.id, &b.agent, &b.container); err != nil {
+			return nil, err
+		}
+		all = append(all, b)
+	}
+	return all, rows.Err()
 }

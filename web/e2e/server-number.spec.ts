@@ -3,7 +3,7 @@
 import type { Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Server number (UI-018, D-087) behind the flag server_number: first
+// Server number (UI-018, D-087): first
 // column ID in Manage servers and server groups, badge before the name on cards and the
 // server page; a number is never given twice.
 
@@ -13,8 +13,6 @@ async function as(page: Page, state: StackState, user: string) {
 }
 
 test.describe('server number on', () => {
-  test.use({ flags: ['server_number'] });
-
   test('ID column, badge on card and server page; a deleted number comes not back', async ({
     page,
     state,
@@ -71,21 +69,5 @@ test.describe('server number on', () => {
     await expect(
       page.getByRole('article', { name: 'survival' }).getByText(`Server number ${s.number}`),
     ).toBeAttached();
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['server_number'] });
-
-  test('server number off: no column ID and no badge', async ({ page, state }) => {
-    await as(page, state, 'admin');
-    await expect(page.getByRole('article', { name: 'survival' }).getByText(/^#\d+$/)).toHaveCount(
-      0,
-    );
-    await page.goto('servers/manage');
-    await expect(page.getByRole('columnheader', { name: 'ID', exact: true })).toHaveCount(0);
-    await page.goto(`servers/${state.servers.survival}/overview`);
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1 }).getByText(/Server number/)).toHaveCount(0);
   });
 });

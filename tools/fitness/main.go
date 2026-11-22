@@ -10,7 +10,10 @@
 //	cmd    only the command pipeline calls Execute of the RCON packages
 //	redact secrets are revealed or converted to their plain value only at
 //	       their destinations (secret-destinations.txt); nothing in
-//	       internal/ prints past the redacting log handler (fmt.Print, log)
+//	       internal/ prints past the redacting log handler (fmt.Print, log,
+//	       print and println, Fprint and Write on stdout or stderr, a
+//	       logger of its own, reflect on a secret, Reveal as a method value
+//	       or expression)
 //	logmask the masking patterns of the shipped profiles stay within a time
 //	       budget per line, alone and as the costliest stack (D-088 b)
 //
@@ -27,6 +30,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 
 	"go.yaml.in/yaml/v3"
 	"golang.org/x/tools/go/callgraph"
@@ -112,7 +116,13 @@ func readExceptions(path string) (map[string]bool, error) {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line, _, _ := strings.Cut(sc.Text(), "#")
-		if fields := strings.Fields(line); len(fields) == 2 {
+		// Split as scripts/fitness-ratchet.sh does (awk: space and tab), so
+		// that both read the same entries; any other blank is an error.
+		fields := strings.FieldsFunc(line, func(r rune) bool { return r == ' ' || r == '\t' })
+		if strings.ContainsFunc(strings.Join(fields, ""), unicode.IsSpace) {
+			return nil, fmt.Errorf("exception line %q: only spaces and tabs separate the fields", sc.Text())
+		}
+		if len(fields) == 2 {
 			out[fields[0]+" "+fields[1]] = true
 		} else if len(fields) != 0 {
 			return nil, fmt.Errorf("exception line %q: want rule, symbol and # reason", sc.Text())
@@ -204,6 +214,9 @@ func check(dir string, dests map[string]string) ([]finding, error) {
 				edges[finding{"redact", rel, "prints past the redacting log handler"}] = true
 			}
 		}
+	}
+	for _, f := range printsPastHandler(funcs, mod) {
+		edges[f] = true
 	}
 	for _, f := range secretConversions(funcs, mod, dests) {
 		edges[f] = true

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"golang.org/x/tools/go/ssa"
 )
@@ -27,12 +28,18 @@ func readDestinations(path string) (map[string]string, error) {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line, reason, _ := strings.Cut(sc.Text(), "#")
-		fields := strings.Fields(line)
+		// Split and trim at spaces and tabs only, as the ratchet's awk does;
+		// any other blank in the package part is an error.
+		blank := func(r rune) bool { return r == ' ' || r == '\t' }
+		fields := strings.FieldsFunc(line, blank)
+		if strings.ContainsFunc(strings.Join(fields, ""), unicode.IsSpace) {
+			return nil, fmt.Errorf("destination line %q: only spaces and tabs separate the fields", sc.Text())
+		}
 		switch {
-		case len(fields) == 0 && strings.HasPrefix(strings.TrimSpace(sc.Text()), "#"):
+		case len(fields) == 0 && strings.HasPrefix(strings.TrimFunc(sc.Text(), blank), "#"):
 		case len(fields) == 1 && strings.TrimSpace(reason) != "":
 			out[fields[0]] = strings.TrimSpace(reason)
-		case len(fields) != 0 || strings.TrimSpace(sc.Text()) != "":
+		case len(fields) != 0 || strings.TrimFunc(sc.Text(), blank) != "":
 			return nil, fmt.Errorf("destination line %q: want a package and # reason", sc.Text())
 		}
 	}

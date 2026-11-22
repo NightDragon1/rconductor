@@ -44,6 +44,9 @@ type Store struct {
 	Queries *sqlitedb.Queries
 	// kept holds the last value read of each guarded setting (GuardedSetting).
 	kept sync.Map
+	// failing holds the settings whose failed read is logged and not read
+	// well since, so that a broken row is logged once, not on every read.
+	failing sync.Map
 }
 
 // Open creates the data directory if needed and opens (or creates) the
@@ -73,6 +76,13 @@ func Open(ctx context.Context, dataDir string) (*Store, error) {
 func IsBusy(err error) bool {
 	var e *sqlite.Error
 	return errors.As(err, &e) && e.Code()&0xff == sqlite3.SQLITE_BUSY
+}
+
+// IsForeignKey reports whether err means that a foreign key constraint
+// failed, such as a row that refers to one deleted in the meantime.
+func IsForeignKey(err error) bool {
+	var e *sqlite.Error
+	return errors.As(err, &e) && e.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY
 }
 
 // Close closes the database.

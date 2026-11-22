@@ -151,9 +151,10 @@ func TestCodesUniqueAndWellFormed(t *testing.T) {
 	// rcon.connection_test with revision 2.8, mail.sent and mail.failed
 	// with 1.1 (NFR-017), the four codes of the second factor with 1.1
 	// (AUTH-008), the two certificate codes with 1.1 (PROT-003),
-	// auth.recovery.dropped with D-077.
-	if len(AllCodes) != 60 {
-		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected, logs.tail, audit.entry_lost, rcon.connection_test, mail.sent, mail.failed, the four of AUTH-008, the two of PROT-003, auth.recovery.dropped and setting.read_failed", len(AllCodes))
+	// auth.recovery.dropped with D-077, db.migrate.binding_released with
+	// D-105.
+	if len(AllCodes) != 63 {
+		t.Errorf("AllCodes has %d entries, want 46 of Design 8.3 plus agent.disconnected, logs.tail, audit.entry_lost, rcon.connection_test, mail.sent, mail.failed, the four of AUTH-008, the two of PROT-003, auth.recovery.dropped, setting.read_failed, db.migrate.binding_released, logs.lines_dropped and syslog.lines_lost", len(AllCodes))
 	}
 }
 
@@ -170,6 +171,25 @@ func TestAnswerOnlyInSystemLog(t *testing.T) {
 			t.Errorf("%s stdout: %s", format, out.String())
 		}
 		if !strings.Contains(sys.String(), `"answer":"Unknown command steve"`) {
+			t.Errorf("%s system log: %s", format, sys.String())
+		}
+	}
+}
+
+// TestC323AnswerInGroupOnlyInSystemLog: an answer within a group or under
+// WithGroup does not reach stdout either (D-091).
+func TestC323AnswerInGroupOnlyInSystemLog(t *testing.T) {
+	for _, format := range []string{"json", "text"} {
+		var out, sys bytes.Buffer
+		f := New(&out, "panel", config.Log{Level: slog.LevelDebug, Format: format})
+		f.Also(&sys)
+		log := f.Module("cmd")
+		log.Info("grouped", slog.Group("cmd", slog.String(KeyAnswer, "Unknown command steve")))
+		log.WithGroup("cmd").Info("with group", slog.String(KeyAnswer, "Unknown command alex"))
+		if strings.Contains(out.String(), "steve") || strings.Contains(out.String(), "alex") || !strings.Contains(out.String(), "with group") {
+			t.Errorf("%s stdout: %s", format, out.String())
+		}
+		if !strings.Contains(sys.String(), "steve") || !strings.Contains(sys.String(), "alex") {
 			t.Errorf("%s system log: %s", format, sys.String())
 		}
 	}

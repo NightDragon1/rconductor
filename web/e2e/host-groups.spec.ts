@@ -3,7 +3,7 @@
 import type { Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Overview by host (UI-021, D-089) behind the flag host_groups: the RCON
+// Overview by host (UI-021, D-089): the RCON
 // admin names the host of agent host-1 on the agents page; every role sees
 // the cards of its scope framed per host with that name as text, the
 // servers without agent (outpost) apart; host name and address only for
@@ -26,8 +26,6 @@ async function hostOne(page: Page) {
 }
 
 test.describe('host groups on', () => {
-  test.use({ flags: ['host_groups'] });
-
   test('the RCON admin names a host; the overview frames its cards', async ({ page, state }) => {
     await as(page, state, 'admin');
     const id = await hostOne(page);
@@ -95,23 +93,5 @@ test.describe('host groups on', () => {
       await as(page, state, 'admin');
       await set(null);
     }
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['host_groups'] });
-
-  test('host groups off: overview as before, no display name', async ({ page, state }) => {
-    await as(page, state, 'admin');
-    const id = await hostOne(page);
-    await expect(page.getByRole('article', { name: 'survival' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Servers without agent' })).toHaveCount(0);
-    const r = await page.request.patch(`api/v1/agents/${id}`, {
-      data: { display_name: 'Rack' },
-      headers: headers(state),
-    });
-    expect(r.status()).toBe(404);
-    await page.goto('admin/agents');
-    await expect(page.getByRole('columnheader', { name: 'Display name' })).toHaveCount(0);
   });
 });

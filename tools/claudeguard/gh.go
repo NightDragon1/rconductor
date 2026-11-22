@@ -33,7 +33,7 @@ var ghTop = map[string]map[string]ghRule{
 		"create": ghAllow, "new": ghAllow, "view": ghAllow, "list": ghAllow, "ls": ghAllow,
 		"comment": ghAllow, "checks": ghAllow, "diff": ghAllow, "status": ghAllow, "ready": ghAllow,
 		"close": ghAllow, "edit": ghAllow, "checkout": ghAllow, "co": ghAllow, "reopen": ghAllow,
-		"review": ghAllow, "update-branch": ghAllow, "merge": ghPRMerge,
+		"review": ghAllow, "merge": ghPRMerge,
 	},
 	"issue": {
 		"create": ghAllow, "new": ghAllow, "view": ghAllow, "list": ghAllow, "ls": ghAllow,

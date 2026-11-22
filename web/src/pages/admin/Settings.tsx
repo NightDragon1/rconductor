@@ -5,14 +5,13 @@ import { useState, type FormEvent } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api, must, patchVersioned } from '@/api/client';
-import { sessionKey, useSession } from '@/api/session';
+import { sessionKey } from '@/api/session';
 import { outcome } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useWide } from '@/components/DenseTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
-import { LOG_MASKING_FLAG } from '@/lib/console';
 import { formatDuration, isGoDuration, parseDuration } from '@/lib/duration';
 import { usePhone } from '@/lib/phone';
 import { cn } from '@/lib/utils';
@@ -44,18 +43,6 @@ function storeHelp(on: boolean) {
 
 // Keys with their own label and help in the language file.
 const keyTexts = [
-  'features_profile_browser',
-  'features_color_codes',
-  'features_say_sender',
-  'features_docker_host',
-  'features_server_number',
-  'features_messages',
-  'features_diagnostics_export',
-  'features_host_groups',
-  'features_log_masking_ui',
-  'features_server_save_as_new',
-  'features_log_filter_split',
-  'features_command_palette',
   'auth_recovery_lifetime',
   'auth_recovery_per_hour',
   'auth_recovery_queue',
@@ -114,7 +101,6 @@ const groupOrder = [
   'servers',
   'agents',
   'system',
-  'features',
   'other',
 ] as const;
 type Group = (typeof groupOrder)[number];
@@ -135,7 +121,6 @@ const sections: [string, Group, RegExp][] = [
   ['mail', 'system', /^smtp\./],
   ['interface', 'system', /^ui\./],
   ['diagnostics', 'system', /^(diagnostics|system_log)\./],
-  ['features', 'features', /^features\./],
 ];
 const sectionOrder = [...sections.map(([name]) => name), 'other'];
 // Internal tuning values: they stay behind "Advanced", closed at first.
@@ -210,13 +195,11 @@ const settingsQuery = {
 // (revision 2.4 candidate 24); switching supporters off asks first, as
 // it ends the sessions of all supporters. A phone only reads (UI-012).
 // SettingsPage holds the global settings, the SMTP setup (NFR-017) and,
-// behind the flag log_masking_ui, the masking of container logs (UI-022).
+// the masking of container logs (UI-022).
 // From 1024 px the groups stand on the left and only the chosen one on the
 // right (O8); below, all groups follow one another as before.
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { data: session } = useSession();
-  const masking = !!session?.ui.features?.includes(LOG_MASKING_FLAG);
   const phone = usePhone();
   const wide = useWide();
   const [showHelp, setShowHelp] = useState(storedHelp);
@@ -252,7 +235,7 @@ export function SettingsPage() {
     <div className="flex min-w-0 flex-col gap-5">
       <SettingsForm group={group} showHelp={showHelp} />
       {system && <SmtpPanel />}
-      {system && masking && <LogMaskingPanel />}
+      {system && <LogMaskingPanel />}
     </div>
   );
   if (!wide) {

@@ -208,7 +208,7 @@ func TestLogDropWarnings(t *testing.T) {
 	clock = clock.Add(dropWarnEvery)
 	logs.Reset()
 	flood("a1", 1)
-	if !strings.Contains(logs.String(), `"agent_id":"a1","deliveries":`) || strings.Count(logs.String(), "log lines dropped") != 1 {
+	if !strings.Contains(logs.String(), `"event":"logs.lines_dropped","agent_id":"a1","deliveries":`) || strings.Count(logs.String(), "log lines dropped") != 1 {
 		t.Errorf("warning after a minute: %s", logs.String())
 	}
 	close(m.release)

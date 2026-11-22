@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Review stage of each pull request (PRJ-005): scripts/classify.sh decides
-# from the changed files and .github/core-paths.yml, this job sets the
-# label stage-1 or stage-2. A stage 2 pull request over 400 changed lines
-# fails the job. The job token cannot turn auto-merge off; auto-merge is
-# only ever enabled on stage-1 pull requests.
+# from the changed files and .github/core-paths.yml, the job Classify sets
+# the label stage-1 or stage-2. It is meant as a required check: it fails
+# when a stage 2 pull request has auto-merge on, also after a later push,
+# a change of the base or when auto-merge is turned on. The job token
+# cannot turn auto-merge off. The job Line limit fails a stage 2 pull
+# request over 400 changed lines; it is not required (tests may go over).
 #
 # pull_request_target runs this file and the scripts of the base branch
 # with a token that can label. Hard rules for this file:
@@ -18,11 +20,10 @@ name: Classify
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited, auto_merge_enabled, auto_merge_disabled]
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   group: classify-${{ github.event.pull_request.number }}
@@ -33,6 +34,12 @@ jobs:
     name: Classify
     runs-on: ubuntu-26.04
     timeout-minutes: 5
+    outputs:
+      over: ${{ steps.classify.outputs.over }}
+    # Write only in this job: it sets the label (PRJ-005).
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       # The current tip of the base branch, never the head of the pull
       # request. base.sha can be older than the class file and the script
@@ -42,6 +49,7 @@ jobs:
           ref: ${{ github.event.pull_request.base.ref }}
           persist-credentials: false
       - name: Classify and label
+        id: classify
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -49,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           files=$RUNNER_TEMP/files.tsv out=$RUNNER_TEMP/classify.out
-          rc=0 stage=
+          rc=0 stage= broken=
           if gh api --paginate "repos/$GH_REPO/pulls/$PR/files" \
             --jq '.[] | [.status, .additions, .deletions, .filename, (.previous_filename // "")] | @tsv' >"$files"; then
             scripts/classify.sh .github/core-paths.yml "$files" >"$out" || rc=$?
@@ -58,14 +66,14 @@ jobs:
             # The API lists at most 3000 files; a longer list is incomplete.
             if [ "$(wc -l <"$files")" -ge 3000 ]; then
               echo "::error::file list incomplete, counted as stage 2"
-              rc=1 stage=
+              rc=1 stage= broken=1
             fi
           else
             echo "::error::file list not readable, counted as stage 2"
-            rc=1
+            rc=1 broken=1
           fi
           # Anything but a clear stage-1 counts as stage 2.
-          if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then stage=; fi
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then stage= broken=1; fi
           case "$stage" in
             stage-1) other=stage-2 ;;
             *) stage=stage-2 other=stage-1 ;;
@@ -77,4 +85,42 @@ jobs:
           fi
           gh pr edit "$PR" "${args[@]}"
           echo "review stage: $stage"
-          exit "$rc"
+          # Over the line limit: told to the job Line limit, not failed here.
+          if [ "$rc" -eq 1 ] && [ -z "$broken" ]; then
+            echo "over=true" >>"$GITHUB_OUTPUT"
+          elif [ -z "$broken" ]; then
+            echo "over=false" >>"$GITHUB_OUTPUT"
+          fi
+          # Auto-merge as it is now, not as the event saw it; unreadable
+          # counts as on.
+          auto=$(gh pr view "$PR" --json autoMergeRequest --jq '.autoMergeRequest != null' || echo true)
+          if [ "$stage" = stage-2 ] && [ "$auto" != false ]; then
+            echo "::error::stage 2 pull request with auto-merge on; turn auto-merge off, the maintainer merges"
+            exit 1
+          fi
+          # A list that could not be read or a broken class file fails too.
+          if [ -n "$broken" ]; then exit 1; fi
+          exit 0
+
+  line-limit:
+    name: Line limit
+    needs: classify
+    # Also when Classify failed, so that an overrun shows at once.
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 2
+    steps:
+      - name: At most 400 changed lines in stage 2
+        env:
+          OVER: ${{ needs.classify.outputs.over }}
+        run: |
+          # Without a count from Classify the size is unknown, never within.
+          if [ -z "$OVER" ]; then
+            echo "::error::line count unknown: Classify did not finish"
+            exit 1
+          fi
+          if [ "$OVER" = true ]; then
+            echo "::error::stage 2 pull request over 400 changed lines (generated files excluded); split it, or note a test-only overrun in the PR text"
+            exit 1
+          fi
+          echo "within the line limit"

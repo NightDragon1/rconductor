@@ -5,6 +5,7 @@ package web
 
 import (
 	"context"
+	"slices"
 
 	"github.com/google/uuid"
 
@@ -130,7 +131,8 @@ func (s *apiServer) GetServerProfile(ctx context.Context, req api.GetServerProfi
 // messageCommandOf is the profile field message_command for the API
 // (CMD-020); nil without one.
 func messageCommandOf(m *profiles.MessageCommand) *api.MessageCommand {
-	if m == nil {
+	// A stored render outside the known list is none (CMD-020).
+	if m == nil || !slices.Contains(profiles.Renders, m.Render) {
 		return nil
 	}
 	return &api.MessageCommand{Path: m.Path, Render: api.MessageCommandRender(m.Render)}

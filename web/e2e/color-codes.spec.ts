@@ -3,11 +3,11 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Color codes (CMD-017) behind the flag color_codes: the server hostile
+// Color codes (CMD-017): the server hostile
 // (profile minecraft-java, formatting minecraft) answers with markup, the
 // codes §a and §z and an override of the reading direction
-// (internal/e2e/stack). With the flag on, known codes become styles of the
-// fixed list; with the flag off they are removed as before (SEC-006).
+// (internal/e2e/stack). Known codes become styles of the fixed list
+// (SEC-006).
 // Each test sends its own command: the console of the shared stack keeps
 // the blocks of the other tests.
 
@@ -32,7 +32,7 @@ async function answer(page: Page, state: StackState, tag: string): Promise<Locat
   return pre;
 }
 
-// stillText checks what holds with the flag on and off: markup stays text,
+// stillText checks what always holds: markup stays text,
 // no inline style, the override shows as a stand-in.
 async function stillText(page: Page, pre: Locator) {
   await expect(pre).toContainText(markup);
@@ -44,9 +44,7 @@ async function stillText(page: Page, pre: Locator) {
   await expect(pre).not.toContainText('§a');
 }
 
-test.describe('flag on', () => {
-  test.use({ flags: ['color_codes'] });
-
+test.describe('color codes', () => {
   test('a known code becomes a style of the fixed list (CMD-017)', async ({ page, state }) => {
     const pre = await answer(page, state, 'style');
     const green = pre.locator('span.text-mc-a');
@@ -74,15 +72,5 @@ test.describe('flag on', () => {
         for (const c of (value ?? '').split(' ')) expect(fixed).toContain(c);
       }
     }
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['color_codes'] });
-
-  test('flag off: codes are removed, no style (CMD-017, SEC-006)', async ({ page, state }) => {
-    const pre = await answer(page, state, 'off');
-    await stillText(page, pre);
-    await expect(pre.locator('[class*="text-mc-"]')).toHaveCount(0);
   });
 });

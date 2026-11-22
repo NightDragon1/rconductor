@@ -22,7 +22,7 @@ type Message = { ok: boolean; text: string } | null;
 const sayPrefixKey = (id: string) => ['server-groups', id, 'say-prefix'] as const;
 
 // sayPrefixQuery reads the prefix of a group (CMD-020, D-082). 403 and
-// 404 (flag off, group outside the scope, role without the right) are an
+// 404 (group outside the scope, role without the right) are an
 // answer, not a fault: the field is not shown.
 const sayPrefixQuery = (id: string) => ({
   queryKey: sayPrefixKey(id),
@@ -53,12 +53,13 @@ export function SayPrefixField({
 }) {
   const prefix = useQuery(sayPrefixQuery(group.id));
   const [message, setMessage] = useState<Message>(null);
+  // Only a reload starts the editor afresh; a new version keeps a draft.
+  const [round, setRound] = useState(0);
   if (!prefix.data) return null;
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-3">
       <Editor
-        // A new version (saved, reloaded) starts the draft afresh.
-        key={prefix.data.version}
+        key={round}
         group={group}
         data={prefix.data}
         readOnly={readOnly}
@@ -68,6 +69,7 @@ export function SayPrefixField({
         reload={async () => {
           await prefix.refetch();
           setMessage(null);
+          setRound((r) => r + 1);
         }}
       />
       <SeveralGroups group={group} groups={groups} servers={servers} />
@@ -95,21 +97,37 @@ function Editor({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const { saved, saving } = useUndo();
+  // base is the read the draft starts from. A new version without a draft
+  // becomes the new base; with a draft, the draft stays and the conflict
+  // shows, so that nothing typed goes without a word.
+  const [base, setBase] = useState(data);
   const [draft, setDraft] = useState(data.say_prefix);
   const [conflict, setConflict] = useState(false);
+  // While a write runs the field is locked, so nothing typed meanwhile is
+  // replaced by the stored value.
+  const [busy, setBusy] = useState(false);
   const inputId = useId();
   const hintId = useId();
-  const dirty = draft !== data.say_prefix;
+  const dirty = draft !== base.say_prefix;
+  if (data.version !== base.version && !conflict) {
+    if (draft === base.say_prefix) {
+      setBase(data);
+      setDraft(data.say_prefix);
+    } else {
+      setConflict(true);
+    }
+  }
   useUnsaved(dirty);
   const problem = prefixProblem(draft);
 
   const write = async (version: string, value: string) => {
     let done = null as SayPrefix | null;
+    setBusy(true);
     const r = await saving(
       outcome(group.id, async () => {
         done = must(await putSayPrefix(group.id, version, { say_prefix: value }));
       }),
-    );
+    ).finally(() => setBusy(false));
     if (r.reason === 'conflict') {
       setConflict(true);
       setMessage({ ok: false, text: t('admin.conflict') });
@@ -127,14 +145,16 @@ function Editor({
       text: t(value ? 'servers.sayPrefix.saved' : 'servers.sayPrefix.cleared'),
     });
     if (done) {
+      setBase(done);
+      setDraft((done as SayPrefix).say_prefix);
       qc.setQueryData(sayPrefixKey(group.id), done);
       onVersion((done as SayPrefix).version);
     }
     return done as SayPrefix | null;
   };
   const save = async (value: string) => {
-    const before = data.say_prefix;
-    const after = await write(data.version, value);
+    const before = base.say_prefix;
+    const after = await write(base.version, value);
     if (after) {
       saved(
         t('servers.sayPrefix.undo', { name: group.name }),
@@ -154,7 +174,7 @@ function Editor({
         value={draft}
         placeholder={t('servers.sayPrefix.placeholder')}
         aria-describedby={hintId}
-        readOnly={readOnly}
+        readOnly={readOnly || busy}
         disabled={conflict}
         onChange={(e) => {
           setMessage(null);
@@ -172,13 +192,18 @@ function Editor({
           {message.text}
         </p>
       )}
+      {conflict && !message && (
+        <p role="alert" className="text-sm text-danger">
+          {t('admin.conflict')}
+        </p>
+      )}
       {!readOnly && !conflict && (
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled={!dirty} onClick={() => void save(draft)}>
+          <Button variant="outline" disabled={!dirty || busy} onClick={() => void save(draft)}>
             {t('servers.sayPrefix.save')}
           </Button>
-          {data.say_prefix !== '' && (
-            <Button variant="outline" onClick={() => void save('')}>
+          {base.say_prefix !== '' && (
+            <Button variant="outline" disabled={busy} onClick={() => void save('')}>
               {t('servers.sayPrefix.clear')}
             </Button>
           )}

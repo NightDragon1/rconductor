@@ -8,10 +8,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/auth"
+	"github.com/NightDragon1/rconductor/internal/commands/limits"
+	"github.com/NightDragon1/rconductor/internal/diag/diagconf"
+	"github.com/NightDragon1/rconductor/internal/features"
+	"github.com/NightDragon1/rconductor/internal/logmask/maskconf"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -58,7 +63,7 @@ const (
 // SettingLogMasking holds the masking settings with the sealed texts of
 // the RCON admin (UI-022, D-088); it has its own API and never shows in
 // the global settings.
-const SettingLogMasking = "logs.masking"
+const SettingLogMasking = maskconf.Setting
 
 // Settings key of the audit retention and its default (AUD-003).
 const (
@@ -123,29 +128,29 @@ const (
 // the exports at the same time.
 const (
 	SettingDiagnosticsMaxBytes = "diagnostics.max_bytes"
-	DefaultDiagnosticsMaxBytes = 32 << 20
-	MinDiagnosticsMaxBytes     = 1 << 20
+	DefaultDiagnosticsMaxBytes = diagconf.DefaultMaxBytes
+	MinDiagnosticsMaxBytes     = diagconf.MinMaxBytes
 	SettingDiagnosticsParallel = "diagnostics.parallel"
-	DefaultDiagnosticsParallel = 2
-	MinDiagnosticsParallel     = 1
+	DefaultDiagnosticsParallel = diagconf.DefaultParallel
+	MinDiagnosticsParallel     = diagconf.MinParallel
 )
 
 // Command templates per server (CMD-008, D-068).
 const (
 	SettingTemplatesPerServer = "commands.templates_per_server"
-	DefaultTemplatesPerServer = 100
-	MinTemplatesPerServer     = 1
+	DefaultTemplatesPerServer = limits.DefaultTemplatesPerServer
+	MinTemplatesPerServer     = limits.MinTemplatesPerServer
 )
 
 // Commands to several servers at once (CMD-010, D-069): servers per call
 // and runs at the same time.
 const (
 	SettingMultiMaxServers = "commands.multi_max_servers"
-	DefaultMultiMaxServers = 50
-	MinMultiMaxServers     = 1
+	DefaultMultiMaxServers = limits.DefaultMultiMaxServers
+	MinMultiMaxServers     = limits.MinMultiMaxServers
 	SettingMultiParallel   = "commands.multi_parallel"
-	DefaultMultiParallel   = 8
-	MinMultiParallel       = 1
+	DefaultMultiParallel   = limits.DefaultMultiParallel
+	MinMultiParallel       = limits.MinMultiParallel
 )
 
 // rule checks one setting value; it returns the value to store.
@@ -236,14 +241,14 @@ var settingRules = map[string]rule{
 	SettingMessagesPerHour:         intRule(1, 1000),
 	SettingAgentDisplayNameMax:     intRule(MinAgentDisplayNameMax, 256),
 	SettingSystemLogMaxBytes:       intRule(MinSystemLogMaxBytes, 1<<30),
-	SettingDiagnosticsMaxBytes:     intRule(MinDiagnosticsMaxBytes, 1<<30),
-	SettingDiagnosticsParallel:     intRule(MinDiagnosticsParallel, 16),
+	SettingDiagnosticsMaxBytes:     intRule(MinDiagnosticsMaxBytes, diagconf.MaxMaxBytes),
+	SettingDiagnosticsParallel:     intRule(MinDiagnosticsParallel, diagconf.MaxParallel),
 	SettingMessagesMaxComment:      intRule(1, 4096),
 	SettingCommentsPerHour:         intRule(1, 3600),
 	SettingMessagesRetentionDays:   intRule(MinMessagesRetentionDays, 3650),
-	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
-	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
-	SettingMultiParallel:           intRule(MinMultiParallel, 64),
+	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, limits.MaxTemplatesPerServer),
+	SettingMultiMaxServers:         intRule(MinMultiMaxServers, limits.MaxMultiMaxServers),
+	SettingMultiParallel:           intRule(MinMultiParallel, limits.MaxMultiParallel),
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and
@@ -291,6 +296,7 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 }
 
 // Settings returns the global settings; only the RCON admin reads them.
+// Stored values of flags this build no longer has stay unread (NFR-019).
 func (s *Service) Settings(ctx context.Context, req Request) (map[string]json.RawMessage, error) {
 	if req.Actor.Role != perm.RCONAdmin {
 		s.deniedOn(ctx, req, "settings.read", "settings", "", "forbidden", nil)
@@ -302,9 +308,10 @@ func (s *Service) Settings(ctx context.Context, req Request) (map[string]json.Ra
 	}
 	out := map[string]json.RawMessage{}
 	for _, r := range rows {
-		if r.Key != SettingLogMasking {
-			out[r.Key] = json.RawMessage(r.Value)
+		if r.Key == SettingLogMasking || (strings.HasPrefix(r.Key, features.KeyPrefix) && !s.features.Known(r.Key)) {
+			continue
 		}
+		out[r.Key] = json.RawMessage(r.Value)
 	}
 	return out, nil
 }
@@ -325,6 +332,11 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 		}
 		s.deniedOn(ctx, req, "settings.update", "settings", "", "forbidden", map[string]any{"keys": keysTried})
 		return nil, ErrForbidden
+	}
+	// The version is required, checked after the role and before the
+	// values (403, 428, 400 as the contract says).
+	if version == nil {
+		return nil, ErrPreconditionRequired
 	}
 	values := map[string]string{}
 	for k, raw := range in {
@@ -348,11 +360,7 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
-	// Optimistic locking in one statement (revision 2.4 candidate 24);
-	// the version is required, checked after the role.
-	if version == nil {
-		return nil, ErrPreconditionRequired
-	}
+	// Optimistic locking in one statement (revision 2.4 candidate 24).
 	n, err := q.BumpSettingsVersion(ctx, *version)
 	if err != nil {
 		return nil, err
@@ -369,6 +377,17 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 	cur := map[string]json.RawMessage{}
 	for _, r := range rows {
 		cur[r.Key] = json.RawMessage(r.Value)
+	}
+	// Switching the second factor on for everyone needs one of the caller's
+	// own; checked last, so nothing is written (D-104).
+	if values[auth.SettingTOTPRequired] == "true" && string(cur[auth.SettingTOTPRequired]) != "true" {
+		u, err := q.GetUser(ctx, req.Actor.ID)
+		if err != nil {
+			return nil, err
+		}
+		if u.TotpEnabled == 0 {
+			return nil, ErrOwnTOTPRequired
+		}
 	}
 	changes := map[string]any{}
 	for k, v := range values {

@@ -18,6 +18,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/store"
+	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 )
 
 // Role is one of the four fixed roles (ROLE-001).
@@ -135,6 +136,14 @@ func (c *Checker) Invalidate() {
 	}
 }
 
+// FreshTx computes the rights of a user past the cache, read through q of
+// a writing transaction: the transaction holds the write lock, so no change
+// of a scope can come between the check and the commit, and the read needs
+// no second connection (ROLE-003).
+func (c *Checker) FreshTx(ctx context.Context, q *sqlitedb.Queries, userID string) (*Rights, error) {
+	return c.compute(ctx, q, userID)
+}
+
 // For returns the rights of a user. Unknown, disabled and deleted users
 // have no rights at all.
 func (c *Checker) For(ctx context.Context, userID string) (*Rights, error) {
@@ -146,7 +155,7 @@ func (c *Checker) For(ctx context.Context, userID string) (*Rights, error) {
 	gen := c.gen
 	c.mu.Unlock()
 
-	r, err := c.compute(ctx, userID)
+	r, err := c.compute(ctx, c.st.Queries, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -161,8 +170,7 @@ func (c *Checker) For(ctx context.Context, userID string) (*Rights, error) {
 	return r, nil
 }
 
-func (c *Checker) compute(ctx context.Context, userID string) (*Rights, error) {
-	q := c.st.Queries
+func (c *Checker) compute(ctx context.Context, q *sqlitedb.Queries, userID string) (*Rights, error) {
 	u, err := q.GetRightsUser(ctx, userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &Rights{UserID: userID, servers: map[string]ServerRights{}}, nil
@@ -177,7 +185,7 @@ func (c *Checker) compute(ctx context.Context, userID string) (*Rights, error) {
 
 	switch r.Role {
 	case RCONAdmin, ServerAdmin:
-		ids, err := c.adminServers(ctx, userID, r.Role)
+		ids, err := c.adminServers(ctx, q, userID, r.Role)
 		if err != nil {
 			return nil, err
 		}
@@ -185,7 +193,7 @@ func (c *Checker) compute(ctx context.Context, userID string) (*Rights, error) {
 			r.servers[id] = ServerRights{AllCommands: true, Agent: true}
 		}
 	case Moderator:
-		lists, err := c.moderatorLists(ctx, userID)
+		lists, err := c.moderatorLists(ctx, q, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -193,7 +201,7 @@ func (c *Checker) compute(ctx context.Context, userID string) (*Rights, error) {
 			r.servers[id] = ServerRights{Commands: l.paths(false), Passable: l.paths(true)}
 		}
 	case Supporter:
-		if err := c.supporterRights(ctx, userID, r); err != nil {
+		if err := c.supporterRights(ctx, q, userID, r); err != nil {
 			return nil, err
 		}
 	}
@@ -202,13 +210,13 @@ func (c *Checker) compute(ctx context.Context, userID string) (*Rights, error) {
 
 // adminServers returns all servers for the RCON admin and the scope of a
 // server admin (ROLE-002, ROLE-003).
-func (c *Checker) adminServers(ctx context.Context, userID string, role Role) ([]string, error) {
+func (c *Checker) adminServers(ctx context.Context, q *sqlitedb.Queries, userID string, role Role) ([]string, error) {
 	var ids []string
 	var err error
 	if role == RCONAdmin {
-		ids, err = c.st.Queries.ListActiveServerIDs(ctx)
+		ids, err = q.ListActiveServerIDs(ctx)
 	} else {
-		ids, err = c.st.Queries.ListAdminScopeServerIDs(ctx, userID)
+		ids, err = q.ListAdminScopeServerIDs(ctx, userID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("load admin scope: %w", err)
@@ -233,8 +241,7 @@ func (l list) paths(passableOnly bool) []string {
 // moderatorLists returns, per server, the union of the lists of all
 // moderator groups through which the moderator has that server (ROLE-010),
 // limited to the scope of each group's owner (Design 3.2).
-func (c *Checker) moderatorLists(ctx context.Context, userID string) (map[string]list, error) {
-	q := c.st.Queries
+func (c *Checker) moderatorLists(ctx context.Context, q *sqlitedb.Queries, userID string) (map[string]list, error) {
 	grants, err := q.ListModeratorGrants(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("load grants: %w", err)
@@ -245,7 +252,7 @@ func (c *Checker) moderatorLists(ctx context.Context, userID string) (map[string
 	for _, g := range grants {
 		scope, ok := ownerScope[g.OwnerID]
 		if !ok {
-			if scope, err = c.ownerScope(ctx, g.OwnerID); err != nil {
+			if scope, err = c.ownerScope(ctx, q, g.OwnerID); err != nil {
 				return nil, err
 			}
 			ownerScope[g.OwnerID] = scope
@@ -281,8 +288,8 @@ func (c *Checker) moderatorLists(ctx context.Context, userID string) (map[string
 
 // ownerScope is the server set of the owner of a moderator group: an
 // active RCON admin or server admin; any other owner grants nothing.
-func (c *Checker) ownerScope(ctx context.Context, ownerID string) (map[string]bool, error) {
-	o, err := c.st.Queries.GetRightsUser(ctx, ownerID)
+func (c *Checker) ownerScope(ctx context.Context, q *sqlitedb.Queries, ownerID string) (map[string]bool, error) {
+	o, err := q.GetRightsUser(ctx, ownerID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return map[string]bool{}, nil
 	}
@@ -293,7 +300,7 @@ func (c *Checker) ownerScope(ctx context.Context, ownerID string) (map[string]bo
 	if o.DisabledAt.Valid || o.DeletedAt.Valid || (role != RCONAdmin && role != ServerAdmin) {
 		return map[string]bool{}, nil
 	}
-	ids, err := c.adminServers(ctx, ownerID, role)
+	ids, err := c.adminServers(ctx, q, ownerID, role)
 	if err != nil {
 		return nil, err
 	}
@@ -308,12 +315,10 @@ func (c *Checker) ownerScope(ctx context.Context, ownerID string) (map[string]bo
 // commands of the list that applies to his moderator there (ROLE-007).
 // Nothing applies while the global switch is off or the moderator is not
 // allowed to have supporters (ROLE-006).
-func (c *Checker) supporterRights(ctx context.Context, userID string, r *Rights) error {
-	var enabled bool
-	if err := c.st.GlobalSetting(ctx, SettingSupportersEnabled, &enabled); err != nil || !enabled {
-		return nil //nolint:nilerr // a missing switch means off
+func (c *Checker) supporterRights(ctx context.Context, q *sqlitedb.Queries, userID string, r *Rights) error {
+	if !c.supportersOn(ctx, q) {
+		return nil
 	}
-	q := c.st.Queries
 	grants, err := q.ListSupporterGrants(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("load supporter grants: %w", err)
@@ -331,7 +336,7 @@ func (c *Checker) supporterRights(ctx context.Context, userID string, r *Rights)
 			case m.DisabledAt.Valid || m.DeletedAt.Valid || Role(m.Role) != Moderator || m.SupportersAllowed != 1:
 				lists = nil
 			default:
-				if lists, err = c.moderatorLists(ctx, g.ModeratorID); err != nil {
+				if lists, err = c.moderatorLists(ctx, q, g.ModeratorID); err != nil {
 					return err
 				}
 			}
@@ -419,4 +424,16 @@ func MinVisibleRank(viewer Role) int {
 		return 2
 	}
 	return 3
+}
+
+// SupportersOnTx reads the switch supporters.enabled through q of a
+// writing transaction: off when it is missing, broken or cannot be read,
+// the failure logged (ROLE-006, D-109).
+func (c *Checker) SupportersOnTx(ctx context.Context, q *sqlitedb.Queries) bool {
+	return c.supportersOn(ctx, q)
+}
+
+func (c *Checker) supportersOn(ctx context.Context, q *sqlitedb.Queries) bool {
+	var on bool
+	return c.st.LoggedSettingQ(ctx, q, c.log, SettingSupportersEnabled, &on) == nil && on
 }

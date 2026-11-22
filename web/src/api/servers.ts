@@ -113,8 +113,8 @@ export function useProfiles() {
   });
 }
 
-// useServerProfile reads the effective game profile of a server (UI-020,
-// flag profile_browser). A 404 (flag off, server outside the scope) is an
+// useServerProfile reads the effective game profile of a server (UI-020).
+// A 404 (server outside the scope) is an
 // answer, not a fault: it is not asked again.
 export function useServerProfile(id: string | undefined) {
   return useQuery({

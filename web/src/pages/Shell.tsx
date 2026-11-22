@@ -17,7 +17,7 @@ import {
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/api/client';
-import { MESSAGES_FLAG, useUnreadMessages } from '@/api/messages';
+import { useUnreadMessages } from '@/api/messages';
 import { useSession } from '@/api/session';
 import { AboutButton } from '@/components/AboutDialog';
 import { Logo } from '@/components/Logo';
@@ -129,7 +129,7 @@ function Brand({ collapsed }: { collapsed: boolean }) {
 function Navigation({ collapsed, onNavigate }: { collapsed: boolean; onNavigate?: () => void }) {
   const { t } = useTranslation();
   const { data: session } = useSession();
-  const unread = useUnreadMessages(!!session?.ui.features?.includes(MESSAGES_FLAG)).data ?? 0;
+  const unread = useUnreadMessages(!!session).data ?? 0;
   if (!session) return null;
   const ctx = navContext(session.ui);
   const visible = (list: NavEntry[]) => list.filter((e) => shown(e, session.user.role, ctx));

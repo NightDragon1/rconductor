@@ -57,12 +57,13 @@ export function MessagesPage() {
     queryFn: async ({ pageParam }) =>
       must(
         await api.GET('/messages', {
-          params: { query: { limit: pageSize, before: pageParam } },
+          params: { query: { limit: pageSize, cursor: pageParam } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) =>
-      last.items.length < pageSize ? undefined : last.items[last.items.length - 1]?.id,
+    // The backend says whether more follow (MSG-001): no extra request
+    // after a page of exactly pageSize, and none lost after a delete.
+    getNextPageParam: (last) => last.next_cursor,
   });
   const [open, setOpen] = useState<string | null>(null);
   const [compose, setCompose] = useState(false);
@@ -331,6 +332,9 @@ function MessageItem({
   );
 }
 
+// Audiences whose recipients never include the RCON admin (D-085).
+const notToAdmin: string[] = ['server_admins', 'moderators', 'scope', 'scope_moderators'];
+
 // MessageView shows the whole message on top and its comments below as a
 // thread, marks it read for a recipient and offers deleting to the sender
 // and the RCON admin (D-085). Below 768 px it leads back to the list.
@@ -426,12 +430,13 @@ function Comments({ message: m, mine }: { message: Message; mine: boolean }) {
     queryFn: async ({ pageParam }) =>
       must(
         await api.GET('/messages/{id}/comments', {
-          params: { path: { id: m.id }, query: { limit: pageSize, after: pageParam } },
+          params: { path: { id: m.id }, query: { limit: pageSize, cursor: pageParam } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) =>
-      last.items.length < pageSize ? undefined : last.items[last.items.length - 1]?.id,
+    // The backend says whether more follow (MSG-001): no extra request
+    // after a page of exactly pageSize, and none lost after a delete.
+    getNextPageParam: (last) => last.next_cursor,
   });
   const [text, setText] = useState('');
   const [note, setNote] = useState<Note>(null);
@@ -441,6 +446,9 @@ function Comments({ message: m, mine }: { message: Message; mine: boolean }) {
   const admin = session?.user.role === 'rcon_admin';
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
   const mayDelete = (c: MessageComment) => admin || mine || (!!c.author.id && c.author.id === me);
+  // The RCON admin receives no message to server admins, moderators or a
+  // scope; there only the sender comments. The backend decides (D-085).
+  const mayComment = mine || !admin || !notToAdmin.includes(m.audience);
 
   const changed = () => qc.invalidateQueries({ queryKey: messagesKey });
 
@@ -533,26 +541,28 @@ function Comments({ message: m, mine }: { message: Message; mine: boolean }) {
           {t('messages.moreComments')}
         </Button>
       )}
-      <form onSubmit={(e) => void send(e)} className="flex flex-col gap-2">
-        <label htmlFor={textId} className="text-muted">
-          {t('messages.comment')}
-        </label>
-        <textarea
-          id={textId}
-          rows={2}
-          className={area}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        {note && (
-          <p role="alert" className="text-danger wrap-anywhere">
-            {note.text}
-          </p>
-        )}
-        <Button type="submit" className="self-start" disabled={busy || text.trim() === ''}>
-          {t('messages.sendComment')}
-        </Button>
-      </form>
+      {mayComment && (
+        <form onSubmit={(e) => void send(e)} className="flex flex-col gap-2">
+          <label htmlFor={textId} className="text-muted">
+            {t('messages.comment')}
+          </label>
+          <textarea
+            id={textId}
+            rows={2}
+            className={area}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          {note && (
+            <p role="alert" className="text-danger wrap-anywhere">
+              {note.text}
+            </p>
+          )}
+          <Button type="submit" className="self-start" disabled={busy || text.trim() === ''}>
+            {t('messages.sendComment')}
+          </Button>
+        </form>
+      )}
     </section>
   );
 }

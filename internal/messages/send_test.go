@@ -257,7 +257,7 @@ func TestListGetRead(t *testing.T) {
 	}
 	page := func(r users.Request, limit int, before string) Page {
 		t.Helper()
-		p, err := w.s.List(ctx, r, limit, before)
+		p, err := w.s.List(ctx, r, limit, before, "")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -97,9 +97,14 @@ func checkSayPrefix(p string) (string, error) {
 // of the group: it is checked and raised in the same transaction as the
 // prefix is written, so a concurrent change of the group gets 409. Rights
 // come before the version (D-051); the change is in the audit.
-func (s *Service) SetSayPrefix(ctx context.Context, req users.Request, id, prefix string, version *int64) (string, error) {
+func (s *Service) SetSayPrefix(ctx context.Context, req users.Request, id, prefix string, present bool, version *int64) (string, error) {
 	if err := s.sayPrefixAccess(ctx, req, id, actionSayPrefixUpdate); err != nil {
 		return "", err
+	}
+	// The field is required: "" removes the prefix, a missing one or null
+	// changes nothing and is refused (CMD-020).
+	if !present {
+		return "", &users.InvalidError{Detail: "say_prefix is required; \"\" removes the prefix"}
 	}
 	p, err := checkSayPrefix(prefix)
 	if err != nil {
@@ -108,12 +113,25 @@ func (s *Service) SetSayPrefix(ctx context.Context, req users.Request, id, prefi
 	if version == nil {
 		return "", users.ErrPreconditionRequired
 	}
+	if s.beforeWrite != nil {
+		s.beforeWrite()
+	}
 	tx, err := s.st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
+	// The transaction holds the write lock from its start: the scope read
+	// again through it cannot change before the commit. The refusal is
+	// written after the rollback; the open transaction holds the lock.
+	if ok, err := s.groupInScopeQ(ctx, q, req, id); err != nil {
+		return "", err
+	} else if !ok {
+		_ = tx.Rollback()
+		s.denied(ctx, req, actionSayPrefixUpdate, "server_group", id, "not_found")
+		return "", users.ErrNotFound
+	}
 	n, err := q.BumpServerGroupVersion(ctx, sqlitedb.BumpServerGroupVersionParams{ID: id, Version: *version})
 	if err != nil {
 		return "", err

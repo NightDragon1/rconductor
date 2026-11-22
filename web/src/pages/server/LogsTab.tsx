@@ -4,7 +4,6 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, must } from '@/api/client';
 import { useServer } from '@/api/live-servers';
-import { useSession } from '@/api/session';
 import type { Server } from '@/api/servers';
 import { CopyButton } from '@/components/CopyButton';
 import { ForeignText } from '@/components/ForeignText';
@@ -33,10 +32,7 @@ export function LogsView({ server }: { server: Server }) {
   const id = server.id;
   useLogsFeed(id, !!id);
   const buf = useBuffer(id);
-  const [filter, setFilter] = useState('');
-  // The two-part filter behind its flag (UI-019, NFR-019).
-  const { data: session } = useSession();
-  const split = session?.ui.features?.includes('log_filter_split') ?? false;
+  // The two-part filter (UI-019).
   const [bracket, setBracket] = useState('');
   const [rest, setRest] = useState('');
   const [op, setOp] = useState<LogOp>('and');
@@ -49,17 +45,9 @@ export function LogsView({ server }: { server: Server }) {
   const pre = useRef<HTMLPreElement>(null);
 
   const all = buf.logs.flatMap((l) => l.lines.map(stripCodes));
-  const q = filter.trim().toLowerCase();
-  const compiled = split ? compileFilter({ bracket, text: rest, op }) : undefined;
+  const compiled = compileFilter({ bracket, text: rest, op });
   // A part the filter refuses filters nothing; the hint says why.
-  const splitTest = compiled?.ok ? compiled.test : undefined;
-  const shown = split
-    ? splitTest
-      ? all.filter(splitTest)
-      : all
-    : q
-      ? all.filter((l) => l.toLowerCase().includes(q))
-      : all;
+  const shown = compiled.ok && compiled.test ? all.filter(compiled.test) : all;
   const text = shown.join('\n');
 
   // Follow keeps the end in view; scrolling up ends it (Design 6.1).
@@ -122,52 +110,41 @@ export function LogsView({ server }: { server: Server }) {
           {t('logs.clear')}
         </Button>
         <CopyButton text={text} target={pre} label={t('logs.copy')} />
-        {split ? (
-          <div className="ml-auto flex w-full flex-wrap items-center gap-2 max-md:col-span-2 md:w-auto">
-            <Input
-              type="search"
-              className="w-full md:w-48"
-              placeholder={t('logs.split.bracketHint')}
-              aria-label={t('logs.split.bracket')}
-              value={bracket}
-              onChange={(e) => setBracket(e.target.value)}
-            />
-            <label htmlFor={opId} className="sr-only">
-              {t('logs.split.op')}
-            </label>
-            <select
-              id={opId}
-              className="h-9 rounded-md border border-control bg-surface px-2 text-sm max-md:h-11"
-              value={op}
-              onChange={(e) => setOp(e.target.value as LogOp)}
-            >
-              {LOG_OPS.map((o) => (
-                <option key={o} value={o}>
-                  {t(`logs.split.ops.${o}`)}
-                </option>
-              ))}
-            </select>
-            <Input
-              type="search"
-              className="w-full md:w-48"
-              placeholder={t('console.filter')}
-              aria-label={t('logs.split.text')}
-              value={rest}
-              onChange={(e) => setRest(e.target.value)}
-            />
-          </div>
-        ) : (
+        <div className="ml-auto flex w-full flex-wrap items-center gap-2 max-md:col-span-2 md:w-auto">
           <Input
             type="search"
-            className="ml-auto w-full max-md:col-span-2 md:w-56"
-            placeholder={t('console.filter')}
-            aria-label={t('logs.filterLabel')}
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            className="w-full md:w-48"
+            placeholder={t('logs.split.bracketHint')}
+            aria-label={t('logs.split.bracket')}
+            value={bracket}
+            onChange={(e) => setBracket(e.target.value)}
           />
-        )}
+          <label htmlFor={opId} className="sr-only">
+            {t('logs.split.op')}
+          </label>
+          <select
+            id={opId}
+            className="h-9 rounded-md border border-control bg-surface px-2 text-sm max-md:h-11"
+            value={op}
+            onChange={(e) => setOp(e.target.value as LogOp)}
+          >
+            {LOG_OPS.map((o) => (
+              <option key={o} value={o}>
+                {t(`logs.split.ops.${o}`)}
+              </option>
+            ))}
+          </select>
+          <Input
+            type="search"
+            className="w-full md:w-48"
+            placeholder={t('console.filter')}
+            aria-label={t('logs.split.text')}
+            value={rest}
+            onChange={(e) => setRest(e.target.value)}
+          />
+        </div>
       </div>
-      {compiled && !compiled.ok && (
+      {!compiled.ok && (
         <p role="status" className="border-b border-border px-3 py-2 text-sm text-warn">
           {t(`logs.split.problem.${compiled.problem}`, { max: MAX_FILTER_LENGTH })}
         </p>

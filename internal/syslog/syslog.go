@@ -13,10 +13,12 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
@@ -46,6 +48,8 @@ type Sink struct {
 	lost  atomic.Int64
 	// failing: the last write failed (logged once; writer goroutine only).
 	failing bool
+	// told is the number of lost lines reported so far (writer goroutine).
+	told int64
 }
 
 // NewSink returns an empty sink; lines wait in the queue until Run.
@@ -97,18 +101,32 @@ func (s *Sink) drain(ctx context.Context, st *store.Store, m Masker, log *slog.L
 			break
 		}
 		if len(lines) == 0 {
+			s.tellLost(log)
 			return
 		}
 		if err := s.write(ctx, st, m, lines); err != nil {
 			s.lost.Add(int64(len(lines)))
 			if !s.failing {
-				log.Warn("system log not written", slog.Int64("lost", s.Lost()), slog.Any("err", err))
+				log.Warn("system log not written", slog.Any("err", err))
 			}
 			s.failing = true
 		} else {
 			s.failing = false
 		}
 	}
+}
+
+// tellLost reports the lines lost since the last report, at most once per
+// drain, with the event code (D-077, D-091). While writes fail it waits:
+// its own line would be lost too and keep the report going; the next
+// drain that writes tells the number.
+func (s *Sink) tellLost(log *slog.Logger) {
+	all := s.Lost()
+	if all == s.told || s.failing {
+		return
+	}
+	log.Warn("system log lines lost", logging.Event(logging.SyslogLinesLost), slog.Int64("lost", all-s.told), slog.Int64("lost_total", all))
+	s.told = all
 }
 
 func (s *Sink) write(ctx context.Context, st *store.Store, m Masker, lines []string) error {
@@ -137,22 +155,66 @@ type head struct{ TS, Level, Event string }
 // maskJSON masks a JSON line of the panel value by value through Rewrite
 // and reads its head.
 func maskJSON(line string, m Masker) (string, head) {
-	var h struct {
-		TS    string `json:"ts"`
-		Level string `json:"level"`
-		Event string `json:"event"`
+	return MaskLine(line, m), headOf(line)
+}
+
+// headOf reads ts, level and event of a JSON line from their first
+// occurrence: the handler writes them first, so an attribute of the same
+// name later in the line cannot replace them.
+func headOf(line string) head {
+	var h head
+	dec := json.NewDecoder(strings.NewReader(line))
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return h
 	}
-	_ = json.Unmarshal([]byte(line), &h)
-	return MaskLine(line, m), head{TS: h.TS, Level: h.Level, Event: h.Event}
+	seen := map[string]bool{}
+	for dec.More() {
+		k, err := dec.Token()
+		if err != nil {
+			return h
+		}
+		var v json.RawMessage
+		if err := dec.Decode(&v); err != nil {
+			return h
+		}
+		key, _ := k.(string)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		var str string
+		if json.Unmarshal(v, &str) != nil {
+			continue
+		}
+		switch key {
+		case "ts":
+			h.TS = str
+		case "level":
+			h.Level = str
+		case "event":
+			h.Event = str
+		}
+	}
+	return h
 }
 
 // MaskLine masks a log line through Rewrite, such as the agent's own log
 // (D-091).
 func MaskLine(line string, m Masker) string {
-	return Rewrite(line, func(texts []string) []string {
-		out, _ := m.Lines(texts, nil)
+	out, _ := MaskLineCounted(line, m)
+	return out
+}
+
+// MaskLineCounted is MaskLine with the number of values the masker held
+// back for its time budget.
+func MaskLineCounted(line string, m Masker) (string, int) {
+	held := 0
+	out := Rewrite(line, func(texts []string) []string {
+		out, n := m.Lines(texts, nil)
+		held += n
 		return out
 	})
+	return out, held
 }
 
 // Rewrite hands the text values of an encoded line or document to f, in a
@@ -179,15 +241,32 @@ func Rewrite(line string, f func([]string) []string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// walk replaces every text value in v, in a fixed order.
+// walk replaces every text in v, object keys included (foreign JSON may
+// carry a host as a key), in a fixed order: per key the key, then its
+// value. A key that becomes another's gets ~2, ~3 and so on.
 func walk(v any, f func(string) string) any {
 	switch x := v.(type) {
 	case string:
 		return f(x)
 	case map[string]any:
+		out := make(map[string]any, len(x))
+		next := map[string]int{} // the next counter per key that met another
 		for _, k := range slices.Sorted(maps.Keys(x)) {
-			x[k] = walk(x[k], f)
+			nk := f(k)
+			val := walk(x[k], f)
+			if _, taken := out[nk]; taken {
+				base := nk
+				for n := max(next[base], 2); ; n++ {
+					nk = base + "~" + strconv.Itoa(n)
+					if _, used := out[nk]; !used {
+						next[base] = n + 1
+						break
+					}
+				}
+			}
+			out[nk] = val
 		}
+		return out
 	case []any:
 		for i := range x {
 			x[i] = walk(x[i], f)

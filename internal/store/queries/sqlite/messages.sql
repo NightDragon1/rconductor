@@ -74,5 +74,11 @@ SELECT user_id FROM message_recipients WHERE message_id = ?1
 UNION
 SELECT sender_id FROM messages WHERE id = ?1 AND sender_id IS NOT NULL;
 
+-- name: DeleteUserMessageSends :exec
+DELETE FROM message_sends WHERE user_id = ?;
+
+-- name: DeleteUserCommentSends :exec
+DELETE FROM comment_sends WHERE user_id = ?;
+
 -- SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 -- SPDX-License-Identifier: AGPL-3.0-or-later

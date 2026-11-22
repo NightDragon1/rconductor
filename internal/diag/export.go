@@ -7,17 +7,24 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
+	"slices"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
+	"github.com/NightDragon1/rconductor/internal/diag/diagconf"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logmask"
+	"github.com/NightDragon1/rconductor/internal/logmask/maskconf"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -41,8 +48,11 @@ var ErrBusy = errors.New("too many diagnostic packages at the same time")
 // and the system log of the period as text. Every file goes through
 // syslog.Rewrite, so its values are masked (D-088), blacked out and
 // pseudonymized as they were stored or logged, before the file is encoded
-// again. Above diagnostics.max_bytes the oldest lines of the system log
-// stay out and the package says so. Audited with period and size.
+// again. Within diagnostics.max_bytes the agent logs take their part
+// first, the system log the rest; the oldest lines of each stay out and
+// the file says so. The heads of the files are written also without room:
+// about 200 bytes per agent and those of the system log past the budget. Audited with period, size and
+// whether anything was cut.
 func (s *Service) Export(ctx context.Context, req users.Request, from, to time.Time) ([]byte, error) {
 	if req.Actor.Role != perm.RCONAdmin {
 		return nil, s.denied(ctx, req, "diagnostics.exported")
@@ -60,12 +70,18 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 		return nil, err
 	}
 	p := newPseudonyms(known)
+	// Without a masker the built-in list still applies (D-107, fail closed).
 	clean := func(texts []string) []string {
 		if s.mask != nil {
 			texts, _ = s.mask.Lines(texts, nil)
+		} else {
+			texts = logmask.ListLines(texts)
 		}
 		return p.apply(texts)
 	}
+	// rw blacks out one encoded line or document: domain values by their
+	// key first, then every text value (D-090).
+	rw := func(line string) string { return syslog.Rewrite(p.domains(line), clean) }
 	type out struct{ name, text string }
 	var all []out
 	size := 0
@@ -74,38 +90,44 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 		if err != nil {
 			return nil, err
 		}
-		all = append(all, out{f.name, syslog.Rewrite(string(doc), clean) + "\n"})
-	}
-	agents, err := s.st.Queries.ListAgents(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, a := range agents {
-		if a.Status != "active" {
-			continue
-		}
-		var b strings.Builder
-		b.WriteString(Notice + "\n")
-		lines, cut, err := s.tail(ctx, a.ID, agentproto.MaxLogLines)
-		switch {
-		case errors.Is(err, ErrAgentUnavailable):
-			b.WriteString("The agent is offline; its log is not in this package.\n")
-		case errors.Is(err, ErrAgentUnsupported):
-			b.WriteString("The agent does not send its own log.\n")
-		case err != nil:
-			b.WriteString("The agent could not read its log.\n")
-		case cut:
-			b.WriteString("Only the last lines of the log.\n")
-		}
-		for _, l := range lines {
-			b.WriteString(syslog.Rewrite(l, clean) + "\n")
-		}
-		all = append(all, out{"agents/" + a.ID + ".log", b.String()})
+		all = append(all, out{f.name, rw(string(doc)) + "\n"})
 	}
 	for _, o := range all {
 		size += len(o.name) + len(o.text)
 	}
-	text, shortened, err := s.systemLog(ctx, from, to, s.maxBytes(ctx)-size, clean)
+	budget := s.maxBytes(ctx) - size
+	agents, err := s.st.Queries.ListAgents(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var active []string
+	for _, a := range agents {
+		if a.Status == "active" {
+			active = append(active, a.ID)
+		}
+	}
+	// All agents at once under one deadline, so the slot is not held for
+	// one timeout per agent (D-091).
+	tails := make([]tailResult, len(active))
+	tctx, cancel := context.WithTimeout(ctx, agentTimeout)
+	var wg sync.WaitGroup
+	for i, id := range active {
+		wg.Go(func() {
+			r := &tails[i]
+			r.lines, r.cut, r.err = s.tail(tctx, id, agentproto.MaxLogLines)
+		})
+	}
+	wg.Wait()
+	cancel()
+	agentsCut := false
+	for i, id := range active {
+		name := "agents/" + id + ".log"
+		text, used, cut := agentLog(tails[i], rw, budget-len(name))
+		agentsCut = agentsCut || cut
+		budget -= len(name) + used
+		all = append(all, out{name, text})
+	}
+	text, shortened, err := s.systemLog(ctx, from, to, budget, rw)
 	if err != nil {
 		return nil, err
 	}
@@ -127,21 +149,57 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 	if _, err := audit.Write(ctx, s.st.DB, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
 		TargetType: "diagnostics", Action: "diagnostics.exported", Result: audit.ResultOK,
-		Payload: map[string]any{"from": from.UTC(), "to": to.UTC(), "bytes": b.Len(), "shortened": shortened},
+		Payload: map[string]any{"from": from.UTC(), "to": to.UTC(), "bytes": b.Len(), "shortened": shortened || agentsCut},
 	}); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
 }
 
+type tailResult struct {
+	lines []string
+	cut   bool
+	err   error
+}
+
+// agentLog writes the log of one agent: the head, then its newest lines as
+// far as budget bytes allow; used counts the text beyond the head
+// (diagnostics.max_bytes, D-091).
+func agentLog(t tailResult, rw func(string) string, budget int) (text string, used int, cut bool) {
+	head := Notice + "\n"
+	switch {
+	case errors.Is(t.err, ErrAgentUnavailable):
+		head += "The agent is offline; its log is not in this package.\n"
+	case errors.Is(t.err, ErrAgentUnsupported):
+		head += "The agent does not send its own log.\n"
+	case t.err != nil:
+		head += "The agent could not read its log.\n"
+	case t.cut:
+		head += "Only the last lines of the log.\n"
+	}
+	budget -= len(head)
+	var lines []string
+	for i := len(t.lines) - 1; i >= 0; i-- {
+		l := oneLine(rw(t.lines[i])) + "\n"
+		if used+len(l) > budget {
+			head, cut = head+"Shortened by diagnostics.max_bytes.\n", true
+			break
+		}
+		lines, used = append(lines, l), used+len(l)
+	}
+	slices.Reverse(lines)
+	return head + strings.Join(lines, ""), len(head) + used, cut
+}
+
 // systemLog writes the stored lines of the period, oldest first, through
-// clean; beyond budget bytes the oldest stay out, and the head says from
+// rw; beyond budget bytes the oldest stay out, and the head says from
 // when the lines are.
-func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int, clean func([]string) []string) (string, bool, error) {
+func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int, rw func(string) string) (string, bool, error) {
 	const page = 1000
 	var lines, stamps []string
-	size, shortened := 0, false
-	for after := int64(0); ; {
+	size, shortened := 0, budget <= 0
+	// Without room no line is read; the head says so (D-091).
+	for after := int64(0); budget > 0; {
 		rows, err := s.st.Queries.ListSystemLog(ctx, sqlitedb.ListSystemLogParams{
 			FromTs: from.UTC().Format(store.TimeLayout), ToTs: to.UTC().Format(store.TimeLayout), After: after, MaxRows: page,
 		})
@@ -149,7 +207,7 @@ func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int,
 			return "", false, err
 		}
 		for _, r := range rows {
-			l := syslog.Rewrite(r.Text, clean) + "\n"
+			l := rw(r.Text) + "\n"
 			lines, stamps, size, after = append(lines, l), append(stamps, r.Ts), size+len(l), r.ID
 			for size > budget && len(lines) > 0 {
 				size, lines, stamps, shortened = size-len(lines[0]), lines[1:], stamps[1:], true
@@ -173,18 +231,18 @@ func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int,
 // maxBytes is diagnostics.max_bytes; a value not readable is the last one
 // read or the default (F-93).
 func (s *Service) maxBytes(ctx context.Context) int {
-	n := users.DefaultDiagnosticsMaxBytes
-	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsMaxBytes, &n); err != nil || n < users.MinDiagnosticsMaxBytes {
-		n = users.DefaultDiagnosticsMaxBytes
+	n := diagconf.DefaultMaxBytes
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsMaxBytes, &n); err != nil || n < diagconf.MinMaxBytes || n > diagconf.MaxMaxBytes {
+		n = diagconf.DefaultMaxBytes
 	}
 	return n
 }
 
 // acquire takes one of diagnostics.parallel slots.
 func (s *Service) acquire(ctx context.Context) (func(), bool) {
-	n := users.DefaultDiagnosticsParallel
-	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsParallel, &n); err != nil || n < users.MinDiagnosticsParallel {
-		n = users.DefaultDiagnosticsParallel
+	n := diagconf.DefaultParallel
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsParallel, &n); err != nil || n < diagconf.MinParallel || n > diagconf.MaxParallel {
+		n = diagconf.DefaultParallel
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -240,6 +298,12 @@ func (s *Service) areas(ctx context.Context) ([]file, []string, error) {
 			AgentID: r.AgentID.String, Container: r.ContainerName.String, TLSNotAfter: r.TlsNotAfter.String})
 		known = append(known, r.Host)
 	}
+	// The mail server is a host the panel stores too (D-090).
+	if m, err := q.GetSMTPSettings(ctx); err == nil {
+		known = append(known, m.Host)
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, err
+	}
 	profiles, err := q.ListGameProfiles(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -279,7 +343,7 @@ func (s *Service) areas(ctx context.Context) ([]file, []string, error) {
 // by its name or by its last part, and the texts of the log masking.
 func sensitiveSetting(key string) bool {
 	last := key[strings.LastIndex(key, ".")+1:]
-	return logging.IsSensitiveKey(key) || logging.IsSensitiveKey(last) || key == users.SettingLogMasking
+	return logging.IsSensitiveKey(key) || logging.IsSensitiveKey(last) || key == maskconf.Setting
 }
 
 // rawOr keeps a stored JSON value as it is, or def when it is not JSON.
@@ -288,4 +352,16 @@ func rawOr(v, def string) json.RawMessage {
 		return json.RawMessage(v)
 	}
 	return json.RawMessage(def)
+}
+
+// oneLine keeps a foreign log line on its line and in its order: control
+// characters other than the tab (line breaks included), line and paragraph
+// separators and format characters (bidi controls) become U+FFFD (SEC-006).
+func oneLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r != '\t' && (unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf)) {
+			return '\uFFFD'
+		}
+		return r
+	}, s)
 }

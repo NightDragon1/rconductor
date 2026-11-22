@@ -35,6 +35,11 @@ for tag in v1.0.0 1.0 v1 latest v0 v1.1-rc v1.1rc1 v1.1-rc1a v1.1-rc0 v1.1-RC1 v
     fails=$((fails + 1))
   fi
 done
+# A tag over two lines is refused, also when its first line is valid.
+if scripts/release-version.sh "$(printf 'v1.0\nlatest')" >/dev/null 2>&1; then
+  echo "two-line tag: must be refused" >&2
+  fails=$((fails + 1))
+fi
 
 images=$(scripts/release-images.sh panel "$(field v0.9 tags)" | grep -v EOF)
 expect "v0.9 images" "ghcr.io/x/rconductor-panel:0.9 docker.io/x/rconductor-panel:0.9" "$(echo $images)"
@@ -133,7 +138,8 @@ if [ "$4" = --raw ]; then
   exit 0
 fi
 # A line "tag" holds the image sha256:i, a line "tag=digest" another one.
-d=$(awk -v t="${ref##*:}" '$0 == t { print "sha256:i"; exit } index($0, t "=") == 1 { print substr($0, length(t) + 2); exit }' "$WORLD/tags")
+# Compared as strings: in the C locale awk takes 1.0 and 1 as equal numbers.
+d=$(awk -v t="${ref##*:}" '$0 "" == t "" { print "sha256:i"; exit } index($0, t "=") == 1 { print substr($0, length(t) + 2); exit }' "$WORLD/tags")
 if [ -n "$d" ]; then echo "$d"; exit 0; fi
 echo "$ref: not found" >&2
 exit 1

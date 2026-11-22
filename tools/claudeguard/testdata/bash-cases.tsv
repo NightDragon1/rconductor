@@ -45,6 +45,16 @@ deny	C35	gh api -iX DELETE repos/x/y/git/refs/heads/main
 deny	C35	gh api repos/x/y/issues -iF title=t
 deny	C35	gh api repos/x/y/issues -if title=t
 deny	C35	gh api -iXDELETE repos/x/y
+deny	C35	gh api -iXPOST repos/x/y/issues
+deny	C44	gh pr update-branch 12
+deny	C44	gh pr update-branch 12 --rebase
+deny	C44	env gh pr update-branch 12
+deny	C45	git push origin renovate/go-modules
+deny	C45	git push origin HEAD:renovate/npm
+deny	C35	gh api -iiXPOST repos/x/y
+deny	C35	gh api repos/x/y/issues -hhF a=b
+allow	ok	git push -u origin feat/x
+deny	C35	gh api repos/x/y/issues -hiXPOST
 deny	C35	gh api -iX=PUT repos/x/y
 deny	C35	gh api repos/x/y/issues -iFtitle=t
 deny	C35	gh api -ifbody=x repos/x/y/issues

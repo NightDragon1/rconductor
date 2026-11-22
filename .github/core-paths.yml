@@ -24,6 +24,14 @@ authz:
   - internal/web/web.go
   - internal/users/assignments.go
   - internal/users/groups.go
+# the queries that write what the rights check reads (lists, assignments,
+# groups), as perm.sql reads it
+  - internal/store/queries/sqlite/commandlists.sql
+  - internal/store/queries/sqlite/assignments.sql
+  - internal/store/queries/sqlite/groups.sql
+  - internal/store/queries/sqlite/users.sql
+# the operations allowed while the second factor is being set up
+  - internal/web/api_secondfactor.go
 # who sees which message (MSG-001, MSG-002), with the handlers and the
 # request (actor) they hand to the service
   - internal/messages/**
@@ -47,6 +55,14 @@ cmd:
   - internal/profiles/forserver.go
   - internal/profiles/importer.go
   - internal/profiles/presence.go
+# the tests of the profile rules (D-074, D-076), so that no stage-1 change
+# weakens them
+  - internal/profiles/effective_test.go
+  - internal/profiles/combination_test.go
+  - internal/profiles/slash_test.go
+  - internal/profiles/profile_test.go
+  - internal/profiles/message_test.go
+  - internal/profiles/c7_test.go
 # the queries the pipeline and its rights check run
   - internal/store/queries/sqlite/perm.sql
   - internal/store/queries/sqlite/audit.sql
@@ -65,10 +81,9 @@ render:
 
 # redact: no secrets in logs (SEC-012), masking of container logs (UI-022)
 redact:
-  - internal/logging/redact.go
-  - internal/logging/logging.go
-# the wrapper of the log handler that production builds compile in
-  - internal/logging/witness.go
+# the whole logging package: a new file there reaches the handler and its
+# blacking out (SEC-012)
+  - internal/logging/**
   - internal/logmask/**
   - internal/agentview/logs.go
   - internal/servers/logs.go
@@ -93,6 +108,9 @@ input:
 # boundary: API contract, database schema and CI
 boundary:
   - api/**
+# the hand-written code of the generated API package, such as how request
+# bodies decode; api.gen.go itself is generated and decides nothing
+  - internal/api/**
   - migrations/**
   - .github/**
 
@@ -119,7 +137,13 @@ rules:
   - web/redocly.*
   - web/.redocly.*
   - web/index.html
-  - web/vite.config.ts
+  - web/vite.config.*
+  - Makefile
+# the license check: what reuse lint asks for (NFR-021)
+  - REUSE.toml
+  - .reuse/**
+  - LICENSES/**
+  - scripts/check-spdx.sh
 # which query files sqlc generates the database code from
   - sqlc.yaml
 
@@ -127,7 +151,9 @@ rules:
 # lockfiles
 generated:
   - internal/api/api.gen.go
-  - internal/store/sqlitedb/**
+  - internal/store/sqlitedb/*.sql.go
+  - internal/store/sqlitedb/db.go
+  - internal/store/sqlitedb/models.go
   - web/src/api/schema.d.ts
 # Lockfiles: the PR text lists the packages they add (name@version and
 # origin) and the changed origins or checksums, as scripts/lockfile-packages.py

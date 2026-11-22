@@ -3,9 +3,6 @@
 import type { Server } from '@/api/servers';
 import { cardStatus, summaryOf } from '@/lib/status';
 
-// HOST_GROUPS_FLAG groups the overview by host (UI-021, D-089).
-export const HOST_GROUPS_FLAG = 'host_groups';
-
 export type HostCounts = { running: number; stopped: number; error: number };
 
 export type HostGroup = {

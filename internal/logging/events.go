@@ -14,12 +14,19 @@ const (
 	DBMigrateStart  Code = "db.migrate.start"
 	DBMigrateDone   Code = "db.migrate.done"
 	DBMigrateLockWt Code = "db.migrate.lock_wait"
-	KeyCreated      Code = "key.created"
-	KeyLoaded       Code = "key.loaded"
-	BackupDone      Code = "backup.done"
-	BackupFailed    Code = "backup.failed"
-	AuditPurge      Code = "audit.purge"
-	AuditLost       Code = "audit.entry_lost"
+	// DBBindingReleased: an upgrade released a second binding of a
+	// container; the oldest server keeps it (D-105).
+	DBBindingReleased Code = "db.migrate.binding_released"
+	KeyCreated        Code = "key.created"
+	KeyLoaded         Code = "key.loaded"
+	BackupDone        Code = "backup.done"
+	BackupFailed      Code = "backup.failed"
+	AuditPurge        Code = "audit.purge"
+	AuditLost         Code = "audit.entry_lost"
+	// SyslogLinesLost: lines of the panel log not kept in the system log
+	// (full queue or a failed write, D-091); the number since the last
+	// report and in all.
+	SyslogLinesLost Code = "syslog.lines_lost"
 	// SettingReadFailed: a setting that guards something could not be
 	// read; the key and whether the last value read is kept, never a value.
 	SettingReadFailed Code = "setting.read_failed"
@@ -114,6 +121,10 @@ const (
 	WSSubscribe       Code = "ws.subscribe"
 	WSSubscribeDenied Code = "ws.subscribe.denied"
 	CacheStale        Code = "cache.stale"
+	// LogsLinesDropped: live container log lines of an agent dropped
+	// because the masking is behind (UI-022, D-077); deliveries and lines
+	// as numbers.
+	LogsLinesDropped Code = "logs.lines_dropped"
 )
 
 // Mail (NFR-017): only the recipient's domain and the reason as a
@@ -126,8 +137,8 @@ const (
 
 // AllCodes lists every defined code, in the order of Design 8.3.
 var AllCodes = []Code{
-	AppStart, AppReady, DBMigrateStart, DBMigrateDone, DBMigrateLockWt,
-	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge, AuditLost, SettingReadFailed,
+	AppStart, AppReady, DBMigrateStart, DBMigrateDone, DBMigrateLockWt, DBBindingReleased,
+	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge, AuditLost, SyslogLinesLost, SettingReadFailed,
 	AuthLoginOK, AuthLoginFailed, AuthLockout, AuthLogout, AuthSessionRevoked,
 	AuthInitialPassword, AuthInviteUsed, AuthEmergencyReset,
 	AuthTOTPEnabled, AuthTOTPDisabled, AuthRecoveryRequested, AuthRecoveryUsed, AuthRecoveryDropped,
@@ -139,6 +150,6 @@ var AllCodes = []Code{
 	AgentConnected, AgentRejected, AgentPaired, AgentRevoked, AgentLimit, AgentDisconnected,
 	AgentHandshake, AgentForbidden, AgentUnsupported, DockerAction,
 	LogsFollowStart, LogsFollowStop, LogsTail,
-	WSSubscribe, WSSubscribeDenied, CacheStale,
+	WSSubscribe, WSSubscribeDenied, CacheStale, LogsLinesDropped,
 	MailSent, MailFailed,
 }

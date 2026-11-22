@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
 import { profilesKey, serversKey } from '@/api/servers';
 import { sessionKey } from '@/api/session';
-import { mainNav, navContext, shown } from '@/nav';
 import { makeRouter } from '@/router';
 import { renderPage, setLanguage, unmarked } from '@/test/render';
 import { ProfilesPage } from './Profiles';
@@ -24,7 +23,7 @@ vi.mock('@/lib/live', () => ({
 const now = new Date().toISOString();
 const evil = '<img src=x onerror=alert(1)>';
 
-function session(features: string[] = ['profile_browser'], role = 'moderator') {
+function session(role = 'moderator') {
   return {
     user: { id: 'u0', pseudonym: 'me', role },
     expires_at: now,
@@ -32,7 +31,6 @@ function session(features: string[] = ['profile_browser'], role = 'moderator') {
     totp_setup_required: false,
     panel_version: '1.2',
     ui: {
-      features,
       shortcuts_enabled: false,
       supporters_enabled: false,
       supporters_allowed: false,
@@ -112,7 +110,7 @@ const effective = {
 };
 
 const data = (role = 'moderator'): [readonly unknown[], unknown][] => [
-  [sessionKey, session(['profile_browser'], role)],
+  [sessionKey, session(role)],
   [profilesKey, profiles],
   [serversKey, servers],
 ];
@@ -348,23 +346,14 @@ describe('profile browser from 1024 px (UI-020, O6)', () => {
   });
 });
 
-describe('profile browser behind the flag profile_browser (UI-020, NFR-019)', () => {
-  it('has its navigation entry only while the flag is on', () => {
-    const entry = mainNav.find((e) => e.to === '/profiles');
-    if (!entry) throw new Error('no navigation entry /profiles');
-    for (const role of ['rcon_admin', 'server_admin', 'moderator', 'supporter'] as const) {
-      expect(shown(entry, role, navContext(session([]).ui))).toBe(false);
-      expect(shown(entry, role, navContext(session().ui))).toBe(true);
-    }
-  });
-
-  async function open(features: string[]) {
+describe('profile browser in the menu (UI-020)', () => {
+  async function open() {
     setLanguage('en');
     const get = vi.spyOn(api, 'GET').mockImplementation(((path: string) =>
       Promise.resolve({
         data:
           path === '/auth/session'
-            ? session(features)
+            ? session()
             : path === '/profiles'
               ? { items: profiles }
               : path === '/servers'
@@ -388,16 +377,8 @@ describe('profile browser behind the flag profile_browser (UI-020, NFR-019)', ()
     return get;
   }
 
-  it('does not exist while the flag is off: no menu entry, no page, no profile request', async () => {
-    const get = await open([]);
-    expect(await screen.findByText('Page not found')).toBeTruthy();
-    expect(screen.queryByRole('link', { name: 'Game profiles' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Game profiles' })).toBeNull();
-    expect(get.mock.calls.map((c) => c[0])).not.toContain('/profiles');
-  });
-
-  it('shows menu entry and page while the flag is on', async () => {
-    await open(['profile_browser']);
+  it('shows menu entry and page', async () => {
+    await open();
     expect(await screen.findByRole('heading', { name: 'Game profiles' })).toBeTruthy();
     expect(screen.getAllByRole('link', { name: 'Game profiles' }).length).toBeGreaterThan(0);
   });

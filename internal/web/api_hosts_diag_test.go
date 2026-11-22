@@ -6,22 +6,14 @@ package web
 import (
 	"net/http"
 	"testing"
-
-	"github.com/NightDragon1/rconductor/internal/features"
 )
 
-// TestHostsAndDiagnosticsBehindFlags: the display name of a host (UI-021,
-// D-089) and the diagnostic export (NFR-018, D-090) are 404 while their
-// flag is off. With the flag on, every role but the RCON admin is refused
+// TestHostsAndDiagnostics: for the display name of a host (UI-021, D-089)
+// and the diagnostic export (NFR-018, D-090) every role but the RCON admin is refused
 // (403); the display name of an unknown agent is 404, the export checks
 // the period (400) and gives the RCON admin the ZIP.
-func TestHostsAndDiagnosticsBehindFlags(t *testing.T) {
-	flags, err := features.New(features.Flag{Name: "host_groups", Operations: []string{"UpdateAgent"}},
-		features.Flag{Name: "diagnostics_export", Operations: []string{"GetDiagnostics"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+func TestHostsAndDiagnostics(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
 	admin, mod := f.login(t, "Boss"), f.login(t, "Mod")
 	const origin, id = "http://panel.lan", "00000000-0000-4000-8000-000000000001"
 	rename := call{method: http.MethodPatch, path: "/api/v1/agents/" + id, body: `{"display_name":"Rack 1"}`, origin: origin}
@@ -35,14 +27,8 @@ func TestHostsAndDiagnosticsBehindFlags(t *testing.T) {
 			}
 		}
 	}
-	check(http.StatusNotFound, admin, rename, export)
-	for _, flag := range []string{"host_groups", "diagnostics_export"} {
-		if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
-			body: `{"features.` + flag + `":true}`}).Code; got != http.StatusOK {
-			t.Fatalf("switch %s on = %d", flag, got)
-		}
-	}
-	check(http.StatusForbidden, mod, rename, export, call{method: http.MethodGet, path: "/api/v1/diagnostics?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z"})
+	check(http.StatusForbidden, mod, rename, export, call{method: http.MethodGet, path: "/api/v1/diagnostics?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z"},
+		call{method: http.MethodPatch, path: rename.path, body: `{}`, origin: origin})
 	check(http.StatusBadRequest, admin, call{method: http.MethodGet, path: "/api/v1/diagnostics?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z"})
 	check(http.StatusNotFound, admin, rename)
 	if rec := f.do(t, call{method: export.method, path: export.path, cookies: []*http.Cookie{admin}}); rec.Code != http.StatusOK ||
@@ -50,7 +36,7 @@ func TestHostsAndDiagnosticsBehindFlags(t *testing.T) {
 		t.Errorf("export = %d %s, %d bytes", rec.Code, rec.Header().Get("Content-Type"), rec.Body.Len())
 	}
 	var refused int
-	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action IN ('agent.display_name_set', 'diagnostics.exported') AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
-		t.Errorf("audited refusals = %d (%v), want 3", refused, err)
+	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action IN ('agent.display_name_set', 'diagnostics.exported') AND result = 'denied'`).Scan(&refused); err != nil || refused != 4 {
+		t.Errorf("audited refusals = %d (%v), want 4", refused, err)
 	}
 }

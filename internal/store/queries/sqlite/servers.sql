@@ -64,6 +64,14 @@ SELECT id, name FROM server_groups WHERE deleted_at IS NULL ORDER BY name COLLAT
 -- name: GetServerGroup :one
 SELECT id, name FROM server_groups WHERE id = ? AND deleted_at IS NULL;
 
+-- name: ListGroupsOfServer :many
+-- The server groups of one server, by name then ID, for the say prefix
+-- (CMD-020): only its own, not all.
+SELECT g.id FROM server_group_members m
+JOIN server_groups g ON g.id = m.server_group_id AND g.deleted_at IS NULL
+WHERE m.server_id = ?
+ORDER BY g.name, g.id;
+
 -- name: ListServerGroupMemberships :many
 SELECT m.server_group_id, m.server_id FROM server_group_members m
 JOIN server_groups g ON g.id = m.server_group_id AND g.deleted_at IS NULL

@@ -23,7 +23,7 @@ const existing = {
   credentials: 'ok',
 };
 
-const data = (role: string, features: string[]): [readonly unknown[], unknown][] => [
+const data = (role: string): [readonly unknown[], unknown][] => [
   [
     sessionKey,
     {
@@ -34,7 +34,6 @@ const data = (role: string, features: string[]): [readonly unknown[], unknown][]
         shortcuts_enabled: false,
         supporters_enabled: false,
         supporters_allowed: false,
-        features,
       },
     },
   ],
@@ -50,14 +49,14 @@ const answer = (id: string, name: string) => ({
   response: new Response(null, { status: 201 }),
 });
 
-const page = (role = 'rcon_admin', features = ['server_save_as_new']) =>
+const page = (role = 'rcon_admin') =>
   renderPage(
     () => (
       <UndoProvider>
         <ServersAdminPage />
       </UndoProvider>
     ),
-    data(role, features),
+    data(role),
   );
 
 const panel = () => screen.queryByRole('complementary');
@@ -186,20 +185,6 @@ describe('Save as New in the server dialog (UI-017)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close the details' }));
     await waitFor(() => expect(panel()).toBeNull());
     expect(screen.queryByText('Leave without saving?')).toBeNull();
-  });
-
-  it('flag off: the panel closes after create, without Save as New', async () => {
-    setLanguage('en');
-    const post = vi.spyOn(api, 'POST').mockResolvedValue(answer('s1', 'mc') as never);
-    await page('rcon_admin', []);
-    fireEvent.click(screen.getByRole('button', { name: 'New server' }));
-    expect(screen.queryByRole('button', { name: 'Save as New' })).toBeNull();
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'mc' } });
-    fireEvent.change(screen.getByLabelText('Host'), { target: { value: 'mc.lan' } });
-    fireEvent.change(screen.getByLabelText('RCON password'), { target: { value: 'pw' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create server' }));
-    await waitFor(() => expect(panel()).toBeNull());
-    expect(creates(post)).toHaveLength(1);
   });
 
   it('a server admin sees no Save as New', async () => {

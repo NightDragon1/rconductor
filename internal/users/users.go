@@ -33,6 +33,9 @@ var (
 	// ErrConflict means the object changed since the caller read it
 	// (revision 2.4 candidate 24).
 	ErrConflict = errors.New("changed by someone else")
+	// ErrOwnTOTPRequired refuses requiring the second factor for everyone
+	// while the caller has none of their own (D-104).
+	ErrOwnTOTPRequired = errors.New("set up your own second factor first")
 	// ErrPreconditionRequired means a versioned write named no version.
 	ErrPreconditionRequired = errors.New("the version read before is required")
 )
@@ -154,7 +157,12 @@ func (s *Service) Get(ctx context.Context, req Request, id string) (User, error)
 }
 
 func (s *Service) load(ctx context.Context, id string) (User, error) {
-	r, err := s.st.Queries.GetUser(ctx, id)
+	return s.loadQ(ctx, s.st.Queries, id)
+}
+
+// loadQ is load read through q, such as the queries of a transaction.
+func (s *Service) loadQ(ctx context.Context, q *sqlitedb.Queries, id string) (User, error) {
+	r, err := q.GetUser(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -246,12 +254,6 @@ func (s *Service) Update(ctx context.Context, req Request, id string, u Update) 
 			s.denied(ctx, req, "user.update", id, "forbidden", map[string]bool{"supporters_allowed": *u.SupportersAllowed})
 			return User{}, ErrForbidden
 		}
-		// Switching off takes the rights of the moderator's supporters.
-		sups, err := s.st.Queries.ListSupportersOfModerator(ctx, id)
-		if err != nil {
-			return User{}, err
-		}
-		affected = append(affected, sups...)
 	}
 
 	changes := map[string]any{}
@@ -262,6 +264,17 @@ func (s *Service) Update(ctx context.Context, req Request, id string, u Update) 
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	now := store.Now()
+	// A moderator whose supporters lose what he passed on (the switch, a
+	// new role, a lock): their sessions end too, read in the transaction
+	// before the grants go (ROLE-006, AUTH-006).
+	if cur.Role == perm.Moderator && ((u.SupportersAllowed != nil && *u.SupportersAllowed != cur.SupportersAllowed) ||
+		(u.Role != nil && *u.Role != cur.Role) || (u.Disabled != nil && *u.Disabled && !cur.Disabled)) {
+		sups, err := q.ListSupportersOfModerator(ctx, id)
+		if err != nil {
+			return User{}, err
+		}
+		affected = append(affected, sups...)
+	}
 	if u.SupportersAllowed != nil && *u.SupportersAllowed != cur.SupportersAllowed {
 		v := int64(0)
 		if *u.SupportersAllowed {
@@ -316,19 +329,41 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	now := store.Now()
-	if err := q.SoftDeleteUser(ctx, sqlitedb.SoftDeleteUserParams{DeletedAt: sql.NullString{String: now, Valid: true}, UpdatedAt: now, ID: id}); err != nil {
+	// Deleted meanwhile by another call: as for an unknown user (D-106).
+	n, err := q.SoftDeleteUser(ctx, sqlitedb.SoftDeleteUserParams{DeletedAt: sql.NullString{String: now, Valid: true}, UpdatedAt: now, ID: id})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	// The supporters of a moderator lose what he passed on: their sessions
+	// end too (ROLE-006, AUTH-006).
+	supporters, err := q.ListSupportersOfModerator(ctx, id)
+	if err != nil {
 		return err
 	}
 	if err := clearAssignments(ctx, q, id); err != nil {
 		return err
 	}
-	if err := s.audit(ctx, tx, req, "user.delete", id, nil); err != nil {
+	// The counts of the last hour have no use for a removed user (MSG-001, MSG-003).
+	if err := q.DeleteUserMessageSends(ctx, id); err != nil {
+		return err
+	}
+	if err := q.DeleteUserCommentSends(ctx, id); err != nil {
+		return err
+	}
+	owned, members, err := deleteOwned(ctx, tx, req, id, now)
+	if err != nil {
+		return err
+	}
+	if err := s.audit(ctx, tx, req, "user.delete", id, owned); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
-	return s.rightsChanged(ctx, req, "user.delete", id)
+	return s.rightsChanged(ctx, req, "user.delete", append(append([]string{id}, members...), supporters...)...)
 }
 
 // EndSessions ends all sessions of a managed user (AUTH-006, revision 2.4

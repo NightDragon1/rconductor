@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/api/client';
 import { agentsKey, profilesKey, serverGroupsKey, serversKey } from '@/api/servers';
@@ -26,7 +26,7 @@ const groups = [
   { id: 'g2', name: 'Zeta', server_ids: ['s1'], version: 'gv2' },
 ];
 
-const data = (role: string, features: string[]): [readonly unknown[], unknown][] => [
+const data = (role: string): [readonly unknown[], unknown][] => [
   [
     sessionKey,
     {
@@ -37,7 +37,6 @@ const data = (role: string, features: string[]): [readonly unknown[], unknown][]
         shortcuts_enabled: false,
         supporters_enabled: false,
         supporters_allowed: false,
-        features,
       },
     },
   ],
@@ -71,23 +70,27 @@ function readPrefixes(prefixes: Prefixes) {
 const prefixReads = (get: { mock: { calls: unknown[][] } }) =>
   get.mock.calls.filter((c) => c[0] === '/server-groups/{id}/say-prefix');
 
-async function open(name: string, role = 'rcon_admin', features = ['say_sender']) {
-  await renderPage(
+async function open(name: string, role = 'rcon_admin') {
+  return (await openWithClient(name, role)).panel;
+}
+
+async function openWithClient(name: string, role = 'rcon_admin') {
+  const { qc } = await renderPage(
     () => (
       <UndoProvider>
         <ServersAdminPage />
       </UndoProvider>
     ),
-    data(role, features),
+    data(role),
   );
   fireEvent.click(screen.getByRole('button', { name }));
-  return screen.getByRole('complementary');
+  return { panel: screen.getByRole('complementary'), qc };
 }
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('say prefix of a server group (CMD-020, D-082)', () => {
-  it('shows the prefix with the flag on', async () => {
+  it('shows the prefix', async () => {
     setLanguage('en');
     const get = readPrefixes({
       g1: { say_prefix: '[A]', version: '1' },
@@ -97,15 +100,6 @@ describe('say prefix of a server group (CMD-020, D-082)', () => {
     const field = (await within(panel).findByLabelText('Message prefix')) as HTMLInputElement;
     expect(field.value).toBe('[A]');
     expect(prefixReads(get).some((c) => JSON.stringify(c[1]).includes('"g1"'))).toBe(true);
-  });
-
-  it('flag off: no field and no request', async () => {
-    setLanguage('en');
-    const get = readPrefixes({ g1: { say_prefix: '[A]', version: '1' } });
-    const panel = await open('alpha', 'rcon_admin', []);
-    await new Promise((r) => setTimeout(r, 0));
-    expect(within(panel).queryByLabelText('Message prefix')).toBeNull();
-    expect(prefixReads(get)).toHaveLength(0);
   });
 
   it('no field when the backend refuses the read (403, 404)', async () => {
@@ -118,10 +112,16 @@ describe('say prefix of a server group (CMD-020, D-082)', () => {
 
   it('save sends If-Match with the version read and the new prefix', async () => {
     setLanguage('en');
-    readPrefixes({ g1: { say_prefix: '', version: '7' }, g2: { say_prefix: '', version: '1' } });
-    const put = vi
-      .spyOn(api, 'PUT')
-      .mockResolvedValue(ok({ say_prefix: '[R]', version: '8' }) as never);
+    const prefixes: Prefixes = {
+      g1: { say_prefix: '', version: '7' },
+      g2: { say_prefix: '', version: '1' },
+    };
+    readPrefixes(prefixes);
+    // As the backend: a read after the write gives the stored prefix.
+    const put = vi.spyOn(api, 'PUT').mockImplementation((async () => {
+      prefixes.g1 = { say_prefix: '[R]', version: '8' };
+      return ok(prefixes.g1);
+    }) as never);
     const panel = await open('alpha');
     const field = await within(panel).findByLabelText('Message prefix');
     fireEvent.change(field, { target: { value: '[R]' } });
@@ -202,6 +202,64 @@ describe('say prefix of a server group (CMD-020, D-082)', () => {
     );
     expect(prefixReads(get).length).toBeGreaterThan(before);
     expect(within(panel).getByRole('button', { name: 'Save prefix' })).toBeTruthy();
+  });
+
+  it('C236: a new version takes over an untouched field and keeps a draft with the conflict', async () => {
+    setLanguage('en');
+    const prefixes: Prefixes = {
+      g1: { say_prefix: '[A]', version: '1' },
+      g2: { say_prefix: '', version: '1' },
+    };
+    readPrefixes(prefixes);
+    const put = vi.spyOn(api, 'PUT');
+    const { panel, qc } = await openWithClient('alpha');
+    const field = () => within(panel).getByLabelText('Message prefix') as HTMLInputElement;
+    await within(panel).findByLabelText('Message prefix');
+    // Untouched: the new version shows.
+    act(() =>
+      qc.setQueryData(['server-groups', 'g1', 'say-prefix'], { say_prefix: '[B]', version: '2' }),
+    );
+    await waitFor(() => expect(field().value).toBe('[B]'));
+    expect(within(panel).queryByRole('alert')).toBeNull();
+    // With a draft: the draft stays, the conflict shows, nothing is saved.
+    fireEvent.change(field(), { target: { value: '[mine]' } });
+    act(() =>
+      qc.setQueryData(['server-groups', 'g1', 'say-prefix'], { say_prefix: '[C]', version: '3' }),
+    );
+    await waitFor(() =>
+      expect(within(panel).getByRole('alert').textContent).toBe('Changed by someone else – reload'),
+    );
+    expect(field().value).toBe('[mine]');
+    expect(within(panel).queryByRole('button', { name: 'Save prefix' })).toBeNull();
+    expect(put).not.toHaveBeenCalled();
+    // Reload takes the stored prefix in place of the draft.
+    prefixes.g1 = { say_prefix: '[C]', version: '3' };
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reload' }));
+    await waitFor(() => expect(field().value).toBe('[C]'));
+    expect(within(panel).queryByRole('alert')).toBeNull();
+  });
+
+  it('C386: the field is locked while a write runs', async () => {
+    setLanguage('en');
+    const prefixes: Prefixes = {
+      g1: { say_prefix: '', version: '1' },
+      g2: { say_prefix: '', version: '1' },
+    };
+    readPrefixes(prefixes);
+    let finish: (v: unknown) => void = () => {};
+    vi.spyOn(api, 'PUT').mockReturnValue(new Promise((r) => (finish = r)) as never);
+    const panel = await open('alpha');
+    const field = (await within(panel).findByLabelText('Message prefix')) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: '[R]' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save prefix' }));
+    await waitFor(() => expect(field.readOnly).toBe(true));
+    // A second click while the first write runs sends nothing more.
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save prefix' }));
+    expect(api.PUT).toHaveBeenCalledTimes(1);
+    prefixes.g1 = { say_prefix: '[R]', version: '2' };
+    act(() => finish(ok(prefixes.g1)));
+    await waitFor(() => expect(field.readOnly).toBe(false));
+    expect(field.value).toBe('[R]');
   });
 
   it('names a refusal of the write (403, 404) with the fixed texts', async () => {

@@ -29,6 +29,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/auth"
 	"github.com/NightDragon1/rconductor/internal/auth/password"
 	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/diag"
 	"github.com/NightDragon1/rconductor/internal/events"
 	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -85,6 +86,13 @@ func newAPIFixture(t *testing.T, proxies Proxies) *apiFixture {
 // newAPIFixtureFeatures builds the fixture with test feature flags.
 func newAPIFixtureFeatures(t *testing.T, proxies Proxies, flags *features.Set) *apiFixture {
 	t.Helper()
+	return newAPIFixtureDiag(t, proxies, flags, nil)
+}
+
+// newAPIFixtureDiag builds the fixture with the diagnostics of diagFor,
+// if set.
+func newAPIFixtureDiag(t *testing.T, proxies Proxies, flags *features.Set, diagFor func(*store.Store) *diag.Service) *apiFixture {
+	t.Helper()
 	st := storetest.New(t)
 	ctx := context.Background()
 	if err := auth.EnsureDefaults(ctx, st); err != nil {
@@ -127,7 +135,7 @@ func newAPIFixtureFeatures(t *testing.T, proxies Proxies, flags *features.Set) *
 		t.Fatal(err)
 	}
 	us.UseFeatures(flags)
-	hub := events.NewHub(checker, nil, svc, log, events.SettingsLimits(st))
+	hub := events.NewHub(checker, nil, svc, log, events.SettingsLimits(st, log))
 	svc.OnSessionsEnded(hub.CloseSessions)
 	panelKey, err := keys.LoadOrCreateIdentity(log, filepath.Join(t.TempDir(), keys.PanelKeyFile))
 	if err != nil {
@@ -135,14 +143,21 @@ func newAPIFixtureFeatures(t *testing.T, proxies Proxies, flags *features.Set) *
 	}
 	agentSvc := agents.NewService(st, log, "panel.lan:8443")
 	agentSvc.SetHub(agenthub.New(panelKey, log, agenthub.Options{Registry: agentSvc}))
-	agentSvc.UseFeatures(flags)
 	h := NewHandler(Options{
 		Log: log, Features: flags, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies, Hub: hub, Agents: agentSvc,
 		Servers:  servers.NewService(st, checker, box, log),
 		Masking:  logmask.NewSettings(st, box, log),
 		Profiles: users.NewProfiles(us, hasher, svc.RevokeOtherSessions),
+		Diag:     diagOf(st, diagFor),
 	})
 	return &apiFixture{h: h, userID: id, adminID: adminID, proxies: proxies, logs: logs, st: st, checker: checker, hub: hub}
+}
+
+func diagOf(st *store.Store, diagFor func(*store.Store) *diag.Service) *diag.Service {
+	if diagFor == nil {
+		return nil
+	}
+	return diagFor(st)
 }
 
 type call struct {

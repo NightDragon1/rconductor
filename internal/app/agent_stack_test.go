@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -42,6 +44,9 @@ type hostBackend struct {
 	state string
 	// host is the Docker host the backend names (AGT-014).
 	host *agentproto.DockerHost
+	// second adds a container mc2 like mc, for a second server: a
+	// container belongs to one server only (D-105).
+	second bool
 }
 
 func (b *hostBackend) Host(context.Context) *agentproto.DockerHost {
@@ -69,6 +74,10 @@ func (b *hostBackend) Run(ctx context.Context, out agent.Sender) error {
 	}
 	snap := agentproto.Snapshot{Containers: []agentproto.Container{{ID: "c1", Name: "mc", State: state, Image: "mc",
 		StartedAt: time.Now().UTC().Add(-time.Minute), Volumes: []string{"mc-data"}, Ports: b.ports}}}
+	if b.second {
+		snap.Containers = append(snap.Containers, agentproto.Container{ID: "c2", Name: "mc2", State: state, Image: "mc",
+			StartedAt: time.Now().UTC().Add(-time.Minute)})
+	}
 	if err := out.Send(ctx, agentproto.TypeSnapshot, "", snap); err != nil {
 		return err
 	}
@@ -79,7 +88,11 @@ func (b *hostBackend) Run(ctx context.Context, out agent.Sender) error {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
-			if out.Send(ctx, agentproto.TypeMetrics, "", agentproto.Metrics{Containers: []agentproto.Metric{{Name: "mc", CPUPercent: 42, MemBytes: 1 << 20}}}) == nil {
+			m := []agentproto.Metric{{Name: "mc", CPUPercent: 42, MemBytes: 1 << 20}}
+			if b.second {
+				m = append(m, agentproto.Metric{Name: "mc2", CPUPercent: 42, MemBytes: 1 << 20})
+			}
+			if out.Send(ctx, agentproto.TypeMetrics, "", agentproto.Metrics{Containers: m}) == nil {
 				b.samples.Add(1)
 			}
 		}
@@ -340,6 +353,52 @@ func TestAgentThroughTheStack(t *testing.T) {
 	}
 	if strings.Contains(string(data), stackSecret) {
 		t.Errorf("replay not masked: %s", data)
+	}
+
+	// The profile patterns follow a change of the profile list and a new
+	// import of a profile over the panel's hooks (D-088 b, C251).
+	var plist struct {
+		Items []struct{ ID, Slug string }
+	}
+	tailLines := func() []string {
+		t.Helper()
+		admin.must(http.MethodGet, "/servers/"+s.server+"/logs?lines=3", nil, &tail, http.StatusOK)
+		return tail.Lines
+	}
+	writeProfile := func(mask string) {
+		t.Helper()
+		yaml := "schema: 1\nid: c251-masks\nname: C251\nprotocol: { type: source-rcon, default_port: 25575 }\n" +
+			"log_masks: ['" + mask + "']\ncatalog:\n  - { path: status, description: a command }\n"
+		if err := os.MkdirAll(filepath.Join(s.dataDir, "profiles"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(s.dataDir, "profiles", "c251-masks.yaml"), []byte(yaml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	imported := `"event":"profile.imported","profile":"c251-masks"`
+	writeProfile(`(old )\d`)
+	logtest.WaitCount(t, s.logs, imported, 1)
+	admin.must(http.MethodGet, "/profiles", nil, &plist, http.StatusOK)
+	ids := []string{}
+	for _, slug := range []string{"c251-masks", "minecraft-java"} {
+		for _, p := range plist.Items {
+			if p.Slug == slug {
+				ids = append(ids, p.ID)
+			}
+		}
+	}
+	if got := tailLines(); got[0] != "old 1" {
+		t.Fatalf("before the profile list changed: %q", got)
+	}
+	admin.must(http.MethodPatch, "/servers/"+s.server, map[string][]string{"profile_ids": ids}, nil, http.StatusOK)
+	if got := tailLines(); got[0] != "old •••" || got[2] != "old [31m3\u202e" {
+		t.Errorf("after the profile list changed: %q", got)
+	}
+	writeProfile(`(old \[31m)\d`)
+	logtest.WaitCount(t, s.logs, imported, 2)
+	if got := tailLines(); got[0] != "old 1" || got[2] != "old [31m•••\u202e" {
+		t.Errorf("after the profile was imported again: %q", got)
 	}
 
 	// A restart goes to the agent and is audited.

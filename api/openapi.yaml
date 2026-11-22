@@ -375,6 +375,10 @@ paths:
     post:
       operationId: createServer
       summary: Add a game server; RCON admin only (SRV-001).
+      description: >-
+        A container is bound to at most one server (D-105): agent_id and
+        container_name of another server are 409 with the reason
+        container_bound; deleted servers do not count.
       tags: [servers]
       requestBody:
         required: true
@@ -383,6 +387,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ServerInput"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "201":
           description: The new server.
           content:
@@ -456,6 +462,10 @@ paths:
     patch:
       operationId: updateServer
       summary: Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076).
+      description: >-
+        409 is a stale version (conflict) or, when the request sets
+        agent_id or container_name, a container that is bound to another
+        server (container_bound, D-105; deleted servers do not count).
       tags: [servers]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
@@ -714,7 +724,11 @@ paths:
         batch_id that ties the runs together in the audit; a batch_id or
         any other unknown field in the request is refused with 400. Up to
         commands.multi_max_servers servers, commands.multi_parallel at a
-        time; the answer comes when every server has its result.
+        time; the answer comes when every server has its result. Runs start
+        only while one still ends before the answer is due (55 s less the
+        command timeout); a server whose turn comes later is not sent the
+        command and gets skipped with reason time_budget, its own request
+        ID and its own audit entry (an error with that reason).
       tags: [commands]
       requestBody:
         required: true
@@ -771,7 +785,7 @@ paths:
         Merged from the server's profiles top first: for each value the
         topmost profile that sets it wins, wrappers and separators are the
         union, the catalog is the union with the upper profile winning on
-        the same path. Behind the feature flag profile_browser. A server
+        the same path. A server
         outside the caller's scope is 404.
       tags: [profiles]
       responses:
@@ -1072,7 +1086,7 @@ paths:
         (CMD-020, D-082); RCON admin, or a server admin who has every server
         of the group in scope.
       description: >-
-        Behind the feature flag say_sender (404 while off). A server admin
+        A server admin
         sees the group only with every server of it in scope, otherwise 404
         as outside the scope (D-051); moderators and supporters get 403,
         also for an unknown group; for the RCON admin and server admins an
@@ -1097,7 +1111,7 @@ paths:
         Set or clear the prefix of messages to the players for a group
         (CMD-020, D-082); same roles as reading; in the audit.
       description: >-
-        Behind the feature flag say_sender (404 while off). At most 16
+        At most 16
         printable characters without §, otherwise 400; an empty string
         removes the prefix. Requires If-Match with the version read before.
       tags: [servers]
@@ -1133,7 +1147,7 @@ paths:
       operationId: getDiagnostics
       summary: Diagnostic export as ZIP (NFR-018, D-090); RCON admin only.
       description: >-
-        Behind the feature flag diagnostics_export (404 while off). One JSON
+        One JSON
         file per area (versions, settings, profiles, states of agents and
         servers), the system log of the period (D-091) and the logs of the
         agents, fetched on demand; an agent offline is noted in the package.
@@ -1179,7 +1193,7 @@ paths:
       operationId: listSystemLog
       summary: System log of the panel or the log of an agent (UI-025, D-091); RCON admin only.
       description: >-
-        Behind the feature flag diagnostics_export (404 while off). source
+        source
         panel reads the stored system log (events from info up, blacked out
         and masked before writing), oldest first, from level up, within from
         and to (at most 7 days, 400; without from the last hour); after is
@@ -1251,7 +1265,14 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "503":
-          description: The agent is not connected (agent_unavailable).
+          description: >-
+            The agent is not connected (agent_unavailable), or it takes no
+            more orders for now (busy, with Retry-After).
+          headers:
+            Retry-After:
+              description: Seconds to wait, with busy only.
+              schema:
+                type: integer
           content:
             application/problem+json:
               schema:
@@ -1337,9 +1358,9 @@ paths:
       operationId: updateAgent
       summary: Set the display name of an agent's host (UI-021, D-089); RCON admin only.
       description: >-
-        Behind the feature flag host_groups (404 while off). display_name
-        null or "" removes it; at most agents.display_name_max characters,
-        no control characters (400). The other roles see the display name
+        display_name is required; null or "" removes it. A body without it,
+        more than agents.display_name_max characters or control characters
+        are 400. The other roles see the display name
         or a neutral placeholder, never the host name (D-089).
       tags: [agents]
       requestBody:
@@ -1418,13 +1439,16 @@ paths:
         Messages in the panel (MSG-001 to MSG-003, D-085): those sent to me
         and those I sent, newest first; the RCON admin sees all.
       description: >-
-        Behind the feature flag messages (404 while off). The recipients of a
+        The recipients of a
         message are fixed when it is sent; who comes into a scope later does
         not see older messages. Messages and comments go after
         messages.retention_days (D-086). Paged: limit (1 to 100, default 50)
-        and before, the ID of the last message of the page before. before
-        is only compared with the IDs of my view, never looked up: every
-        valid UUID behaves the same.
+        and cursor, the next_cursor of the page before. The cursor is
+        opaque and only compared with my view, never looked up; a malformed
+        cursor or one over 256 characters is 400. With cursor, before is
+        ignored. before (deprecated) is the ID of the last message of the
+        page before, compared the same way: every valid UUID behaves the
+        same.
       tags: [messages]
       parameters:
         - name: limit
@@ -1436,9 +1460,19 @@ paths:
             default: 50
         - name: before
           in: query
+          deprecated: true
+          description: Replaced by cursor.
           schema:
             type: string
             format: uuid
+        - name: cursor
+          in: query
+          description: >-
+            next_cursor of the page before; the next page follows also when
+            messages of the page before are gone.
+          schema:
+            type: string
+            maxLength: 256
       responses:
         "200":
           description: A page of messages and the number of unread ones.
@@ -1458,7 +1492,7 @@ paths:
         Send a message (MSG-001, MSG-002, D-085); RCON admin and server
         admin; in the audit as message.sent, without the text (D-086).
       description: >-
-        Behind the feature flag messages (404 while off). The RCON admin
+        The RCON admin
         sends to all, server_admins, moderators or users (user_ids); a
         server admin to scope (moderators and supporters with at least one
         server in his scope at sending time) or scope_moderators; another
@@ -1506,7 +1540,7 @@ paths:
         One message (MSG-003, D-085); its recipients, its sender and the
         RCON admin.
       description: >-
-        Behind the feature flag messages (404 while off). Anyone else gets
+        Anyone else gets
         404, as for an unknown message.
       tags: [messages]
       responses:
@@ -1529,7 +1563,7 @@ paths:
         good (D-085, D-086); its sender and the RCON admin; in the audit
         without the text.
       description: >-
-        Behind the feature flag messages (404 while off). A recipient gets
+        A recipient gets
         403, anyone else 404.
       tags: [messages]
       responses:
@@ -1550,7 +1584,7 @@ paths:
       operationId: markMessageRead
       summary: Mark a message read for me (D-085); its recipients only.
       description: >-
-        Behind the feature flag messages (404 while off). Repeating it
+        Repeating it
         changes nothing. Sender and RCON admin who are not recipients get
         403 (they see the message), anyone else 404.
       tags: [messages]
@@ -1574,10 +1608,13 @@ paths:
         The comments of a message, oldest first (MSG-003, D-085); its
         recipients, its sender and the RCON admin.
       description: >-
-        Behind the feature flag messages (404 while off). Anyone else gets
+        Anyone else gets
         404, as for an unknown message. Paged: limit (1 to 100, default 50)
-        and after, the ID of the last comment of the page before; after is
-        only compared with the comments of this message, never looked up.
+        and cursor, the next_cursor of the page before. The cursor is
+        opaque and only compared with the comments of this message, never
+        looked up; a malformed cursor or one over 256 characters is 400.
+        With cursor, after is ignored. after (deprecated) is the ID of the
+        last comment of the page before, compared the same way.
       tags: [messages]
       parameters:
         - name: limit
@@ -1589,9 +1626,19 @@ paths:
             default: 50
         - name: after
           in: query
+          deprecated: true
+          description: Replaced by cursor.
           schema:
             type: string
             format: uuid
+        - name: cursor
+          in: query
+          description: >-
+            next_cursor of the page before; the next page follows also when
+            comments of the page before are gone.
+          schema:
+            type: string
+            maxLength: 256
       responses:
         "200":
           description: A page of comments.
@@ -1611,7 +1658,7 @@ paths:
         Comment on a message (MSG-003, D-085); its recipients and its
         sender; in the audit as message.commented, without the text (D-086).
       description: >-
-        Behind the feature flag messages (404 while off). The RCON admin
+        The RCON admin
         who is neither recipient nor sender gets 403 (he sees the message),
         anyone else 404. The text has at most 4 KiB in UTF-8 (first) and 1
         to messages.max_comment code points (setting, default 2000, 1 to
@@ -1657,7 +1704,7 @@ paths:
         the sender of the message and the RCON admin; in the audit as
         message.comment_deleted, without the text.
       description: >-
-        Behind the feature flag messages (404 while off). Another recipient
+        Another recipient
         gets 403, anyone else 404, also for a comment of another message.
       tags: [messages]
       responses:
@@ -1684,15 +1731,14 @@ paths:
         {"type":"error","topic":...,"reason":...}. Topics:
         servers.overview, server.{id}.status, server.{id}.console,
         server.{id}.metrics, server.{id}.logs and messages. messages is
-        behind the feature flag messages for every role that can receive a
+        for every role that can receive a
         message; data is {"kind":...,"message_id":...} with kind one of
         message (new to me), comment (new comment), deleted (message gone),
         comment_deleted and read (read on another socket), and comment_id
         with comment and comment_deleted; never a text. Events come only
         for messages I sent or received, also for the RCON admin, who sees
-        the others through the list; the texts come from the API. While the
-        flag is off, messages is an unknown topic. Metrics and logs are
-        agent functions for RCON admin and server admin only; a new
+        the others through the list; the texts come from the API. Metrics
+        and logs are agent functions for RCON admin and server admin only; a new
         subscription first gets the current value (last sample or the last
         50 log lines), and logs stream from the agent only while someone
         subscribes (UI-009). Metrics carry their time and a stale mark
@@ -2448,6 +2494,10 @@ paths:
         or features.<name> (true or false) for a feature flag of this
         build (NFR-019).
         Switching supporters off ends the sessions of all supporters.
+        Switching auth.totp_required on (from off) while the caller has no
+        second factor of their own is 409 with the reason
+        own_totp_required (D-104). Order: 403, 428, 400, 409 conflict,
+        then 409 own_totp_required; a refused change writes nothing.
       tags: [settings]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
@@ -2487,8 +2537,7 @@ paths:
       operationId: getLogMasking
       summary: Masking of container logs (UI-022, D-088); RCON admin only.
       description: >-
-        Behind the flag log_masking_ui (404 while off); masking runs without
-        it. Texts are never returned, only their number.
+        Texts are never returned, only their number.
       tags: [settings]
       responses:
         "200":
@@ -2507,7 +2556,7 @@ paths:
       operationId: updateLogMasking
       summary: Change the masking (UI-022, D-088); RCON admin only; audit log_masking.updated.
       description: >-
-        Behind the flag log_masking_ui (404 while off). Order for a
+        Order for a
         decodable request: 403, 428, 400, 409 (a body that cannot be read
         is 400 first; over 256 KiB 413). Missing fields stay; texts
         replaces all, [] removes them; {} changes nothing: same version, no
@@ -2752,8 +2801,7 @@ components:
           x-foreign: true
           type: string
           description: >-
-            Display name of the host, set by the RCON admin (D-089); only
-            while the feature flag host_groups is on.
+            Display name of the host, set by the RCON admin (D-089).
         fingerprint:
           type: string
           description: SHA256:<base64> of the agent key.
@@ -2770,7 +2818,7 @@ components:
           type: string
           description: >-
             Source address of the agent's last connection to the agent port.
-            While the flag docker_host is on, it is set only when it lies
+            It is set only when it lies
             outside the panel's own networks and is shown as "Connected
             from" (D-084); it is never part of docker_host.
         docker_host:
@@ -2796,7 +2844,7 @@ components:
       description: >-
         Host of the server for the grouping in the overview (UI-021, D-089),
         for every role that sees the server; missing for a server without
-        an agent. Only while the feature flag host_groups is on. Never the
+        an agent. Never the
         host name, the address or the agent ID.
       properties:
         key:
@@ -2816,7 +2864,7 @@ components:
         hello since the panel started: the name as the daemon gives it, the
         address as the agent's setting RCD_HOST_IP names it, else from the
         daemon (D-084).
-        Only while the feature flag docker_host is on; each field is missing
+        Each field is missing
         when the agent does not give it.
       properties:
         name:
@@ -3027,7 +3075,7 @@ components:
           description: Missing for not_found.
         result:
           type: string
-          enum: [ok, denied, error, timeout, not_found]
+          enum: [ok, denied, error, timeout, not_found, skipped]
         reason:
           $ref: "#/components/schemas/ReasonCode"
         detail:
@@ -3093,7 +3141,7 @@ components:
           description: >-
             Consecutive number of the server, given at creation and never
             given again, also after a delete (UI-018). Every role in scope
-            gets it; the interface shows it with the flag server_number.
+            gets it; the interface shows it.
         version:
           type: string
           description: >-
@@ -3585,6 +3633,9 @@ components:
         unread:
           type: integer
           description: Unread messages to me, over all pages.
+        next_cursor:
+          type: string
+          description: Missing on the last page.
 
     MessageCommentInput:
       type: object
@@ -3624,6 +3675,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MessageComment"
+        next_cursor:
+          type: string
+          description: Missing on the last page.
 
     SayPrefix:
       type: object
@@ -3653,7 +3707,7 @@ components:
         profile field message_command; for a server the topmost profile that
         sets it (D-074). A command on this path is checked as typed and then
         sent in the fixed form of render, with prefix, sender and text
-        escaped; while the flag say_sender is off it is sent unchanged.
+        escaped.
       properties:
         path:
           type: string
@@ -3966,8 +4020,10 @@ components:
         game_ports:
           type: array
           description: >-
-            Effective game ports; only for the RCON admin and the server
-            admin of this server (D-056), missing for other roles.
+            Game ports of the topmost profile that sets them (D-074), not
+            the ports stored for the server (those are on the server); only for
+            the RCON admin and the server admin of this server (D-056),
+            missing for other roles.
           items:
             $ref: "#/components/schemas/GamePort"
         formatting:
@@ -3985,9 +4041,8 @@ components:
       description: >-
         Display of the formatting codes in game server answers (CMD-017), from
         the profile field formatting; for a server the topmost profile that
-        sets it (D-074). minecraft shows § codes as styles of a fixed list
-        while the flag color_codes is on; without the field or with the flag
-        off the codes are removed before display (SEC-006).
+        sets it (D-074). minecraft shows § codes as styles of a fixed list;
+        without the field the codes are removed before display (SEC-006).
 
     EffectiveCommand:
       type: object
@@ -4774,14 +4829,6 @@ components:
             candidate 7); only the RCON admin changes them in /settings.
           required: [shortcuts_enabled, supporters_enabled, supporters_allowed]
           properties:
-            features:
-              type: array
-              description: >-
-                Names of the feature flags that are on (NFR-019); missing
-                means none. The RCON admin switches them with
-                features.<name> in /settings.
-              items:
-                type: string
             shortcuts_enabled:
               type: boolean
               description: Keyboard shortcuts, off by default (UI-008).
@@ -4832,9 +4879,12 @@ components:
         - conflict
         - precondition_required
         - totp_setup_required
+        - own_totp_required
+        - container_bound
         - command_failed
         - message_too_long
         - too_many_recipients
+        - time_budget
 
     Problem:
       type: object
