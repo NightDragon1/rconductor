@@ -4,11 +4,15 @@
 package messages
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
@@ -167,6 +171,8 @@ func TestC297DeleteCommentRefusalNamesComment(t *testing.T) {
 func TestC443DeleteForeignCommentAudited(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
+	var logs bytes.Buffer
+	w.s.log = logging.New(&logs, "panel", config.Log{Format: "json"}).Module("messages")
 	m1, err := w.s.Send(ctx, w.admin, Input{Text: "one", Audience: AudienceModerators})
 	if err != nil {
 		t.Fatal(err)
@@ -188,6 +194,9 @@ func TestC443DeleteForeignCommentAudited(t *testing.T) {
 			AND reason_code = 'not_found' AND target_id = ? AND json_extract(payload, '$.comment_id') = ?`, m1.ID, id).Scan(&n); err != nil || n != 1 {
 			t.Errorf("audited %s = %d (%v), want 1", id, n, err)
 		}
+	}
+	if got := strings.Count(logs.String(), `"event":"perm.denied"`); got != 2 || !strings.Contains(logs.String(), "message.comment_deleted") {
+		t.Errorf("perm.denied logged %d times for the comments, want 2", got)
 	}
 	var left int
 	_ = w.s.st.DB.QueryRow(`SELECT count(*) FROM message_comments WHERE id = ?`, c.ID).Scan(&left)

@@ -213,16 +213,14 @@ func TestC439FallbackInOrderAndLoggedReset(t *testing.T) {
 	if _, err := st.EnsureDefault(ctx, "supporters.enabled", true); err != nil {
 		t.Fatal(err)
 	}
-	count := func() int {
-		return strings.Count(out.String(), `"setting":"supporters.enabled"`) + strings.Count(out.String(), `supporters.enabled`)
-	}
+	count := func() int { return strings.Count(out.String(), `supporters.enabled`) }
 	var on bool
 	set("supporters.enabled", `"x`)
 	_ = st.LoggedSetting(ctx, log, "supporters.enabled", &on)
 	_ = st.LoggedSetting(ctx, log, "supporters.enabled", &on)
 	first := count()
-	if first == 0 {
-		t.Fatal("a broken logged setting is not logged")
+	if first != 1 {
+		t.Fatalf("two broken reads logged %d times, want once", first)
 	}
 	set("supporters.enabled", `true`)
 	if err := st.LoggedSetting(ctx, log, "supporters.enabled", &on); err != nil || !on {
