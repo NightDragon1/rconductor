@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ type fixture struct {
 	logs    *bytes.Buffer
 	ids     map[string]string
 	revoked []string
+	mu      sync.Mutex // guards revoked for parallel calls
 }
 
 // newFixture: admin (rcon_admin), sa and sa2 (server admins), m (moderator
@@ -44,6 +46,8 @@ func newFixture(t *testing.T) *fixture {
 	log := logging.New(logs, "panel", config.Log{Format: "json"}).Module("users")
 	f := &fixture{t: t, st: st, logs: logs, ids: map[string]string{}, checker: perm.NewChecker(st, log)}
 	f.svc = NewService(st, f.checker, log, func(_ context.Context, id, _, _ string) error {
+		f.mu.Lock()
+		defer f.mu.Unlock()
 		f.revoked = append(f.revoked, id)
 		return nil
 	})
