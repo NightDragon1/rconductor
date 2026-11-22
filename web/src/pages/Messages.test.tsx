@@ -319,17 +319,28 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     expect(messageTitle('\n\n')).toBe('');
   });
 
-  it('loads older messages with before', async () => {
+  it('loads older messages with the cursor of the backend (MSG-001)', async () => {
     setLanguage('en');
     const page = Array.from({ length: 50 }, (_, i) => msg(`m${i}`));
-    const calls = mock({ '/messages': list(page) });
+    const calls = mock({
+      '/messages': { status: 200, body: { items: page, unread: 0, next_cursor: 'c1' } },
+    });
     await renderPage(MessagesPage, [[sessionKey, session('supporter')]]);
     fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
     await waitFor(() =>
       expect(calls.get).toHaveBeenCalledWith('/messages', {
-        params: { query: { limit: 50, before: 'm49' } },
+        params: { query: { limit: 50, cursor: 'c1' } },
       }),
     );
+  });
+
+  it('offers no more after a last page of exactly 50 (MSG-001)', async () => {
+    setLanguage('en');
+    const page = Array.from({ length: 50 }, (_, i) => msg(`m${i}`));
+    mock({ '/messages': list(page) });
+    await renderPage(MessagesPage, [[sessionKey, session('supporter')]]);
+    await screen.findAllByTestId('message');
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 
   it('takes every text from the language file', async () => {

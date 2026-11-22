@@ -9,11 +9,15 @@ package messages
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"slices"
+	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/events"
@@ -129,33 +133,53 @@ type Page struct {
 	Items []Message
 	// Unread counts the unread messages to the caller over all pages.
 	Unread int
+	// Next is the cursor of the next page; empty on the last one.
+	Next string
 }
 
 // List lists the messages of the caller (D-085): those sent to him and
-// those he sent; the RCON admin sees all. before is the ID of the last
-// message of the page before; it is only compared with the caller's view,
-// so an ID outside it gives an empty page like any unknown one.
-func (s *Service) List(ctx context.Context, req users.Request, limit int, before string) (Page, error) {
+// those he sent; the RCON admin sees all. cursor is the Next of the page
+// before: a position of time and ID, never looked up, so the next page
+// follows also when messages of the page before are gone (MSG-001). Without
+// a cursor, before (deprecated) is the ID of the last message of the page
+// before, only compared with the caller's view.
+func (s *Service) List(ctx context.Context, req users.Request, limit int, before, cursor string) (Page, error) {
 	if err := s.read(ctx, req, "message.list"); err != nil {
 		return Page{}, err
 	}
+	if limit < 1 || limit > maxPage {
+		return Page{}, &users.InvalidError{Detail: "limit is 1 to 100"}
+	}
 	at, after := "", ""
-	if before != "" {
+	switch {
+	case cursor != "":
+		var err error
+		if at, after, err = decodeCursor(cursor); err != nil {
+			return Page{}, err
+		}
+	case before != "":
 		cur, err := s.view(ctx, req, before, "", "", 1)
 		if err != nil || len(cur) == 0 {
 			return Page{Items: []Message{}}, err
 		}
 		at, after = cur[0].CreatedAt.Format(store.TimeLayout), before
 	}
-	items, err := s.view(ctx, req, "", at, after, limit)
+	items, err := s.view(ctx, req, "", at, after, limit+1)
 	if err != nil {
 		return Page{}, err
+	}
+	p := Page{Items: items}
+	if len(items) > limit {
+		p.Items = items[:limit]
+		last := p.Items[limit-1]
+		p.Next = encodeCursor(last.CreatedAt.Format(store.TimeLayout), last.ID)
 	}
 	unread, err := s.st.Queries.CountUnreadMessages(ctx, req.Actor.ID)
 	if err != nil {
 		return Page{}, err
 	}
-	return Page{Items: items, Unread: int(unread)}, nil
+	p.Unread = int(unread)
+	return p, nil
 }
 
 // Get returns one message to its recipients, its sender and the RCON
@@ -279,35 +303,49 @@ type Comment struct {
 // Comments lists the comments of a message, oldest first, to everyone who
 // sees the message (D-085). after is the ID of the last comment of the
 // page before; it is only looked for among the comments of this message.
-func (s *Service) Comments(ctx context.Context, req users.Request, id string, limit int, after string) ([]Comment, error) {
+func (s *Service) Comments(ctx context.Context, req users.Request, id string, limit int, after, cursor string) ([]Comment, string, error) {
 	if _, err := s.one(ctx, req, "message.comment_list", id); err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	if limit < 1 || limit > maxPage {
+		return nil, "", &users.InvalidError{Detail: "limit is 1 to 100"}
 	}
 	at := ""
-	if after != "" {
+	switch {
+	case cursor != "":
+		var err error
+		if at, after, err = decodeCursor(cursor); err != nil {
+			return nil, "", err
+		}
+	case after != "":
 		c, err := s.st.Queries.GetMessageComment(ctx, sqlitedb.GetMessageCommentParams{MessageID: id, ID: after})
 		if errors.Is(err, sql.ErrNoRows) {
-			return []Comment{}, nil
+			return []Comment{}, "", nil
 		} else if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		at = c.CreatedAt
 	}
 	rows, err := s.st.Queries.ListMessageComments(ctx, sqlitedb.ListMessageCommentsParams{
-		MessageID: id, Column2: at, ID: after, Limit: int64(limit),
+		MessageID: id, Column2: at, ID: after, Limit: int64(limit + 1),
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	next := ""
+	if len(rows) > limit {
+		rows = rows[:limit]
+		next = encodeCursor(rows[limit-1].CreatedAt, rows[limit-1].ID)
 	}
 	out := make([]Comment, 0, len(rows))
 	for _, r := range rows {
 		created, err := time.Parse(store.TimeLayout, r.CreatedAt)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		out = append(out, Comment{ID: r.ID, AuthorID: r.AuthorID.String, AuthorPseudonym: r.AuthorPseudonym, Text: r.Text, CreatedAt: created})
 	}
-	return out, nil
+	return out, next, nil
 }
 
 // Comment comments on a message: its recipients and its sender (D-085).
@@ -635,4 +673,39 @@ func (s *Service) denied(ctx context.Context, req users.Request, action, target 
 		s.log.Error("audit entry not written", slog.String("action", action), slog.Any("err", err))
 	}
 	return users.ErrForbidden
+}
+
+// maxCursor bounds a cursor and maxPage a page as the contract does.
+const (
+	maxCursor = 256
+	maxPage   = 100
+)
+
+// encodeCursor makes the opaque position after an item: its time and ID.
+func encodeCursor(at, id string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(at + "|" + id))
+}
+
+// decodeCursor reads a cursor; anything that is not one is invalid (400).
+// The position is only compared with the caller's view, never looked up.
+func decodeCursor(c string) (at, id string, err error) {
+	bad := &users.InvalidError{Detail: "cursor is not one of this list"}
+	if len(c) > maxCursor {
+		return "", "", bad
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(c)
+	if err != nil {
+		return "", "", bad
+	}
+	at, id, ok := strings.Cut(string(raw), "|")
+	if !ok {
+		return "", "", bad
+	}
+	if _, err := time.Parse(store.TimeLayout, at); err != nil {
+		return "", "", bad
+	}
+	if u, err := uuid.Parse(id); err != nil || u.String() != id {
+		return "", "", bad
+	}
+	return at, id, nil
 }
