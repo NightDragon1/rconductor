@@ -28,26 +28,8 @@ type Flag struct {
 
 // production lists the flags of this build. A flag without operations
 // switches only the interface; the backend checks every request anyway.
-// The flags of 1.2 are on by default.
-var production = []Flag{
-	{Name: "server_save_as_new", On: true},                                        // Save as New in the server dialog (UI-017)
-	{Name: "log_filter_split", On: true},                                          // two-part log filter, frontend only (UI-019)
-	{Name: "command_palette", On: true},                                           // command palette in the console (CMD-016)
-	{Name: "profile_browser", Operations: []string{"GetServerProfile"}, On: true}, // profile browser (UI-020)
-	{Name: "color_codes", On: true},                                               // game formatting codes as fixed styles, frontend only (CMD-017)
-	{Name: "say_sender", Operations: []string{"GetServerGroupSayPrefix", "SetServerGroupSayPrefix"}, On: true}, // say with sender and group prefix (CMD-020)
-	{Name: "docker_host", On: true},   // Docker host of the agents, in the agent data of the RCON admin (AGT-014)
-	{Name: "server_number", On: true}, // server number as ID column and badge, frontend only (UI-018)
-	// Settings of the masking of container logs (UI-022, D-088); the
-	// masking itself runs without the flag.
-	{Name: "log_masking_ui", Operations: []string{"GetLogMasking", "UpdateLogMasking"}, On: true},
-	// Overview grouped by host with the display name of the agent (UI-021, D-089).
-	{Name: "host_groups", Operations: []string{"UpdateAgent"}, On: true},
-	// Diagnostic export for the RCON admin (NFR-018, D-090).
-	{Name: "diagnostics_export", Operations: []string{"GetDiagnostics", "ListSystemLog"}, On: true},
-	// Messages in the panel (MSG-001 to MSG-003, D-085).
-	{Name: "messages", Operations: []string{"ListMessages", "CreateMessage", "GetMessage", "DeleteMessage", "MarkMessageRead", "ListMessageComments", "CreateMessageComment", "DeleteMessageComment"}, On: true},
-}
+// The flags of 1.2 left with 1.3; stored values of them stay unused.
+var production = []Flag{}
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 
@@ -125,11 +107,6 @@ func (s *Set) Enabled(ctx context.Context, st *store.Store, name string) bool {
 		return s.on[name]
 	}
 	return on
-}
-
-// EnabledNames returns the names of the flags that are on.
-func (s *Set) EnabledNames(ctx context.Context, st *store.Store) []string {
-	return slices.DeleteFunc(append([]string{}, s.list()...), func(n string) bool { return !s.Enabled(ctx, st, n) })
 }
 
 func (s *Set) list() []string {

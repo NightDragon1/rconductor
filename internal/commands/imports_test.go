@@ -24,7 +24,7 @@ var coreAreas = []string{"authz", "cmd", "render", "redact", "audit", "input"}
 // import: storage, the user and request types, the flags, the profiles it
 // reads its rules from, and logging. The list may only shrink.
 var outsideCore = []string{
-	"internal/store", "internal/store/sqlitedb", "internal/users", "internal/features", "internal/profiles", "internal/logging",
+	"internal/store", "internal/store/sqlitedb", "internal/users", "internal/profiles", "internal/logging",
 }
 
 // wholeCore are the directories the core areas name as a whole today; a

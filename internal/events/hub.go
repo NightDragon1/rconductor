@@ -97,10 +97,6 @@ type Sessions interface {
 	SessionValid(ctx context.Context, hash string) bool
 }
 
-// MessagesEnabled tells whether the flag messages is on (MSG-001); while
-// it is off, messages is an unknown topic.
-type MessagesEnabled func(ctx context.Context) bool
-
 // MessageEvent is the data of the topic messages: what happened, never a
 // text (MSG-001…003, D-085); the texts come from the API.
 type MessageEvent struct {
@@ -182,11 +178,9 @@ type Hub struct {
 	// agentViews serves server.<id>.metrics and .logs; nil until set.
 	agentViews AgentViews
 	sessions   Sessions
-	// messages is nil until set: the topic messages is then unknown.
-	messages MessagesEnabled
-	log      *slog.Logger
-	limits   LimitsFunc
-	ping     time.Duration
+	log        *slog.Logger
+	limits     LimitsFunc
+	ping       time.Duration
 
 	mu        sync.Mutex
 	clients   map[*client]bool
@@ -195,9 +189,6 @@ type Hub struct {
 
 // SetAgentViews connects the agent data for the metrics and logs topics.
 func (h *Hub) SetAgentViews(v AgentViews) { h.agentViews = v }
-
-// SetMessages enables the topic messages while f reports the flag on.
-func (h *Hub) SetMessages(f MessagesEnabled) { h.messages = f }
 
 // NewHub returns the event bus; it checks subscriptions again after every
 // change of rights.
@@ -394,9 +385,6 @@ func (h *Hub) deny(c *client, topic, reason string) {
 
 func (h *Hub) subscribe(ctx context.Context, c *client, topic string) {
 	server, kind, err := parseTopic(topic)
-	if err == nil && kind == "messages" && (h.messages == nil || !h.messages(ctx)) {
-		err = errors.New(ReasonInvalid)
-	}
 	if err != nil {
 		h.deny(c, topic, err.Error())
 		return

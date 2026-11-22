@@ -135,7 +135,6 @@ func newAPIFixtureFeatures(t *testing.T, proxies Proxies, flags *features.Set) *
 	}
 	agentSvc := agents.NewService(st, log, "panel.lan:8443")
 	agentSvc.SetHub(agenthub.New(panelKey, log, agenthub.Options{Registry: agentSvc}))
-	agentSvc.UseFeatures(flags)
 	h := NewHandler(Options{
 		Log: log, Features: flags, Store: st, Auth: svc, Perm: checker, Users: us, Proxies: proxies, Hub: hub, Agents: agentSvc,
 		Servers:  servers.NewService(st, checker, box, log),

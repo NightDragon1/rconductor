@@ -8,20 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
-// TestMessagesBehindFlag: the message operations (MSG-001 to MSG-003) are
-// 404 while the flag messages is off and 401 without a session. With the
-// flag on, the skeleton checks role and audience (403), then the input
+// TestMessagesOperations: the message operations (MSG-001 to MSG-003) are
+// 401 without a session; the skeleton checks role and audience (403), then the input
 // (400), as in D-051.
-func TestMessagesBehindFlag(t *testing.T) {
-	flags, err := features.New(features.Flag{Name: "messages", Operations: []string{"ListMessages", "CreateMessage", "GetMessage", "DeleteMessage", "MarkMessageRead", "ListMessageComments", "CreateMessageComment", "DeleteMessageComment"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+func TestMessagesOperations(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
 	var hash string
 	if err := f.st.DB.QueryRow(`SELECT password_hash FROM users WHERE id = ?`, f.userID).Scan(&hash); err != nil {
 		t.Fatal(err)
@@ -55,11 +49,6 @@ func TestMessagesBehindFlag(t *testing.T) {
 				t.Errorf("%s %s %s = %d, want %d", c.method, c.path, c.body, got, want)
 			}
 		}
-	}
-	check(http.StatusNotFound, admin, ops...)
-	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
-		body: `{"features.messages":true}`}).Code; got != http.StatusOK {
-		t.Fatalf("switch flag on = %d", got)
 	}
 	check(http.StatusUnauthorized, nil, ops...)
 	// Sending (201), the list (200), an unknown message (404) and a
