@@ -79,39 +79,54 @@ func (v *View) UseMasking(ctx context.Context, m Masking) {
 	if v.now == nil {
 		v.now = time.Now
 	}
-	if v.maskIdle == 0 {
-		v.maskIdle = maskIdle
-	}
 }
 
 // maskLoop masks the deliveries of one agent in order; after maskIdle
-// without any it frees the queue and tells the drops not yet warned about.
+// without any, and when the masking ends, it frees the queue and tells the
+// drops not yet warned about.
 func (v *View) maskLoop(agentID string, q *agentQueue) {
-	idle := time.NewTimer(v.maskIdle)
+	idle := time.NewTimer(maskIdle)
 	defer idle.Stop()
 	for {
 		select {
 		case <-v.maskCtx.Done():
+			v.freeQueue(agentID, q)
 			return
 		case d := <-q.ch:
 			v.publishLines(v.maskCtx, d)
-			idle.Reset(v.maskIdle)
+			idle.Reset(maskIdle)
 		case <-idle.C:
-			v.qmu.Lock()
-			if len(q.ch) > 0 {
-				v.qmu.Unlock()
-				idle.Reset(v.maskIdle)
-				continue
+			if v.freeQueue(agentID, q) {
+				return
 			}
-			delete(v.queues, agentID) // deliveries are queued under qmu: none can come
-			n, lines := q.dropped, q.droppedLines
-			v.qmu.Unlock()
-			if n > 0 {
-				v.dropWarn(agentID, n, lines)
-			}
-			return
+			idle.Reset(maskIdle)
 		}
 	}
+}
+
+// freeQueue removes the queue of an agent unless a delivery waits in it;
+// deliveries are queued under qmu, so none can come after. With the
+// masking ended the queue goes in any case: its waiting deliveries are
+// dropped and counted. It tells the drops not yet warned about.
+func (v *View) freeQueue(agentID string, q *agentQueue) bool {
+	v.qmu.Lock()
+	if v.maskCtx.Err() == nil && len(q.ch) > 0 {
+		v.qmu.Unlock()
+		return false
+	}
+	for len(q.ch) > 0 {
+		d := <-q.ch
+		q.dropped, q.droppedLines = q.dropped+1, q.droppedLines+len(d.ll.Lines)
+	}
+	if v.queues[agentID] == q {
+		delete(v.queues, agentID)
+	}
+	n, lines := q.dropped, q.droppedLines
+	v.qmu.Unlock()
+	if n > 0 {
+		v.dropWarn(agentID, n, lines)
+	}
+	return true
 }
 
 func (v *View) dropWarn(agentID string, deliveries, lines int) {
@@ -145,6 +160,9 @@ func (v *View) lines(agentID string, ll agentproto.LogLines, seq, first uint64) 
 	if v.queues == nil {
 		v.publishLines(context.Background(), d)
 		return
+	}
+	if v.maskCtx.Err() != nil {
+		return // the panel stops: no new worker
 	}
 	v.qmu.Lock()
 	q := v.queues[agentID]

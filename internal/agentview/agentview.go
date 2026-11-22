@@ -117,12 +117,11 @@ type View struct {
 
 	// mask masks log lines before they leave the panel; queue carries the
 	// live deliveries to it (UI-022, logs.go).
-	mask     Masking
-	maskCtx  context.Context
-	qmu      sync.Mutex
-	queues   map[string]*agentQueue // by agent ID
-	now      func() time.Time
-	maskIdle time.Duration // maskIdle, shorter only in tests
+	mask    Masking
+	maskCtx context.Context
+	qmu     sync.Mutex
+	queues  map[string]*agentQueue // by agent ID
+	now     func() time.Time
 }
 
 // SetPlayers adds the player counts to the runtime data.
