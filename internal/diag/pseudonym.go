@@ -110,8 +110,8 @@ func (p *pseudonyms) apply(texts []string) []string {
 }
 
 // domains replaces, in a JSON line or document, every text under the key
-// "domain", in arrays too, by its host pseudonym (D-090); the key decides,
-// not the text before it. Other lines come back as they are.
+// "domain" in any case, in arrays and objects too, by its host pseudonym
+// (D-090); the key decides, not the text before it. Other lines come back as they are.
 func (p *pseudonyms) domains(line string) string {
 	var v any
 	dec := json.NewDecoder(strings.NewReader(line))
@@ -131,6 +131,10 @@ func (p *pseudonyms) domains(line string) string {
 			for i := range y {
 				y[i] = hosts(y[i])
 			}
+		case map[string]any:
+			for _, k := range slices.Sorted(maps.Keys(y)) { // everything under domain is a domain
+				y[k] = hosts(y[k])
+			}
 		}
 		return x
 	}
@@ -139,7 +143,7 @@ func (p *pseudonyms) domains(line string) string {
 		switch y := x.(type) {
 		case map[string]any:
 			for _, k := range slices.Sorted(maps.Keys(y)) { // fixed order of the pseudonyms
-				if k == "domain" {
+				if strings.EqualFold(k, "domain") {
 					y[k] = hosts(y[k])
 				} else {
 					walk(y[k])
