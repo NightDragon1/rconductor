@@ -156,7 +156,16 @@ npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 \
   node_modules/a/node_modules/b=a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 node_modules/b 2.0.0 "$R/b/-/b-2.0.0.tgz" sha512-b2
 EOF
 got=$(out)
-has "existing key becomes another base package" "- b (alias of a)@1.0.0 (node_modules/a/node_modules/b) package changed: b@1.0.0 -> a@1.0.0"
+has "existing key becomes another base package" "- b (alias of a)@1.0.0 (node_modules/a/node_modules/b) package changed: b@1.0.0 -> a@1.0.0, resolved $R/a/-/a-1.0.0.tgz, integrity sha512-a1"
+hasnt "existing key becomes another base package: not new" "- b (alias of a)@1.0.0 ($R"
+
+change "existing key becomes a new package with a foreign origin" <<EOF
+npm node_modules/a 1.0.0 "$R/a/-/a-1.0.0.tgz" sha512-a1 \
+  node_modules/a/node_modules/b=evil 6.6.6 "https://evil.example/evil-6.6.6.tgz" sha512-e6 node_modules/b 2.0.0 "$R/b/-/b-2.0.0.tgz" sha512-b2
+EOF
+got=$(out)
+has "key to a new package: origin" "- b (alias of evil)@6.6.6 (node_modules/a/node_modules/b) package changed: b@1.0.0 -> evil@6.6.6, resolved https://evil.example/evil-6.6.6.tgz, integrity sha512-e6"
+has "key to a new package: under New packages" "- b (alias of evil)@6.6.6 (https://evil.example/evil-6.6.6.tgz)"
 
 change "changed /go.mod hash" <<'EOF'
 printf '%s\n' "example.com/m v1.0.0 h1:old=" "example.com/m v1.0.0/go.mod h1:other=" >go.sum

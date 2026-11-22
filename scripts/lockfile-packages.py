@@ -100,7 +100,12 @@ def report_npm(path, base, head):
         if prev and prev[1] != name:
             # A key that now points at another package, also one the base
             # has elsewhere.
-            changed.append(f"{label}@{ver} ({key}) package changed: {prev[1]}@{prev[2]} -> {name}@{ver}")
+            # With its origin, and under New packages when the base does
+            # not have that name@version at all.
+            changed.append(f"{label}@{ver} ({key}) package changed: {prev[1]}@{prev[2]} -> {name}@{ver}"
+                           f", resolved {res}, integrity {integ}")
+            if (name, ver) not in seen:
+                added.append(f"{label}@{ver} ({res})")
             continue
         origins = seen.get((name, ver))
         if origins is None:
