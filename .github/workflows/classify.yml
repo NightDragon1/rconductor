@@ -88,6 +88,8 @@ jobs:
           # Over the line limit: told to the job Line limit, not failed here.
           if [ "$rc" -eq 1 ] && [ -z "$broken" ]; then
             echo "over=true" >>"$GITHUB_OUTPUT"
+          elif [ -z "$broken" ]; then
+            echo "over=false" >>"$GITHUB_OUTPUT"
           fi
           # Auto-merge as it is now, not as the event saw it; unreadable
           # counts as on.
@@ -111,10 +113,9 @@ jobs:
       - name: At most 400 changed lines in stage 2
         env:
           OVER: ${{ needs.classify.outputs.over }}
-          CLASSIFIED: ${{ needs.classify.result }}
         run: |
-          # Without a result of Classify the size is unknown, never within.
-          if [ "$CLASSIFIED" != success ] && [ -z "$OVER" ]; then
+          # Without a count from Classify the size is unknown, never within.
+          if [ -z "$OVER" ]; then
             echo "::error::line count unknown: Classify did not finish"
             exit 1
           fi

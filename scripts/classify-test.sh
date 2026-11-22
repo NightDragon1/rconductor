@@ -124,6 +124,7 @@ check "queries and handler of the rights check" 0 "stage-2 authz 5" "modified 1 
   "modified 1 0 internal/store/queries/sqlite/users.sql"
 check "hand-written code of the API package" 0 "stage-2 boundary 1" "added 1 0 internal/api/x.go"
 check "generated API code alone" 0 "stage-1  0" "modified 1 0 internal/api/api.gen.go"
+check "move onto the generated name counts" 0 "stage-2 cmd 7" "renamed 7 0 internal/api/api.gen.go internal/commands/c.go"
 check "bad line" 2 "" "modified x 0 a.go"
 
 # The class file is read strictly: a line outside the format fails.
