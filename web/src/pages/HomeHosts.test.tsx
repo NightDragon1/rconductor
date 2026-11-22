@@ -39,7 +39,7 @@ const servers = [
 
 // The overview by host (UI-021, D-089): a frame per host with the display
 // name as text or a neutral placeholder, the count and the status summary;
-// servers without agent in their own frame. With the flag off it is as before.
+// servers without agent in their own frame.
 describe('overview by host', () => {
   it('frames the cards per host', async () => {
     setLanguage('en');

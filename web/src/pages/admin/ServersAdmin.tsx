@@ -108,25 +108,20 @@ const draftOf = (s?: Server): Draft => ({
 // RCON admin; a server admin may change only the profile list of a server
 // in his scope (SRV-008), the backend checks it; a phone sees it read-only.
 // The password is only set, never shown. Agent and container come from the agent's list
-// (revision 2.4 candidate 22). With saveAsNew (who may create servers) the
-// panel stays open after creating: Save changes the server just created,
+// (revision 2.4 candidate 22). The panel stays open after creating: Save changes the server just created,
 // Save as New creates another one from the form (UI-017).
 function ServerPanel({
   server: opened,
   canEdit,
   canEditProfiles,
   canSeeAgents,
-  saveAsNew,
   onClose,
-  onCreated,
 }: {
   server?: Server;
   canEdit: boolean;
   canEditProfiles: boolean;
   canSeeAgents: boolean;
-  saveAsNew: boolean;
   onClose: () => void;
-  onCreated: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
@@ -252,26 +247,9 @@ function ServerPanel({
 
   const save = (e: FormEvent) => {
     e.preventDefault();
-    if (saveAsNew) {
-      void once(() =>
-        server ? change(server) : create((name) => t('servers.createdStay', { name })),
-      );
-      return;
-    }
-    if (!server) {
-      void (async () => {
-        const r = await saving(
-          outcome('new', async () => {
-            must(await api.POST('/servers', { body: body() }));
-            onCreated();
-          }),
-        );
-        void qc.invalidateQueries({ queryKey: serversKey });
-        if (!r.ok) setMessage({ ok: false, text: reasonText(t, r) });
-      })();
-      return;
-    }
-    void change(server);
+    void once(() =>
+      server ? change(server) : create((name) => t('servers.createdStay', { name })),
+    );
   };
   // Save goes out at once; Undo sends the previous state, but never for a
   // new password: the old one is not known here (D-048). Host and port
@@ -561,7 +539,7 @@ function ServerPanel({
                 {server ? t('servers.save') : t('servers.create')}
               </Button>
             )}
-            {saveAsNew && canEdit && made && !conflict && (
+            {canEdit && made && !conflict && (
               <Button type="button" variant="outline" disabled={pending} onClick={createAgain}>
                 {t('servers.saveAsNew')}
               </Button>
@@ -1108,9 +1086,7 @@ export function ServersAdminPage() {
           canEdit={canEdit}
           canEditProfiles={canEditProfiles}
           canSeeAgents={canSeeAgents}
-          saveAsNew={canEdit}
           onClose={() => guard(() => setOpen(null))}
-          onCreated={() => setOpen(null)}
         />
       )}
       {currentGroup && (

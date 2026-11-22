@@ -3,7 +3,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Docker host of the agents (AGT-014) behind the flag docker_host: the fake
+// Docker host of the agents (AGT-014): the fake
 // daemon of host-1 names its host "<b>nas</b>-1" with a direction override
 // and the address 192.168.1.5 (internal/e2e/stack); the agent host-legacy
 // sends none, as an agent of 1.1.

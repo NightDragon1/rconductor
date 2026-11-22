@@ -5,7 +5,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 type Playwright = { request: { newContext: (o: object) => Promise<APIRequestContext> } };
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Command palette (CMD-016) behind the flag command_palette: a button in the
+// Command palette (CMD-016): a button in the
 // console of the admins opens it, Ctrl+K only while keyboard shortcuts are
 // on (UI-008); it lists only what the backend lets the role reach.
 

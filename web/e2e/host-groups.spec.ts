@@ -3,7 +3,7 @@
 import type { Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Overview by host (UI-021, D-089) behind the flag host_groups: the RCON
+// Overview by host (UI-021, D-089): the RCON
 // admin names the host of agent host-1 on the agents page; every role sees
 // the cards of its scope framed per host with that name as text, the
 // servers without agent (outpost) apart; host name and address only for

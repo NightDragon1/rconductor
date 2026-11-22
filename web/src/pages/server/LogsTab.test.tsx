@@ -62,7 +62,7 @@ async function renderLogs(features: string[]) {
 }
 
 describe('two-part log filter (UI-019)', () => {
-  it('filters bracket part and text with and, or, xor while the flag is on', async () => {
+  it('filters bracket part and text with and, or, xor', async () => {
     await renderLogs(['log_filter_split']);
     expect(screen.queryByRole('searchbox', { name: 'Filter the logs' })).toBeNull();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Filter the bracket part' }), {

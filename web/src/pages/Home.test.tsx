@@ -13,6 +13,7 @@ import {
 import { sessionKey } from '@/api/session';
 import { renderPage, setLanguage, unmarked } from '@/test/render';
 import { HomePage } from './Home';
+import { ServersPage } from './Servers';
 
 const now = new Date().toISOString();
 
@@ -195,6 +196,15 @@ describe('landing pages', () => {
     const beta = screen.getByRole('article', { name: 'beta' });
     expect(beta.dataset.status).toBe('restartLoop');
     expect(within(beta).getByText('itzg/mc')).toBeTruthy();
+  });
+
+  it('groups the cards by server group on the page Servers (UI-004)', async () => {
+    setLanguage('en');
+    await renderPage(ServersPage, adminData('server_admin'));
+    const main = screen.getByRole('region', { name: 'main' });
+    expect(within(main).getByRole('article', { name: 'alpha' })).toBeTruthy();
+    const other = screen.getByRole('region', { name: 'Other servers' });
+    expect(within(other).getByRole('article', { name: 'beta' })).toBeTruthy();
   });
 
   it('gives moderators reduced cards without agent data (UI-006)', async () => {

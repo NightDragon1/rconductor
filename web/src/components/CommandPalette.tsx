@@ -54,7 +54,7 @@ function Entry({ e }: { e: PaletteEntry }) {
 }
 
 // CommandPalette searches the commands, templates and favorites of the
-// console (CMD-016), behind the flag command_palette. It shows only what
+// console (CMD-016). It shows only what
 // the backend returned for the caller; a command picked goes into the
 // input line, where the backend checks it like a typed one.
 export function CommandPalette({

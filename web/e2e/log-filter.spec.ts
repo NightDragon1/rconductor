@@ -3,7 +3,7 @@
 import type { Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Two-part log filter (UI-019) behind the flag log_filter_split: the bracket
+// Two-part log filter (UI-019): the bracket
 // part and the text after it, joined with and, or, xor.
 
 const bracket = (page: Page) => page.getByRole('searchbox', { name: 'Filter the bracket part' });

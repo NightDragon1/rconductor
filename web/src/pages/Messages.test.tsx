@@ -350,7 +350,7 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
   });
 });
 
-describe('messages behind the flag messages (NFR-019)', () => {
+describe('messages in the menu (MSG-001)', () => {
   async function open(features: string[]) {
     setLanguage('en');
     const get = vi.spyOn(api, 'GET').mockImplementation(((path: string) =>
@@ -378,7 +378,7 @@ describe('messages behind the flag messages (NFR-019)', () => {
     return get;
   }
 
-  it('shows the menu entry with the unread count while the flag is on', async () => {
+  it('shows the menu entry with the unread count', async () => {
     await open(['messages']);
     expect(await screen.findByRole('heading', { name: 'Messages' })).toBeTruthy();
     expect(

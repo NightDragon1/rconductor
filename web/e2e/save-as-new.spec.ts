@@ -3,7 +3,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Save as New (UI-017) behind the flag server_save_as_new: after create the
+// Save as New (UI-017): after create the
 // server dialog stays open; Save changes the server just created, Save as
 // New creates another one with the same data and the password typed again;
 // once all is saved it closes without a question.

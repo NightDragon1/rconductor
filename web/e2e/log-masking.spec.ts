@@ -3,8 +3,7 @@
 import type { Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Masking settings of container logs (UI-022, D-088 c) behind the flag
-// log_masking_ui: the RCON admin sets the switch, fixed texts and limits;
+// Masking settings of container logs (UI-022, D-088 c): the RCON admin sets the switch, fixed texts and limits;
 // the texts are write-only, the page shows only their number.
 
 // The masking settings are part of the group System (O8).

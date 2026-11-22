@@ -3,7 +3,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Profile browser (UI-020) behind the flag profile_browser: every role with
+// Profile browser (UI-020): every role with
 // access to a server reads the profiles and the effective profile of its
 // servers; the game ports only the RCON admin and the server admin in scope
 // (D-056); read only.

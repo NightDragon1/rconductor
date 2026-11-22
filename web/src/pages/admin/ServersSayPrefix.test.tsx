@@ -87,7 +87,7 @@ async function open(name: string, role = 'rcon_admin', features = ['say_sender']
 afterEach(() => vi.restoreAllMocks());
 
 describe('say prefix of a server group (CMD-020, D-082)', () => {
-  it('shows the prefix with the flag on', async () => {
+  it('shows the prefix', async () => {
     setLanguage('en');
     const get = readPrefixes({
       g1: { say_prefix: '[A]', version: '1' },

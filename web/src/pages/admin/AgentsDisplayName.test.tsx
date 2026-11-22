@@ -38,7 +38,7 @@ const data = (features: string[]) =>
 afterEach(() => vi.restoreAllMocks());
 
 // The RCON admin sets the display name of a host (UI-021, D-089); the
-// backend's refusal shows, empty removes it, without the flag nothing shows.
+// backend's refusal shows, empty removes it.
 describe('display name of a host', () => {
   it('shows it as text and sends an empty one as null', async () => {
     setLanguage('en');

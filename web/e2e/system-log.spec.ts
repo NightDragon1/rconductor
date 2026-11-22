@@ -3,8 +3,8 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// System log (UI-025, D-091) and the diagnostic export (NFR-018) behind
-// the flag diagnostics_export: only the RCON admin sees the page.
+// System log (UI-025, D-091) and the diagnostic export (NFR-018): only the
+// RCON admin sees the page.
 
 const title = 'System log';
 const notice = 'May contain chat messages of players.';

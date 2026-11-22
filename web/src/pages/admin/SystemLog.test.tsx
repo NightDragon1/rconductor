@@ -265,7 +265,7 @@ describe('system log (UI-025, D-091)', () => {
   });
 });
 
-describe('system log behind the flag diagnostics_export (NFR-018, NFR-019)', () => {
+describe('system log in the menu (NFR-018)', () => {
   async function at(role: string, features: string[]) {
     setLanguage('en');
     const get = vi.spyOn(api, 'GET').mockImplementation(((path: string) =>
@@ -293,14 +293,14 @@ describe('system log behind the flag diagnostics_export (NFR-018, NFR-019)', () 
     return get;
   }
 
-  it('does not exist for a server admin with the flag on', async () => {
+  it('does not exist for a server admin', async () => {
     const get = await at('server_admin', [flag]);
     expect(await screen.findByText('Page not found')).toBeTruthy();
     expect(screen.queryByRole('link', { name: /System log/ })).toBeNull();
     expect(get.mock.calls.map((c) => c[0])).not.toContain('/system-log');
   });
 
-  it('shows menu entry and page to the RCON admin with the flag on', async () => {
+  it('shows menu entry and page to the RCON admin', async () => {
     await at('rcon_admin', [flag]);
     expect(await screen.findByRole('heading', { name: 'System log' })).toBeTruthy();
     expect((await screen.findAllByRole('link', { name: /System log/ })).length).toBeGreaterThan(0);

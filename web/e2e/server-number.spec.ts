@@ -3,7 +3,7 @@
 import type { Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Server number (UI-018, D-087) behind the flag server_number: first
+// Server number (UI-018, D-087): first
 // column ID in Manage servers and server groups, badge before the name on cards and the
 // server page; a number is never given twice.
 

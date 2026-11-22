@@ -283,8 +283,7 @@ function Effective({ id, profiles }: { id: string; profiles: GameProfile[] }) {
   );
 }
 
-// ProfilesPage is the read-only profile browser (UI-020, flag
-// profile_browser): all game profiles with their catalog and the effective
+// ProfilesPage is the read-only profile browser (UI-020): all game profiles with their catalog and the effective
 // profile of a server in scope. It writes nothing.
 export function ProfilesPage() {
   const { t } = useTranslation();

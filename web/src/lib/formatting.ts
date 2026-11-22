@@ -40,8 +40,8 @@ const decorationClass = {
 } as const;
 
 // MAX_STYLED caps the styled segments of one text: a long answer full of
-// codes stays cheap to show; after the cap the rest is shown as with the
-// flag off, codes removed.
+// codes stays cheap to show; after the cap the rest is shown with the
+// codes removed.
 export const MAX_STYLED = 2000;
 
 export type Segment = { text: string; className: string };

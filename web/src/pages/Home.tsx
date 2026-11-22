@@ -7,10 +7,9 @@ import { HealthOverview } from '@/components/HealthOverview';
 import { ServerBoard } from '@/components/ServerBoard';
 
 // HomePage is the landing page of every role (UI-002, Gesamtkonzept 5):
-// the RCON admin gets the health overview and all cards by server group,
-// the server admin the cards of his scope by group, moderator and
-// supporter reduced cards of their servers. The cards stay live over
-// servers.overview. With the flag host_groups the cards are by host.
+// the RCON admin gets the health overview and all cards, the server admin
+// the cards of his scope, moderator and supporter reduced cards of their
+// servers, all by host (UI-021). The cards stay live over servers.overview.
 export function HomePage() {
   const { t } = useTranslation();
   const { data: session } = useSession();

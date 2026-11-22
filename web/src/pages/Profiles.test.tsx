@@ -347,7 +347,7 @@ describe('profile browser from 1024 px (UI-020, O6)', () => {
   });
 });
 
-describe('profile browser behind the flag profile_browser (UI-020, NFR-019)', () => {
+describe('profile browser in the menu (UI-020)', () => {
   async function open(features: string[]) {
     setLanguage('en');
     const get = vi.spyOn(api, 'GET').mockImplementation(((path: string) =>
@@ -378,7 +378,7 @@ describe('profile browser behind the flag profile_browser (UI-020, NFR-019)', ()
     return get;
   }
 
-  it('shows menu entry and page while the flag is on', async () => {
+  it('shows menu entry and page', async () => {
     await open(['profile_browser']);
     expect(await screen.findByRole('heading', { name: 'Game profiles' })).toBeTruthy();
     expect(screen.getAllByRole('link', { name: 'Game profiles' }).length).toBeGreaterThan(0);
