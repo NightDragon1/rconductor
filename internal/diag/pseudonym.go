@@ -67,11 +67,27 @@ func (p *pseudonyms) name(kind, v string) string {
 	return p.names[key]
 }
 
+// domainAttr is a domain in a text line (domain=x); in JSON the value
+// follows the key "domain" in the texts of a line (syslog.Rewrite).
+var domainAttr = regexp.MustCompile(`\bdomain=("?)([^\s"]+)`)
+
 // apply blacks out the values of one package: e-mail addresses and
-// fingerprints become a mark, IPs and hosts their pseudonym.
+// fingerprints become a mark, IPs and hosts their pseudonym; a domain
+// value is a host whatever its top-level domain (D-090).
 func (p *pseudonyms) apply(texts []string) []string {
 	out := make([]string, len(texts))
+	prev := ""
 	for i, s := range texts {
+		key := prev
+		prev = s
+		if key == "domain" && s != "" {
+			out[i] = p.name("host", s)
+			continue
+		}
+		s = domainAttr.ReplaceAllStringFunc(s, func(c string) string {
+			m := domainAttr.FindStringSubmatch(c)
+			return "domain=" + m[1] + p.name("host", m[2])
+		})
 		s = emailValue.ReplaceAllString(s, "[email]")
 		s = fpValue.ReplaceAllString(s, "[fingerprint]")
 		s = ipv6Value.ReplaceAllStringFunc(s, func(c string) string {
