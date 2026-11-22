@@ -6,6 +6,10 @@ import { reasonText } from './admin';
 const t = (k: string) => `text:${k}`;
 
 describe('refusal texts (UI-016)', () => {
+  it('names a container bound to another server (D-105)', () => {
+    expect(reasonText(t, { reason: 'container_bound' })).toBe('text:admin.reason.container_bound');
+  });
+
   it('shows the detail of an input refused as invalid', () => {
     expect(reasonText(t, { reason: 'invalid', detail: 'a server with this name exists' })).toBe(
       'a server with this name exists',

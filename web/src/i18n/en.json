@@ -598,7 +598,8 @@
       "rate_limited": "Too many changes, try again shortly",
       "busy": "The panel is busy, try again",
       "other": "Failed",
-      "conflict": "Changed by someone else – reload"
+      "conflict": "Changed by someone else – reload",
+      "container_bound": "This container already belongs to another server."
     },
     "lock": "Lock",
     "unlock": "Unlock",
@@ -797,6 +798,7 @@
     "noAgent": "No agent",
     "agentSet": "set",
     "container": "Container",
+    "containerOnce": "A container belongs to one server only. A container another server uses is refused.",
     "containerOption": "{{name}} · {{state}}",
     "agentAway": "The agent is disconnected; the containers are the last known ones.",
     "ownPorts": "Own game ports instead of the profile's",

@@ -3,7 +3,15 @@
 import type { CommandListEntry } from '@/api/users';
 
 // Reason codes with their own text (Design 3.5).
-const known = ['forbidden', 'not_found', 'invalid', 'rate_limited', 'busy', 'conflict'];
+const known = [
+  'forbidden',
+  'not_found',
+  'invalid',
+  'rate_limited',
+  'busy',
+  'conflict',
+  'container_bound',
+];
 
 // reasonText names a refusal. An input refused as invalid shows the
 // backend's detail in plain text (UI-016); every other reason keeps its
