@@ -84,3 +84,12 @@ func TestMessageCommandStoredNormalized(t *testing.T) {
 		t.Errorf("path = %+v, want say", p.MessageCommand)
 	}
 }
+
+// TestC221RenderNeedsItsProtocol (D-081): a render builds its command for
+// one protocol; a profile of another protocol cannot name it.
+func TestC221RenderNeedsItsProtocol(t *testing.T) {
+	_, err := Parse([]byte("schema: 1\nid: t\nname: T\nprotocol: { type: http-api, default_port: 8080 }\nmessage_command: { path: say, render: minecraft-tellraw }\n"))
+	if err == nil || !strings.Contains(err.Error(), "needs protocol.type source-rcon") {
+		t.Errorf("tellraw over another protocol: %v", err)
+	}
+}
