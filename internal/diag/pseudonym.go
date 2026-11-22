@@ -11,6 +11,7 @@ import (
 	"net"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -71,7 +72,7 @@ func (p *pseudonyms) name(kind, v string) string {
 
 // domainAttr is a domain in a text line (domain=x); in JSON, domains
 // replaces the values under the key "domain".
-var domainAttr = regexp.MustCompile(`\bdomain=("?)([^\s"]+)`)
+var domainAttr = regexp.MustCompile(`(?i)\b(domain)=("?)([^\s"]+)`)
 
 // apply blacks out the values of one package: e-mail addresses and
 // fingerprints become a mark, IPs and hosts their pseudonym; a domain
@@ -81,7 +82,7 @@ func (p *pseudonyms) apply(texts []string) []string {
 	for i, s := range texts {
 		s = domainAttr.ReplaceAllStringFunc(s, func(c string) string {
 			m := domainAttr.FindStringSubmatch(c)
-			return "domain=" + m[1] + p.name("host", m[2])
+			return m[1] + "=" + m[2] + p.name("host", m[3])
 		})
 		s = emailValue.ReplaceAllString(s, "[email]")
 		s = fpValue.ReplaceAllString(s, "[fingerprint]")
@@ -132,9 +133,19 @@ func (p *pseudonyms) domains(line string) string {
 				y[i] = hosts(y[i])
 			}
 		case map[string]any:
-			for _, k := range slices.Sorted(maps.Keys(y)) { // everything under domain is a domain
-				y[k] = hosts(y[k])
+			// Everything under domain is a domain, its keys too.
+			out := make(map[string]any, len(y))
+			for _, k := range slices.Sorted(maps.Keys(y)) {
+				nk := p.name("host", k)
+				for n := 2; ; n++ { // two keys may meet in one pseudonym
+					if _, taken := out[nk]; !taken {
+						break
+					}
+					nk = p.name("host", k) + "~" + strconv.Itoa(n)
+				}
+				out[nk] = hosts(y[k])
 			}
+			return out
 		}
 		return x
 	}

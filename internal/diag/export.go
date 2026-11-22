@@ -48,8 +48,8 @@ var ErrBusy = errors.New("too many diagnostic packages at the same time")
 // pseudonymized as they were stored or logged, before the file is encoded
 // again. Within diagnostics.max_bytes the agent logs take their part
 // first, the system log the rest; the oldest lines of each stay out and
-// the file says so. The heads of the files are written also without room,
-// about 100 bytes per agent past the budget. Audited with period, size and
+// the file says so. The heads of the files are written also without room:
+// about 200 bytes per agent and those of the system log past the budget. Audited with period, size and
 // whether anything was cut.
 func (s *Service) Export(ctx context.Context, req users.Request, from, to time.Time) ([]byte, error) {
 	if req.Actor.Role != perm.RCONAdmin {

@@ -1054,7 +1054,7 @@ type EffectiveProfile struct {
 	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list; without the field the codes are removed before display (SEC-006).
 	Formatting *Formatting `json:"formatting,omitempty"`
 
-	// GamePorts Game ports of the merged profiles, top first (D-074), not the ports stored for the server (those are on the server); only for the RCON admin and the server admin of this server (D-056), missing for other roles.
+	// GamePorts Game ports of the topmost profile that sets them (D-074), not the ports stored for the server (those are on the server); only for the RCON admin and the server admin of this server (D-056), missing for other roles.
 	GamePorts *[]GamePort `json:"game_ports,omitempty"`
 	MaxLength int         `json:"max_length"`
 
@@ -11719,15 +11719,25 @@ func (response ListSystemLog502ApplicationProblemPlusJSONResponse) VisitListSyst
 	return err
 }
 
-type ListSystemLog503ApplicationProblemPlusJSONResponse Problem
+type ListSystemLog503ResponseHeaders struct {
+	RetryAfter *int
+}
+
+type ListSystemLog503ApplicationProblemPlusJSONResponse struct {
+	Body    Problem
+	Headers ListSystemLog503ResponseHeaders
+}
 
 func (response ListSystemLog503ApplicationProblemPlusJSONResponse) VisitListSystemLogResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
 	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err

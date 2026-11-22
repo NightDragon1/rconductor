@@ -1970,7 +1970,7 @@ export interface components {
             max_length: number;
             wrappers: string[];
             separators: string[];
-            /** @description Game ports of the merged profiles, top first (D-074), not the ports stored for the server (those are on the server); only for the RCON admin and the server admin of this server (D-056), missing for other roles. */
+            /** @description Game ports of the topmost profile that sets them (D-074), not the ports stored for the server (those are on the server); only for the RCON admin and the server admin of this server (D-056), missing for other roles. */
             game_ports?: components["schemas"]["GamePort"][];
             formatting?: components["schemas"]["Formatting"];
             message_command?: components["schemas"]["MessageCommand"];
@@ -3715,6 +3715,8 @@ export interface operations {
             /** @description The agent is not connected (agent_unavailable), or it takes no more orders for now (busy, with Retry-After). */
             503: {
                 headers: {
+                    /** @description Seconds to wait, with busy only. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
