@@ -14,7 +14,11 @@ const lock = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const pkgs = lock.packages ?? {};
 let bad = 0;
 for (const name of ['eslint', 'typescript', 'openapi-typescript', 'prettier', 'vitest', 'vite', '@playwright/test']) {
-  if (!pkgs['node_modules/' + name]) { console.error(`${name}: missing in package-lock.json`); bad++; }
+  const p = pkgs['node_modules/' + name];
+  if (!p) { console.error(`${name}: missing in package-lock.json`); bad++; continue; }
+  // The package itself, not another one under its name (npm alias).
+  const own = `https://registry.npmjs.org/${name}/-/${name.split('/').pop()}-`;
+  if (!String(p.resolved || '').startsWith(own)) { console.error(`${name}: comes as another package (${p.resolved})`); bad++; }
 }
 // Every installed package, the tools and all they load: from the registry,
 // with a checksum, never a link, a file or git.

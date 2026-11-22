@@ -12,7 +12,7 @@ tree() { # tree <dir> <resolved of eslint> <go.mod line>
   mkdir -p "$1/web" "$1/tools"
   pkgs=""
   for n in typescript openapi-typescript prettier vitest vite @playwright/test; do
-    pkgs="$pkgs\"node_modules/$n\": {\"resolved\": \"https://registry.npmjs.org/$n/-/x.tgz\", \"integrity\": \"sha512-x\"},"
+    pkgs="$pkgs\"node_modules/$n\": {\"resolved\": \"https://registry.npmjs.org/$n/-/${n##*/}-1.0.0.tgz\", \"integrity\": \"sha512-x\"},"
   done
   printf '{"packages": {%s "node_modules/eslint": {"resolved": "%s", "integrity": "sha512-x"}}}\n' "$pkgs" "$2" >"$1/web/package-lock.json"
   printf 'module x\n\ngo 1.27\n%s\n' "$3" >"$1/tools/go.mod"
@@ -55,5 +55,8 @@ check "replace in go.mod" 1 "$tmp/rootreplace"
 tree "$tmp/work" https://registry.npmjs.org/eslint/-/eslint-9.tgz ""
 printf 'go 1.27\nuse .\n' >"$tmp/work/tools/go.work"
 check "tools/go.work" 1 "$tmp/work"
+tree "$tmp/alias" https://registry.npmjs.org/eslint/-/eslint-9.tgz ""
+node -e 'const f=process.argv[1],l=JSON.parse(require("fs").readFileSync(f));l.packages["node_modules/vite"].resolved="https://registry.npmjs.org/evil-vite/-/evil-vite-1.0.0.tgz";require("fs").writeFileSync(f,JSON.stringify(l))' "$tmp/alias/web/package-lock.json"
+check "a tool as another package (alias)" 1 "$tmp/alias"
 [ "$fail" = 0 ] && echo "check-tool-origin-test passed"
 exit "$fail"

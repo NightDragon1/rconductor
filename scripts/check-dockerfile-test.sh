@@ -28,5 +28,26 @@ check "another build step" 1 "$tmp/run"
 copy ignore
 printf 'scripts\n' >>"$tmp/ignore/.dockerignore"
 check "changed .dockerignore" 1 "$tmp/ignore"
+copy frontend
+sed -i -E '1s|^# syntax=[^@]+|# syntax=evil/frontend:1|' "$tmp/frontend/Dockerfile"
+check "other syntax frontend" 1 "$tmp/frontend"
+copy frontendbump
+sed -i -E '1s|dockerfile:1@sha256:[0-9a-f]+|dockerfile:2@sha256:1111111111111111111111111111111111111111111111111111111111111111|' "$tmp/frontendbump/Dockerfile"
+check "new tag and digest of the frontend" 0 "$tmp/frontendbump"
+copy variant
+sed -i 's|static-debian13:nonroot|static-debian13:debug-nonroot|' "$tmp/variant/Dockerfile"
+check "other tag variant" 1 "$tmp/variant"
+copy unpinned
+sed -i -E '0,/^FROM/s|@sha256:[0-9a-f]+||' "$tmp/unpinned/Dockerfile"
+check "digest pin removed" 1 "$tmp/unpinned"
+copy scripts
+sed -i 's|npm ci --no-audit --no-fund --ignore-scripts|npm ci --no-audit --no-fund|' "$tmp/scripts/Dockerfile"
+check "lifecycle scripts back on" 1 "$tmp/scripts"
+copy arg
+sed -i '0,/^ARG /s|^ARG |ARG EXTRA=1\nARG |' "$tmp/arg/Dockerfile"
+check "another ARG" 1 "$tmp/arg"
+copy own
+touch "$tmp/own/Dockerfile.dockerignore"
+check "Dockerfile.dockerignore" 1 "$tmp/own"
 [ "$fail" = 0 ] && echo "check-dockerfile-test passed"
 exit "$fail"

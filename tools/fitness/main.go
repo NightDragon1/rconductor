@@ -54,10 +54,12 @@ var (
 	harness  = []string{"/internal/e2e", "/internal/integration"}
 	cmdSinks = []string{"/internal/rcon", "/internal/connmgr"}
 	cmdCore  = []string{"/internal/rcon", "/internal/connmgr", "/internal/commands"}
-	// rawLogReaders fetch raw container log lines and mask them (UI-022):
-	// RequestData of the agent hub (logs.tail and other orders) and Logs and
-	// OnLines of the agent cache are called only there.
-	rawLogReaders = []string{"/internal/servers", "/internal/diag", "/internal/agentview", "/internal/agenthub", "/internal/cache"}
+	// rawLogFiles fetch raw container log lines and mask them (UI-022): the
+	// log orders of the agent hub (RequestData with logs.tail or logs.follow,
+	// or an order type that is no constant) and Logs and OnLines of the agent
+	// cache are called only from these core files.
+	rawLogFiles = []string{"internal/servers/logs.go", "internal/diag/", "internal/agentview/logs.go",
+		"internal/agentview/agentview.go", "internal/cache/agents.go"}
 	// sysLog writes the system log; only the masking sink (D-091) calls it.
 	sysLogQueries, sysLogSink = "/internal/store/sqlitedb", "/internal/syslog"
 )
@@ -186,6 +188,7 @@ func check(dir string, dests map[string]string) ([]finding, error) {
 	if packages.PrintErrors(pkgs) > 0 || len(pkgs) == 0 || pkgs[0].Module == nil {
 		return nil, fmt.Errorf("the module in %s does not load", dir)
 	}
+	root := pkgs[0].Module.Dir
 	mod := pkgs[0].Module.Path
 	var found []finding
 	prog, _ := ssautil.AllPackages(pkgs, ssa.InstantiateGenerics)
@@ -215,10 +218,12 @@ func check(dir string, dests map[string]string) ([]finding, error) {
 			switch {
 			case c.Name() == "Execute" && hasPrefix(cp, mod, cmdSinks) && !hasPrefix(p, mod, cmdCore):
 				edges[finding{"cmd", rel, "sends a command to a game server outside the command pipeline"}] = true
-			case (c.Name() == "RequestData" && cp == mod+"/internal/agenthub" ||
+			case (c.Name() == "RequestData" && cp == mod+"/internal/agenthub" && logOrder(e.Site) ||
 				(c.Name() == "Logs" || c.Name() == "OnLines") && cp == mod+"/internal/cache") &&
-				!hasPrefix(p, mod, rawLogReaders) && !hasPrefix(p, mod, harness):
+				!inFiles(prog.Fset, fn, root, rawLogFiles) && !hasPrefix(p, mod, harness):
 				edges[finding{"redact", rel, "reads raw container logs outside the masking"}] = true
+			case c.Name() == "InsertSystemLog" && cp == mod+sysLogQueries && p != mod+sysLogSink:
+				edges[finding{"redact", rel, "writes the system log past its masking"}] = true
 			case c.Name() == "Reveal" && cp == mod+logPkg && !hasPrefix(p, mod, revealers):
 				edges[finding{"redact", rel, "reveals a secret outside its destinations"}] = true
 			case (cp == "log" || (cp == "fmt" && strings.HasPrefix(c.Name(), "Print"))) && strings.HasPrefix(p, mod+"/internal/") &&
