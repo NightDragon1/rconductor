@@ -185,13 +185,15 @@ func (a Always) Lines(lines []string, profilePatterns [][]string) ([]string, int
 	if a.p == nil {
 		return ListLines(lines), 0
 	}
+	// Switch and budget read once: a switch in between cannot leave a
+	// batch without the list.
 	a.p.mu.RLock()
-	enabled := a.p.enabled
+	enabled, budget := a.p.enabled, a.p.budget
 	a.p.mu.RUnlock()
 	if !enabled {
 		return ListLines(lines), 0
 	}
-	return a.p.Lines(lines, profilePatterns)
+	return a.p.masker(profilePatterns).Lines(lines, Budget{Max: budget})
 }
 
 // ListLines masks with the built-in list alone, for a way out of the panel

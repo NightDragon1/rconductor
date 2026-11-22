@@ -13,6 +13,7 @@ import (
 	"net"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/audit"
@@ -294,11 +295,12 @@ func rawOr(v, def string) json.RawMessage {
 	return json.RawMessage(def)
 }
 
-// oneLine keeps a foreign log line on its line: control characters other
-// than the tab, line breaks included, become U+FFFD (SEC-006).
+// oneLine keeps a foreign log line on its line and in its order: control
+// characters other than the tab (line breaks included), line and paragraph
+// separators and format characters (bidi controls) become U+FFFD (SEC-006).
 func oneLine(s string) string {
 	return strings.Map(func(r rune) rune {
-		if r != '\t' && (r < 0x20 || (r >= 0x7f && r <= 0x9f)) {
+		if r != '\t' && (unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf)) {
 			return '\uFFFD'
 		}
 		return r

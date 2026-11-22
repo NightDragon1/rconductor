@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -215,18 +216,26 @@ func Rewrite(line string, f func([]string) []string) string {
 
 // walk replaces every text in v, object keys included (foreign JSON may
 // carry a host as a key), in a fixed order: per key the key, then its
-// value. A key that becomes another's gets a ~ until it is unique.
+// value. A key that becomes another's gets ~2, ~3 and so on.
 func walk(v any, f func(string) string) any {
 	switch x := v.(type) {
 	case string:
 		return f(x)
 	case map[string]any:
 		out := make(map[string]any, len(x))
+		next := map[string]int{} // the next counter per key that met another
 		for _, k := range slices.Sorted(maps.Keys(x)) {
 			nk := f(k)
 			val := walk(x[k], f)
-			for _, taken := out[nk]; taken; _, taken = out[nk] {
-				nk += "~"
+			if _, taken := out[nk]; taken {
+				base := nk
+				for n := max(next[base], 2); ; n++ {
+					nk = base + "~" + strconv.Itoa(n)
+					if _, used := out[nk]; !used {
+						next[base] = n + 1
+						break
+					}
+				}
 			}
 			out[nk] = val
 		}

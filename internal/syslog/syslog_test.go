@@ -225,8 +225,35 @@ func TestRewriteKeys(t *testing.T) {
 		}
 		return out
 	})
-	want := `{"caps":{"host-1":1,"other":"host-1"},"k":"x","k~":"x"}`
+	want := `{"caps":{"host-1":1,"other":"host-1"},"k":"x","k~2":"x"}`
 	if got != want {
 		t.Errorf("got %s, want %s", got, want)
+	}
+}
+
+// TestRewriteManyKeysMeet: keys that all become the same text stay apart
+// with a short counter each; the line grows linearly, not with the square.
+func TestRewriteManyKeysMeet(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("{")
+	for i := range 700 {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `"k%03d":1`, i)
+	}
+	b.WriteString("}")
+	got := Rewrite(b.String(), func(in []string) []string {
+		out := make([]string, len(in))
+		for i, s := range in {
+			out[i] = s
+			if strings.HasPrefix(s, "k") {
+				out[i] = "[x]"
+			}
+		}
+		return out
+	})
+	if len(got) > 3*b.Len() || !strings.Contains(got, `"[x]~700":1`) {
+		t.Errorf("%d bytes for %d", len(got), b.Len())
 	}
 }
