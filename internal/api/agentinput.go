@@ -36,3 +36,25 @@ func (a *AgentInput) UnmarshalJSON(b []byte) error {
 	a.DisplayName = &s
 	return nil
 }
+
+// missingSayPrefix stands for a SayPrefixInput without the field or with
+// null: a control character, so the check refuses it after the rights
+// (CMD-020, D-051); "" removes the prefix.
+const missingSayPrefix = "\x00"
+
+// SayPrefixMissing reports a body without say_prefix or with null.
+func (p SayPrefixInput) SayPrefixMissing() bool { return p.SayPrefix == missingSayPrefix }
+
+// UnmarshalJSON tells a missing or null say_prefix from "".
+func (p *SayPrefixInput) UnmarshalJSON(b []byte) error {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+	raw, ok := m["say_prefix"]
+	if !ok || string(raw) == "null" {
+		p.SayPrefix = missingSayPrefix
+		return nil
+	}
+	return json.Unmarshal(raw, &p.SayPrefix)
+}

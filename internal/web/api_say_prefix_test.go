@@ -73,6 +73,12 @@ func TestSayPrefix(t *testing.T) {
 			t.Errorf("prefix %q = %d %s, want 400", bad, got, b)
 		}
 	}
+	// CMD-020: a missing or null say_prefix removes nothing; "" does.
+	for _, body := range []string{`{}`, `{"say_prefix":null}`} {
+		if got, b := putSayPrefix(t, f, admin, id, body, p.Version); got != http.StatusBadRequest || !strings.Contains(b, "required") {
+			t.Errorf("%s = %d %s, want 400", body, got, b)
+		}
+	}
 	if got, b := putSayPrefix(t, f, admin, id, `{"say_prefix":" [R] "}`, p.Version); got != http.StatusOK || !strings.Contains(b, `"say_prefix":"[R]"`) {
 		t.Fatalf("set = %d %s", got, b)
 	}
