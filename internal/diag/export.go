@@ -111,9 +111,11 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 	}
 	wg.Wait()
 	cancel()
+	agentsCut := false
 	for i, id := range active {
 		name := "agents/" + id + ".log"
-		text, used := agentLog(tails[i], clean, budget-len(name))
+		text, used, cut := agentLog(tails[i], clean, budget-len(name))
+		agentsCut = agentsCut || cut
 		budget -= len(name) + used
 		all = append(all, out{name, text})
 	}
@@ -139,7 +141,7 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 	if _, err := audit.Write(ctx, s.st.DB, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
 		TargetType: "diagnostics", Action: "diagnostics.exported", Result: audit.ResultOK,
-		Payload: map[string]any{"from": from.UTC(), "to": to.UTC(), "bytes": b.Len(), "shortened": shortened},
+		Payload: map[string]any{"from": from.UTC(), "to": to.UTC(), "bytes": b.Len(), "shortened": shortened || agentsCut},
 	}); err != nil {
 		return nil, err
 	}
@@ -155,7 +157,7 @@ type tailResult struct {
 // agentLog writes the log of one agent: the head, then its newest lines as
 // far as budget bytes allow; used counts the text beyond the head
 // (diagnostics.max_bytes, D-091).
-func agentLog(t tailResult, clean func([]string) []string, budget int) (string, int) {
+func agentLog(t tailResult, clean func([]string) []string, budget int) (text string, used int, cut bool) {
 	head := Notice + "\n"
 	switch {
 	case errors.Is(t.err, ErrAgentUnavailable):
@@ -169,17 +171,16 @@ func agentLog(t tailResult, clean func([]string) []string, budget int) (string, 
 	}
 	budget -= len(head)
 	var lines []string
-	used := 0
 	for i := len(t.lines) - 1; i >= 0; i-- {
 		l := oneLine(syslog.Rewrite(t.lines[i], clean)) + "\n"
 		if used+len(l) > budget {
-			head += "Shortened by diagnostics.max_bytes.\n"
+			head, cut = head+"Shortened by diagnostics.max_bytes.\n", true
 			break
 		}
 		lines, used = append(lines, l), used+len(l)
 	}
 	slices.Reverse(lines)
-	return head + strings.Join(lines, ""), len(head) + used
+	return head + strings.Join(lines, ""), len(head) + used, cut
 }
 
 // systemLog writes the stored lines of the period, oldest first, through
