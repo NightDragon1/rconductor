@@ -916,7 +916,6 @@
       "mail": "Mail",
       "other": "Other",
       "twofactor": "Two-factor sign-in",
-      "features": "Features",
       "messages": "Messages",
       "diagnostics": "Diagnostics"
     },
@@ -927,7 +926,6 @@
       "servers": "Servers and commands",
       "agents": "Agents",
       "system": "System",
-      "features": "Features",
       "other": "Other"
     },
     "groupsLabel": "Settings groups",
@@ -1128,54 +1126,6 @@
       "auth_recovery_queue": {
         "label": "Recovery queue",
         "help": "Recovery requests waiting in the background; further ones are dropped with the same answer."
-      },
-      "features_server_save_as_new": {
-        "label": "Save as New",
-        "help": "Keeps the server dialog open after creating a server and offers Save and Save as New."
-      },
-      "features_log_filter_split": {
-        "label": "Two-part log filter",
-        "help": "Filters container logs by the bracket part and the text, joined with and, or, xor."
-      },
-      "features_command_palette": {
-        "label": "Command palette",
-        "help": "Shows the command palette in the console (button, Ctrl+K with shortcuts on)."
-      },
-      "features_profile_browser": {
-        "label": "Profile browser",
-        "help": "Shows the game profiles with their command catalog and the effective profile of each server, read only."
-      },
-      "features_color_codes": {
-        "label": "Color codes",
-        "help": "Shows the formatting codes of game server answers (for example Minecraft § codes) as a fixed set of styles instead of removing them."
-      },
-      "features_say_sender": {
-        "label": "Messages with sender",
-        "help": "Messages to the players (for example Minecraft say) show the name of the signed-in user and a prefix per server group instead of [Rcon]."
-      },
-      "features_log_masking_ui": {
-        "label": "Log masking settings",
-        "help": "Settings for the masking of container logs: switch it off or add fixed texts that are masked. Masking itself is on without this flag."
-      },
-      "features_host_groups": {
-        "label": "Overview by host",
-        "help": "Server cards grouped by host in the overview, with a display name the RCON admin gives each agent."
-      },
-      "features_diagnostics_export": {
-        "label": "Diagnostic export",
-        "help": "The RCON admin downloads a package for bug reports, with secrets and host names blacked out."
-      },
-      "features_messages": {
-        "label": "Messages",
-        "help": "Messages from the RCON admin and server admins to users in the panel, with comments of the recipients."
-      },
-      "features_server_number": {
-        "label": "Server numbers",
-        "help": "Shows the consecutive number of each server: as the first column ID in Manage servers and server groups and as a badge before the name on cards and the server page."
-      },
-      "features_docker_host": {
-        "label": "Docker host",
-        "help": "Shows the Docker host of each agent: its name, and its address from the agent setting RCD_HOST_IP or Swarm mode; without an address, the address the agent connected from if it lies outside the panel's networks. Only the RCON admin sees them."
       }
     },
     "badDuration": "Use a number and h, min or s, e.g. 72 h."

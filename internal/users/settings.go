@@ -8,10 +8,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/auth"
+	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -291,6 +293,7 @@ func EnsureAuditDefaults(ctx context.Context, st *store.Store) error {
 }
 
 // Settings returns the global settings; only the RCON admin reads them.
+// Stored values of flags this build no longer has stay unread (NFR-019).
 func (s *Service) Settings(ctx context.Context, req Request) (map[string]json.RawMessage, error) {
 	if req.Actor.Role != perm.RCONAdmin {
 		s.deniedOn(ctx, req, "settings.read", "settings", "", "forbidden", nil)
@@ -302,9 +305,10 @@ func (s *Service) Settings(ctx context.Context, req Request) (map[string]json.Ra
 	}
 	out := map[string]json.RawMessage{}
 	for _, r := range rows {
-		if r.Key != SettingLogMasking {
-			out[r.Key] = json.RawMessage(r.Value)
+		if r.Key == SettingLogMasking || (strings.HasPrefix(r.Key, features.KeyPrefix) && !s.features.Known(r.Key)) {
+			continue
 		}
+		out[r.Key] = json.RawMessage(r.Value)
 	}
 	return out, nil
 }

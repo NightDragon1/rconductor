@@ -53,7 +53,7 @@ describe('explanations in the settings (UI-014)', () => {
 });
 
 // Every global setting (internal/users/settings.go), the rate limits of
-// each role and the feature flags of 1.2.
+// each role.
 const allKeys: Record<string, unknown> = {
   'backup.interval': '24h0m0s',
   'backup.keep_auto': 7,
@@ -108,22 +108,6 @@ const allKeys: Record<string, unknown> = {
       [`ratelimit.${r}.burst`, 10],
     ]),
   ),
-  ...Object.fromEntries(
-    [
-      'profile_browser',
-      'color_codes',
-      'say_sender',
-      'docker_host',
-      'server_number',
-      'messages',
-      'diagnostics_export',
-      'host_groups',
-      'log_masking_ui',
-      'server_save_as_new',
-      'log_filter_split',
-      'command_palette',
-    ].map((f) => [`features.${f}`, true]),
-  ),
   'some.new_key': 1,
 };
 const groups = [
@@ -133,7 +117,6 @@ const groups = [
   'Servers and commands',
   'Agents',
   'System',
-  'Features',
   'Other',
 ];
 const advanced = [

@@ -460,7 +460,7 @@ export interface paths {
         };
         /**
          * Effective game profile of a server, read only (UI-020, SRV-008, D-074).
-         * @description Merged from the server's profiles top first: for each value the topmost profile that sets it wins, wrappers and separators are the union, the catalog is the union with the upper profile winning on the same path. Behind the feature flag profile_browser. A server outside the caller's scope is 404.
+         * @description Merged from the server's profiles top first: for each value the topmost profile that sets it wins, wrappers and separators are the union, the catalog is the union with the upper profile winning on the same path. A server outside the caller's scope is 404.
          */
         get: operations["getServerProfile"];
         put?: never;
@@ -587,12 +587,12 @@ export interface paths {
         };
         /**
          * Prefix of messages to the players for the servers of a group (CMD-020, D-082); RCON admin, or a server admin who has every server of the group in scope.
-         * @description Behind the feature flag say_sender (404 while off). A server admin sees the group only with every server of it in scope, otherwise 404 as outside the scope (D-051); moderators and supporters get 403, also for an unknown group; for the RCON admin and server admins an unknown group is 404.
+         * @description A server admin sees the group only with every server of it in scope, otherwise 404 as outside the scope (D-051); moderators and supporters get 403, also for an unknown group; for the RCON admin and server admins an unknown group is 404.
          */
         get: operations["getServerGroupSayPrefix"];
         /**
          * Set or clear the prefix of messages to the players for a group (CMD-020, D-082); same roles as reading; in the audit.
-         * @description Behind the feature flag say_sender (404 while off). At most 16 printable characters without §, otherwise 400; an empty string removes the prefix. Requires If-Match with the version read before.
+         * @description At most 16 printable characters without §, otherwise 400; an empty string removes the prefix. Requires If-Match with the version read before.
          */
         put: operations["setServerGroupSayPrefix"];
         post?: never;
@@ -611,7 +611,7 @@ export interface paths {
         };
         /**
          * Diagnostic export as ZIP (NFR-018, D-090); RCON admin only.
-         * @description Behind the feature flag diagnostics_export (404 while off). One JSON file per area (versions, settings, profiles, states of agents and servers), the system log of the period (D-091) and the logs of the agents, fetched on demand; an agent offline is noted in the package. Every log file starts with the notice that it may contain chat messages of players. Period from to to, at most 7 days (400); without from the last 24 hours. Blacked out before writing (SEC-012), log lines masked as in D-088. Above diagnostics.max_bytes the period is shortened and the package says so. Exports at the same time are limited (503 with Retry-After). Audited with period and size, never with content.
+         * @description One JSON file per area (versions, settings, profiles, states of agents and servers), the system log of the period (D-091) and the logs of the agents, fetched on demand; an agent offline is noted in the package. Every log file starts with the notice that it may contain chat messages of players. Period from to to, at most 7 days (400); without from the last 24 hours. Blacked out before writing (SEC-012), log lines masked as in D-088. Above diagnostics.max_bytes the period is shortened and the package says so. Exports at the same time are limited (503 with Retry-After). Audited with period and size, never with content.
          */
         get: operations["getDiagnostics"];
         put?: never;
@@ -631,7 +631,7 @@ export interface paths {
         };
         /**
          * System log of the panel or the log of an agent (UI-025, D-091); RCON admin only.
-         * @description Behind the feature flag diagnostics_export (404 while off). source panel reads the stored system log (events from info up, blacked out and masked before writing), oldest first, from level up, within from and to (at most 7 days, 400; without from the last hour); after is the ID of the last entry of the page before, for polling. source with an agent ID fetches the last lines of the agent's own container over logs.tail, not stored, masked as container logs; from, to and after do not apply. Retrieval is audited without content.
+         * @description source panel reads the stored system log (events from info up, blacked out and masked before writing), oldest first, from level up, within from and to (at most 7 days, 400; without from the last hour); after is the ID of the last entry of the page before, for polling. source with an agent ID fetches the last lines of the agent's own container over logs.tail, not stored, masked as container logs; from, to and after do not apply. Retrieval is audited without content.
          */
         get: operations["listSystemLog"];
         put?: never;
@@ -704,7 +704,7 @@ export interface paths {
         head?: never;
         /**
          * Set the display name of an agent's host (UI-021, D-089); RCON admin only.
-         * @description Behind the feature flag host_groups (404 while off). display_name null or "" removes it; at most agents.display_name_max characters, no control characters (400). The other roles see the display name or a neutral placeholder, never the host name (D-089).
+         * @description display_name null or "" removes it; at most agents.display_name_max characters, no control characters (400). The other roles see the display name or a neutral placeholder, never the host name (D-089).
          */
         patch: operations["updateAgent"];
         trace?: never;
@@ -762,13 +762,13 @@ export interface paths {
         };
         /**
          * Messages in the panel (MSG-001 to MSG-003, D-085): those sent to me and those I sent, newest first; the RCON admin sees all.
-         * @description Behind the feature flag messages (404 while off). The recipients of a message are fixed when it is sent; who comes into a scope later does not see older messages. Messages and comments go after messages.retention_days (D-086). Paged: limit (1 to 100, default 50) and before, the ID of the last message of the page before. before is only compared with the IDs of my view, never looked up: every valid UUID behaves the same.
+         * @description The recipients of a message are fixed when it is sent; who comes into a scope later does not see older messages. Messages and comments go after messages.retention_days (D-086). Paged: limit (1 to 100, default 50) and before, the ID of the last message of the page before. before is only compared with the IDs of my view, never looked up: every valid UUID behaves the same.
          */
         get: operations["listMessages"];
         put?: never;
         /**
          * Send a message (MSG-001, MSG-002, D-085); RCON admin and server admin; in the audit as message.sent, without the text (D-086).
-         * @description Behind the feature flag messages (404 while off). The RCON admin sends to all, server_admins, moderators or users (user_ids); a server admin to scope (moderators and supporters with at least one server in his scope at sending time) or scope_moderators; another audience, users among them, is 403. Moderators and supporters do not send (403). The text has at most 8 KiB in UTF-8 (first) and 1 to messages.max_text code points, the smaller applies; user_ids is for audience users only and has 1 to messages.max_recipients entries without repeats; otherwise 400, also when the audience has no recipient. An audience that resolves to more than messages.max_resolved_recipients users is 400 with reason too_many_recipients; it is never cut. At most messages.per_hour messages per sender and hour (429); deleting a message does not lower the count. The text is shown as text, never as markup (SEC-006).
+         * @description The RCON admin sends to all, server_admins, moderators or users (user_ids); a server admin to scope (moderators and supporters with at least one server in his scope at sending time) or scope_moderators; another audience, users among them, is 403. Moderators and supporters do not send (403). The text has at most 8 KiB in UTF-8 (first) and 1 to messages.max_text code points, the smaller applies; user_ids is for audience users only and has 1 to messages.max_recipients entries without repeats; otherwise 400, also when the audience has no recipient. An audience that resolves to more than messages.max_resolved_recipients users is 400 with reason too_many_recipients; it is never cut. At most messages.per_hour messages per sender and hour (429); deleting a message does not lower the count. The text is shown as text, never as markup (SEC-006).
          */
         post: operations["createMessage"];
         delete?: never;
@@ -788,14 +788,14 @@ export interface paths {
         };
         /**
          * One message (MSG-003, D-085); its recipients, its sender and the RCON admin.
-         * @description Behind the feature flag messages (404 while off). Anyone else gets 404, as for an unknown message.
+         * @description Anyone else gets 404, as for an unknown message.
          */
         get: operations["getMessage"];
         put?: never;
         post?: never;
         /**
          * Delete a message with its recipients and comments, at once and for good (D-085, D-086); its sender and the RCON admin; in the audit without the text.
-         * @description Behind the feature flag messages (404 while off). A recipient gets 403, anyone else 404.
+         * @description A recipient gets 403, anyone else 404.
          */
         delete: operations["deleteMessage"];
         options?: never;
@@ -816,7 +816,7 @@ export interface paths {
         put?: never;
         /**
          * Mark a message read for me (D-085); its recipients only.
-         * @description Behind the feature flag messages (404 while off). Repeating it changes nothing. Sender and RCON admin who are not recipients get 403 (they see the message), anyone else 404.
+         * @description Repeating it changes nothing. Sender and RCON admin who are not recipients get 403 (they see the message), anyone else 404.
          */
         post: operations["markMessageRead"];
         delete?: never;
@@ -836,13 +836,13 @@ export interface paths {
         };
         /**
          * The comments of a message, oldest first (MSG-003, D-085); its recipients, its sender and the RCON admin.
-         * @description Behind the feature flag messages (404 while off). Anyone else gets 404, as for an unknown message. Paged: limit (1 to 100, default 50) and after, the ID of the last comment of the page before; after is only compared with the comments of this message, never looked up.
+         * @description Anyone else gets 404, as for an unknown message. Paged: limit (1 to 100, default 50) and after, the ID of the last comment of the page before; after is only compared with the comments of this message, never looked up.
          */
         get: operations["listMessageComments"];
         put?: never;
         /**
          * Comment on a message (MSG-003, D-085); its recipients and its sender; in the audit as message.commented, without the text (D-086).
-         * @description Behind the feature flag messages (404 while off). The RCON admin who is neither recipient nor sender gets 403 (he sees the message), anyone else 404. The text has at most 4 KiB in UTF-8 (first) and 1 to messages.max_comment code points (setting, default 2000, 1 to 4096), the smaller applies; otherwise 400. At most messages.comments_per_hour comments per author and hour (setting, default 60, 1 to 3600; counted in the same transaction as the comment, so parallel requests cannot pass it, and deleting a comment does not lower the count): 429. Order: 404 and 403 first, then 400, then 429. No editing. The text is shown as text, never as markup (SEC-006).
+         * @description The RCON admin who is neither recipient nor sender gets 403 (he sees the message), anyone else 404. The text has at most 4 KiB in UTF-8 (first) and 1 to messages.max_comment code points (setting, default 2000, 1 to 4096), the smaller applies; otherwise 400. At most messages.comments_per_hour comments per author and hour (setting, default 60, 1 to 3600; counted in the same transaction as the comment, so parallel requests cannot pass it, and deleting a comment does not lower the count): 429. Order: 404 and 403 first, then 400, then 429. No editing. The text is shown as text, never as markup (SEC-006).
          */
         post: operations["createMessageComment"];
         delete?: never;
@@ -866,7 +866,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a comment at once and for good (D-085, D-086); its author, the sender of the message and the RCON admin; in the audit as message.comment_deleted, without the text.
-         * @description Behind the feature flag messages (404 while off). Another recipient gets 403, anyone else 404, also for a comment of another message.
+         * @description Another recipient gets 403, anyone else 404, also for a comment of another message.
          */
         delete: operations["deleteMessageComment"];
         options?: never;
@@ -883,7 +883,7 @@ export interface paths {
         };
         /**
          * WebSocket for live data (Design 2.3).
-         * @description Upgrade with the session cookie; the Origin is checked. Messages from the browser: {"type":"subscribe"|"unsubscribe","topic":...}. Messages from the panel: {"type":"subscribed","topic":...} once a subscription is in place, before its first event; {"type":"event","topic":...,"data":...} and {"type":"error","topic":...,"reason":...}. Topics: servers.overview, server.{id}.status, server.{id}.console, server.{id}.metrics, server.{id}.logs and messages. messages is behind the feature flag messages for every role that can receive a message; data is {"kind":...,"message_id":...} with kind one of message (new to me), comment (new comment), deleted (message gone), comment_deleted and read (read on another socket), and comment_id with comment and comment_deleted; never a text. Events come only for messages I sent or received, also for the RCON admin, who sees the others through the list; the texts come from the API. While the flag is off, messages is an unknown topic. Metrics and logs are agent functions for RCON admin and server admin only; a new subscription first gets the current value (last sample or the last 50 log lines), and logs stream from the agent only while someone subscribes (UI-009). Metrics carry their time and a stale mark (NFR-005). Rights are checked on subscribe and after every change; withdrawn subscriptions end with reason revoked. Ended sessions close the socket. Limits (SEC-008): ws.max_sockets_per_session sockets per session (default 20); a socket over the limit closes the oldest one with reason replaced. ws.max_subscriptions_per_socket subscriptions per socket (default 16); more get reason limit. Ping every 30 s.
+         * @description Upgrade with the session cookie; the Origin is checked. Messages from the browser: {"type":"subscribe"|"unsubscribe","topic":...}. Messages from the panel: {"type":"subscribed","topic":...} once a subscription is in place, before its first event; {"type":"event","topic":...,"data":...} and {"type":"error","topic":...,"reason":...}. Topics: servers.overview, server.{id}.status, server.{id}.console, server.{id}.metrics, server.{id}.logs and messages. messages is for every role that can receive a message; data is {"kind":...,"message_id":...} with kind one of message (new to me), comment (new comment), deleted (message gone), comment_deleted and read (read on another socket), and comment_id with comment and comment_deleted; never a text. Events come only for messages I sent or received, also for the RCON admin, who sees the others through the list; the texts come from the API. Metrics and logs are agent functions for RCON admin and server admin only; a new subscription first gets the current value (last sample or the last 50 log lines), and logs stream from the agent only while someone subscribes (UI-009). Metrics carry their time and a stale mark (NFR-005). Rights are checked on subscribe and after every change; withdrawn subscriptions end with reason revoked. Ended sessions close the socket. Limits (SEC-008): ws.max_sockets_per_session sockets per session (default 20); a socket over the limit closes the oldest one with reason replaced. ws.max_subscriptions_per_socket subscriptions per socket (default 16); more get reason limit. Ping every 30 s.
          */
         get: operations["openWebSocket"];
         put?: never;
@@ -1313,12 +1313,12 @@ export interface paths {
         };
         /**
          * Masking of container logs (UI-022, D-088); RCON admin only.
-         * @description Behind the flag log_masking_ui (404 while off); masking runs without it. Texts are never returned, only their number.
+         * @description Texts are never returned, only their number.
          */
         get: operations["getLogMasking"];
         /**
          * Change the masking (UI-022, D-088); RCON admin only; audit log_masking.updated.
-         * @description Behind the flag log_masking_ui (404 while off). Order for a decodable request: 403, 428, 400, 409 (a body that cannot be read is 400 first; over 256 KiB 413). Missing fields stay; texts replaces all, [] removes them; {} changes nothing: same version, no audit entry. Off, nothing is masked: list, profiles and texts. Fixed texts, no expressions, sealed with the master key in their own row, never in /settings (D-058): each 4 to max_text_chars characters on one line, at most max_texts (1 to 200, default 50; max_text_chars 4 to 1024, default 256), checked against the limits after the change, for texts sent and stored. Errors name a position, never a text (SEC-012). Audit: enabled, text_count, both limits and budget_ms as from and to, texts_replaced, repaired; never a text. An unreadable stored state is 500 for reads and partial writes; a write that sets every field and the texts repairs it, with a version above the stored one. Unreadable texts keep the last masker read; unreadable limits their last value or default; always with a log (F-93). Stored texts are not checked against the limits when they are loaded, only when written. Without any readable state since the start, list and profiles mask and the texts are missing, with a log. budget_ms (50 to 2000, default 250) bounds the masking of one batch of lines; lines left after it are withheld.
+         * @description Order for a decodable request: 403, 428, 400, 409 (a body that cannot be read is 400 first; over 256 KiB 413). Missing fields stay; texts replaces all, [] removes them; {} changes nothing: same version, no audit entry. Off, nothing is masked: list, profiles and texts. Fixed texts, no expressions, sealed with the master key in their own row, never in /settings (D-058): each 4 to max_text_chars characters on one line, at most max_texts (1 to 200, default 50; max_text_chars 4 to 1024, default 256), checked against the limits after the change, for texts sent and stored. Errors name a position, never a text (SEC-012). Audit: enabled, text_count, both limits and budget_ms as from and to, texts_replaced, repaired; never a text. An unreadable stored state is 500 for reads and partial writes; a write that sets every field and the texts repairs it, with a version above the stored one. Unreadable texts keep the last masker read; unreadable limits their last value or default; always with a log (F-93). Stored texts are not checked against the limits when they are loaded, only when written. Without any readable state since the start, list and profiles mask and the texts are missing, with a log. budget_ms (50 to 2000, default 250) bounds the masking of one batch of lines; lines left after it are withheld.
          */
         put: operations["updateLogMasking"];
         post?: never;
@@ -1381,7 +1381,7 @@ export interface components {
             id: string;
             /** @description Foreign data from the agent (SEC-006). */
             name: string;
-            /** @description Display name of the host, set by the RCON admin (D-089); only while the feature flag host_groups is on. */
+            /** @description Display name of the host, set by the RCON admin (D-089). */
             display_name?: string;
             /** @description SHA256:<base64> of the agent key. */
             fingerprint: string;
@@ -1389,7 +1389,7 @@ export interface components {
             status: "pending" | "active" | "revoked";
             version: string;
             capabilities: string[];
-            /** @description Source address of the agent's last connection to the agent port. While the flag docker_host is on, it is set only when it lies outside the panel's own networks and is shown as "Connected from" (D-084); it is never part of docker_host. */
+            /** @description Source address of the agent's last connection to the agent port. It is set only when it lies outside the panel's own networks and is shown as "Connected from" (D-084); it is never part of docker_host. */
             remote?: string;
             docker_host?: components["schemas"]["DockerHost"];
             /** Format: uuid */
@@ -1402,14 +1402,14 @@ export interface components {
             /** Format: date-time */
             revoked_at?: string;
         };
-        /** @description Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Only while the feature flag host_groups is on. Never the host name, the address or the agent ID. */
+        /** @description Host of the server for the grouping in the overview (UI-021, D-089), for every role that sees the server; missing for a server without an agent. Never the host name, the address or the agent ID. */
         HostGroup: {
             /** @description The same for the servers on the same host within one answer, otherwise without meaning; never the agent ID. */
             key: string;
             /** @description Missing when none is set; the interface shows a neutral placeholder. */
             display_name?: string;
         };
-        /** @description Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Only while the feature flag docker_host is on; each field is missing when the agent does not give it. */
+        /** @description Host of the agent's Docker daemon (AGT-014), from the agent's last hello since the panel started: the name as the daemon gives it, the address as the agent's setting RCD_HOST_IP names it, else from the daemon (D-084). Each field is missing when the agent does not give it. */
         DockerHost: {
             /** @description Foreign data from the agent (SEC-006). */
             name?: string;
@@ -1544,7 +1544,7 @@ export interface components {
         Server: {
             /**
              * Format: int64
-             * @description Consecutive number of the server, given at creation and never given again, also after a delete (UI-018). Every role in scope gets it; the interface shows it with the flag server_number.
+             * @description Consecutive number of the server, given at creation and never given again, also after a delete (UI-018). Every role in scope gets it; the interface shows it.
              */
             number: number;
             /** @description Version of the stored object for optimistic locking, raised by every change; send it as If-Match when changing the object (revision 2.4 candidate 24). */
@@ -1810,7 +1810,7 @@ export interface components {
             /** @description At most 16 printable characters without §; empty removes the prefix. */
             say_prefix: string;
         };
-        /** @description Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped; while the flag say_sender is off it is sent unchanged. */
+        /** @description Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped. */
         MessageCommand: {
             /** @description Command path that is rewritten, e.g. say. */
             path: string;
@@ -1967,7 +1967,7 @@ export interface components {
             catalog: components["schemas"]["EffectiveCommand"][];
         };
         /**
-         * @description Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list while the flag color_codes is on; without the field or with the flag off the codes are removed before display (SEC-006).
+         * @description Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list; without the field the codes are removed before display (SEC-006).
          * @enum {string}
          */
         Formatting: "minecraft";
@@ -2330,8 +2330,6 @@ export interface components {
             panel_version: string;
             /** @description Global interface settings everyone needs (revision 2.4 candidate 7); only the RCON admin changes them in /settings. */
             ui: {
-                /** @description Names of the feature flags that are on (NFR-019); missing means none. The RCON admin switches them with features.<name> in /settings. */
-                features?: string[];
                 /** @description Keyboard shortcuts, off by default (UI-008). */
                 shortcuts_enabled: boolean;
                 /** @description The global supporter switch (ROLE-006); with the user's own release it decides whether a moderator manages supporters (Design 6.2). */

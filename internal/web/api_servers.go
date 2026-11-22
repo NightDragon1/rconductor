@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/NightDragon1/rconductor/internal/agents"
 	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -433,11 +432,11 @@ func strIDs(list []uuid.UUID) []string {
 
 // hostGroups gives the servers of one answer their host in the overview
 // (UI-021, D-089): a key, the same per host within the answer, meaningless
-// beyond it and never the agent ID, and the display name. Nil: flag off.
+// beyond it and never the agent ID, and the display name. Nil: no agents.
 type hostGroups struct{ names, keys map[string]string }
 
 func (s *apiServer) hostGroups(ctx context.Context) (*hostGroups, error) {
-	if s.agents == nil || !s.features.Enabled(ctx, s.store, agents.FeatureHostGroups) {
+	if s.agents == nil {
 		return nil, nil
 	}
 	names, err := s.agents.DisplayNames(ctx)

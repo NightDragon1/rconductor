@@ -4,7 +4,6 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,24 +12,17 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-
-	"github.com/NightDragon1/rconductor/internal/features"
 )
 
 // TestWebSocketMessages covers the topic messages (MSG-001…003, D-085):
-// unknown while the flag messages is off; then events only to the
+// events only to the
 // participants of a message, kind and IDs, never a text. Events come in
 // order, so an event to the wrong socket shows as the wrong next kind.
 func TestWebSocketMessages(t *testing.T) {
-	flags, err := features.New(features.Flag{Name: "messages", Operations: []string{"CreateMessage", "CreateMessageComment", "MarkMessageRead", "DeleteMessage", "DeleteMessageComment"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+	f := newAPIFixture(t, Proxies{})
 	srv := httptest.NewServer(f.h)
 	t.Cleanup(srv.Close)
 	w := &wsFixture{apiFixture: f, srv: srv}
-	f.hub.SetMessages(func(ctx context.Context) bool { return flags.Enabled(ctx, f.st, "messages") })
 	admin, mod := f.login(t, "Boss"), f.login(t, "Mod")
 	const origin = "http://panel.lan"
 	ca, _, err := w.dial(t, admin, w.origin())
@@ -41,19 +33,10 @@ func TestWebSocketMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	send(t, cm, "subscribe", "messages")
-	if m, err := next(t, cm, 5*time.Second); err != nil || m.Type != "error" || m.Reason != "invalid" {
-		t.Fatalf("flag off: %+v %v", m, err)
-	}
-	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
-		body: `{"features.messages":true}`}).Code; got != http.StatusOK {
-		t.Fatalf("switch flag on = %d", got)
-	}
 	send(t, ca, "subscribe", "messages")
 	send(t, cm, "subscribe", "messages")
-	// Three log lines name the topic: the refusal above and the two
-	// subscriptions.
-	w.subscribed(t, "messages", 3)
+	// Two log lines name the topic: the two subscriptions.
+	w.subscribed(t, "messages", 2)
 	rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/messages", cookies: []*http.Cookie{admin}, origin: origin,
 		body: `{"text":"secret words","audience":"users","user_ids":["` + f.userID + `"]}`})
 	var sent struct{ ID string }
