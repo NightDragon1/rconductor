@@ -126,6 +126,7 @@ jobs:
       - run: scripts/check-secrets-test.sh
       - run: scripts/script-isolation-test.sh
       - run: scripts/classify-test.sh
+      - run: scripts/fitness-ratchet-test.sh
       - run: scripts/check-git-config-test.sh
       - run: scripts/lockfile-packages-test.sh
       - run: scripts/third-party-go-test.sh
