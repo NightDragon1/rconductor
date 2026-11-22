@@ -433,7 +433,7 @@ func (h *Hello) Clean() error {
 	h.Name = foreign.Name(h.Name, 64)
 	// A version over MaxHelloVersion characters is unknown, never cut to a
 	// plausible one (D-080); it then fails the major check (AGT-013).
-	h.Version = foreign.Name(h.Version, MaxHelloVersion+1)
+	h.Version = foreign.Name(h.Version, len(h.Version)) // counted before any cut
 	if utf8.RuneCountInString(h.Version) > MaxHelloVersion {
 		h.Version = buildinfo.Unknown
 	}
