@@ -160,4 +160,10 @@ func TestC424ColorResetKept(t *testing.T) {
 			t.Errorf("%q: got %q, want %q", in, got, want)
 		}
 	}
+	// An escape the separator gap does not know still masks the value.
+	for _, in := range []string{"password=\x1b7hunter2 x", "password=\x1b[0m\x1bchunter2 x", "password=\x1b[0mhunter2 x"} {
+		if got := m.Line(in); strings.Contains(got, "hunter2") {
+			t.Errorf("%q: the value stays: %q", in, got)
+		}
+	}
 }
