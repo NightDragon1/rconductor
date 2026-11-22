@@ -348,7 +348,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	// profile, with the sender and the prefix of the server group; the
 	// checks above ran on the input, the built command is not checked
 	// against the list again (CMD-020, D-081).
-	sent, err := s.message(ctx, req, serverID, cmd, syn)
+	sent, err := s.message(ctx, req, serverID, cmd, syn, !sr.AllCommands)
 	if err != nil {
 		return Result{}, err
 	}

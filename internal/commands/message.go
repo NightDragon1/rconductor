@@ -6,8 +6,9 @@ package commands
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
-	"slices"
+	"errors"
 	"strings"
 	"unicode/utf8"
 
@@ -99,34 +100,20 @@ func messageText(cmd string, m *profiles.MessageCommand, caseSensitive bool) (st
 // sayPrefix is the prefix for a server: that of the first of its groups,
 // by name in byte order and then by ID, that has one (D-082).
 func (s *Service) sayPrefix(ctx context.Context, serverID string) (string, error) {
-	members, err := s.st.Queries.ListServerGroupMemberships(ctx)
+	// Only the groups of this server, in one read: a say costs no more
+	// than its own groups (CMD-020).
+	ids, err := s.st.Queries.ListGroupsOfServer(ctx, serverID)
 	if err != nil {
 		return "", err
 	}
-	groups, err := s.st.Queries.ListServerGroups(ctx)
-	if err != nil {
-		return "", err
-	}
-	name := map[string]string{}
-	for _, g := range groups {
-		name[g.ID] = g.Name
-	}
-	var ids []string
-	for _, m := range members {
-		if m.ServerID == serverID {
-			ids = append(ids, m.ServerGroupID)
-		}
-	}
-	slices.SortFunc(ids, func(a, b string) int {
-		if c := strings.Compare(name[a], name[b]); c != 0 {
-			return c
-		}
-		return strings.Compare(a, b)
-	})
 	for _, id := range ids {
 		v, err := s.st.Queries.GetSetting(ctx, sqlitedb.GetSettingParams{Key: sayconf.Setting, ScopeType: sayconf.ScopeServerGroup, ScopeID: id})
-		if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
 			continue // no prefix for this group
+		}
+		if err != nil {
+			// A read that fails is no "no prefix": the say is refused.
+			return "", err
 		}
 		var p string
 		if json.Unmarshal([]byte(v), &p) == nil {
@@ -141,7 +128,7 @@ func (s *Service) sayPrefix(ctx context.Context, serverID string) (string, error
 // message is the command to send for cmd: the message in the form of the
 // profile when cmd is the message command with a text, otherwise cmd
 // itself (CMD-020, D-081).
-func (s *Service) message(ctx context.Context, req users.Request, serverID, cmd string, syn Syntax) (string, error) {
+func (s *Service) message(ctx context.Context, req users.Request, serverID, cmd string, syn Syntax, bound bool) (string, error) {
 	text, ok := messageText(cmd, syn.Message, syn.CaseSensitive)
 	if !ok {
 		return cmd, nil
@@ -154,17 +141,19 @@ func (s *Service) message(ctx context.Context, req users.Request, serverID, cmd 
 	if !ok {
 		return "", s.deny(ctx, req, serverID, cmd, ReasonInvalid, 0)
 	}
-	if len(built) > sendLimit(syn) {
+	// For those bound to lists, the built command holds no separator
+	// either, whatever the escaping made of the text (CMD-005).
+	if bound && HasSeparator(built, syn) {
+		return "", s.deny(ctx, req, serverID, cmd, ReasonInvalid, 0)
+	}
+	if tooLong(built, syn) {
 		return "", s.deny(ctx, req, serverID, cmd, ReasonMessageTooLong, 0)
 	}
 	return built, nil
 }
 
-// sendLimit is the longest command the server takes: the length of the
-// profile, within the bound of the protocol.
-func sendLimit(syn Syntax) int {
-	if syn.MaxLength > 0 && syn.MaxLength < source.MaxCommand {
-		return syn.MaxLength
-	}
-	return source.MaxCommand
+// tooLong reports a command over what the server takes: the length of the
+// profile in characters, and the bound of the protocol in bytes.
+func tooLong(cmd string, syn Syntax) bool {
+	return (syn.MaxLength > 0 && utf8.RuneCountInString(cmd) > syn.MaxLength) || len(cmd) > source.MaxCommand
 }
