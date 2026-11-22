@@ -4293,7 +4293,7 @@ components:
 
     SMTPSettings:
       type: object
-      required: [host, port, encryption, username, password_set, from, version]
+      required: [host, port, encryption, username, password_set, password_state, from, version]
       properties:
         host:
           type: string
@@ -4307,6 +4307,14 @@ components:
         password_set:
           type: boolean
           description: Whether a password is stored; the password itself is never returned.
+        password_state:
+          type: string
+          enum: [none, set, unreadable]
+          description: >-
+            none: no password stored; set: stored and readable; unreadable:
+            stored, but it cannot be decrypted, e.g. it was sealed with
+            another master key (NFR-017), so mail fails with category auth
+            until the password is entered again.
         from:
           type: string
           description: Sender address.
