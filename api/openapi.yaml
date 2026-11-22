@@ -375,6 +375,10 @@ paths:
     post:
       operationId: createServer
       summary: Add a game server; RCON admin only (SRV-001).
+      description: >-
+        A container is bound to at most one server (D-105): agent_id and
+        container_name of another server are 409 with the reason
+        container_bound; deleted servers do not count.
       tags: [servers]
       requestBody:
         required: true
@@ -383,6 +387,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ServerInput"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "201":
           description: The new server.
           content:
@@ -456,6 +462,10 @@ paths:
     patch:
       operationId: updateServer
       summary: Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076).
+      description: >-
+        409 is a stale version (conflict) or, when the request sets
+        agent_id or container_name, a container that is bound to another
+        server (container_bound, D-105; deleted servers do not count).
       tags: [servers]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
@@ -1337,9 +1347,9 @@ paths:
       operationId: updateAgent
       summary: Set the display name of an agent's host (UI-021, D-089); RCON admin only.
       description: >-
-        display_name
-        null or "" removes it; at most agents.display_name_max characters,
-        no control characters (400). The other roles see the display name
+        display_name is required; null or "" removes it. A body without it,
+        more than agents.display_name_max characters or control characters
+        are 400. The other roles see the display name
         or a neutral placeholder, never the host name (D-089).
       tags: [agents]
       requestBody:
@@ -1422,9 +1432,12 @@ paths:
         message are fixed when it is sent; who comes into a scope later does
         not see older messages. Messages and comments go after
         messages.retention_days (D-086). Paged: limit (1 to 100, default 50)
-        and before, the ID of the last message of the page before. before
-        is only compared with the IDs of my view, never looked up: every
-        valid UUID behaves the same.
+        and cursor, the next_cursor of the page before. The cursor is
+        opaque and only compared with my view, never looked up; a malformed
+        cursor or one over 256 characters is 400. With cursor, before is
+        ignored. before (deprecated) is the ID of the last message of the
+        page before, compared the same way: every valid UUID behaves the
+        same.
       tags: [messages]
       parameters:
         - name: limit
@@ -1436,9 +1449,19 @@ paths:
             default: 50
         - name: before
           in: query
+          deprecated: true
+          description: Replaced by cursor.
           schema:
             type: string
             format: uuid
+        - name: cursor
+          in: query
+          description: >-
+            next_cursor of the page before; the next page follows also when
+            messages of the page before are gone.
+          schema:
+            type: string
+            maxLength: 256
       responses:
         "200":
           description: A page of messages and the number of unread ones.
@@ -1576,8 +1599,11 @@ paths:
       description: >-
         Anyone else gets
         404, as for an unknown message. Paged: limit (1 to 100, default 50)
-        and after, the ID of the last comment of the page before; after is
-        only compared with the comments of this message, never looked up.
+        and cursor, the next_cursor of the page before. The cursor is
+        opaque and only compared with the comments of this message, never
+        looked up; a malformed cursor or one over 256 characters is 400.
+        With cursor, after is ignored. after (deprecated) is the ID of the
+        last comment of the page before, compared the same way.
       tags: [messages]
       parameters:
         - name: limit
@@ -1589,9 +1615,19 @@ paths:
             default: 50
         - name: after
           in: query
+          deprecated: true
+          description: Replaced by cursor.
           schema:
             type: string
             format: uuid
+        - name: cursor
+          in: query
+          description: >-
+            next_cursor of the page before; the next page follows also when
+            comments of the page before are gone.
+          schema:
+            type: string
+            maxLength: 256
       responses:
         "200":
           description: A page of comments.
@@ -2447,6 +2483,10 @@ paths:
         or features.<name> (true or false) for a feature flag of this
         build (NFR-019).
         Switching supporters off ends the sessions of all supporters.
+        Switching auth.totp_required on (from off) while the caller has no
+        second factor of their own is 409 with the reason
+        own_totp_required (D-104). Order: 403, 428, 400, 409 conflict,
+        then 409 own_totp_required; a refused change writes nothing.
       tags: [settings]
       parameters:
         - $ref: "#/components/parameters/IfMatch"
@@ -3582,6 +3622,9 @@ components:
         unread:
           type: integer
           description: Unread messages to me, over all pages.
+        next_cursor:
+          type: string
+          description: Missing on the last page.
 
     MessageCommentInput:
       type: object
@@ -3621,6 +3664,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MessageComment"
+        next_cursor:
+          type: string
+          description: Missing on the last page.
 
     SayPrefix:
       type: object
@@ -4820,6 +4866,8 @@ components:
         - conflict
         - precondition_required
         - totp_setup_required
+        - own_totp_required
+        - container_bound
         - command_failed
         - message_too_long
         - too_many_recipients

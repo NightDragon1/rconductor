@@ -372,11 +372,13 @@ const (
 	ReasonCodeBusy                   ReasonCode = "busy"
 	ReasonCodeCommandFailed          ReasonCode = "command_failed"
 	ReasonCodeConflict               ReasonCode = "conflict"
+	ReasonCodeContainerBound         ReasonCode = "container_bound"
 	ReasonCodeForbidden              ReasonCode = "forbidden"
 	ReasonCodeInvalid                ReasonCode = "invalid"
 	ReasonCodeMessageTooLong         ReasonCode = "message_too_long"
 	ReasonCodeNotFound               ReasonCode = "not_found"
 	ReasonCodeNotInList              ReasonCode = "not_in_list"
+	ReasonCodeOwnTotpRequired        ReasonCode = "own_totp_required"
 	ReasonCodePasswordChangeRequired ReasonCode = "password_change_required"
 	ReasonCodePreconditionRequired   ReasonCode = "precondition_required"
 	ReasonCodeRateLimited            ReasonCode = "rate_limited"
@@ -403,6 +405,8 @@ func (e ReasonCode) Valid() bool {
 		return true
 	case ReasonCodeConflict:
 		return true
+	case ReasonCodeContainerBound:
+		return true
 	case ReasonCodeForbidden:
 		return true
 	case ReasonCodeInvalid:
@@ -412,6 +416,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeNotFound:
 		return true
 	case ReasonCodeNotInList:
+		return true
+	case ReasonCodeOwnTotpRequired:
 		return true
 	case ReasonCodePasswordChangeRequired:
 		return true
@@ -1324,6 +1330,9 @@ type MessageCommentInput struct {
 // MessageCommentList defines model for MessageCommentList.
 type MessageCommentList struct {
 	Items []MessageComment `json:"items"`
+
+	// NextCursor Missing on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
 // MessageInput defines model for MessageInput.
@@ -1341,6 +1350,9 @@ type MessageInput struct {
 // MessageList defines model for MessageList.
 type MessageList struct {
 	Items []Message `json:"items"`
+
+	// NextCursor Missing on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
 
 	// Unread Unread messages to me, over all pages.
 	Unread int `json:"unread"`
@@ -2041,14 +2053,26 @@ type GetDiagnosticsParams struct {
 
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
-	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Before Replaced by cursor.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
+
+	// Cursor next_cursor of the page before; the next page follows also when messages of the page before are gone.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // ListMessageCommentsParams defines parameters for ListMessageComments.
 type ListMessageCommentsParams struct {
-	Limit *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// After Replaced by cursor.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	After *openapi_types.UUID `form:"after,omitempty" json:"after,omitempty"`
+
+	// Cursor next_cursor of the page before; the next page follows also when comments of the page before are gone.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // UpdateServerGroupParams defines parameters for UpdateServerGroup.
@@ -3331,6 +3355,19 @@ func (siw *ServerInterfaceWrapper) ListMessages(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListMessages(w, r, params)
 	}))
@@ -3448,6 +3485,19 @@ func (siw *ServerInterfaceWrapper) ListMessageComments(w http.ResponseWriter, r 
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
 		}
 		return
 	}
@@ -9336,6 +9386,22 @@ func (response CreateServer403ApplicationProblemPlusJSONResponse) VisitCreateSer
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServer409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServer409ApplicationProblemPlusJSONResponse) VisitCreateServerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }

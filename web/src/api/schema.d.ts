@@ -284,7 +284,10 @@ export interface paths {
          */
         get: operations["listServers"];
         put?: never;
-        /** Add a game server; RCON admin only (SRV-001). */
+        /**
+         * Add a game server; RCON admin only (SRV-001).
+         * @description A container is bound to at most one server (D-105): agent_id and container_name of another server are 409 with the reason container_bound; deleted servers do not count.
+         */
         post: operations["createServer"];
         delete?: never;
         options?: never;
@@ -329,7 +332,10 @@ export interface paths {
         delete: operations["deleteServer"];
         options?: never;
         head?: never;
-        /** Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076). */
+        /**
+         * Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076).
+         * @description 409 is a stale version (conflict) or, when the request sets agent_id or container_name, a container that is bound to another server (container_bound, D-105; deleted servers do not count).
+         */
         patch: operations["updateServer"];
         trace?: never;
     };
@@ -704,7 +710,7 @@ export interface paths {
         head?: never;
         /**
          * Set the display name of an agent's host (UI-021, D-089); RCON admin only.
-         * @description display_name null or "" removes it; at most agents.display_name_max characters, no control characters (400). The other roles see the display name or a neutral placeholder, never the host name (D-089).
+         * @description display_name is required; null or "" removes it. A body without it, more than agents.display_name_max characters or control characters are 400. The other roles see the display name or a neutral placeholder, never the host name (D-089).
          */
         patch: operations["updateAgent"];
         trace?: never;
@@ -762,7 +768,7 @@ export interface paths {
         };
         /**
          * Messages in the panel (MSG-001 to MSG-003, D-085): those sent to me and those I sent, newest first; the RCON admin sees all.
-         * @description The recipients of a message are fixed when it is sent; who comes into a scope later does not see older messages. Messages and comments go after messages.retention_days (D-086). Paged: limit (1 to 100, default 50) and before, the ID of the last message of the page before. before is only compared with the IDs of my view, never looked up: every valid UUID behaves the same.
+         * @description The recipients of a message are fixed when it is sent; who comes into a scope later does not see older messages. Messages and comments go after messages.retention_days (D-086). Paged: limit (1 to 100, default 50) and cursor, the next_cursor of the page before. The cursor is opaque and only compared with my view, never looked up; a malformed cursor or one over 256 characters is 400. With cursor, before is ignored. before (deprecated) is the ID of the last message of the page before, compared the same way: every valid UUID behaves the same.
          */
         get: operations["listMessages"];
         put?: never;
@@ -836,7 +842,7 @@ export interface paths {
         };
         /**
          * The comments of a message, oldest first (MSG-003, D-085); its recipients, its sender and the RCON admin.
-         * @description Anyone else gets 404, as for an unknown message. Paged: limit (1 to 100, default 50) and after, the ID of the last comment of the page before; after is only compared with the comments of this message, never looked up.
+         * @description Anyone else gets 404, as for an unknown message. Paged: limit (1 to 100, default 50) and cursor, the next_cursor of the page before. The cursor is opaque and only compared with the comments of this message, never looked up; a malformed cursor or one over 256 characters is 400. With cursor, after is ignored. after (deprecated) is the ID of the last comment of the page before, compared the same way.
          */
         get: operations["listMessageComments"];
         put?: never;
@@ -1299,7 +1305,7 @@ export interface paths {
         head?: never;
         /**
          * Change global settings; RCON admin only (AUD-003).
-         * @description Only known keys with valid values, all or nothing; for example audit.retention_days, supporters.enabled, session.idle_timeout, or features.<name> (true or false) for a feature flag of this build (NFR-019). Switching supporters off ends the sessions of all supporters.
+         * @description Only known keys with valid values, all or nothing; for example audit.retention_days, supporters.enabled, session.idle_timeout, or features.<name> (true or false) for a feature flag of this build (NFR-019). Switching supporters off ends the sessions of all supporters. Switching auth.totp_required on (from off) while the caller has no second factor of their own is 409 with the reason own_totp_required (D-104). Order: 403, 428, 400, 409 conflict, then 409 own_totp_required; a refused change writes nothing.
          */
         patch: operations["updateSettings"];
         trace?: never;
@@ -1783,6 +1789,8 @@ export interface components {
             items: components["schemas"]["Message"][];
             /** @description Unread messages to me, over all pages. */
             unread: number;
+            /** @description Missing on the last page. */
+            next_cursor?: string;
         };
         MessageCommentInput: {
             /** @description At most 4 KiB in UTF-8, checked first, then 1 to messages.max_comment characters (code points); the smaller applies. */
@@ -1799,6 +1807,8 @@ export interface components {
         };
         MessageCommentList: {
             items: components["schemas"]["MessageComment"][];
+            /** @description Missing on the last page. */
+            next_cursor?: string;
         };
         SayPrefix: {
             /** @description Prefix before the sender, e.g. "[R]"; empty when none is set. */
@@ -2350,7 +2360,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "command_failed" | "message_too_long" | "too_many_recipients";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "own_totp_required" | "container_bound" | "command_failed" | "message_too_long" | "too_many_recipients";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**
@@ -2872,6 +2882,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
         };
     };
@@ -3888,7 +3899,13 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                /**
+                 * @deprecated
+                 * @description Replaced by cursor.
+                 */
                 before?: string;
+                /** @description next_cursor of the page before; the next page follows also when messages of the page before are gone. */
+                cursor?: string;
             };
             header?: never;
             path?: never;
@@ -4016,7 +4033,13 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                /**
+                 * @deprecated
+                 * @description Replaced by cursor.
+                 */
                 after?: string;
+                /** @description next_cursor of the page before; the next page follows also when comments of the page before are gone. */
+                cursor?: string;
             };
             header?: never;
             path: {
