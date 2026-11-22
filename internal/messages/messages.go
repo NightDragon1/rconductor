@@ -291,6 +291,9 @@ func (s *Service) MarkRead(ctx context.Context, req users.Request, id string) er
 		return err
 	}
 	if n == 0 {
+		if s.gone(ctx, req, id) {
+			return users.ErrNotFound
+		}
 		return s.denied(ctx, req, "message.mark_read", id)
 	}
 	s.publish([]string{req.Actor.ID}, "read", id, "")
@@ -366,6 +369,9 @@ func (s *Service) Comment(ctx context.Context, req users.Request, id, text strin
 			return Comment{}, err
 		}
 		if n == 0 {
+			if s.gone(ctx, req, id) {
+				return Comment{}, users.ErrNotFound
+			}
 			return Comment{}, s.denied(ctx, req, "message.commented", id)
 		}
 	}
@@ -724,4 +730,11 @@ func decodeCursor(c string) (at, id string, err error) {
 		return "", "", bad
 	}
 	return at, id, nil
+}
+
+// gone reports a message deleted after the caller's first look at it: the
+// caller then gets 404 as for an unknown message, not a refusal (MSG-003).
+func (s *Service) gone(ctx context.Context, req users.Request, id string) bool {
+	m, err := s.view(ctx, req, id, "", "", 1)
+	return err == nil && len(m) == 0
 }
