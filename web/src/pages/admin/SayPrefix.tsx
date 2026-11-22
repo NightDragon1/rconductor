@@ -103,6 +103,9 @@ function Editor({
   const [base, setBase] = useState(data);
   const [draft, setDraft] = useState(data.say_prefix);
   const [conflict, setConflict] = useState(false);
+  // While a write runs the field is locked, so nothing typed meanwhile is
+  // replaced by the stored value.
+  const [busy, setBusy] = useState(false);
   const inputId = useId();
   const hintId = useId();
   const dirty = draft !== base.say_prefix;
@@ -119,11 +122,12 @@ function Editor({
 
   const write = async (version: string, value: string) => {
     let done = null as SayPrefix | null;
+    setBusy(true);
     const r = await saving(
       outcome(group.id, async () => {
         done = must(await putSayPrefix(group.id, version, { say_prefix: value }));
       }),
-    );
+    ).finally(() => setBusy(false));
     if (r.reason === 'conflict') {
       setConflict(true);
       setMessage({ ok: false, text: t('admin.conflict') });
@@ -170,7 +174,7 @@ function Editor({
         value={draft}
         placeholder={t('servers.sayPrefix.placeholder')}
         aria-describedby={hintId}
-        readOnly={readOnly}
+        readOnly={readOnly || busy}
         disabled={conflict}
         onChange={(e) => {
           setMessage(null);
