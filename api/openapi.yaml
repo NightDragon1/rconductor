@@ -1690,9 +1690,8 @@ paths:
         comment_deleted and read (read on another socket), and comment_id
         with comment and comment_deleted; never a text. Events come only
         for messages I sent or received, also for the RCON admin, who sees
-        the others through the list; the texts come from the API. While the
-        Metrics and logs are
-        agent functions for RCON admin and server admin only; a new
+        the others through the list; the texts come from the API. Metrics
+        and logs are agent functions for RCON admin and server admin only; a new
         subscription first gets the current value (last sample or the last
         50 log lines), and logs stream from the agent only while someone
         subscribes (UI-009). Metrics carry their time and a stale mark
