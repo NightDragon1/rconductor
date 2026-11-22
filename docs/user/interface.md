@@ -48,7 +48,8 @@ holds once and for a short time; with your password it resets two-factor sign-in
 and ends all your sessions. Without an address, whoever manages your account
 resets it in the user administration. The RCON admin can require two-factor
 sign-in for everyone (setting `auth.totp_required`); who has none yet must set it
-up before anything else, the RCON admin too.
+up before anything else. (changed in 1.3) The RCON admin sets up his own first;
+before that, switching it on is refused with a hint.
 
 ## Overview
 

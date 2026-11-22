@@ -88,6 +88,10 @@ func TestAUTH008AuditTOTPRequired(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := map[string]json.RawMessage{auth.SettingTOTPRequired: json.RawMessage(`true`)}
+	// The RCON admin has a second factor of his own (D-104).
+	if _, err := f.st.DB.Exec(`UPDATE users SET totp_secret = x'00' WHERE id = ?`, f.ids["admin"]); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := f.svc.UpdateSettings(ctx, f.as("sa"), in, f.version("settings", "")); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("server admin: %v", err)
 	}

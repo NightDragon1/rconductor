@@ -3,6 +3,7 @@
 ## 1.3
 
 ### Changed
+- Two-factor sign-in for everyone can be switched on only by an RCON admin who has set up his own; otherwise the panel refuses with a hint (AUTH-008).
 - The functions of 1.2 can no longer be switched off; Settings has no group Features. API: the session has no ui.features, and PATCH /settings refuses the keys features.<name> of 1.2; stored values stay unused (NFR-019).
 
 ## 1.2
