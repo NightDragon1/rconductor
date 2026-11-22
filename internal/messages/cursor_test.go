@@ -125,3 +125,49 @@ func TestCursorSameTime(t *testing.T) {
 		t.Errorf("%d of 5 messages seen", len(seen))
 	}
 }
+
+// TestTextCleaned covers SEC-006 and MSG-001 for messages and comments: a
+// text of space alone is none, control characters other than line ends
+// and tabs are dropped before it is stored.
+func TestTextCleaned(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	var inv *users.InvalidError
+	for _, blank := range []string{" ", "\n\t ", "\x00\x1b"} {
+		if _, err := w.s.Send(ctx, w.sa, Input{Text: blank, Audience: AudienceScopeModerators}); !errors.As(err, &inv) {
+			t.Errorf("message %q: %v, want invalid", blank, err)
+		}
+	}
+	m, err := w.s.Send(ctx, w.sa, Input{Text: "hi\x1b[31m\x00 there\n\tok", Audience: AudienceScopeModerators})
+	if err != nil || m.Text != "hi[31m there\n\tok" {
+		t.Fatalf("message %q %v", m.Text, err)
+	}
+	if _, err := w.s.Comment(ctx, w.mod1, m.ID, "  \n "); !errors.As(err, &inv) {
+		t.Errorf("blank comment: %v, want invalid", err)
+	}
+	c, err := w.s.Comment(ctx, w.mod1, m.ID, "a\x07b")
+	if err != nil || c.Text != "ab" {
+		t.Errorf("comment %q %v", c.Text, err)
+	}
+}
+
+// TestCommentWhileDeleted: a comment on a message deleted at the same time
+// is 404 as for an unknown message, never a fault.
+func TestCommentWhileDeleted(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	for i := range 20 {
+		m, err := w.s.Send(ctx, w.sa, Input{Text: fmt.Sprint("m", i), Audience: AudienceScopeModerators})
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() { done <- w.s.Delete(ctx, w.sa, m.ID) }()
+		if _, err := w.s.Comment(ctx, w.mod1, m.ID, "late"); err != nil && !errors.Is(err, users.ErrNotFound) {
+			t.Errorf("comment during the delete: %v", err)
+		}
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+}
