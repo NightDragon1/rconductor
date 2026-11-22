@@ -289,9 +289,14 @@ volumes:
 // SetDisplayName sets the display name of an agent's host (UI-021, D-089),
 // foreign data (SEC-006): RCON admin only, refusals audited; nil or ""
 // removes it; at most agents.display_name_max characters, no controls.
-func (s *Service) SetDisplayName(ctx context.Context, req users.Request, id string, name *string) (Agent, error) {
+func (s *Service) SetDisplayName(ctx context.Context, req users.Request, id string, name *string, present bool) (Agent, error) {
 	if err := s.mustBeAdmin(ctx, req, "agent.display_name_set", id); err != nil {
 		return Agent{}, err
+	}
+	// The field is required: null or "" removes the name, a body without
+	// it changes nothing and is refused (UI-021).
+	if !present {
+		return Agent{}, &users.InvalidError{Detail: "display_name is required"}
 	}
 	var v string
 	if name != nil {

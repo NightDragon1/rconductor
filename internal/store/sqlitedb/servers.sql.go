@@ -415,6 +415,38 @@ func (q *Queries) InsertServerGroupMember(ctx context.Context, arg InsertServerG
 	return err
 }
 
+const listGroupsOfServer = `-- name: ListGroupsOfServer :many
+SELECT g.id FROM server_group_members m
+JOIN server_groups g ON g.id = m.server_group_id AND g.deleted_at IS NULL
+WHERE m.server_id = ?
+ORDER BY g.name, g.id
+`
+
+// The server groups of one server, by name then ID, for the say prefix
+// (CMD-020): only its own, not all.
+func (q *Queries) ListGroupsOfServer(ctx context.Context, serverID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupsOfServer, serverID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServerGroupMemberships = `-- name: ListServerGroupMemberships :many
 SELECT m.server_group_id, m.server_id FROM server_group_members m
 JOIN server_groups g ON g.id = m.server_group_id AND g.deleted_at IS NULL

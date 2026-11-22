@@ -21,6 +21,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/events"
+	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -366,8 +367,9 @@ func (s *Service) Comment(ctx context.Context, req users.Request, id, text strin
 			return Comment{}, s.denied(ctx, req, "message.commented", id)
 		}
 	}
+	text, _ = foreign.Text(text, len(text))
 	switch {
-	case text == "":
+	case strings.TrimSpace(text) == "":
 		return Comment{}, &users.InvalidError{Detail: "text is required"}
 	case len(text) > MaxCommentBytes,
 		utf8.RuneCountInString(text) > s.limit(ctx, users.SettingMessagesMaxComment, users.DefaultMessagesMaxComment, 1):
@@ -398,6 +400,10 @@ func (s *Service) Comment(ctx context.Context, req users.Request, id, text strin
 		ID: cid, MessageID: id, AuthorID: sql.NullString{String: req.Actor.ID, Valid: true},
 		AuthorPseudonym: req.Pseudonym, Text: text, CreatedAt: created,
 	}); err != nil {
+		// The message went in the meantime: as for an unknown one.
+		if strings.Contains(err.Error(), "FOREIGN KEY") {
+			return Comment{}, users.ErrNotFound
+		}
 		return Comment{}, err
 	}
 	if err := q.DeleteOldCommentSends(ctx, sqlitedb.DeleteOldCommentSendsParams{UserID: req.Actor.ID, SentAt: hourAgo}); err != nil {
@@ -476,8 +482,11 @@ func (s *Service) Send(ctx context.Context, req users.Request, in Input) (Messag
 	if !allowed {
 		return Message{}, s.denied(ctx, req, "message.sent", "")
 	}
+	// Control characters other than line ends and tabs go; a text of
+	// space alone is none (SEC-006, MSG-001).
+	in.Text, _ = foreign.Text(in.Text, len(in.Text))
 	switch {
-	case in.Text == "":
+	case strings.TrimSpace(in.Text) == "":
 		return Message{}, &users.InvalidError{Detail: "text is required"}
 	case len(in.Text) > MaxTextBytes:
 		return Message{}, &users.InvalidError{Detail: "text is too long"}

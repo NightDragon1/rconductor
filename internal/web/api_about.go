@@ -58,10 +58,10 @@ func (s *apiServer) GetAbout(ctx context.Context, _ api.GetAboutRequestObject) (
 
 // agentVersion is the version an agent reported, cleaned as foreign data
 // (SEC-006); missing or longer than maxAgentVersion it is unknown (D-080).
-// The hello already turns an overlong version into unknown; this holds for
-// rows stored before.
+// The length counts after cleaning and before any cut, so a space at the
+// cut cannot make an overlong version look short.
 func agentVersion(v string) string {
-	v = foreign.Name(v, maxAgentVersion+1)
+	v = foreign.Name(v, len(v))
 	if v == "" || utf8.RuneCountInString(v) > maxAgentVersion {
 		return buildinfo.Unknown
 	}

@@ -97,9 +97,14 @@ func checkSayPrefix(p string) (string, error) {
 // of the group: it is checked and raised in the same transaction as the
 // prefix is written, so a concurrent change of the group gets 409. Rights
 // come before the version (D-051); the change is in the audit.
-func (s *Service) SetSayPrefix(ctx context.Context, req users.Request, id, prefix string, version *int64) (string, error) {
+func (s *Service) SetSayPrefix(ctx context.Context, req users.Request, id, prefix string, present bool, version *int64) (string, error) {
 	if err := s.sayPrefixAccess(ctx, req, id, actionSayPrefixUpdate); err != nil {
 		return "", err
+	}
+	// The field is required: "" removes the prefix, a missing one or null
+	// changes nothing and is refused (CMD-020).
+	if !present {
+		return "", &users.InvalidError{Detail: "say_prefix is required; \"\" removes the prefix"}
 	}
 	p, err := checkSayPrefix(prefix)
 	if err != nil {

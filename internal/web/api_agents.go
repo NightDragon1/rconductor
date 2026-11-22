@@ -122,7 +122,7 @@ func (s *apiServer) UpdateAgent(ctx context.Context, req api.UpdateAgentRequestO
 	if req.Body == nil {
 		return nil, bodyRequired()
 	}
-	a, err := s.agents.SetDisplayName(ctx, adminRequest(ctx), req.Id.String(), req.Body.DisplayName)
+	a, err := s.agents.SetDisplayName(ctx, adminRequest(ctx), req.Id.String(), req.Body.DisplayName, !req.Body.DisplayNameMissing())
 	// The contract answers an invalid display name with 400 (D-089).
 	if inv := (*users.InvalidError)(nil); errors.As(err, &inv) {
 		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: inv.Detail}
