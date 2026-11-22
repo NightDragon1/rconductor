@@ -338,7 +338,7 @@ func (s *Service) duration(ctx context.Context) time.Duration {
 		return s.timeout
 	}
 	var v string
-	if err := s.st.GlobalSetting(ctx, SettingTimeout, &v); err == nil {
+	if err := s.st.GuardedSetting(ctx, s.log, SettingTimeout, &v); err == nil {
 		if d, err := time.ParseDuration(v); err == nil {
 			return max(d, MinTimeout)
 		}

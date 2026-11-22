@@ -101,19 +101,44 @@ func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string
 		return fmt.Errorf("read setting %s: %w", key, err)
 	case err != nil:
 		last, ok := s.kept.Load(key)
-		// A request or job that ended is no fault of the database.
-		if ended := ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded); log != nil && !ended {
-			log.Error("setting not readable", logging.Event(logging.SettingReadFailed),
-				slog.String("setting", key), slog.Bool("kept", ok), slog.Any("err", err))
-		}
+		s.logReadFailed(ctx, log, key, err)
 		if !ok {
 			return fmt.Errorf("read setting %s: %w", key, err)
 		}
 		v = last.(string)
 	}
 	if err := json.Unmarshal([]byte(v), dst); err != nil {
+		// A broken row is a failed read too: logged, and the last value
+		// read before, if any (D-109).
+		s.logReadFailed(ctx, log, key, err)
+		if last, ok := s.kept.Load(key); ok && json.Unmarshal([]byte(last.(string)), dst) == nil {
+			return nil
+		}
 		return fmt.Errorf("decode setting %s: %w", key, err)
 	}
 	s.kept.Store(key, v)
 	return nil
+}
+
+// LoggedSetting decodes the global setting key into dst, for a switch
+// (D-109, F-93): a failed read or a broken row is logged and returned, never
+// a value read before, so the caller keeps the protection on; a missing row
+// is an error without a log, as in GlobalSetting.
+func (s *Store) LoggedSetting(ctx context.Context, log *slog.Logger, key string, dst any) error {
+	err := s.GlobalSetting(ctx, key, dst)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		s.logReadFailed(ctx, log, key, err)
+	}
+	return err
+}
+
+// logReadFailed logs a setting that could not be read, with the key only;
+// a request or job that ended is no fault of the database.
+func (s *Store) logReadFailed(ctx context.Context, log *slog.Logger, key string, err error) {
+	if log == nil || ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return
+	}
+	_, kept := s.kept.Load(key)
+	log.Error("setting not readable", logging.Event(logging.SettingReadFailed),
+		slog.String("setting", key), slog.Bool("kept", kept), slog.Any("err", err))
 }

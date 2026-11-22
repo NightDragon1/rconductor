@@ -200,9 +200,13 @@ func (s *Service) durationSetting(ctx context.Context, key string, def, low time
 // required, so a fault never lowers the sign-in (fail closed).
 func (s *Service) TOTPRequired(ctx context.Context) bool {
 	var raw json.RawMessage
-	err := s.st.GlobalSetting(ctx, SettingTOTPRequired, &raw)
+	// A failed read is logged by LoggedSetting (D-109); a value that is
+	// neither true nor false here.
+	err := s.st.LoggedSetting(ctx, s.log, SettingTOTPRequired, &raw)
 	if err == nil && string(raw) != "true" && string(raw) != "false" {
 		err = errors.New("not true or false")
+		s.log.Error("second factor setting not readable, treated as required", logging.Event(logging.SettingReadFailed),
+			slog.String("setting", SettingTOTPRequired), slog.Any("err", err))
 	}
 	switch {
 	case err == nil:
@@ -210,7 +214,6 @@ func (s *Service) TOTPRequired(ctx context.Context) bool {
 	case errors.Is(err, sql.ErrNoRows):
 		return false
 	default:
-		s.log.Error("second factor setting not readable, treated as required", slog.Any("err", err))
 		return true
 	}
 }
@@ -732,10 +735,10 @@ func (s *Service) RequestRecovery(ctx context.Context, pseudonym string, c Clien
 func (s *Service) poolSize(ctx context.Context) (workers, queue int) {
 	workers, queue = DefaultRecoveryWorkers, DefaultRecoveryQueue
 	var v int
-	if err := s.st.GlobalSetting(ctx, SettingRecoveryWorkers, &v); err == nil {
+	if err := s.st.GuardedSetting(ctx, s.log, SettingRecoveryWorkers, &v); err == nil {
 		workers = max(v, MinRecoveryWorkers)
 	}
-	if err := s.st.GlobalSetting(ctx, SettingRecoveryQueue, &v); err == nil {
+	if err := s.st.GuardedSetting(ctx, s.log, SettingRecoveryQueue, &v); err == nil {
 		queue = max(v, MinRecoveryQueue)
 	}
 	if s.sf.workers > 0 {

@@ -214,7 +214,7 @@ func (s *Service) loginPolicy(ctx context.Context) loginLimits {
 			s.log.Warn("invalid login setting, using default", slog.String("setting", SettingLockout))
 		}
 	}
-	if err := s.st.GlobalSetting(ctx, SettingOverflowGap, &v); err == nil {
+	if err := s.st.GuardedSetting(ctx, s.log, SettingOverflowGap, &v); err == nil {
 		if d, err := time.ParseDuration(v); err == nil && d >= minOverflowGap {
 			lim.overflowGap = d
 		} else {

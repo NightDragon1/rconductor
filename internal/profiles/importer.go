@@ -347,7 +347,7 @@ func (im *Importer) pollInterval(ctx context.Context) time.Duration {
 		return im.interval
 	}
 	var v string
-	if err := im.st.GlobalSetting(ctx, SettingPollInterval, &v); err == nil {
+	if err := im.st.GuardedSetting(ctx, im.log, SettingPollInterval, &v); err == nil {
 		if d, err := time.ParseDuration(v); err == nil && d >= MinPollInterval {
 			return d
 		}
