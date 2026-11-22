@@ -95,3 +95,40 @@ func TestC147N4ListCost(t *testing.T) {
 		t.Errorf("one line took %s", took)
 	}
 }
+
+// TestC238ANSIBetweenNameAndSeparator: escape sequences of a colored log
+// around a name or a separator keep the value masked (UI-022).
+func TestC238ANSIBetweenNameAndSeparator(t *testing.T) {
+	for in, want := range map[string]string{
+		"\x1b[1mpassword\x1b[0m=hunter2 next":            "\x1b[1mpassword\x1b[0m=••• next",
+		"RCON_PASSWORD\x1b[0m: \x1b[33mhunter2\x1b[0m x": "RCON_PASSWORD\x1b[0m: \x1b[33m••• x",
+		"token\x1b[2m=\x1b[0m\"two words\" x":            "token\x1b[2m=•••\"•••\" x",
+		"password=\x1b(B\x1b[mhunter2 x":                 "password=\x1b(B\x1b[m••• x",
+		"password=\x1b[38:2:1:2:3mhunter2 x":             "password=\x1b[38:2:1:2:3m••• x",
+		"password\x1b(B: hunter2 x":                      "password\x1b(B: ••• x",
+		"'password\x1b[0m=a b' x":                        "'password\x1b[0m=•••' x",
+	} {
+		if got := (*Masker)(nil).Line(in); got != want {
+			t.Errorf("%q: got %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestC239MoreForms: a Python dict, escaped JSON, :=, the DSN of a Go SQL
+// driver and an @ in the user info of a URL keep the value masked (UI-022).
+func TestC239MoreForms(t *testing.T) {
+	for in, want := range map[string]string{
+		`{'password': 'hun ter2', 'user': 'steve'}`:     `{'password': '•••', 'user': 'steve'}`,
+		`msg="{\"password\":\"hun ter2\",\"port\":1}"`:  `msg="{\"password\":\"•••\",\"port\":1}"`,
+		`password := hunter2 next`:                      `password := ••• next`,
+		`RCON_PASSWORD:="two words" next`:               `RCON_PASSWORD:•••"•••" next`,
+		`dsn root:hun@ter2@tcp(db:3306)/game`:           `dsn root:•••@tcp(db:3306)/game`,
+		`GET https://steve:p@ss@example.com/x?mail=a@b`: `GET https://•••@example.com/x?mail=a@b`,
+		`password=a\b next`:                             `password=••• next`,
+		`mail steve@example.com at 12:30 for help`:      `mail steve@example.com at 12:30 for help`,
+	} {
+		if got := (*Masker)(nil).Line(in); got != want {
+			t.Errorf("%q: got %q, want %q", in, got, want)
+		}
+	}
+}

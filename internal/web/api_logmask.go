@@ -39,7 +39,7 @@ func (s *apiServer) UpdateLogMasking(ctx context.Context, req api.UpdateLogMaski
 		in.SetTexts = true
 		in.Texts = make([]logmask.Text, 0, len(*req.Body.Texts))
 		for _, t := range *req.Body.Texts {
-			in.Texts = append(in.Texts, logmask.Text{Value: deref(t.Value), Fold: t.IgnoreCase != nil && *t.IgnoreCase})
+			in.Texts = append(in.Texts, logmask.NewText(deref(t.Value), t.IgnoreCase != nil && *t.IgnoreCase))
 		}
 	}
 	st, err := s.masking.Write(ctx, adminRequest(ctx), in)

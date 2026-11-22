@@ -27,10 +27,24 @@ const (
 )
 
 // Text is a fixed text of the RCON admin; Fold ignores the case of the
-// letters A to Z, so that the masked part keeps its length in bytes.
+// letters A to Z, so that the masked part keeps its length in bytes. The
+// value sits behind a pointer: fmt prints the fields of a value without
+// its methods for a bad verb such as %p, and a pointer prints as an
+// address only (SEC-012).
 type Text struct {
-	Value string
+	value *string
 	Fold  bool
+}
+
+// NewText returns the text v.
+func NewText(v string, fold bool) Text { return Text{value: &v, Fold: fold} }
+
+// Value returns the text, empty for the zero Text.
+func (t Text) Value() string {
+	if t.value == nil {
+		return ""
+	}
+	return *t.value
 }
 
 // LogValue keeps a text out of logs (SEC-012).
@@ -63,7 +77,7 @@ var DefaultLimits = Limits{Texts: DefaultTexts, TextRunes: DefaultTextRunes}
 // after it is built.
 type Masker struct {
 	patterns    []*regexp.Regexp
-	exact, fold []needle // fold holds the texts in lower case
+	exact, fold []*needle // pointers for the reason at Text; fold holds the texts in lower case
 }
 
 // needle is a text with its KMP table, so that one pass over a line finds
@@ -73,7 +87,7 @@ type needle struct {
 	next []int
 }
 
-func newNeedle(t string) needle {
+func newNeedle(t string) *needle {
 	next := make([]int, len(t))
 	for i, k := 1, 0; i < len(t); i++ {
 		for k > 0 && t[i] != t[k] {
@@ -84,13 +98,13 @@ func newNeedle(t string) needle {
 		}
 		next[i] = k
 	}
-	return needle{text: t, next: next}
+	return &needle{text: t, next: next}
 }
 
 // mark counts every place of the text in cover, as +1 at its start and
 // -1 after its end, so that dense overlapping places cost one step each.
 // On a line cut at the bound, a start of the text at its end counts too.
-func (n needle) mark(in string, cover []int32, atBound bool) bool {
+func (n *needle) mark(in string, cover []int32, atBound bool) bool {
 	found, k := false, 0
 	for i := 0; i < len(in); i++ {
 		for k > 0 && in[i] != n.text[k] {
@@ -124,14 +138,15 @@ func New(texts []Text, lim Limits) (*Masker, error) {
 	}
 	m := &Masker{}
 	for i, t := range texts {
-		n := utf8.RuneCountInString(t.Value)
-		if !utf8.ValidString(t.Value) || n < MinTextRunes || n > lim.TextRunes || strings.ContainsAny(t.Value, "\r\n") {
+		v := t.Value()
+		n := utf8.RuneCountInString(v)
+		if !utf8.ValidString(v) || n < MinTextRunes || n > lim.TextRunes || strings.ContainsAny(v, "\r\n") {
 			return nil, fmt.Errorf("text %d: %d to %d characters on one line", i+1, MinTextRunes, lim.TextRunes)
 		}
 		if t.Fold {
-			m.fold = append(m.fold, newNeedle(lowerASCII(t.Value)))
+			m.fold = append(m.fold, newNeedle(lowerASCII(v)))
 		} else {
-			m.exact = append(m.exact, newNeedle(t.Value))
+			m.exact = append(m.exact, newNeedle(v))
 		}
 	}
 	return m, nil

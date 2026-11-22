@@ -18,7 +18,7 @@ import (
 // after group 1, in the same pass as the list and the texts; the masker
 // they are added to stays as it was.
 func TestProfilePatterns(t *testing.T) {
-	base, err := New([]Text{{Value: "t0p-s3cr3t"}}, DefaultLimits)
+	base, err := New([]Text{NewText("t0p-s3cr3t", false)}, DefaultLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
