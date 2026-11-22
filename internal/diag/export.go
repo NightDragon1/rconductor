@@ -7,11 +7,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
 	"net"
+	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -81,36 +84,40 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 		}
 		all = append(all, out{f.name, syslog.Rewrite(string(doc), clean) + "\n"})
 	}
+	for _, o := range all {
+		size += len(o.name) + len(o.text)
+	}
+	budget := s.maxBytes(ctx) - size
 	agents, err := s.st.Queries.ListAgents(ctx)
 	if err != nil {
 		return nil, err
 	}
+	var active []string
 	for _, a := range agents {
-		if a.Status != "active" {
-			continue
+		if a.Status == "active" {
+			active = append(active, a.ID)
 		}
-		var b strings.Builder
-		b.WriteString(Notice + "\n")
-		lines, cut, err := s.tail(ctx, a.ID, agentproto.MaxLogLines)
-		switch {
-		case errors.Is(err, ErrAgentUnavailable):
-			b.WriteString("The agent is offline; its log is not in this package.\n")
-		case errors.Is(err, ErrAgentUnsupported):
-			b.WriteString("The agent does not send its own log.\n")
-		case err != nil:
-			b.WriteString("The agent could not read its log.\n")
-		case cut:
-			b.WriteString("Only the last lines of the log.\n")
-		}
-		for _, l := range lines {
-			b.WriteString(oneLine(syslog.Rewrite(l, clean)) + "\n")
-		}
-		all = append(all, out{"agents/" + a.ID + ".log", b.String()})
 	}
-	for _, o := range all {
-		size += len(o.name) + len(o.text)
+	// All agents at once under one deadline, so the slot is not held for
+	// one timeout per agent (D-091).
+	tails := make([]tailResult, len(active))
+	tctx, cancel := context.WithTimeout(ctx, agentTimeout)
+	var wg sync.WaitGroup
+	for i, id := range active {
+		wg.Go(func() {
+			r := &tails[i]
+			r.lines, r.cut, r.err = s.tail(tctx, id, agentproto.MaxLogLines)
+		})
 	}
-	text, shortened, err := s.systemLog(ctx, from, to, s.maxBytes(ctx)-size, clean)
+	wg.Wait()
+	cancel()
+	for i, id := range active {
+		name := "agents/" + id + ".log"
+		text, used := agentLog(tails[i], clean, budget-len(name))
+		budget -= len(name) + used
+		all = append(all, out{name, text})
+	}
+	text, shortened, err := s.systemLog(ctx, from, to, budget, clean)
 	if err != nil {
 		return nil, err
 	}
@@ -139,14 +146,51 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 	return b.Bytes(), nil
 }
 
+type tailResult struct {
+	lines []string
+	cut   bool
+	err   error
+}
+
+// agentLog writes the log of one agent: the head, then its newest lines as
+// far as budget bytes allow; used counts the text beyond the head
+// (diagnostics.max_bytes, D-091).
+func agentLog(t tailResult, clean func([]string) []string, budget int) (string, int) {
+	head := Notice + "\n"
+	switch {
+	case errors.Is(t.err, ErrAgentUnavailable):
+		head += "The agent is offline; its log is not in this package.\n"
+	case errors.Is(t.err, ErrAgentUnsupported):
+		head += "The agent does not send its own log.\n"
+	case t.err != nil:
+		head += "The agent could not read its log.\n"
+	case t.cut:
+		head += "Only the last lines of the log.\n"
+	}
+	budget -= len(head)
+	var lines []string
+	used := 0
+	for i := len(t.lines) - 1; i >= 0; i-- {
+		l := oneLine(syslog.Rewrite(t.lines[i], clean)) + "\n"
+		if used+len(l) > budget {
+			head += "Shortened by diagnostics.max_bytes.\n"
+			break
+		}
+		lines, used = append(lines, l), used+len(l)
+	}
+	slices.Reverse(lines)
+	return head + strings.Join(lines, ""), len(head) + used
+}
+
 // systemLog writes the stored lines of the period, oldest first, through
 // clean; beyond budget bytes the oldest stay out, and the head says from
 // when the lines are.
 func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int, clean func([]string) []string) (string, bool, error) {
 	const page = 1000
 	var lines, stamps []string
-	size, shortened := 0, false
-	for after := int64(0); ; {
+	size, shortened := 0, budget <= 0
+	// Without room no line is read; the head says so (D-091).
+	for after := int64(0); budget > 0; {
 		rows, err := s.st.Queries.ListSystemLog(ctx, sqlitedb.ListSystemLogParams{
 			FromTs: from.UTC().Format(store.TimeLayout), ToTs: to.UTC().Format(store.TimeLayout), After: after, MaxRows: page,
 		})
@@ -244,6 +288,12 @@ func (s *Service) areas(ctx context.Context) ([]file, []string, error) {
 		srv = append(srv, server{ID: r.ID, Number: r.Number.Int64, Name: r.Name, Protocol: r.Protocol, Host: r.Host, Port: r.Port,
 			AgentID: r.AgentID.String, Container: r.ContainerName.String, TLSNotAfter: r.TlsNotAfter.String})
 		known = append(known, r.Host)
+	}
+	// The mail server is a host the panel stores too (D-090).
+	if m, err := q.GetSMTPSettings(ctx); err == nil {
+		known = append(known, m.Host)
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, err
 	}
 	profiles, err := q.ListGameProfiles(ctx)
 	if err != nil {
