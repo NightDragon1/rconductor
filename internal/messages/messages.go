@@ -443,7 +443,10 @@ func (s *Service) DeleteComment(ctx context.Context, req users.Request, id, comm
 	}
 	c, err := s.st.Queries.GetMessageComment(ctx, sqlitedb.GetMessageCommentParams{MessageID: id, ID: commentID})
 	if errors.Is(err, sql.ErrNoRows) {
-		return users.ErrNotFound
+		// Another message's comment or an unknown ID: refused as not
+		// found, logged and audited like a foreign message (MSG-003).
+		return s.refused(ctx, req, "message.comment_deleted", id, "not_found", users.ErrNotFound,
+			map[string]any{"comment_id": commentID})
 	} else if err != nil {
 		return err
 	}

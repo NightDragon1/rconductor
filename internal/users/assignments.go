@@ -247,6 +247,9 @@ func (s *Service) UpdateAssignments(ctx context.Context, req Request, id string,
 
 // applyAssignments writes all sections in one transaction.
 func (s *Service) applyAssignments(ck *checker, u User, up AssignmentsUpdate) (map[string]any, error) {
+	if s.beforeTx != nil {
+		s.beforeTx()
+	}
 	tx, err := s.st.DB.BeginTx(ck.ctx, nil)
 	if err != nil {
 		return nil, err
@@ -258,6 +261,20 @@ func (s *Service) applyAssignments(ck *checker, u User, up AssignmentsUpdate) (m
 	// again inside it: a parallel change of the same user cannot make a
 	// row twice.
 	clear(ck.rights)
+	// The target and what the caller manages, read again inside the lock:
+	// a change of role or lock in between decides, not the state before.
+	managed, err := s.perm.ManagedTx(ck.ctx, q, ck.req.Actor)
+	if err != nil {
+		return nil, err
+	}
+	if !managed[u.ID] {
+		ck.denials = append(ck.denials, func() { s.denied(ck.ctx, ck.req, "assignments.update", u.ID, "not_found", nil) })
+		return nil, ErrNotFound
+	}
+	ck.managed = managed
+	if u, err = s.loadQ(ck.ctx, q, u.ID); err != nil {
+		return nil, err
+	}
 	cur, err := s.loadCurrent(ck.ctx, q, u.ID)
 	if err != nil {
 		return nil, fmt.Errorf("load assignments: %w", err)
