@@ -42,10 +42,11 @@ func TestC254ChangeDuringRead(t *testing.T) {
 	p.mu.RLock()
 	gen := p.gen
 	p.mu.RUnlock()
-	// The read starts at gen; the change comes before it ends.
-	setRules(t, s, `{"log_masks":["(k=)\\S+"]}`)
+	// The read starts at gen and still sees the old patterns; the change
+	// is told before the read stores them.
 	p.ProfilesChanged()
 	p.readPatterns(ctx, "s1", gen, nil)
+	setRules(t, s, `{"log_masks":["(k=)\\S+"]}`)
 	if got := p.ServerLines(ctx, "s1", []string{"pw=y k=z"})[0]; got != "pw=y k=•••" {
 		t.Errorf("after a change during the read: %q", got)
 	}

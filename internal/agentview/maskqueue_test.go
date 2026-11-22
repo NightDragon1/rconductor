@@ -261,3 +261,27 @@ func TestC253FreeQueueKeepsWaiting(t *testing.T) {
 		t.Fatal("empty queue kept")
 	}
 }
+
+// TestC253NothingSentAfterTheEnd covers UI-022: a worker that finds the
+// masking ended sends none of the waiting deliveries, whichever case its
+// select takes, and tells them as dropped.
+func TestC253NothingSentAfterTheEnd(t *testing.T) {
+	for range 20 {
+		var logs lockedBuffer
+		bus := &logBus{logs: make(chan Logs, maxMaskQueue)}
+		v := nAgents(t, 1, panelLog(&logs), bus)
+		ctx, cancel := context.WithCancel(context.Background())
+		v.UseMasking(ctx, &slowMasking{release: make(chan struct{})})
+		cancel()
+		q := &agentQueue{ch: make(chan delivery, maxMaskQueue)}
+		v.queues["a0"] = q
+		for i := range 3 {
+			q.ch <- delivery{agentID: "a0", ll: agentproto.LogLines{Container: "mc", Lines: []string{"a"}}, seq: uint64(i + 1)}
+		}
+		v.maskLoop("a0", q)
+		w := dropWarnings(t, logs.String())
+		if len(bus.logs) != 0 || queueAlive(v, "a0") || len(w) != 1 || w[0]["deliveries"] != 3.0 {
+			t.Fatalf("sent %d, alive %t, warnings %v", len(bus.logs), queueAlive(v, "a0"), w)
+		}
+	}
+}
