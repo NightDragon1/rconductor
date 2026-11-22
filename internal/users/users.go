@@ -325,13 +325,17 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	if err := clearAssignments(ctx, q, id); err != nil {
 		return err
 	}
-	if err := s.audit(ctx, tx, req, "user.delete", id, nil); err != nil {
+	owned, members, err := deleteOwned(ctx, tx, req, id, now)
+	if err != nil {
+		return err
+	}
+	if err := s.audit(ctx, tx, req, "user.delete", id, owned); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
-	return s.rightsChanged(ctx, req, "user.delete", id)
+	return s.rightsChanged(ctx, req, "user.delete", append([]string{id}, members...)...)
 }
 
 // EndSessions ends all sessions of a managed user (AUTH-006, revision 2.4

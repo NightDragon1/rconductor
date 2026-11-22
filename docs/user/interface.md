@@ -143,6 +143,8 @@ Lists can be searched. (new in 1.2) From 1024 px wide they are dense tables. The
 mass actions. Details open in a panel at the side, the list stays visible.
 (new in 1.2) Open invitations stand in the user list too; whoever made one, and the
 RCON admin, can withdraw it.
+(changed in 1.3) Deleting a user deletes his user groups and command lists with
+him; the dialog names them first.
 
 (new in 1.2) Settings are in groups such as Security, Users, Servers and commands,
 Agents and System. From 1024 px wide one group shows at a time, picked from
