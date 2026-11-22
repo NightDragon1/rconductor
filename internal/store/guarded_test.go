@@ -166,4 +166,13 @@ func TestC260BrokenRowLoggedOnce(t *testing.T) {
 	if count() != 2 {
 		t.Errorf("new failure after a good read logged %d times in all, want 2", count())
 	}
+	// Another reason is logged although the broken row still is.
+	if err := st.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.GuardedSetting(ctx, log, "login.max_failures", &n)
+	_ = st.GuardedSetting(ctx, log, "login.max_failures", &n)
+	if count() != 3 || !strings.Contains(out.String(), `"reason":"read"`) {
+		t.Errorf("a failed read after a broken row: %d lines, %s", count(), out.String())
+	}
 }
