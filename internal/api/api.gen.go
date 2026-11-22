@@ -1048,7 +1048,7 @@ type EffectiveProfile struct {
 	// Formatting Display of the formatting codes in game server answers (CMD-017), from the profile field formatting; for a server the topmost profile that sets it (D-074). minecraft shows § codes as styles of a fixed list; without the field the codes are removed before display (SEC-006).
 	Formatting *Formatting `json:"formatting,omitempty"`
 
-	// GamePorts Effective game ports; only for the RCON admin and the server admin of this server (D-056), missing for other roles.
+	// GamePorts Game ports of the merged profiles, top first (D-074), not the ports stored for the server (those are on the server); only for the RCON admin and the server admin of this server (D-056), missing for other roles.
 	GamePorts *[]GamePort `json:"game_ports,omitempty"`
 	MaxLength int         `json:"max_length"`
 

@@ -22,13 +22,13 @@ import (
 // is a known host (D-090).
 func TestC333DomainsAndMailHost(t *testing.T) {
 	p := newPseudonyms([]string{"smtp.mailer.fr"})
-	got := p.apply([]string{"domain", "example.xyz", "msg", "send via smtp.mailer.fr", `level=info domain=other.gg msg=x`})
-	for _, leak := range []string{"example.xyz", "smtp.mailer.fr", "other.gg"} {
+	got := p.apply([]string{"msg", "send via smtp.mailer.fr", `level=info domain=other.gg msg=x`})
+	for _, leak := range []string{"smtp.mailer.fr", "other.gg"} {
 		if strings.Contains(strings.Join(got, " "), leak) {
 			t.Errorf("%s left in %q", leak, got)
 		}
 	}
-	if got[0] != "domain" || !strings.HasPrefix(got[1], "host-") || !strings.Contains(got[4], "domain=host-") {
+	if !strings.Contains(got[2], "domain=host-") {
 		t.Errorf("apply = %q", got)
 	}
 
@@ -135,5 +135,24 @@ func TestC334BudgetCoversAgentLogs(t *testing.T) {
 	}
 	if size > users.MinDiagnosticsMaxBytes+1024 {
 		t.Errorf("package = %d bytes, over the budget %d", size, users.MinDiagnosticsMaxBytes)
+	}
+}
+
+// TestC382DomainByKey (D-090): in JSON every text under the key domain,
+// in arrays too, becomes its host pseudonym; a value "domain" leaves the
+// next key as it is.
+func TestC382DomainByKey(t *testing.T) {
+	p := newPseudonyms(nil)
+	got := p.domains(`{"a":{"domain":["one.xyz",["two.xyz"],""]},"domain":"three.xyz","msg":"domain","next":"plain-word"}`)
+	for _, leak := range []string{"one.xyz", "two.xyz", "three.xyz"} {
+		if strings.Contains(got, leak) {
+			t.Errorf("%s left in %s", leak, got)
+		}
+	}
+	if !strings.Contains(got, `"next":"plain-word"`) || !strings.Contains(got, `"msg":"domain"`) || !strings.Contains(got, `["host-1",["host-2"],""]`) {
+		t.Errorf("domains = %s", got)
+	}
+	if line := "domain one.xyz in text"; p.domains(line) != line {
+		t.Errorf("text line changed: %s", p.domains(line))
 	}
 }

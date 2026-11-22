@@ -4,6 +4,8 @@
 package diag
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"net"
@@ -67,8 +69,8 @@ func (p *pseudonyms) name(kind, v string) string {
 	return p.names[key]
 }
 
-// domainAttr is a domain in a text line (domain=x); in JSON the value
-// follows the key "domain" in the texts of a line (syslog.Rewrite).
+// domainAttr is a domain in a text line (domain=x); in JSON, domains
+// replaces the values under the key "domain".
 var domainAttr = regexp.MustCompile(`\bdomain=("?)([^\s"]+)`)
 
 // apply blacks out the values of one package: e-mail addresses and
@@ -76,14 +78,7 @@ var domainAttr = regexp.MustCompile(`\bdomain=("?)([^\s"]+)`)
 // value is a host whatever its top-level domain (D-090).
 func (p *pseudonyms) apply(texts []string) []string {
 	out := make([]string, len(texts))
-	prev := ""
 	for i, s := range texts {
-		key := prev
-		prev = s
-		if key == "domain" && s != "" {
-			out[i] = p.name("host", s)
-			continue
-		}
 		s = domainAttr.ReplaceAllStringFunc(s, func(c string) string {
 			m := domainAttr.FindStringSubmatch(c)
 			return "domain=" + m[1] + p.name("host", m[2])
@@ -112,4 +107,54 @@ func (p *pseudonyms) apply(texts []string) []string {
 		out[i] = hostValue.ReplaceAllStringFunc(s, func(c string) string { return p.name("host", c) })
 	}
 	return out
+}
+
+// domains replaces, in a JSON line or document, every text under the key
+// "domain", in arrays too, by its host pseudonym (D-090); the key decides,
+// not the text before it. Other lines come back as they are.
+func (p *pseudonyms) domains(line string) string {
+	var v any
+	dec := json.NewDecoder(strings.NewReader(line))
+	dec.UseNumber()
+	if !json.Valid([]byte(line)) || dec.Decode(&v) != nil {
+		return line
+	}
+	var hosts func(x any) any
+	hosts = func(x any) any {
+		switch y := x.(type) {
+		case string:
+			if y == "" {
+				return y
+			}
+			return p.name("host", y)
+		case []any:
+			for i := range y {
+				y[i] = hosts(y[i])
+			}
+		}
+		return x
+	}
+	var walk func(x any)
+	walk = func(x any) {
+		switch y := x.(type) {
+		case map[string]any:
+			for _, k := range slices.Sorted(maps.Keys(y)) { // fixed order of the pseudonyms
+				if k == "domain" {
+					y[k] = hosts(y[k])
+				} else {
+					walk(y[k])
+				}
+			}
+		case []any:
+			for _, e := range y {
+				walk(e)
+			}
+		}
+	}
+	walk(v)
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(v)
+	return strings.TrimRight(b.String(), "\n")
 }
