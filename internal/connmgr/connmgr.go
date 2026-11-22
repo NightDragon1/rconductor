@@ -179,8 +179,13 @@ func (m *Manager) Refresh(ctx context.Context) error {
 		m.mu.Lock()
 		w, ok := m.workers[t.ID]
 		m.mu.Unlock()
-		if !ok || w.current() != t {
-			m.ensure(t)
+		if ok && w.current() == t {
+			continue
+		}
+		// Read the server again right before taking it over, as Reload
+		// does: a change or deletion in the meantime wins over the list.
+		if err := m.Reload(ctx, t.ID); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -335,8 +335,8 @@ func (s *Service) applyScopes(ck *checker, q *sqlitedb.Queries, u User, cur curr
 			removed = append(removed, t)
 		}
 	}
-	// In the order of the request: the IDs grow with time, so the scopes
-	// read back in this order.
+	// New scopes in the order of the request: the IDs grow with time, so
+	// they read back in this order after the scopes kept.
 	for _, t := range want {
 		if have[t] {
 			continue

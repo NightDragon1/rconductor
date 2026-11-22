@@ -19,8 +19,8 @@ func TestC72DisconnectBeforeNextSession(t *testing.T) {
 	calls := 0
 	h.OnDisconnect(func(id string) {
 		calls++
-		if h.life.TryLock() {
-			h.life.Unlock()
+		if l := h.lifeOf(id); l.TryLock() {
+			l.Unlock()
 			t.Error("a new session could register while the end of the old one is told")
 		}
 	})
@@ -28,10 +28,24 @@ func TestC72DisconnectBeforeNextSession(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("onDisconnect calls = %d, want 1", calls)
 	}
+	// Another agent is not held up meanwhile.
+	h.OnDisconnect(func(string) {
+		calls++
+		if l := h.lifeOf("a2"); !l.TryLock() {
+			t.Error("another agent waits for the end of a1")
+		} else {
+			l.Unlock()
+		}
+	})
+	h.register(old)
+	h.unregister(old)
+	if calls != 2 {
+		t.Fatalf("onDisconnect calls = %d, want 2", calls)
+	}
 	// A session that is no longer the last one tells nothing.
 	h.register(&Session{AgentID: "a1"})
 	h.unregister(old)
-	if calls != 1 {
-		t.Errorf("onDisconnect calls = %d after a stale end, want 1", calls)
+	if calls != 2 {
+		t.Errorf("onDisconnect calls = %d after a stale end, want 2", calls)
 	}
 }
