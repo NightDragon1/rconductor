@@ -201,3 +201,32 @@ func TestC16FirstSentRunAfterRefusals(t *testing.T) {
 		t.Fatalf("outside the scope first: %+v, %v", items, err)
 	}
 }
+
+// TestC16ClientGoneBeforeAnyRun: a client that left before any run went
+// out still leaves one audit entry per server, each skipped with reason
+// time_budget, and none of them is sent the command (CMD-010).
+func TestC16ClientGoneBeforeAnyRun(t *testing.T) {
+	w := newWorld(t)
+	b := w.second(t, "b")
+	h := &heldExec{asked: make(chan struct{}), release: make(chan struct{})}
+	close(h.release)
+	svc := NewService(w.st, w.c, h, w.svc.log)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, items, err := svc.Multi(ctx, w.as("admin"), []string{w.server, b}, "list")
+	if err != nil || len(items) != 2 {
+		t.Fatalf("multi = %+v, %v", items, err)
+	}
+	for _, it := range items {
+		var n int
+		_ = w.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE id = ? AND reason_code = 'time_budget'`, it.RequestID).Scan(&n)
+		if it.Result != ResultSkipped || n != 1 {
+			t.Errorf("%s: %+v, %d audit entries", it.ServerID, it, n)
+		}
+	}
+	select {
+	case <-h.asked:
+		t.Error("a server was sent the command")
+	default:
+	}
+}

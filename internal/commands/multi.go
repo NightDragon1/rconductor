@@ -119,6 +119,11 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 		if r.RequestID, err = store.NewID(); err != nil {
 			return "", nil, err
 		}
+		if first && ctx.Err() != nil {
+			// The client left before a run went out: the rest is skipped
+			// and audited all the same.
+			first, over = false, true
+		}
 		if first {
 			slots <- struct{}{}
 			out, done := make(chan struct{}), make(chan struct{})
@@ -132,7 +137,11 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 			case <-out:
 				first = false
 			case <-done:
-				// refused or failed before sending: the next one is first
+				select {
+				case <-out: // sent and already done
+					first = false
+				default: // refused or failed before sending: the next one is first
+				}
 			}
 			continue
 		}
