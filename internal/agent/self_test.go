@@ -49,6 +49,12 @@ func TestC321SelfUnknownToTheDaemon(t *testing.T) {
 	if d.selfID != "id-db" {
 		t.Error("known own container dropped")
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // the daemon does not answer in time
+	d.checkSelf(ctx)
+	if d.selfID != "id-db" {
+		t.Error("own container dropped while the daemon was not reachable")
+	}
 	d.selfID = "id-gone" // removed after the start
 	if r, _ := order(t, d, agentproto.TypeLogsTail, agentproto.LogsTail{Container: agentproto.SelfContainer, Lines: 5}); r.Code != agentproto.CodeNotFound {
 		t.Errorf("gone own container: %+v", r)

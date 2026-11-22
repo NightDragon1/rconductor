@@ -96,17 +96,14 @@ func (d *Docker) checkSelf(ctx context.Context) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	if _, err := d.resolveSelf(ctx); err != nil {
-		d.log.Info("own container not known to the daemon, no own logs", slog.String("reason", selfReason(err)))
+	switch _, err := d.resolveSelf(ctx); {
+	case errors.Is(err, errSelfUnknown):
+		d.log.Info("own container not known to the daemon, no own logs")
 		d.selfID = ""
+	case err != nil:
+		// Not reachable now: each order checks again (F-93).
+		d.log.Warn("own container not checked, the daemon is not reachable")
 	}
-}
-
-func selfReason(err error) string {
-	if errors.Is(err, errSelfUnknown) {
-		return "unknown"
-	}
-	return "unreachable"
 }
 
 func newDocker(api dockerAPI, cfg config.Agent, log *slog.Logger) *Docker {

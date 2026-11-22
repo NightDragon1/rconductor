@@ -61,7 +61,10 @@ func (f *fakeDocker) Info(context.Context, client.InfoOptions) (client.SystemInf
 	return client.SystemInfoResult{Info: f.info}, f.infoErr
 }
 
-func (f *fakeDocker) ContainerList(_ context.Context, o client.ContainerListOptions) (client.ContainerListResult, error) {
+func (f *fakeDocker) ContainerList(ctx context.Context, o client.ContainerListOptions) (client.ContainerListResult, error) {
+	if err := ctx.Err(); err != nil {
+		return client.ContainerListResult{}, err // a daemon that is not reachable
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []container.Summary
