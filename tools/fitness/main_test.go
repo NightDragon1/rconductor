@@ -46,6 +46,14 @@ func TestExceptions(t *testing.T) {
 	if _ = os.WriteFile(p, []byte("authz\n"), 0o600); func() error { _, err := readExceptions(p); return err }() == nil {
 		t.Error("a line without symbol is accepted")
 	}
+	// C252: a blank other than space or tab, which the awk of the ratchet
+	// does not split at, is refused.
+	if _ = os.WriteFile(p, []byte("authz\u00a0GetC # reason\n"), 0o600); func() error { _, err := readExceptions(p); return err }() == nil {
+		t.Error("a no-break space between the fields is accepted")
+	}
+	if _ = os.WriteFile(p, []byte("authz\tGetC # reason\n"), 0o600); func() error { _, err := readExceptions(p); return err }() != nil {
+		t.Error("a tab between the fields is refused")
+	}
 }
 
 // TestDestinations: every line names a package and a reason; a missing
@@ -57,6 +65,9 @@ func TestDestinations(t *testing.T) {
 		"internal/auth\n":                 false,
 		"internal/auth #\n":               false,
 		"internal/a internal/b # r\n":     false,
+		"\u00a0 # r\n":                    false, // C252: no blank but space or tab
+		"\u00a0internal/x # r\n":          false,
+		"\tinternal/auth\t# r\n":          true,
 	} {
 		_ = os.WriteFile(p, []byte(body), 0o600)
 		if _, err := readDestinations(p); (err == nil) != ok {

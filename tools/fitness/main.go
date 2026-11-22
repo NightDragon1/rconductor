@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 
 	"go.yaml.in/yaml/v3"
 	"golang.org/x/tools/go/callgraph"
@@ -115,7 +116,13 @@ func readExceptions(path string) (map[string]bool, error) {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line, _, _ := strings.Cut(sc.Text(), "#")
-		if fields := strings.Fields(line); len(fields) == 2 {
+		// Split as scripts/fitness-ratchet.sh does (awk: space and tab), so
+		// that both read the same entries; any other blank is an error.
+		fields := strings.FieldsFunc(line, func(r rune) bool { return r == ' ' || r == '\t' })
+		if strings.ContainsFunc(strings.Join(fields, ""), unicode.IsSpace) {
+			return nil, fmt.Errorf("exception line %q: only spaces and tabs separate the fields", sc.Text())
+		}
+		if len(fields) == 2 {
 			out[fields[0]+" "+fields[1]] = true
 		} else if len(fields) != 0 {
 			return nil, fmt.Errorf("exception line %q: want rule, symbol and # reason", sc.Text())
