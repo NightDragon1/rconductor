@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +27,8 @@ var (
 	ErrAgentUnavailable = errors.New("the agent is not connected")
 	ErrAgentUnsupported = errors.New("the agent does not send its own log")
 	ErrAgentFailed      = errors.New("the agent could not read its log")
+	// ErrAgentBusy: the agent refused for its rate limit; later again (503).
+	ErrAgentBusy = errors.New("the agent takes no more orders for now")
 )
 
 const agentTimeout = 15 * time.Second
@@ -159,12 +162,19 @@ func (s *Service) agentLog(ctx context.Context, q LogQuery) (Page, error) {
 			Level string `json:"level"`
 		}
 		known := json.Unmarshal([]byte(l), &head) == nil
+		// The level is foreign data: only a known one is kept, in the
+		// spelling of the list (slog writes INFO, WARN, ERROR); any other
+		// is none (SEC-006).
+		level := strings.ToLower(head.Level)
+		if _, ok := ranks[level]; !ok {
+			level = ""
+		}
 		// The agent logs JSON: each value is masked as it was logged.
 		l = syslog.MaskLine(l, s.mask)
-		if known && ranks[head.Level] < ranks[q.Level] {
+		if known && level != "" && ranks[level] < ranks[q.Level] {
 			continue
 		}
-		p.Items = append(p.Items, Entry{Level: head.Level, Text: l})
+		p.Items = append(p.Items, Entry{Level: level, Text: l})
 	}
 	return p, nil
 }
@@ -193,6 +203,8 @@ func (s *Service) tail(ctx context.Context, agentID string, n int) ([]string, bo
 		return nil, false, ErrAgentUnavailable
 	case err != nil:
 		return nil, false, err
+	case res.Code == agentproto.CodeRateLimited:
+		return nil, false, ErrAgentBusy
 	case res.Code == agentproto.CodeForbidden:
 		return nil, false, ErrAgentUnsupported // an agent before 1.2 or outside a container
 	case res.Code != agentproto.CodeOK:

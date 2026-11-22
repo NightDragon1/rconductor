@@ -76,6 +76,8 @@ func (s *apiServer) ListSystemLog(ctx context.Context, req api.ListSystemLogRequ
 	case err == nil:
 	case errors.Is(err, diag.ErrAgentUnavailable):
 		return nil, &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeAgentUnavailable, detail: err.Error()}
+	case errors.Is(err, diag.ErrAgentBusy):
+		return nil, &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeBusy, detail: err.Error(), retryAfter: 10}
 	case errors.Is(err, diag.ErrAgentUnsupported):
 		return nil, &problem{status: http.StatusConflict, reason: api.ReasonCodeAgentUnsupported, detail: err.Error()}
 	case errors.Is(err, diag.ErrAgentFailed):
