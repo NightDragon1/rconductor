@@ -725,7 +725,8 @@ paths:
         any other unknown field in the request is refused with 400. Up to
         commands.multi_max_servers servers, commands.multi_parallel at a
         time; the answer comes when every server has its result. The first
-        server always runs; further runs start only while one still ends
+        run that passes its checks (known, in scope, list, rate limit)
+        always goes out; further runs start only while one still ends
         before the answer is due (55 s less the command timeout); a server
         whose turn comes later is not sent the
         command and gets skipped with reason time_budget, its own request

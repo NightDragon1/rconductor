@@ -117,7 +117,6 @@ func TestC16SkippedAuditOutlivesTheClient(t *testing.T) {
 	w := newWorld(t)
 	b := w.second(t, "b")
 	h := &heldExec{asked: make(chan struct{}), release: make(chan struct{})}
-	close(h.release)
 	svc := NewService(w.st, w.c, h, w.svc.log)
 	svc.SetTimeout(multiAnswerBy)
 	var told []Entry
@@ -130,8 +129,8 @@ func TestC16SkippedAuditOutlivesTheClient(t *testing.T) {
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, all, err := svc.Multi(ctx, w.as("admin"), []string{w.server, b}, strings.Repeat("say x ", 1000))
+	go func() { <-h.asked; cancel(); close(h.release) }() // the client leaves while the first run is out
+	_, all, err := svc.Multi(ctx, w.as("admin"), []string{w.server, b}, "say "+strings.Repeat("x", 400))
 	if err != nil || len(all) != 2 || all[1].Result != ResultSkipped {
 		t.Fatalf("multi = %+v, %v", all, err)
 	}
@@ -173,5 +172,32 @@ func TestC16FirstServerAlwaysRuns(t *testing.T) {
 	case <-h.asked:
 	default:
 		t.Error("the first server was not sent the command")
+	}
+}
+
+// TestC16FirstSentRunAfterRefusals: an unknown server or one outside the
+// scope at the head of the list does not use up the guarantee; the first
+// run that passes its checks still goes out with a command timeout that
+// fills the budget, later ones are skipped (CMD-010, D-069).
+func TestC16FirstSentRunAfterRefusals(t *testing.T) {
+	w := newWorld(t)
+	b, c := w.second(t, "b"), w.second(t, "c")
+	h := &heldExec{asked: make(chan struct{}), release: make(chan struct{})}
+	close(h.release)
+	svc := NewService(w.st, w.c, h, w.svc.log)
+	svc.SetTimeout(multiAnswerBy + time.Second)
+	dead := "00000000-0000-4000-8000-00000000dead"
+	_, items, err := svc.Multi(context.Background(), w.as("admin"), []string{dead, w.server, b}, "list")
+	if err != nil || len(items) != 3 || items[0].Result != ResultNotFound || items[1].Result != ResultOK ||
+		items[2].Result != ResultSkipped || items[2].Reason != ReasonTimeBudget {
+		t.Fatalf("unknown first: %+v, %v", items, err)
+	}
+	// b and c lie outside the scope of the server admin.
+	w.exec(`DELETE FROM admin_scopes WHERE id IN ('as-b', 'as-c')`)
+	w.c.Invalidate()
+	_, items, err = svc.Multi(context.Background(), w.as("sa"), []string{b, c, w.server}, "list")
+	if err != nil || len(items) != 3 || items[0].Result != ResultNotFound || items[1].Result != ResultNotFound ||
+		items[2].Result != ResultOK {
+		t.Fatalf("outside the scope first: %+v, %v", items, err)
 	}
 }
