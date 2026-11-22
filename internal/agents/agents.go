@@ -70,10 +70,9 @@ type Agent struct {
 	LastSeenAt   *time.Time
 	RevokedAt    *time.Time
 	Connected    bool
-	// DockerHost is the host of the agent's last hello, only with the
-	// flag docker_host on (AGT-014).
+	// DockerHost is the host of the agent's last hello (AGT-014).
 	DockerHost *agentproto.DockerHost
-	// DisplayName of the host, only with host_groups on; "" while unset.
+	// DisplayName of the host (UI-021); "" while unset.
 	DisplayName string
 }
 
