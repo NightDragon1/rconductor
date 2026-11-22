@@ -493,6 +493,27 @@ func (e SMTPSettingsEncryption) Valid() bool {
 	}
 }
 
+// Defines values for SMTPSettingsPasswordState.
+const (
+	SMTPSettingsPasswordStateNone       SMTPSettingsPasswordState = "none"
+	SMTPSettingsPasswordStateSet        SMTPSettingsPasswordState = "set"
+	SMTPSettingsPasswordStateUnreadable SMTPSettingsPasswordState = "unreadable"
+)
+
+// Valid indicates whether the value is a known member of the SMTPSettingsPasswordState enum.
+func (e SMTPSettingsPasswordState) Valid() bool {
+	switch e {
+	case SMTPSettingsPasswordStateNone:
+		return true
+	case SMTPSettingsPasswordStateSet:
+		return true
+	case SMTPSettingsPasswordStateUnreadable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SMTPSettingsInputEncryption.
 const (
 	SMTPSettingsInputEncryptionNone     SMTPSettingsInputEncryption = "none"
@@ -1536,9 +1557,12 @@ type SMTPSettings struct {
 	Host string `json:"host"`
 
 	// PasswordSet Whether a password is stored; the password itself is never returned.
-	PasswordSet bool   `json:"password_set"`
-	Port        int    `json:"port"`
-	Username    string `json:"username"`
+	PasswordSet bool `json:"password_set"`
+
+	// PasswordState none: no password stored; set: stored and readable; unreadable: stored, but sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
+	PasswordState SMTPSettingsPasswordState `json:"password_state"`
+	Port          int                       `json:"port"`
+	Username      string                    `json:"username"`
 
 	// Version Version for If-Match.
 	Version string `json:"version"`
@@ -1546,6 +1570,9 @@ type SMTPSettings struct {
 
 // SMTPSettingsEncryption defines model for SMTPSettings.Encryption.
 type SMTPSettingsEncryption string
+
+// SMTPSettingsPasswordState none: no password stored; set: stored and readable; unreadable: stored, but sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
+type SMTPSettingsPasswordState string
 
 // SMTPSettingsInput defines model for SMTPSettingsInput.
 type SMTPSettingsInput struct {

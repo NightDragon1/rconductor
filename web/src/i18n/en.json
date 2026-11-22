@@ -259,6 +259,8 @@
     "password": "Password",
     "passwordSet": "set; type to replace",
     "passwordNone": "not set",
+    "passwordUnreadable": "set, but not readable",
+    "passwordUnreadableHint": "The stored password was encrypted with another master key and cannot be read, so no mail goes out. Enter the password again and save.",
     "removePassword": "Remove the stored password",
     "noTLS": "Without encryption the panel sends no user and no password.",
     "test": "Send a test mail",

@@ -13,6 +13,7 @@ const setup = {
   encryption: 'starttls',
   username: 'mailer',
   password_set: true,
+  password_state: 'set',
   from: 'panel@example.org',
   version: '3',
 };
@@ -33,6 +34,25 @@ describe('SMTP setup (NFR-017)', () => {
     expect(panel.textContent).toContain(
       'Without encryption the panel sends no user and no password.',
     );
+  });
+
+  it('tells a password it cannot read and how to set it again (NFR-017)', async () => {
+    setLanguage('en');
+    await renderPage(SmtpPanel, [[key, { ...setup, password_state: 'unreadable' }]]);
+    const panel = screen.getByRole('region', { name: 'Mail (SMTP)' });
+    const pw = within(panel).getByLabelText('Password') as HTMLInputElement;
+    expect(pw.placeholder).toBe('set, but not readable');
+    expect(panel.textContent).toContain('Enter the password again and save.');
+  });
+
+  it('shows no hint for a readable or missing password', async () => {
+    setLanguage('en');
+    await renderPage(SmtpPanel, [[key, { ...setup, password_set: false, password_state: 'none' }]]);
+    const panel = screen.getByRole('region', { name: 'Mail (SMTP)' });
+    expect((within(panel).getByLabelText('Password') as HTMLInputElement).placeholder).toBe(
+      'not set',
+    );
+    expect(panel.textContent).not.toContain('cannot be read');
   });
 
   it('names only the category of a failed test mail', async () => {
