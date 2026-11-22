@@ -9,12 +9,12 @@ import { TopologyPage } from './Topology';
 
 const now = new Date().toISOString();
 
-function session(role: string, features: string[] = []) {
+function session(role: string) {
   return {
     user: { id: 'u0', pseudonym: 'me', role },
     expires_at: now,
     must_change_password: false,
-    ui: { shortcuts_enabled: false, supporters_enabled: true, supporters_allowed: true, features },
+    ui: { shortcuts_enabled: false, supporters_enabled: true, supporters_allowed: true },
     panel_version: '1.2.0',
   };
 }
@@ -84,9 +84,9 @@ const agents = [
   },
 ];
 
-function data(role: string, features: string[] = []) {
+function data(role: string) {
   return [
-    [sessionKey, session(role, features)],
+    [sessionKey, session(role)],
     [serversKey, servers],
     [agentsKey, agents],
   ] as [readonly unknown[], unknown][];
@@ -222,7 +222,7 @@ describe('topology (UI-010)', () => {
   it('keeps Docker host and address out of the node, also with docker_host (AGT-014)', async () => {
     setLanguage('en');
     for (const role of ['rcon_admin', 'server_admin']) {
-      const { unmount } = await renderPage(TopologyPage, data(role, ['docker_host']));
+      const { unmount } = await renderPage(TopologyPage, data(role));
       const page = document.body.textContent ?? '';
       expect(page).not.toContain('nas');
       expect(page).not.toContain('192.168.1.5');

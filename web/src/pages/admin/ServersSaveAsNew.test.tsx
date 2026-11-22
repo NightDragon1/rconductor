@@ -23,7 +23,7 @@ const existing = {
   credentials: 'ok',
 };
 
-const data = (role: string, features: string[]): [readonly unknown[], unknown][] => [
+const data = (role: string): [readonly unknown[], unknown][] => [
   [
     sessionKey,
     {
@@ -34,7 +34,6 @@ const data = (role: string, features: string[]): [readonly unknown[], unknown][]
         shortcuts_enabled: false,
         supporters_enabled: false,
         supporters_allowed: false,
-        features,
       },
     },
   ],
@@ -50,14 +49,14 @@ const answer = (id: string, name: string) => ({
   response: new Response(null, { status: 201 }),
 });
 
-const page = (role = 'rcon_admin', features = ['server_save_as_new']) =>
+const page = (role = 'rcon_admin') =>
   renderPage(
     () => (
       <UndoProvider>
         <ServersAdminPage />
       </UndoProvider>
     ),
-    data(role, features),
+    data(role),
   );
 
 const panel = () => screen.queryByRole('complementary');

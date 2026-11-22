@@ -24,7 +24,7 @@ vi.mock('@/lib/live', () => ({
 const now = new Date().toISOString();
 const evil = '<img src=x onerror=alert(1)>';
 
-function session(role = 'rcon_admin', features = ['messages']) {
+function session(role = 'rcon_admin') {
   return {
     user: { id: 'me', pseudonym: 'me', role },
     expires_at: now,
@@ -32,7 +32,6 @@ function session(role = 'rcon_admin', features = ['messages']) {
     totp_setup_required: false,
     panel_version: '1.2',
     ui: {
-      features,
       shortcuts_enabled: false,
       supporters_enabled: false,
       supporters_allowed: false,
@@ -388,13 +387,13 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
 });
 
 describe('messages in the menu (MSG-001)', () => {
-  async function open(features: string[]) {
+  async function open() {
     setLanguage('en');
     const get = vi.spyOn(api, 'GET').mockImplementation(((path: string) =>
       Promise.resolve({
         data:
           path === '/auth/session'
-            ? session('moderator', features)
+            ? session('moderator')
             : path === '/messages'
               ? { items: [], unread: 3 }
               : { items: [] },
@@ -416,7 +415,7 @@ describe('messages in the menu (MSG-001)', () => {
   }
 
   it('shows the menu entry with the unread count', async () => {
-    await open(['messages']);
+    await open();
     expect(await screen.findByRole('heading', { name: 'Messages' })).toBeTruthy();
     expect(
       (await screen.findAllByRole('link', { name: /Messages.*3 unread messages/ })).length,

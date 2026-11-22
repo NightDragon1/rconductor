@@ -199,11 +199,11 @@ function Editor({
       )}
       {!readOnly && !conflict && (
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled={!dirty} onClick={() => void save(draft)}>
+          <Button variant="outline" disabled={!dirty || busy} onClick={() => void save(draft)}>
             {t('servers.sayPrefix.save')}
           </Button>
           {base.say_prefix !== '' && (
-            <Button variant="outline" onClick={() => void save('')}>
+            <Button variant="outline" disabled={busy} onClick={() => void save('')}>
               {t('servers.sayPrefix.clear')}
             </Button>
           )}

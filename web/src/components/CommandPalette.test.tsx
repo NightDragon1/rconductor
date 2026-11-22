@@ -8,14 +8,13 @@ import { MAX_RESULTS, paletteEntries, searchPalette } from '@/lib/palette';
 import { renderPage, setLanguage, unmarked } from '@/test/render';
 import { CommandPalette } from './CommandPalette';
 
-const ui = vi.hoisted(() => ({ features: [] as string[], shortcuts: false }));
+const ui = vi.hoisted(() => ({ shortcuts: false }));
 vi.mock('@/api/session', async (original) => ({
   ...(await original<typeof import('@/api/session')>()),
   useSession: () => ({
     data: {
       user: { id: 'boss', pseudonym: 'boss', role: 'server_admin' },
       ui: {
-        features: ui.features,
         shortcuts_enabled: ui.shortcuts,
         supporters_enabled: false,
         supporters_allowed: false,
@@ -56,7 +55,6 @@ const ctrlK = () => act(() => void fireEvent.keyDown(window, { key: 'k', ctrlKey
 const options = () => within(screen.getByRole('listbox')).queryAllByRole('option');
 
 beforeEach(async () => {
-  ui.features = ['command_palette'];
   ui.shortcuts = false;
   await setLanguage('en');
 });

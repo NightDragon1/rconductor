@@ -9,12 +9,12 @@ import { HomePage } from './Home';
 
 const now = new Date().toISOString();
 
-function session(features: string[]) {
+function session() {
   return {
     user: { id: 'u0', pseudonym: 'me', role: 'moderator' },
     expires_at: now,
     must_change_password: false,
-    ui: { shortcuts_enabled: false, supporters_enabled: true, features },
+    ui: { shortcuts_enabled: false, supporters_enabled: true },
   };
 }
 
@@ -44,7 +44,7 @@ describe('overview by host', () => {
   it('frames the cards per host', async () => {
     setLanguage('en');
     await renderPage(HomePage, [
-      [sessionKey, session(['host_groups'])],
+      [sessionKey, session()],
       [serversKey, servers],
       [profilesKey, []],
     ]);
