@@ -234,7 +234,7 @@ describe('topology (UI-010)', () => {
 
   it('has no text outside the language files (NFR-007)', async () => {
     setLanguage('xx');
-    const { container: el } = await renderPage(TopologyPage, data('rcon_admin', ['docker_host']));
+    const { container: el } = await renderPage(TopologyPage, data('rcon_admin'));
     const names = /^(Rack <i>A<\/i>|1\.2\.3|2\.0\.0|alpha|beta|gamma)$/;
     expect(unmarked(el).filter((s) => !names.test(s.trim()))).toEqual([]);
   });
