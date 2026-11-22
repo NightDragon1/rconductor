@@ -6,8 +6,12 @@
 # the label stage-1 or stage-2. It is meant as a required check: it fails
 # when a stage 2 pull request has auto-merge on, also after a later push,
 # a change of the base or when auto-merge is turned on. The job token
-# cannot turn auto-merge off. The job Line limit fails a stage 2 pull
-# request over 400 changed lines; it is not required (tests may go over).
+# cannot turn auto-merge off. Classify also sets the size labels:
+# over-limit for a stage 2 pull request over 400 changed lines of code,
+# over-limit-tests when tests alone take it over 400 (tests are the list
+# "tests" of the class file; generated files and lockfiles never count).
+# The job Line limit only warns about an overrun, with the counts in the
+# summary; it fails when the count is unknown (Classify did not finish).
 #
 # pull_request_target runs this file and the scripts of the base branch
 # with a token that can label. Hard rules for this file:
@@ -35,7 +39,10 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     outputs:
-      over: ${{ steps.classify.outputs.over }}
+      size: ${{ steps.classify.outputs.size }}
+      lines: ${{ steps.classify.outputs.lines }}
+      code: ${{ steps.classify.outputs.code }}
+      tests: ${{ steps.classify.outputs.tests }}
     # Write only in this job: it sets the label (PRJ-005).
     permissions:
       contents: read
@@ -78,18 +85,25 @@ jobs:
             stage-1) other=stage-2 ;;
             *) stage=stage-2 other=stage-1 ;;
           esac
+          size=
+          if [ -z "$broken" ]; then size=$(sed -n 's/^size=//p' "$out"); fi
           args=(--add-label "$stage")
           labels=$(gh pr view "$PR" --json labels --jq '.labels[].name')
-          if printf '%s\n' "$labels" | grep -qxF "$other"; then
-            args+=(--remove-label "$other")
-          fi
+          has() { printf '%s\n' "$labels" | grep -qxF "$1"; }
+          if has "$other"; then args+=(--remove-label "$other"); fi
+          # Size labels like the stage labels; an unknown size keeps them.
+          mapfile -t sizeargs < <(printf '%s\n' "$labels" | scripts/classify-size.sh "$size")
+          args+=("${sizeargs[@]}")
           gh pr edit "$PR" "${args[@]}"
-          echo "review stage: $stage"
-          # Over the line limit: told to the job Line limit, not failed here.
-          if [ "$rc" -eq 1 ] && [ -z "$broken" ]; then
-            echo "over=true" >>"$GITHUB_OUTPUT"
-          elif [ -z "$broken" ]; then
-            echo "over=false" >>"$GITHUB_OUTPUT"
+          echo "review stage: $stage, size: ${size:-unknown}"
+          # The counts go to the job Line limit; an overrun fails nothing here.
+          if [ -n "$size" ]; then
+            {
+              echo "size=$size"
+              echo "lines=$(sed -n 's/^lines=//p' "$out")"
+              echo "code=$(sed -n 's/^code_lines=//p' "$out")"
+              echo "tests=$(sed -n 's/^test_lines=//p' "$out")"
+            } >>"$GITHUB_OUTPUT"
           fi
           # Auto-merge as it is now, not as the event saw it; unreadable
           # counts as on.
@@ -110,17 +124,15 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 2
     steps:
-      - name: At most 400 changed lines in stage 2
+      # The scripts of the base branch, never of the pull request.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+      - name: At most 400 changed lines of code in stage 2
         env:
-          OVER: ${{ needs.classify.outputs.over }}
-        run: |
-          # Without a count from Classify the size is unknown, never within.
-          if [ -z "$OVER" ]; then
-            echo "::error::line count unknown: Classify did not finish"
-            exit 1
-          fi
-          if [ "$OVER" = true ]; then
-            echo "::error::stage 2 pull request over 400 changed lines (generated files excluded); split it, or note a test-only overrun in the PR text"
-            exit 1
-          fi
-          echo "within the line limit"
+          SIZE: ${{ needs.classify.outputs.size }}
+          LINES: ${{ needs.classify.outputs.lines }}
+          CODE: ${{ needs.classify.outputs.code }}
+          TESTS: ${{ needs.classify.outputs.tests }}
+        run: scripts/line-limit.sh "$SIZE" "$LINES" "$CODE" "$TESTS" "$GITHUB_STEP_SUMMARY"
