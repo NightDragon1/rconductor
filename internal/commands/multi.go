@@ -149,15 +149,26 @@ func (s *Service) multiSkipped(ctx context.Context, req users.Request, serverID,
 		return MultiItem{ServerID: serverID, RequestID: req.RequestID, Result: ResultError}
 	}
 	if _, ok := rights.Server(serverID); !ok {
+		perm.LogDenied(s.log, perm.Denial{
+			RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym, Role: req.Actor.Role,
+			Server: serverID, Reason: "not_found", Action: "command",
+		})
 		return MultiItem{ServerID: serverID, Result: ResultNotFound, Reason: "not_found"}
 	}
 	s.log.Warn("multi command: server left out after the time budget",
 		append(s.attrs(req, serverID), logging.Event(logging.CmdDenied), slog.String(logging.KeyReason, ReasonTimeBudget))...)
-	if err := s.entry(ctx, req, serverID, ActionDenied, audit.Entry{
-		Payload: payload{Command: input, BatchID: req.BatchID}, Result: audit.ResultError, Reason: ReasonTimeBudget,
+	// Unsent, so uncleaned: kept short as a refused input is. The entry is
+	// written even when the client has gone (one per server, CMD-010).
+	command := truncate(input, 256)
+	if err := s.entry(context.WithoutCancel(ctx), req, serverID, ActionDenied, audit.Entry{
+		Payload: payload{Command: command, BatchID: req.BatchID}, Result: audit.ResultError, Reason: ReasonTimeBudget,
 	}); err != nil {
 		s.log.Error("audit entry not written", append(s.attrs(req, serverID), "err", err)...)
 	}
+	s.publish(serverID, Entry{
+		RequestID: req.RequestID, TS: s.now().UTC(), UserID: req.Actor.ID, Pseudonym: req.Pseudonym,
+		Role: string(req.Actor.Role), Command: command, Result: ResultError, Reason: ReasonTimeBudget,
+	})
 	return MultiItem{ServerID: serverID, RequestID: req.RequestID, Result: ResultSkipped, Reason: ReasonTimeBudget}
 }
 

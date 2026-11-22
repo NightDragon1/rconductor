@@ -91,15 +91,50 @@ func TestC16TimeBudget(t *testing.T) {
 // not_found after the budget, without an audit entry (D-069).
 func TestC16OutsideScopeAfterBudget(t *testing.T) {
 	w := newWorld(t)
-	svc := NewService(w.st, w.c, &heldExec{asked: make(chan struct{}), release: make(chan struct{})}, w.svc.log)
+	h := &heldExec{asked: make(chan struct{}), release: make(chan struct{})}
+	close(h.release) // a run that starts after all ends at once
+	svc := NewService(w.st, w.c, h, w.svc.log)
 	svc.SetTimeout(multiAnswerBy) // no time to start any run
 	_, items, err := svc.Multi(context.Background(), w.as("sa"), []string{w.server, "00000000-0000-4000-8000-00000000dead"}, "list")
-	if err != nil || len(items) != 2 || items[1].Result != ResultNotFound || items[1].RequestID != "" {
+	if err != nil || len(items) != 2 || items[0].Result != ResultSkipped || items[1].Result != ResultNotFound || items[1].RequestID != "" {
 		t.Fatalf("multi = %+v, %v", items, err)
 	}
 	var n int
 	_ = w.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE reason_code = 'time_budget' AND server_id = ?`, items[1].ServerID).Scan(&n)
 	if n != 0 {
 		t.Errorf("%d audit entries for a server outside the scope", n)
+	}
+	if !strings.Contains(w.logs.String(), `"reason":"not_found"`) {
+		t.Error("no denial logged for the server outside the scope")
+	}
+}
+
+// TestC16SkippedAuditOutlivesTheClient: the audit entry of a left-out
+// server is written also when the client has gone, with the input cut as
+// for a refused one, and the console is told.
+func TestC16SkippedAuditOutlivesTheClient(t *testing.T) {
+	w := newWorld(t)
+	svc := NewService(w.st, w.c, &heldExec{asked: make(chan struct{}), release: make(chan struct{})}, w.svc.log)
+	svc.SetTimeout(multiAnswerBy)
+	var told []Entry
+	var mu sync.Mutex
+	svc.Publish = func(_ string, e Entry) { mu.Lock(); told = append(told, e); mu.Unlock() }
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, items, err := svc.Multi(ctx, w.as("admin"), []string{w.server}, strings.Repeat("say x ", 1000))
+	if err != nil || len(items) != 1 || items[0].Result != ResultSkipped {
+		t.Fatalf("multi = %+v, %v", items, err)
+	}
+	var payload string
+	if err := w.st.DB.QueryRow(`SELECT payload FROM audit_log WHERE id = ? AND reason_code = 'time_budget'`, items[0].RequestID).Scan(&payload); err != nil {
+		t.Fatalf("no audit entry after the client left: %v", err)
+	}
+	if len(payload) > 600 {
+		t.Errorf("payload of %d bytes", len(payload))
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(told) != 1 || told[0].Reason != ReasonTimeBudget || told[0].RequestID != items[0].RequestID {
+		t.Errorf("console told %+v", told)
 	}
 }
