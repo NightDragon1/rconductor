@@ -80,6 +80,8 @@ check "message handlers and actor" 0 "stage-2 authz 2" "modified 1 0 internal/we
   "modified 1 0 internal/web/api_users.go"
 check "other web handler" 0 "stage-1  1" "modified 1 0 internal/web/api_servers.go"
 check "log masking" 0 "stage-2 redact 1" "added 1 0 internal/logmask/x.go"
+check "diagnostics" 0 "stage-2 redact 1" "added 1 0 internal/diag/x.go"
+check "system log" 0 "stage-2 redact 1" "added 1 0 internal/syslog/x.go"
 check "sqlc config" 0 "stage-2 rules 1" "modified 1 0 sqlc.yaml"
 check "other profile and query files" 0 "stage-1  2" "modified 1 0 internal/profiles/catalog.go" \
   "modified 1 0 internal/store/queries/sqlite/smtp.sql"

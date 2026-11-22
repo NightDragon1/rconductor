@@ -77,6 +77,9 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 		}
 		return p.apply(texts)
 	}
+	// rw blacks out one encoded line or document: domain values by their
+	// key first, then every text value (D-090).
+	rw := func(line string) string { return syslog.Rewrite(p.domains(line), clean) }
 	type out struct{ name, text string }
 	var all []out
 	size := 0
@@ -85,7 +88,7 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 		if err != nil {
 			return nil, err
 		}
-		all = append(all, out{f.name, syslog.Rewrite(string(doc), clean) + "\n"})
+		all = append(all, out{f.name, rw(string(doc)) + "\n"})
 	}
 	for _, o := range all {
 		size += len(o.name) + len(o.text)
@@ -117,12 +120,12 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 	agentsCut := false
 	for i, id := range active {
 		name := "agents/" + id + ".log"
-		text, used, cut := agentLog(tails[i], clean, budget-len(name))
+		text, used, cut := agentLog(tails[i], rw, budget-len(name))
 		agentsCut = agentsCut || cut
 		budget -= len(name) + used
 		all = append(all, out{name, text})
 	}
-	text, shortened, err := s.systemLog(ctx, from, to, budget, clean)
+	text, shortened, err := s.systemLog(ctx, from, to, budget, rw)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +163,7 @@ type tailResult struct {
 // agentLog writes the log of one agent: the head, then its newest lines as
 // far as budget bytes allow; used counts the text beyond the head
 // (diagnostics.max_bytes, D-091).
-func agentLog(t tailResult, clean func([]string) []string, budget int) (text string, used int, cut bool) {
+func agentLog(t tailResult, rw func(string) string, budget int) (text string, used int, cut bool) {
 	head := Notice + "\n"
 	switch {
 	case errors.Is(t.err, ErrAgentUnavailable):
@@ -175,7 +178,7 @@ func agentLog(t tailResult, clean func([]string) []string, budget int) (text str
 	budget -= len(head)
 	var lines []string
 	for i := len(t.lines) - 1; i >= 0; i-- {
-		l := oneLine(syslog.Rewrite(t.lines[i], clean)) + "\n"
+		l := oneLine(rw(t.lines[i])) + "\n"
 		if used+len(l) > budget {
 			head, cut = head+"Shortened by diagnostics.max_bytes.\n", true
 			break
@@ -187,9 +190,9 @@ func agentLog(t tailResult, clean func([]string) []string, budget int) (text str
 }
 
 // systemLog writes the stored lines of the period, oldest first, through
-// clean; beyond budget bytes the oldest stay out, and the head says from
+// rw; beyond budget bytes the oldest stay out, and the head says from
 // when the lines are.
-func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int, clean func([]string) []string) (string, bool, error) {
+func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int, rw func(string) string) (string, bool, error) {
 	const page = 1000
 	var lines, stamps []string
 	size, shortened := 0, budget <= 0
@@ -202,7 +205,7 @@ func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int,
 			return "", false, err
 		}
 		for _, r := range rows {
-			l := syslog.Rewrite(r.Text, clean) + "\n"
+			l := rw(r.Text) + "\n"
 			lines, stamps, size, after = append(lines, l), append(stamps, r.Ts), size+len(l), r.ID
 			for size > budget && len(lines) > 0 {
 				size, lines, stamps, shortened = size-len(lines[0]), lines[1:], stamps[1:], true

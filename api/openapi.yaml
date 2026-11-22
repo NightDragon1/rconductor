@@ -1261,7 +1261,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
         "503":
-          description: The agent is not connected (agent_unavailable).
+          description: >-
+            The agent is not connected (agent_unavailable), or it takes no
+            more orders for now (busy, with Retry-After).
           content:
             application/problem+json:
               schema:
@@ -4009,8 +4011,10 @@ components:
         game_ports:
           type: array
           description: >-
-            Effective game ports; only for the RCON admin and the server
-            admin of this server (D-056), missing for other roles.
+            Game ports of the merged profiles, top first (D-074), not the
+            ports stored for the server (those are on the server); only for
+            the RCON admin and the server admin of this server (D-056),
+            missing for other roles.
           items:
             $ref: "#/components/schemas/GamePort"
         formatting:
