@@ -43,18 +43,6 @@ function storeHelp(on: boolean) {
 
 // Keys with their own label and help in the language file.
 const keyTexts = [
-  'features_profile_browser',
-  'features_color_codes',
-  'features_say_sender',
-  'features_docker_host',
-  'features_server_number',
-  'features_messages',
-  'features_diagnostics_export',
-  'features_host_groups',
-  'features_log_masking_ui',
-  'features_server_save_as_new',
-  'features_log_filter_split',
-  'features_command_palette',
   'auth_recovery_lifetime',
   'auth_recovery_per_hour',
   'auth_recovery_queue',
@@ -113,7 +101,6 @@ const groupOrder = [
   'servers',
   'agents',
   'system',
-  'features',
   'other',
 ] as const;
 type Group = (typeof groupOrder)[number];
@@ -134,7 +121,6 @@ const sections: [string, Group, RegExp][] = [
   ['mail', 'system', /^smtp\./],
   ['interface', 'system', /^ui\./],
   ['diagnostics', 'system', /^(diagnostics|system_log)\./],
-  ['features', 'features', /^features\./],
 ];
 const sectionOrder = [...sections.map(([name]) => name), 'other'];
 // Internal tuning values: they stay behind "Advanced", closed at first.

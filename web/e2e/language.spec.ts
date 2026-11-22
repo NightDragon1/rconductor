@@ -99,7 +99,7 @@ test('every group of the settings', async ({ page, state }) => {
   const groups = page.getByRole('navigation', { name: '⟦Settings groups⟧' }).getByRole('button');
   await expect(groups.first()).toBeVisible();
   const count = await groups.count();
-  expect(count).toBeGreaterThanOrEqual(7);
+  expect(count).toBeGreaterThanOrEqual(6);
   for (let i = 0; i < count; i++) {
     await groups.nth(i).click();
     await page.evaluate(() => {

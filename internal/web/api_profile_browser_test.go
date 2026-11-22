@@ -10,20 +10,15 @@ import (
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/api"
-	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
-// TestServerProfileBehindFlagAndScope: GET /servers/{id}/profile (UI-020)
-// is 404 while the flag is off and for a server outside the scope; only
+// TestServerProfileScope: GET /servers/{id}/profile (UI-020) is 404 for a
+// server outside the scope; only
 // then does the handler answer.
-func TestServerProfileBehindFlagAndScope(t *testing.T) {
-	flags, err := features.New(features.Flag{Name: "profile_browser", Operations: []string{"GetServerProfile"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+func TestServerProfileScope(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
 	admin, mod := f.login(t, "Boss"), f.login(t, "Mod")
 	const origin = "http://panel.lan"
 	var list api.ProfileList
@@ -38,13 +33,6 @@ func TestServerProfileBehindFlagAndScope(t *testing.T) {
 		return f.do(t, call{method: http.MethodGet, path: "/api/v1/servers/" + id + "/profile", cookies: []*http.Cookie{c}}).Code
 	}
 	id := srv.Id.String()
-	if got := get(admin, id); got != http.StatusNotFound {
-		t.Errorf("flag off = %d, want 404", got)
-	}
-	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
-		body: `{"features.profile_browser":true}`}).Code; got != http.StatusOK {
-		t.Fatalf("switch flag on = %d", got)
-	}
 	if got := f.do(t, call{method: http.MethodGet, path: "/api/v1/servers/" + id + "/profile"}).Code; got != http.StatusUnauthorized {
 		t.Errorf("without session = %d, want 401", got)
 	}
@@ -70,11 +58,7 @@ func TestServerProfileBehindFlagAndScope(t *testing.T) {
 // ports follow D-056: RCON admin and server admin of the server, not the
 // moderator in scope.
 func TestServerProfileEffectiveView(t *testing.T) {
-	flags, err := features.New(features.Flag{Name: "profile_browser", Operations: []string{"GetServerProfile"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+	f := newAPIFixture(t, Proxies{})
 	ctx := context.Background()
 	var hash string
 	if err := f.st.DB.QueryRow(`SELECT password_hash FROM users WHERE id = ?`, f.userID).Scan(&hash); err != nil {
@@ -100,10 +84,6 @@ func TestServerProfileEffectiveView(t *testing.T) {
 		t.Fatalf("create = %d %s", rec.Code, rec.Body.String())
 	}
 	id := srv.Id.String()
-	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
-		body: `{"features.profile_browser":true}`}).Code; got != http.StatusOK {
-		t.Fatalf("switch flag on = %d", got)
-	}
 	// Scope: the server group as admin scope of the server admin and as
 	// grant to a moderator group of the RCON admin with the moderator.
 	rec = f.do(t, call{method: http.MethodPost, path: "/api/v1/server-groups", cookies: []*http.Cookie{admin}, origin: origin,

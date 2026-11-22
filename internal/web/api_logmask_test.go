@@ -7,20 +7,13 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/NightDragon1/rconductor/internal/features"
 )
 
-// TestLogMaskingBehindFlag (UI-022, D-088): 404 with the flag off, 401
-// without a session; then only the RCON admin passes (403), 428 without a
+// TestLogMaskingAPI (UI-022, D-088): 401 without a session; then only the RCON admin passes (403), 428 without a
 // version, 400 for bad input without naming a text, 409 for a stale
 // version; the texts never come back, nor through /settings.
-func TestLogMaskingBehindFlag(t *testing.T) {
-	flags, err := features.New(features.Flag{Name: "log_masking_ui", Operations: []string{"GetLogMasking", "UpdateLogMasking"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newAPIFixtureFeatures(t, Proxies{}, flags)
+func TestLogMaskingAPI(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
 	admin, mod := f.login(t, "Boss"), f.login(t, "Mod")
 	const origin = "http://panel.lan"
 	put := func(body string) call {
@@ -41,11 +34,6 @@ func TestLogMaskingBehindFlag(t *testing.T) {
 				t.Errorf("answer names a text: %s", rec.Body.String())
 			}
 		}
-	}
-	check(http.StatusNotFound, admin, ops...)
-	if got := f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{admin}, origin: origin,
-		body: `{"features.log_masking_ui":true}`}).Code; got != http.StatusOK {
-		t.Fatalf("switch flag on = %d", got)
 	}
 	check(http.StatusUnauthorized, nil, ops...)
 	check(http.StatusOK, admin, ops...)

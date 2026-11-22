@@ -25,7 +25,6 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/config"
-	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
@@ -409,19 +408,12 @@ func TestTurnDownPending(t *testing.T) {
 	}
 }
 
-// TestDockerHostBehindFlag covers AGT-014: the RCON admin sees the Docker
-// host of an agent's last hello, cleaned (SEC-006), only while the flag
-// docker_host is on; with the flag off the agent is shown as in 1.1, and
-// an agent whose daemon names no host has none. Other roles do not read
-// agents at all.
-func TestDockerHostBehindFlag(t *testing.T) {
+// TestDockerHost covers AGT-014: the RCON admin sees the Docker host of an
+// agent's last hello, cleaned (SEC-006), and an agent whose daemon names no
+// host has none. Other roles do not read agents at all.
+func TestDockerHost(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	flags, err := features.New(features.Flag{Name: FeatureDockerHost})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.svc.UseFeatures(flags)
 	tok, err := f.svc.CreateToken(ctx, f.admin)
 	if err != nil {
 		t.Fatal(err)
@@ -434,16 +426,9 @@ func TestDockerHostBehindFlag(t *testing.T) {
 	if w.AgentID == "" {
 		t.Fatalf("pairing = %+v", e)
 	}
-	if got, err := f.svc.Get(ctx, f.admin, w.AgentID); err != nil || got.DockerHost != nil {
-		t.Errorf("flag off: %+v %v", got.DockerHost, err)
-	}
-	if _, err := f.st.DB.Exec(`INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('f', ?, 'true', 'global', '', 't')`,
-		features.Key(FeatureDockerHost)); err != nil {
-		t.Fatal(err)
-	}
 	want := agentproto.DockerHost{Name: "nas", IP: "192.168.1.5"}
 	if got, err := f.svc.Get(ctx, f.admin, w.AgentID); err != nil || got.DockerHost == nil || *got.DockerHost != want {
-		t.Errorf("flag on: %+v %v", got.DockerHost, err)
+		t.Errorf("docker host: %+v %v", got.DockerHost, err)
 	}
 	list, err := f.svc.List(ctx, f.admin)
 	if err != nil || len(list) != 1 || list[0].DockerHost == nil || *list[0].DockerHost != want {
@@ -494,20 +479,14 @@ func TestRefusedHelloKeepsToken(t *testing.T) {
 	}
 }
 
-// TestConnectedFromOutsidePanel covers D-084: while the flag docker_host is
-// on, the RCON admin gets the address an agent connected from only when it
+// TestConnectedFromOutsidePanel covers D-084: the RCON admin gets the address an agent connected from only when it
 // lies outside the panel's own networks, taken from its interfaces and not
 // from the private ranges: an agent in the panel's Docker network or on
 // loopback has none, one in another 172.x network keeps it. Without the
-// networks no address is shown; with the flag off nothing changes.
+// networks no address is shown.
 func TestConnectedFromOutsidePanel(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	flags, err := features.New(features.Flag{Name: FeatureDockerHost})
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.svc.UseFeatures(flags)
 	tok, err := f.svc.CreateToken(ctx, f.admin)
 	if err != nil {
 		t.Fatal(err)
@@ -536,13 +515,6 @@ func TestConnectedFromOutsidePanel(t *testing.T) {
 		}
 		return got.Remote
 	}
-	if got := remoteOf("172.18.0.5"); got != "172.18.0.5" {
-		t.Errorf("flag off: remote = %q, want unchanged", got)
-	}
-	if _, err := f.st.DB.Exec(`INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('f', ?, 'true', 'global', '', 't')`,
-		features.Key(FeatureDockerHost)); err != nil {
-		t.Fatal(err)
-	}
 	for remote, want := range map[string]string{
 		"172.18.0.5":     "",            // the panel's Docker network
 		"127.0.0.1":      "",            // loopback
@@ -554,7 +526,7 @@ func TestConnectedFromOutsidePanel(t *testing.T) {
 		"2001:db8::7":    "2001:db8::7", // another host, IPv6
 	} {
 		if got := remoteOf(remote); got != want {
-			t.Errorf("flag on, remote %q = %q, want %q", remote, got, want)
+			t.Errorf("remote %q = %q, want %q", remote, got, want)
 		}
 	}
 	netsErr = errors.New("no interfaces")

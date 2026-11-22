@@ -22,7 +22,6 @@ import (
 func TestHostGroupsByRole(t *testing.T) {
 	f := newRightsFixture(t)
 	const name, ip, display = "nas-7f3", "198.51.100.7", "Rack seven"
-	f.as(rA).must(http.MethodPatch, "/settings", map[string]any{"features.host_groups": true, "features.docker_host": true}, nil, http.StatusOK)
 	others := []string{rSI, rSO, rMR, rMN, rSU, rP}
 	rec := map[string]*wsRecorder{}
 	for _, role := range append([]string{rA}, others...) {

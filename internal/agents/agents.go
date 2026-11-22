@@ -26,7 +26,6 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
-	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/ops/keys"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -56,13 +55,6 @@ type Hub interface {
 	Revoke(agentID string)
 	DockerHost(agentID string) (agentproto.DockerHost, bool)
 }
-
-// FeatureDockerHost is the flag of the Docker host in the agent data
-// (AGT-014); while it is off the agents are shown as in 1.1.
-const FeatureDockerHost = "docker_host"
-
-// FeatureHostGroups is the flag of host display names (UI-021, D-089).
-const FeatureHostGroups = "host_groups"
 
 // Agent is an agent as the API shows it.
 type Agent struct {
@@ -99,7 +91,6 @@ type Service struct {
 	st         *store.Store
 	log        *slog.Logger
 	hub        Hub
-	flags      *features.Set
 	publicAddr string
 	imageRepo  string
 	now        func() time.Time
@@ -124,18 +115,13 @@ func NewService(st *store.Store, log *slog.Logger, publicAddr string) *Service {
 // registry.
 func (s *Service) SetHub(h Hub) { s.hub = h }
 
-// UseFeatures sets the feature flags of the panel.
-func (s *Service) UseFeatures(f *features.Set) { s.flags = f }
-
-// view is an agent as the RCON admin sees it. While the flag docker_host
-// is on, it has the Docker host of its last hello (AGT-014), and the
-// address it connected from only outside the panel's networks (D-084).
+// view is an agent as the RCON admin sees it: with its display name
+// (UI-021), the Docker host of its last hello (AGT-014), and the address
+// it connected from only outside the panel's networks (D-084).
 func (s *Service) view(ctx context.Context, r sqlitedb.Agent) Agent {
 	a := toAgent(r, s.connected(r.ID))
-	if s.flags != nil && s.flags.Enabled(ctx, s.st, FeatureHostGroups) {
-		a.DisplayName = r.DisplayName.String
-	}
-	if s.hub == nil || s.flags == nil || !s.flags.Enabled(ctx, s.st, FeatureDockerHost) {
+	a.DisplayName = r.DisplayName.String
+	if s.hub == nil {
 		return a
 	}
 	if !s.outsidePanel(a.Remote) {

@@ -144,7 +144,7 @@ mass actions. Details open in a panel at the side, the list stays visible.
 RCON admin, can withdraw it.
 
 (new in 1.2) Settings are in groups such as Security, Users, Servers and commands,
-Agents, System and Features. From 1024 px wide one group shows at a time, picked from
+Agents and System. From 1024 px wide one group shows at a time, picked from
 the list at the side; below that all groups follow each other. Values that are
 rarely needed sit folded under Advanced in their section.
 
@@ -155,8 +155,8 @@ reload" and nothing is overwritten.
 
 Keyboard shortcuts are off unless the RCON admin switches them on.
 
-The new functions of 1.2 are on. Under Settings, Features, the RCON admin can
-switch each of them off; a switched-off function is gone for every role.
+(changed in 1.3) The functions of 1.2 can no longer be switched off; Settings has no
+group Features.
 
 ### Game profiles of a server
 
