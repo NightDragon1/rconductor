@@ -10,7 +10,6 @@ package perm
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -427,17 +426,14 @@ func MinVisibleRank(viewer Role) int {
 	return 3
 }
 
-// supportersOn reads the switch supporters.enabled through q: off when it
-// is missing, broken or cannot be read, the failure logged (ROLE-006, D-109).
+// SupportersOnTx reads the switch supporters.enabled through q of a
+// writing transaction: off when it is missing, broken or cannot be read,
+// the failure logged (ROLE-006, D-109).
+func (c *Checker) SupportersOnTx(ctx context.Context, q *sqlitedb.Queries) bool {
+	return c.supportersOn(ctx, q)
+}
+
 func (c *Checker) supportersOn(ctx context.Context, q *sqlitedb.Queries) bool {
-	v, err := q.GetSetting(ctx, sqlitedb.GetSettingParams{Key: SettingSupportersEnabled, ScopeType: store.ScopeGlobal, ScopeID: ""})
 	var on bool
-	if err == nil {
-		err = json.Unmarshal([]byte(v), &on)
-	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) && ctx.Err() == nil {
-		c.log.Error("setting not readable", logging.Event(logging.SettingReadFailed),
-			slog.String("setting", SettingSupportersEnabled), slog.String(logging.KeyReason, "read"))
-	}
-	return err == nil && on
+	return c.st.LoggedSettingQ(ctx, q, c.log, SettingSupportersEnabled, &on) == nil && on
 }

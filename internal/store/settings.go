@@ -132,6 +132,23 @@ func (s *Store) LoggedSetting(ctx context.Context, log *slog.Logger, key string,
 	return err
 }
 
+// LoggedSettingQ is LoggedSetting read through q, such as the queries of a
+// writing transaction, which then needs no second connection.
+func (s *Store) LoggedSettingQ(ctx context.Context, q *sqlitedb.Queries, log *slog.Logger, key string, dst any) error {
+	v, err := q.GetSetting(ctx, sqlitedb.GetSettingParams{Key: key, ScopeType: ScopeGlobal, ScopeID: ""})
+	if err == nil {
+		if err = json.Unmarshal([]byte(v), dst); err != nil {
+			err = fmt.Errorf("decode setting %s: %w", key, err)
+		}
+	} else {
+		err = fmt.Errorf("read setting %s: %w", key, err)
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		s.logReadFailed(ctx, log, key, err, failure(err))
+	}
+	return err
+}
+
 // LoggedSettingSince is LoggedSetting with the time of the last change,
 // for a switch that runs out (D-109).
 func (s *Store) LoggedSettingSince(ctx context.Context, log *slog.Logger, key string, dst any) (time.Time, error) {

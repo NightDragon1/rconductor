@@ -226,12 +226,7 @@ func (s *Service) UpdateAssignments(ctx context.Context, req Request, id string,
 		return Assignments{}, err
 	}
 	ck := &checker{s: s, ctx: ctx, req: req, target: id, rights: map[string]*perm.Rights{}, managed: managed}
-	cur, err := s.loadCurrent(ctx, s.st.Queries, id)
-	if err != nil {
-		return Assignments{}, fmt.Errorf("load assignments: %w", err)
-	}
-
-	changes, err := s.applyAssignments(ck, u, cur, up)
+	changes, err := s.applyAssignments(ck, u, up)
 	for _, d := range ck.denials {
 		d()
 	}
@@ -251,7 +246,7 @@ func (s *Service) UpdateAssignments(ctx context.Context, req Request, id string,
 }
 
 // applyAssignments writes all sections in one transaction.
-func (s *Service) applyAssignments(ck *checker, u User, cur current, up AssignmentsUpdate) (map[string]any, error) {
+func (s *Service) applyAssignments(ck *checker, u User, up AssignmentsUpdate) (map[string]any, error) {
 	tx, err := s.st.DB.BeginTx(ck.ctx, nil)
 	if err != nil {
 		return nil, err
@@ -259,8 +254,14 @@ func (s *Service) applyAssignments(ck *checker, u User, cur current, up Assignme
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	ck.q = q
-	// Rights read before the lock are read again inside it.
+	// Rights and the current assignments read before the lock are read
+	// again inside it: a parallel change of the same user cannot make a
+	// row twice.
 	clear(ck.rights)
+	cur, err := s.loadCurrent(ck.ctx, q, u.ID)
+	if err != nil {
+		return nil, fmt.Errorf("load assignments: %w", err)
+	}
 	changes := map[string]any{}
 	now := store.Now()
 
@@ -494,16 +495,14 @@ func (s *Service) applySupporterGrants(ck *checker, q *sqlitedb.Queries, u User,
 		}
 		return &InvalidError{Detail: "supporter grants are only for supporters"}
 	}
-	var enabled bool
-	if err := s.st.LoggedSetting(ck.ctx, s.log, perm.SettingSupportersEnabled, &enabled); err != nil {
-		enabled = false
-	}
+	// Read through the transaction: it needs no second connection.
+	enabled := s.perm.SupportersOnTx(ck.ctx, q)
 	wanted := map[SupporterGrant]bool{}
 	for _, g := range want {
 		if !ck.controlsModerator(g.ModeratorID) {
 			return ck.refuse(ErrNotFound, "not_found", g)
 		}
-		m, err := s.load(ck.ctx, g.ModeratorID)
+		m, err := s.loadQ(ck.ctx, q, g.ModeratorID)
 		if errors.Is(err, ErrNotFound) || (err == nil && m.Role != perm.Moderator) {
 			return ck.refuse(ErrNotFound, "not_found", g)
 		}
