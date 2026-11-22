@@ -152,8 +152,9 @@ func (s *Service) message(ctx context.Context, req users.Request, serverID, cmd 
 	return built, nil
 }
 
-// tooLong reports a command over what the server takes: the length of the
-// profile in characters, and the bound of the protocol in bytes.
+// tooLong reports a command over what the server takes: max_length of the
+// profile in bytes of the built command, capped by the bound of the
+// protocol (D-081).
 func tooLong(cmd string, syn Syntax) bool {
-	return (syn.MaxLength > 0 && utf8.RuneCountInString(cmd) > syn.MaxLength) || len(cmd) > source.MaxCommand
+	return (syn.MaxLength > 0 && len(cmd) > syn.MaxLength) || len(cmd) > source.MaxCommand
 }

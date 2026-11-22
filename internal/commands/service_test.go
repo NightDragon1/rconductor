@@ -786,9 +786,9 @@ func TestSayWithSender(t *testing.T) {
 	if n := len(w.gameReceived()); n != 1 {
 		t.Errorf("game received %d commands, want 1", n)
 	}
-	// The length of the profile counts characters, not bytes: 900 umlauts
-	// are 1800 bytes and fit the 1000 characters of the profile.
-	if _, err := w.send("admin", "say "+strings.Repeat("ä", 900)); err != nil {
-		t.Errorf("long in bytes, short in characters: %v", err)
+	// D-081: max_length counts bytes of the built command: 900 umlauts are
+	// 1800 bytes and do not fit 1000.
+	if _, err := w.send("admin", "say "+strings.Repeat("ä", 900)); reason(err) != ReasonMessageTooLong {
+		t.Errorf("long in bytes = %v, want message_too_long", err)
 	}
 }

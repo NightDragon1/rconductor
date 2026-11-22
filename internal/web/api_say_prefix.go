@@ -31,14 +31,10 @@ func (s *apiServer) SetServerGroupSayPrefix(ctx context.Context, req api.SetServ
 		return nil, bodyRequired()
 	}
 	id := req.Id.String()
-	p, err := s.servers.SetSayPrefix(ctx, adminRequest(ctx), id, req.Body.SayPrefix, ifMatch(req.Params.IfMatch))
+	p, err := s.servers.SetSayPrefix(ctx, adminRequest(ctx), id, req.Body.SayPrefix, !req.Body.SayPrefixMissing(), ifMatch(req.Params.IfMatch))
 	// An invalid prefix is 400 (D-082), not 422 as other invalid input.
 	if inv := (*users.InvalidError)(nil); errors.As(err, &inv) {
-		detail := inv.Detail
-		if req.Body.SayPrefixMissing() {
-			detail = "say_prefix is required; \"\" removes the prefix"
-		}
-		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: detail}
+		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: inv.Detail}
 	}
 	if err != nil {
 		return nil, adminError(err)
