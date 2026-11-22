@@ -13,7 +13,10 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/agentview"
 	"github.com/NightDragon1/rconductor/internal/auth"
+	"github.com/NightDragon1/rconductor/internal/commands/limits"
+	"github.com/NightDragon1/rconductor/internal/diag/diagconf"
 	"github.com/NightDragon1/rconductor/internal/features"
+	"github.com/NightDragon1/rconductor/internal/logmask/maskconf"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/profiles"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -60,7 +63,7 @@ const (
 // SettingLogMasking holds the masking settings with the sealed texts of
 // the RCON admin (UI-022, D-088); it has its own API and never shows in
 // the global settings.
-const SettingLogMasking = "logs.masking"
+const SettingLogMasking = maskconf.Setting
 
 // Settings key of the audit retention and its default (AUD-003).
 const (
@@ -125,29 +128,29 @@ const (
 // the exports at the same time.
 const (
 	SettingDiagnosticsMaxBytes = "diagnostics.max_bytes"
-	DefaultDiagnosticsMaxBytes = 32 << 20
-	MinDiagnosticsMaxBytes     = 1 << 20
+	DefaultDiagnosticsMaxBytes = diagconf.DefaultMaxBytes
+	MinDiagnosticsMaxBytes     = diagconf.MinMaxBytes
 	SettingDiagnosticsParallel = "diagnostics.parallel"
-	DefaultDiagnosticsParallel = 2
-	MinDiagnosticsParallel     = 1
+	DefaultDiagnosticsParallel = diagconf.DefaultParallel
+	MinDiagnosticsParallel     = diagconf.MinParallel
 )
 
 // Command templates per server (CMD-008, D-068).
 const (
 	SettingTemplatesPerServer = "commands.templates_per_server"
-	DefaultTemplatesPerServer = 100
-	MinTemplatesPerServer     = 1
+	DefaultTemplatesPerServer = limits.DefaultTemplatesPerServer
+	MinTemplatesPerServer     = limits.MinTemplatesPerServer
 )
 
 // Commands to several servers at once (CMD-010, D-069): servers per call
 // and runs at the same time.
 const (
 	SettingMultiMaxServers = "commands.multi_max_servers"
-	DefaultMultiMaxServers = 50
-	MinMultiMaxServers     = 1
+	DefaultMultiMaxServers = limits.DefaultMultiMaxServers
+	MinMultiMaxServers     = limits.MinMultiMaxServers
 	SettingMultiParallel   = "commands.multi_parallel"
-	DefaultMultiParallel   = 8
-	MinMultiParallel       = 1
+	DefaultMultiParallel   = limits.DefaultMultiParallel
+	MinMultiParallel       = limits.MinMultiParallel
 )
 
 // rule checks one setting value; it returns the value to store.
@@ -238,14 +241,14 @@ var settingRules = map[string]rule{
 	SettingMessagesPerHour:         intRule(1, 1000),
 	SettingAgentDisplayNameMax:     intRule(MinAgentDisplayNameMax, 256),
 	SettingSystemLogMaxBytes:       intRule(MinSystemLogMaxBytes, 1<<30),
-	SettingDiagnosticsMaxBytes:     intRule(MinDiagnosticsMaxBytes, 1<<30),
-	SettingDiagnosticsParallel:     intRule(MinDiagnosticsParallel, 16),
+	SettingDiagnosticsMaxBytes:     intRule(MinDiagnosticsMaxBytes, diagconf.MaxMaxBytes),
+	SettingDiagnosticsParallel:     intRule(MinDiagnosticsParallel, diagconf.MaxParallel),
 	SettingMessagesMaxComment:      intRule(1, 4096),
 	SettingCommentsPerHour:         intRule(1, 3600),
 	SettingMessagesRetentionDays:   intRule(MinMessagesRetentionDays, 3650),
-	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, 1000),
-	SettingMultiMaxServers:         intRule(MinMultiMaxServers, 1000),
-	SettingMultiParallel:           intRule(MinMultiParallel, 64),
+	SettingTemplatesPerServer:      intRule(MinTemplatesPerServer, limits.MaxTemplatesPerServer),
+	SettingMultiMaxServers:         intRule(MinMultiMaxServers, limits.MaxMultiMaxServers),
+	SettingMultiParallel:           intRule(MinMultiParallel, limits.MaxMultiParallel),
 }
 
 // Rate limits per role (Design 3.4, 5.6): ratelimit.<role>.per_minute and

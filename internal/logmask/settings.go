@@ -16,6 +16,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logmask/maskconf"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
@@ -110,14 +111,14 @@ type sealedText struct {
 }
 
 func textsContext() secret.Context {
-	return secret.Context{Table: "settings", ID: users.SettingLogMasking, Column: "texts"}
+	return secret.Context{Table: "settings", ID: maskconf.Setting, Column: "texts"}
 }
 
 // Load reads the stored setup; a missing row is the default.
 func (s *Settings) Load(ctx context.Context) (State, error) { return s.load(ctx, s.st.Queries) }
 
 func (s *Settings) load(ctx context.Context, q *sqlitedb.Queries) (State, error) {
-	v, err := q.GetSetting(ctx, sqlitedb.GetSettingParams{Key: users.SettingLogMasking, ScopeType: "global"})
+	v, err := q.GetSetting(ctx, sqlitedb.GetSettingParams{Key: maskconf.Setting, ScopeType: "global"})
 	if errors.Is(err, sql.ErrNoRows) {
 		return DefaultState(), nil
 	}
@@ -135,7 +136,7 @@ func (s *Settings) load(ctx context.Context, q *sqlitedb.Queries) (State, error)
 // brokenVersion is the version of an unreadable row as far as it can be
 // read, 0 otherwise, so that a repair never lowers it.
 func brokenVersion(ctx context.Context, q *sqlitedb.Queries) int64 {
-	v, err := q.GetSetting(ctx, sqlitedb.GetSettingParams{Key: users.SettingLogMasking, ScopeType: "global"})
+	v, err := q.GetSetting(ctx, sqlitedb.GetSettingParams{Key: maskconf.Setting, ScopeType: "global"})
 	var head struct{ Version int64 }
 	if err != nil || json.Unmarshal([]byte(v), &head) != nil || head.Version < 0 || head.Version >= math.MaxInt64-1 {
 		return 0
@@ -145,7 +146,7 @@ func brokenVersion(ctx context.Context, q *sqlitedb.Queries) int64 {
 
 // readFailed logs a read error of the settings, never their content (F-93).
 func (s *Settings) readFailed() {
-	s.log.Error("masking settings unreadable", logging.Event(logging.SettingReadFailed), slog.String("key", users.SettingLogMasking))
+	s.log.Error("masking settings unreadable", logging.Event(logging.SettingReadFailed), slog.String("key", maskconf.Setting))
 }
 
 // OpenTexts opens the sealed texts of st; another master key or a broken
@@ -228,7 +229,7 @@ func (s *Settings) Write(ctx context.Context, req users.Request, in SettingsInpu
 		return State{}, err
 	}
 	if err := q.UpsertScopedSetting(ctx, sqlitedb.UpsertScopedSettingParams{
-		ID: id, Key: users.SettingLogMasking, Value: string(value), ScopeType: "global", UpdatedAt: store.Now(),
+		ID: id, Key: maskconf.Setting, Value: string(value), ScopeType: "global", UpdatedAt: store.Now(),
 	}); err != nil {
 		return State{}, err
 	}

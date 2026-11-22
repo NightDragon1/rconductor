@@ -21,8 +21,10 @@ import (
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
+	"github.com/NightDragon1/rconductor/internal/diag/diagconf"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/logmask"
+	"github.com/NightDragon1/rconductor/internal/logmask/maskconf"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -229,18 +231,18 @@ func (s *Service) systemLog(ctx context.Context, from, to time.Time, budget int,
 // maxBytes is diagnostics.max_bytes; a value not readable is the last one
 // read or the default (F-93).
 func (s *Service) maxBytes(ctx context.Context) int {
-	n := users.DefaultDiagnosticsMaxBytes
-	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsMaxBytes, &n); err != nil || n < users.MinDiagnosticsMaxBytes {
-		n = users.DefaultDiagnosticsMaxBytes
+	n := diagconf.DefaultMaxBytes
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsMaxBytes, &n); err != nil || n < diagconf.MinMaxBytes || n > diagconf.MaxMaxBytes {
+		n = diagconf.DefaultMaxBytes
 	}
 	return n
 }
 
 // acquire takes one of diagnostics.parallel slots.
 func (s *Service) acquire(ctx context.Context) (func(), bool) {
-	n := users.DefaultDiagnosticsParallel
-	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsParallel, &n); err != nil || n < users.MinDiagnosticsParallel {
-		n = users.DefaultDiagnosticsParallel
+	n := diagconf.DefaultParallel
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingDiagnosticsParallel, &n); err != nil || n < diagconf.MinParallel || n > diagconf.MaxParallel {
+		n = diagconf.DefaultParallel
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -341,7 +343,7 @@ func (s *Service) areas(ctx context.Context) ([]file, []string, error) {
 // by its name or by its last part, and the texts of the log masking.
 func sensitiveSetting(key string) bool {
 	last := key[strings.LastIndex(key, ".")+1:]
-	return logging.IsSensitiveKey(key) || logging.IsSensitiveKey(last) || key == users.SettingLogMasking
+	return logging.IsSensitiveKey(key) || logging.IsSensitiveKey(last) || key == maskconf.Setting
 }
 
 // rawOr keeps a stored JSON value as it is, or def when it is not JSON.

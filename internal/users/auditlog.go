@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/commands/limits"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -19,8 +20,8 @@ import (
 
 // Page sizes of the audit log.
 const (
-	DefaultAuditLimit = 50
-	MaxAuditLimit     = 200
+	DefaultAuditLimit = limits.DefaultAuditLimit
+	MaxAuditLimit     = limits.MaxAuditLimit
 )
 
 // AuditEntry is one entry as shown in the audit view. The session appears
