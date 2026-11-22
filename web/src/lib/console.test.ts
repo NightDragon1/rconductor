@@ -8,7 +8,6 @@ import {
   addLogLines,
   isRunning,
   RUNNING_MS,
-  GAP_LINE,
   bufferOwner,
   bufferWriter,
   newLines,
@@ -246,14 +245,18 @@ describe('log lines by number', () => {
     expect(lines(same)).toHaveLength(3);
   });
 
-  it('marks a gap (K-6)', () => {
+  it('marks a gap apart from the lines (K-6, UI-022)', () => {
     const b = addDelivery(held(3), { lines: ['n'], first: 9, run: 'r' }, ts);
-    expect(lines(b).slice(-2)).toEqual([GAP_LINE, 'n']);
+    expect(lines(b).slice(-1)).toEqual(['n']);
+    const marks = b.logs.filter((l) => l.gap !== undefined);
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toMatchObject({ gap: 5, lines: [] });
   });
 
-  it('names the lines omitted at a gap (UI-022)', () => {
-    const b = addDelivery(held(3), { lines: ['n'], first: 9, run: 'r' }, ts, (n) => `${n} omitted`);
-    expect(lines(b).slice(-2)).toEqual(['5 omitted', 'n']);
+  it('keeps a container line that reads like the mark a line (C261)', () => {
+    const b = addDelivery(held(3), { lines: ['⋯ 5 lines omitted'], first: 4, run: 'r' }, ts);
+    expect(b.logs.some((l) => l.gap !== undefined)).toBe(false);
+    expect(lines(b).slice(-1)).toEqual(['⋯ 5 lines omitted']);
   });
 
   it('starts over with a new count, by text for a new subscription', () => {

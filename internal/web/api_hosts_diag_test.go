@@ -40,3 +40,33 @@ func TestHostsAndDiagnostics(t *testing.T) {
 		t.Errorf("audited refusals = %d (%v), want 4", refused, err)
 	}
 }
+
+// TestC283CrossSiteReadRefused: a read the browser marks as coming from
+// another site (a link to the export) is refused before any work and no
+// export is written; the panel's own reads and clients without the header
+// pass (Design 2.1, NFR-018).
+func TestC283CrossSiteReadRefused(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	admin := f.login(t, "Boss")
+	for _, site := range []string{"cross-site", "same-site"} {
+		rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/diagnostics", cookies: []*http.Cookie{admin},
+			headers: map[string]string{"Sec-Fetch-Site": site}})
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("export from %s = %d, want 403", site, rec.Code)
+		}
+	}
+	var exported int
+	_ = f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'diagnostics.exported'`).Scan(&exported)
+	if exported != 0 {
+		t.Errorf("%d exports written for refused reads", exported)
+	}
+	for _, site := range []string{"same-origin", "none", ""} {
+		c := call{method: http.MethodGet, path: "/api/v1/me", cookies: []*http.Cookie{admin}}
+		if site != "" {
+			c.headers = map[string]string{"Sec-Fetch-Site": site}
+		}
+		if rec := f.do(t, c); rec.Code != http.StatusOK {
+			t.Errorf("own read with %q = %d", site, rec.Code)
+		}
+	}
+}
