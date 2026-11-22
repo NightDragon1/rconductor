@@ -12,10 +12,10 @@ import (
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
 
-// TestC260EndedContextNoLog (D-109): a request that ended is no fault of
+// TestC397EndedContextNoLog (D-109): a request that ended is no fault of
 // the database: neither LoggedSetting nor GuardedSetting on a broken row
 // logs it.
-func TestC260EndedContextNoLog(t *testing.T) {
+func TestC397EndedContextNoLog(t *testing.T) {
 	st := storetest.New(t)
 	ctx := context.Background()
 	var out bytes.Buffer

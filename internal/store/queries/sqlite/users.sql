@@ -66,8 +66,8 @@ UPDATE users SET avatar = ?, avatar_type = ?, updated_at = ? WHERE id = ?;
 -- name: GetAvatar :one
 SELECT avatar, avatar_type FROM users WHERE id = ? AND deleted_at IS NULL AND avatar IS NOT NULL;
 
--- name: SoftDeleteUser :exec
-UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?;
+-- name: SoftDeleteUser :execrows
+UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL;
 
 -- Assignments belong to a role; a role change or deletion removes them.
 -- name: DeleteUserScopes :exec

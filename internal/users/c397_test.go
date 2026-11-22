@@ -5,15 +5,16 @@ package users
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sync"
 	"testing"
 )
 
-// TestC255ServerAdminDeletes (D-106): a server admin deletes a moderator
+// TestC397ServerAdminDeletes (D-106): a server admin deletes a moderator
 // he manages; the moderator's general group goes with him, its members
 // keep their sessions.
-func TestC255ServerAdminDeletes(t *testing.T) {
+func TestC397ServerAdminDeletes(t *testing.T) {
 	f := newFixture(t)
 	f.exec(`INSERT INTO user_groups (id, name, kind, owner_id, created_at, updated_at) VALUES ('gg', 'general', 'general', ?, 't', 't')`, f.ids["m"])
 	f.exec(`INSERT INTO user_group_members (user_group_id, user_id, added_by, created_at) VALUES ('gg', ?, ?, 't')`, f.ids["sup"], f.ids["m"])
@@ -28,9 +29,9 @@ func TestC255ServerAdminDeletes(t *testing.T) {
 	}
 }
 
-// TestC255ParallelDeletes (D-106): users deleted at the same time, as the
+// TestC397ParallelDeletes (D-106): users deleted at the same time, as the
 // interface does for a selection, all go, each with its own audit entry.
-func TestC255ParallelDeletes(t *testing.T) {
+func TestC397ParallelDeletes(t *testing.T) {
 	f := newFixture(t)
 	ids := []string{f.ids["m"], f.ids["m2"], f.ids["sup"]}
 	var wg sync.WaitGroup
@@ -50,6 +51,33 @@ func TestC255ParallelDeletes(t *testing.T) {
 		}
 		if n := f.count(`SELECT count(*) FROM users WHERE id = ? AND deleted_at IS NOT NULL`, id); n != 1 {
 			t.Errorf("%s not deleted", id)
+		}
+	}
+}
+
+// TestC397SameUserTwice (D-106): one user deleted twice at the same time
+// is deleted once: one call succeeds, the other is 404, and there is one
+// audit entry.
+func TestC397SameUserTwice(t *testing.T) {
+	for range 10 {
+		f := newFixture(t)
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		for i := range errs {
+			wg.Go(func() { errs[i] = f.svc.Delete(context.Background(), f.as("admin"), f.ids["m2"]) })
+		}
+		wg.Wait()
+		ok := 0
+		for _, err := range errs {
+			switch {
+			case err == nil:
+				ok++
+			case !errors.Is(err, ErrNotFound):
+				t.Fatalf("second delete = %v, want 404", err)
+			}
+		}
+		if n := f.count(`SELECT count(*) FROM audit_log WHERE action = 'user.delete' AND result = 'ok' AND target_id = ?`, f.ids["m2"]); ok != 1 || n != 1 {
+			t.Fatalf("%d deletes succeeded, %d audit entries, want 1 and 1", ok, n)
 		}
 	}
 }

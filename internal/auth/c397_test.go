@@ -9,10 +9,10 @@ import (
 	"testing"
 )
 
-// TestC260TOTPSwitchFaultEvent (D-109, F-93): a second-factor switch that
+// TestC397TOTPSwitchFaultEvent (D-109, F-93): a second-factor switch that
 // is neither true nor false counts as required and is logged with the
 // event code, never with its value.
-func TestC260TOTPSwitchFaultEvent(t *testing.T) {
+func TestC397TOTPSwitchFaultEvent(t *testing.T) {
 	f := newSFFixture(t)
 	f.set(t, SettingTOTPRequired, `"maybe-7654"`)
 	if !f.svc.TOTPRequired(context.Background()) {

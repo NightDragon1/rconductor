@@ -329,8 +329,13 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	now := store.Now()
-	if err := q.SoftDeleteUser(ctx, sqlitedb.SoftDeleteUserParams{DeletedAt: sql.NullString{String: now, Valid: true}, UpdatedAt: now, ID: id}); err != nil {
+	// Deleted meanwhile by another call: as for an unknown user (D-106).
+	n, err := q.SoftDeleteUser(ctx, sqlitedb.SoftDeleteUserParams{DeletedAt: sql.NullString{String: now, Valid: true}, UpdatedAt: now, ID: id})
+	if err != nil {
 		return err
+	}
+	if n == 0 {
+		return ErrNotFound
 	}
 	// The supporters of a moderator lose what he passed on: their sessions
 	// end too (ROLE-006, AUTH-006).
