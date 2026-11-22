@@ -152,11 +152,20 @@ func TestC382DomainByKey(t *testing.T) {
 	if !strings.Contains(got, `"next":"plain-word"`) || !strings.Contains(got, `"msg":"domain"`) || !strings.Contains(got, `["host-1",["host-2"],""]`) {
 		t.Errorf("domains = %s", got)
 	}
-	nested := p.domains(`{"domain":{"Domain":"four.xyz","name":["five.xyz"]},"DOMAIN":"six.xyz"}`)
-	for _, leak := range []string{"four.xyz", "five.xyz", "six.xyz"} {
+	nested := p.domains(`{"domain":{"Domain":"four.xyz","name":["five.xyz"],"seven.xyz":1},"DOMAIN":"six.xyz"}`)
+	for _, leak := range []string{"four.xyz", "five.xyz", "six.xyz", "seven.xyz"} {
 		if strings.Contains(nested, leak) {
 			t.Errorf("%s left in %s", leak, nested)
 		}
+	}
+	// Two keys that differ only in case meet in one pseudonym: both values
+	// stay, the second key gets ~2.
+	meet := newPseudonyms(nil).domains(`{"domain":{"A.xyz":"one","a.xyz":"two"}}`)
+	if !strings.Contains(meet, `"host-1":"host-2"`) && !strings.Contains(meet, `"host-1":"host-3"`) || !strings.Contains(meet, `"host-1~2":`) {
+		t.Errorf("keys that meet = %s", meet)
+	}
+	if got := p.apply([]string{"level=info Domain=other.gg"}); strings.Contains(got[0], "other.gg") || !strings.Contains(got[0], "Domain=host-") {
+		t.Errorf("text with Domain= = %q", got)
 	}
 	if line := "domain one.xyz in text"; p.domains(line) != line {
 		t.Errorf("text line changed: %s", p.domains(line))
