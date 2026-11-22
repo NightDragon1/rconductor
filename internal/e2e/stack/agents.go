@@ -78,6 +78,8 @@ func (*fakeHost) Run(ctx context.Context, out agent.Sender) error {
 		{ID: "c4", Name: "mc-arena", Image: imageCreativ, State: "running", StartedAt: now.Add(-26 * time.Hour)},
 		{ID: "c5", Name: hostileContainer, Image: "§a<b>evil</b>\u202E:tag", State: "running", Health: agentproto.HealthHealthy, StartedAt: now.Add(-time.Hour)},
 		{ID: "c6", Name: "<script>window.__xss=1</script>\u202Exe", Image: imageCreativ, State: "exited"},
+		// Bound to no server: the free choice in the server form (D-105).
+		{ID: "c7", Name: "mc-spare", Image: imageCreativ, State: "exited"},
 	}}
 	if err := out.Send(ctx, agentproto.TypeSnapshot, "", snap); err != nil {
 		return err

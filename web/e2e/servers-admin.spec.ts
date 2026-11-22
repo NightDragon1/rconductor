@@ -29,11 +29,17 @@ test('a server with profile, host, port, password and an agent container (SRV-00
   await expect(panel.getByLabel('Container').locator('option')).toContainText([
     'mc-lobby · exited',
   ]);
+  // A container belongs to one server only (D-105): lobby has mc-lobby.
+  await expect(panel.getByText('A container belongs to one server only.')).toBeVisible();
   await panel.getByLabel('Container').selectOption('mc-lobby');
   await panel.getByRole('button', { name: 'Create server' }).click();
+  await expect(panel.getByText('This container already belongs to another server.')).toBeVisible();
   const row = page.getByRole('row').filter({ hasText: 'e2e-new' });
+  await expect(row).toHaveCount(0);
+  await panel.getByLabel('Container').selectOption('mc-spare');
+  await panel.getByRole('button', { name: 'Create server' }).click();
   await expect(row).toContainText('mc.example:25575');
-  await expect(row).toContainText('mc-lobby');
+  await expect(row).toContainText('mc-spare');
   // The dialog closes after Create; the password is never shown again.
   const opened = page.getByRole('complementary', { name: 'Details of e2e-new' });
   await expect(panel).toHaveCount(0);

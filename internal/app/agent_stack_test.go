@@ -42,6 +42,9 @@ type hostBackend struct {
 	state string
 	// host is the Docker host the backend names (AGT-014).
 	host *agentproto.DockerHost
+	// second adds a container mc2 like mc, for a second server: a
+	// container belongs to one server only (D-105).
+	second bool
 }
 
 func (b *hostBackend) Host(context.Context) *agentproto.DockerHost {
@@ -69,6 +72,10 @@ func (b *hostBackend) Run(ctx context.Context, out agent.Sender) error {
 	}
 	snap := agentproto.Snapshot{Containers: []agentproto.Container{{ID: "c1", Name: "mc", State: state, Image: "mc",
 		StartedAt: time.Now().UTC().Add(-time.Minute), Volumes: []string{"mc-data"}, Ports: b.ports}}}
+	if b.second {
+		snap.Containers = append(snap.Containers, agentproto.Container{ID: "c2", Name: "mc2", State: state, Image: "mc",
+			StartedAt: time.Now().UTC().Add(-time.Minute)})
+	}
 	if err := out.Send(ctx, agentproto.TypeSnapshot, "", snap); err != nil {
 		return err
 	}
@@ -79,7 +86,11 @@ func (b *hostBackend) Run(ctx context.Context, out agent.Sender) error {
 		case <-ctx.Done():
 			return nil
 		case <-t.C:
-			if out.Send(ctx, agentproto.TypeMetrics, "", agentproto.Metrics{Containers: []agentproto.Metric{{Name: "mc", CPUPercent: 42, MemBytes: 1 << 20}}}) == nil {
+			m := []agentproto.Metric{{Name: "mc", CPUPercent: 42, MemBytes: 1 << 20}}
+			if b.second {
+				m = append(m, agentproto.Metric{Name: "mc2", CPUPercent: 42, MemBytes: 1 << 20})
+			}
+			if out.Send(ctx, agentproto.TypeMetrics, "", agentproto.Metrics{Containers: m}) == nil {
 				b.samples.Add(1)
 			}
 		}

@@ -114,8 +114,8 @@ func TestTopologyScopeUI010(t *testing.T) {
 	}
 	// Both servers get a container only now, after every viewer subscribed:
 	// each runtime event below is an update sent after subscribing.
-	agentID := pairAgent(t, f.as(rA), f.agentAddr, f.server2, &hostBackend{})
-	f.as(rA).must(http.MethodPatch, "/servers/"+f.server, map[string]string{"agent_id": agentID, "container_name": "mc"}, nil, http.StatusOK)
+	agentID := pairAgent(t, f.as(rA), f.agentAddr, f.server2, &hostBackend{second: true})
+	f.as(rA).must(http.MethodPatch, "/servers/"+f.server, map[string]string{"agent_id": agentID, "container_name": "mc2"}, nil, http.StatusOK)
 
 	// want: the runtime events each viewer must see; in scope only.
 	const n = 5
@@ -189,8 +189,8 @@ func TestTopologyScopeUI010(t *testing.T) {
 // servers without any agent part.
 func TestTopologyScopeRESTUI010(t *testing.T) {
 	f := newRightsFixture(t)
-	agentID := pairAgent(t, f.as(rA), f.agentAddr, f.server2, &hostBackend{})
-	f.as(rA).must(http.MethodPatch, "/servers/"+f.server, map[string]string{"agent_id": agentID, "container_name": "mc"}, nil, http.StatusOK)
+	agentID := pairAgent(t, f.as(rA), f.agentAddr, f.server2, &hostBackend{second: true})
+	f.as(rA).must(http.MethodPatch, "/servers/"+f.server, map[string]string{"agent_id": agentID, "container_name": "mc2"}, nil, http.StatusOK)
 	// A group with both servers, as the graph groups by server groups.
 	f.as(rA).must(http.MethodPost, "/server-groups", map[string]any{"name": "group-both", "server_ids": []string{f.server, f.server2}}, nil, http.StatusCreated)
 

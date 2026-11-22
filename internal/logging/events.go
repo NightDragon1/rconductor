@@ -14,12 +14,15 @@ const (
 	DBMigrateStart  Code = "db.migrate.start"
 	DBMigrateDone   Code = "db.migrate.done"
 	DBMigrateLockWt Code = "db.migrate.lock_wait"
-	KeyCreated      Code = "key.created"
-	KeyLoaded       Code = "key.loaded"
-	BackupDone      Code = "backup.done"
-	BackupFailed    Code = "backup.failed"
-	AuditPurge      Code = "audit.purge"
-	AuditLost       Code = "audit.entry_lost"
+	// DBBindingReleased: an upgrade released a second binding of a
+	// container; the oldest server keeps it (D-105).
+	DBBindingReleased Code = "db.migrate.binding_released"
+	KeyCreated        Code = "key.created"
+	KeyLoaded         Code = "key.loaded"
+	BackupDone        Code = "backup.done"
+	BackupFailed      Code = "backup.failed"
+	AuditPurge        Code = "audit.purge"
+	AuditLost         Code = "audit.entry_lost"
 	// SettingReadFailed: a setting that guards something could not be
 	// read; the key and whether the last value read is kept, never a value.
 	SettingReadFailed Code = "setting.read_failed"
@@ -126,7 +129,7 @@ const (
 
 // AllCodes lists every defined code, in the order of Design 8.3.
 var AllCodes = []Code{
-	AppStart, AppReady, DBMigrateStart, DBMigrateDone, DBMigrateLockWt,
+	AppStart, AppReady, DBMigrateStart, DBMigrateDone, DBMigrateLockWt, DBBindingReleased,
 	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge, AuditLost, SettingReadFailed,
 	AuthLoginOK, AuthLoginFailed, AuthLockout, AuthLogout, AuthSessionRevoked,
 	AuthInitialPassword, AuthInviteUsed, AuthEmergencyReset,

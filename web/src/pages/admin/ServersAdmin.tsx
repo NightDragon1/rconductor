@@ -445,6 +445,10 @@ function ServerPanel({
             )}
           </Row>
         )}
+        {d.agent_id && (
+          // One server per container (D-105); the backend refuses a second.
+          <p className="text-xs text-muted">{t('servers.containerOnce')}</p>
+        )}
         {containers.data && !containers.data.connected && (
           <p className="text-sm text-warn">{t('servers.agentAway')}</p>
         )}
