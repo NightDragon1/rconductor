@@ -65,6 +65,9 @@ func TestDestinations(t *testing.T) {
 		"internal/auth\n":                 false,
 		"internal/auth #\n":               false,
 		"internal/a internal/b # r\n":     false,
+		"\u00a0 # r\n":                    false, // C252: no blank but space or tab
+		"\u00a0internal/x # r\n":          false,
+		"\tinternal/auth\t# r\n":          true,
 	} {
 		_ = os.WriteFile(p, []byte(body), 0o600)
 		if _, err := readDestinations(p); (err == nil) != ok {
