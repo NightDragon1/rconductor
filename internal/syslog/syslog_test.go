@@ -198,3 +198,35 @@ func TestC174QuotedValuesMasked(t *testing.T) {
 		t.Errorf("stored:\n%s", got)
 	}
 }
+
+// TestHeadFirstOccurrence: an attribute named ts, level or event later in
+// the line does not replace the head the handler wrote first.
+func TestHeadFirstOccurrence(t *testing.T) {
+	h := headOf(`{"ts":"2026-11-22T00:00:00Z","level":"INFO","event":"auth.login.ok","level":"ERROR","event":"x","ts":"1999"}`)
+	if h.TS != "2026-11-22T00:00:00Z" || h.Level != "INFO" || h.Event != "auth.login.ok" {
+		t.Errorf("head = %+v", h)
+	}
+	if h := headOf(`not json`); h != (head{}) {
+		t.Errorf("head of text = %+v", h)
+	}
+}
+
+// TestRewriteKeys: object keys go through f as the values do, so a host
+// or a secret used as a key of foreign JSON is masked too; keys that meet
+// stay apart.
+func TestRewriteKeys(t *testing.T) {
+	got := Rewrite(`{"caps":{"rack1.example.lan":1,"other":"rack1.example.lan"},"a":"x","b":"x"}`, func(in []string) []string {
+		out := make([]string, len(in))
+		for i, s := range in {
+			out[i] = strings.ReplaceAll(s, "rack1.example.lan", "host-1")
+			if s == "a" || s == "b" {
+				out[i] = "k"
+			}
+		}
+		return out
+	})
+	want := `{"caps":{"host-1":1,"other":"host-1"},"k":"x","k~":"x"}`
+	if got != want {
+		t.Errorf("got %s, want %s", got, want)
+	}
+}

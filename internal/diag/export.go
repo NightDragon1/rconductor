@@ -102,7 +102,7 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 			b.WriteString("Only the last lines of the log.\n")
 		}
 		for _, l := range lines {
-			b.WriteString(syslog.Rewrite(l, clean) + "\n")
+			b.WriteString(oneLine(syslog.Rewrite(l, clean)) + "\n")
 		}
 		all = append(all, out{"agents/" + a.ID + ".log", b.String()})
 	}
@@ -292,4 +292,15 @@ func rawOr(v, def string) json.RawMessage {
 		return json.RawMessage(v)
 	}
 	return json.RawMessage(def)
+}
+
+// oneLine keeps a foreign log line on its line: control characters other
+// than the tab, line breaks included, become U+FFFD (SEC-006).
+func oneLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r != '\t' && (r < 0x20 || (r >= 0x7f && r <= 0x9f)) {
+			return '\uFFFD'
+		}
+		return r
+	}, s)
 }

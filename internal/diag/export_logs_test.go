@@ -64,6 +64,7 @@ func TestExportLogsBlackedOut(t *testing.T) {
 		agentOn: {code: agentproto.CodeOK, lines: []string{
 			`{"level":"error","msg":"dial \"play.example.com\" at \"192.168.1.7\" password: \"agentpw1\""}`,
 			`time=2026-11-20T11:00:00.000Z level=warn msg="dial \"play.example.com\" at \"192.168.1.7\" password: \"agentpw2\""`,
+			"time=2026-11-20T11:00:01.000Z level=warn msg=\"two\nlines \x1b[31mred\"",
 		}},
 		agentOff: {err: agenthub.ErrNotConnected},
 	}
@@ -93,6 +94,10 @@ func TestExportLogsBlackedOut(t *testing.T) {
 	}
 	if !strings.Contains(sys, "kept line") || strings.Contains(sys, "outside the period") || strings.Count(sys, "rcon ") != 2 {
 		t.Errorf("system log:\n%s", sys)
+	}
+	// SEC-006: a line break or ESC of a text line stays on its line.
+	if strings.Contains(on, "two\nlines") || strings.Contains(on, "\x1b") || !strings.Contains(on, "two\uFFFDlines") {
+		t.Errorf("control characters in the agent log:\n%q", on)
 	}
 	if strings.Count(on, "dial ") != 2 || !strings.Contains(off, "offline") {
 		t.Errorf("agent logs:\n%s\n%s", on, off)
