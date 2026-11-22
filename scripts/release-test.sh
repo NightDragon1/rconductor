@@ -138,7 +138,8 @@ if [ "$4" = --raw ]; then
   exit 0
 fi
 # A line "tag" holds the image sha256:i, a line "tag=digest" another one.
-d=$(awk -v t="${ref##*:}" '$0 == t { print "sha256:i"; exit } index($0, t "=") == 1 { print substr($0, length(t) + 2); exit }' "$WORLD/tags")
+# Compared as strings: in the C locale awk takes 1.0 and 1 as equal numbers.
+d=$(awk -v t="${ref##*:}" '$0 "" == t "" { print "sha256:i"; exit } index($0, t "=") == 1 { print substr($0, length(t) + 2); exit }' "$WORLD/tags")
 if [ -n "$d" ]; then echo "$d"; exit 0; fi
 echo "$ref: not found" >&2
 exit 1
