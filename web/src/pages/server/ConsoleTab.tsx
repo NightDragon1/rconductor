@@ -138,6 +138,8 @@ function CommandView({
 
 function LogView({ b }: { b: Extract<Block, { kind: 'log' }> }) {
   const { t } = useTranslation();
+  // The mark of the panel, apart from the foreign lines (UI-022).
+  if (b.gap !== undefined) return <GapMark omitted={b.gap} />;
   return (
     <section
       aria-label={t('console.logLines')}
@@ -148,6 +150,22 @@ function LogView({ b }: { b: Extract<Block, { kind: 'log' }> }) {
         <ForeignText text={b.lines.map((l) => stripCodes(l)).join('\n')} />
       </pre>
     </section>
+  );
+}
+
+// GapMark tells how many log lines passed meanwhile. It is set apart from
+// the lines (own element, no monospace, an icon-free note role), so that a
+// container line with the same text cannot pass for it.
+export function GapMark({ omitted }: { omitted: number }) {
+  const { t } = useTranslation();
+  return (
+    <span
+      role="note"
+      data-gap=""
+      className="my-1 block rounded bg-surface px-2 py-0.5 font-sans text-xs text-warn italic"
+    >
+      {t('console.omitted', { count: omitted })}
+    </span>
   );
 }
 

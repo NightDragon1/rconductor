@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 import {
   addCommands,
   addDelivery,
+  addGap,
   addLogLines,
   isRunning,
   RUNNING_MS,
-  GAP_LINE,
   bufferOwner,
   bufferWriter,
   newLines,
@@ -246,14 +246,30 @@ describe('log lines by number', () => {
     expect(lines(same)).toHaveLength(3);
   });
 
-  it('marks a gap (K-6)', () => {
+  it('marks a gap apart from the lines (K-6, UI-022)', () => {
     const b = addDelivery(held(3), { lines: ['n'], first: 9, run: 'r' }, ts);
-    expect(lines(b).slice(-2)).toEqual([GAP_LINE, 'n']);
+    expect(lines(b).slice(-1)).toEqual(['n']);
+    const marks = b.logs.filter((l) => l.gap !== undefined);
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toMatchObject({ gap: 5, lines: [] });
   });
 
-  it('names the lines omitted at a gap (UI-022)', () => {
-    const b = addDelivery(held(3), { lines: ['n'], first: 9, run: 'r' }, ts, (n) => `${n} omitted`);
-    expect(lines(b).slice(-2)).toEqual(['5 omitted', 'n']);
+  it('keeps a container line that reads like the mark a line (C261)', () => {
+    const b = addDelivery(held(3), { lines: ['⋯ 5 lines omitted'], first: 9, run: 'r' }, ts);
+    const marks = b.logs.filter((l) => l.gap !== undefined);
+    expect(marks).toEqual([expect.objectContaining({ gap: 5, lines: [] })]);
+    expect(lines(b).slice(-1)).toEqual(['⋯ 5 lines omitted']);
+  });
+
+  it('joins gaps that follow each other and counts a mark as one line (C261, G3)', () => {
+    let b = addGap(held(3), 2, ts);
+    b = addGap(b, 3, ts);
+    expect(b.logs.filter((l) => l.gap !== undefined)).toEqual([
+      expect.objectContaining({ gap: 5 }),
+    ]);
+    for (let i = 0; i < 300; i++) b = addLogLines(addGap(b, 1, ts), [`l${i}`, `m${i}`], ts);
+    const size = b.logs.reduce((n, l) => n + (l.gap !== undefined ? 1 : l.lines.length), 0);
+    expect(size).toBeLessThanOrEqual(MAX_LOG_LINES);
   });
 
   it('starts over with a new count, by text for a new subscription', () => {

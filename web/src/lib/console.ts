@@ -28,6 +28,9 @@ export interface LogBlock {
   id: string;
   ts: string;
   lines: string[]; // foreign data (SEC-006)
+  // gap: lines that passed meanwhile, shown as a mark of the panel apart from
+  // the lines, so that no container line can pass for it; lines is empty.
+  gap?: number;
 }
 
 export type Block = CmdBlock | LogBlock;
@@ -46,9 +49,6 @@ export interface ConsoleBuffer {
   running?: number; // commands to this server without an answer yet
   logPos?: { run: string; last: number }; // number of the newest line held
 }
-
-// GAP_LINE marks lines that passed while nobody followed.
-export const GAP_LINE = '⋯';
 
 // A delivery of log lines; first numbers its first line within run.
 export interface LogDelivery {
@@ -104,12 +104,7 @@ export function newLines(buf: ConsoleBuffer, lines: string[]): string[] {
 // addDelivery takes the new lines of a delivery by their numbers; repeated
 // lines stay apart that way (#157). Lines that passed meanwhile leave a mark.
 // Without a count to go by the text decides.
-export function addDelivery(
-  buf: ConsoleBuffer,
-  d: LogDelivery,
-  ts: string,
-  gapLine: (omitted: number) => string = () => GAP_LINE,
-): ConsoleBuffer {
+export function addDelivery(buf: ConsoleBuffer, d: LogDelivery, ts: string): ConsoleBuffer {
   const { lines, first, run } = d;
   if (first === undefined || run === undefined) {
     return addLogLines(buf, d.current ? newLines(buf, lines) : lines, ts);
@@ -122,9 +117,20 @@ export function addDelivery(
   }
   const fresh = lines.slice(Math.max(0, pos.last + 1 - first));
   const gap = first > pos.last + 1;
+  const marked = gap ? addGap(buf, first - pos.last - 1, ts) : buf;
+  return { ...addLogLines(marked, fresh, ts), logPos: { run, last: Math.max(pos.last, last) } };
+}
+
+// addGap appends the mark of lines omitted at a gap (K-6, UI-022).
+// Gaps that follow each other become one mark.
+export function addGap(buf: ConsoleBuffer, omitted: number, ts: string): ConsoleBuffer {
+  const last = buf.logs[buf.logs.length - 1];
+  if (last?.gap !== undefined) {
+    return { ...buf, logs: [...buf.logs.slice(0, -1), { ...last, gap: last.gap + omitted }] };
+  }
   return {
-    ...addLogLines(buf, gap ? [gapLine(first - pos.last - 1), ...fresh] : fresh, ts),
-    logPos: { run, last: Math.max(pos.last, last) },
+    ...buf,
+    logs: [...buf.logs, { kind: 'log', id: `log-${++logSeq}`, ts, lines: [], gap: omitted }],
   };
 }
 
@@ -133,14 +139,16 @@ export function addDelivery(
 export function addLogLines(buf: ConsoleBuffer, lines: string[], ts: string): ConsoleBuffer {
   if (lines.length === 0) return buf;
   const logs = [...buf.logs, { kind: 'log' as const, id: `log-${++logSeq}`, ts, lines }];
-  let total = logs.reduce((n, l) => n + l.lines.length, 0);
+  // A mark of a gap counts as one line (G3).
+  const size = (l: LogBlock) => (l.gap !== undefined ? 1 : l.lines.length);
+  let total = logs.reduce((n, l) => n + size(l), 0);
   while (total > MAX_LOG_LINES && logs.length > 0) {
     const first = logs[0];
     if (!first) break;
     const drop = total - MAX_LOG_LINES;
-    if (first.lines.length <= drop) {
+    if (size(first) <= drop) {
       logs.shift();
-      total -= first.lines.length;
+      total -= size(first);
     } else {
       logs[0] = { ...first, lines: first.lines.slice(drop) };
       total -= drop;

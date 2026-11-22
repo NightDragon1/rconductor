@@ -101,6 +101,71 @@ test.describe('log masking on', () => {
     await expect(panel.getByRole('button', { name: 'Save' })).toHaveCount(0);
   });
 
+  test('a stored text masks the next live line, the tail and the system log (UI-022, D-088)', async ({
+    browser,
+    page,
+    state,
+  }) => {
+    await as(page, state, 'admin');
+    const origin = new URL(page.url()).origin;
+    const store = async (texts: { value: string }[]) => {
+      const m = await (await page.request.get('api/v1/settings/log-masking')).json();
+      const r = await page.request.put('api/v1/settings/log-masking', {
+        headers: { 'If-Match': String(m.version), Origin: origin },
+        data: { enabled: true, texts },
+      });
+      expect(r.status()).toBe(200);
+    };
+    await store([{ value: 'Steve joined' }]);
+    try {
+      // Live lines and the tail of the container go through the same masker.
+      await page.goto(`servers/${state.servers.survival}/logs`);
+      const lines = page.getByRole('region', { name: 'Logs' }).locator('pre');
+      await expect(lines).toContainText('••• the game');
+      await expect(lines).not.toContainText('Steve joined');
+      await page.getByRole('button', { name: 'Load earlier lines' }).click();
+      await expect(lines).toContainText('Starting minecraft server version 26.3');
+      await expect(lines).not.toContainText('Steve joined');
+
+      // The system log too: a new user whose name holds the text.
+      const created = await page.request.post('api/v1/invites', {
+        data: { role: 'moderator' },
+        headers: { Origin: origin },
+      });
+      expect(created.status()).toBe(201);
+      const inv = await created.json();
+      const anon = await browser.newContext({ baseURL: state.base_url });
+      const name = `Steve joined ${Date.now() % 100000}`;
+      const r = await anon.request.post('api/v1/invites/redeem', {
+        data: { token: inv.token, pseudonym: name, password: 'Masked-Name-Pass-7!' },
+        headers: { Origin: origin },
+      });
+      expect(r.status()).toBe(201);
+      await anon.close();
+      const texts = async () => {
+        const out: { id: number; code?: string; text: string }[] = [];
+        for (let after = 0; ;) {
+          const res = await page.request.get(
+            `api/v1/system-log?source=panel&limit=500${after ? `&after=${after}` : ''}`,
+          );
+          expect(res.status(), await res.text()).toBe(200);
+          const items = (await res.json()).items as typeof out;
+          out.push(...items);
+          if (items.length < 500) return out;
+          after = items[items.length - 1]?.id ?? 0;
+        }
+      };
+      await expect
+        .poll(async () => (await texts()).some((e) => e.code === 'auth.invite.used'), {
+          timeout: 10_000,
+        })
+        .toBe(true);
+      expect((await texts()).some((e) => e.text.includes('Steve joined'))).toBe(false);
+    } finally {
+      await store([]);
+    }
+  });
+
   test('a server admin has neither the page part nor the API', async ({ page, state }) => {
     await as(page, state, 'sadmin');
     await page.goto('admin/settings');

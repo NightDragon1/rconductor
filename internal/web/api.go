@@ -226,11 +226,18 @@ func httpOf(ctx context.Context) httpPair {
 
 // checkOrigin rejects write requests whose Origin header does not match the
 // panel (CSRF protection together with SameSite, Design 2.1). Browsers send
-// Origin on every cross-site and same-site write request.
+// Origin on every cross-site and same-site write request. A read that a
+// browser marks as coming from another site is refused too: the session
+// cookie (SameSite=Lax) goes along with a link, and some reads do work
+// (the diagnostic export); the panel's own pages read same-origin.
 func (s *apiServer) checkOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" || site == "same-site" {
+				WriteProblem(w, http.StatusForbidden, api.ReasonCodeForbidden, "origin not allowed")
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
