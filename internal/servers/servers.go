@@ -127,11 +127,14 @@ type Input struct {
 
 // Service administers servers and server groups.
 type Service struct {
-	st    *store.Store
-	perm  *perm.Checker
-	box   *secret.Box
-	log   *slog.Logger
-	conns Connections
+	// beforeWrite runs before a writing transaction of the say prefix; set
+	// by tests only, to change the database in between.
+	beforeWrite func()
+	st          *store.Store
+	perm        *perm.Checker
+	box         *secret.Box
+	log         *slog.Logger
+	conns       Connections
 	// onChange is told about every changed server, after the connection.
 	onChange func(id string)
 	// agents and rcon carry out actions (AGT-003, AGT-009).

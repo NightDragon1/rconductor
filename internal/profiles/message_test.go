@@ -63,10 +63,24 @@ func TestMessageCommandChecked(t *testing.T) {
 		"two words":      {"message_command: { path: say all, render: minecraft-tellraw }\n", false},
 		"empty path":     {"message_command: { path: \"\", render: minecraft-tellraw }\n", false},
 		"long path":      {"message_command: { path: " + strings.Repeat("s", 33) + ", render: minecraft-tellraw }\n", false},
+		"slash":          {"message_command: { path: /say, render: minecraft-tellraw }\n", false},
+		"format char":    {"message_command: { path: \"s\\u200Bay\", render: minecraft-tellraw }\n", false},
 	} {
 		_, err := Parse([]byte(base + tc.yaml))
 		if (err == nil) != tc.ok {
 			t.Errorf("%s: err = %v, want ok %v", name, err, tc.ok)
 		}
+	}
+}
+
+// TestMessageCommandStoredNormalized: the path is stored as the rights
+// check normalizes it (CMD-020).
+func TestMessageCommandStoredNormalized(t *testing.T) {
+	p, err := Parse([]byte("schema: 1\nid: t\nname: T\nprotocol: { type: source-rcon, default_port: 25575 }\nmessage_command: { path: \"  say  \", render: minecraft-tellraw }\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.MessageCommand == nil || p.MessageCommand.Path != "say" {
+		t.Errorf("path = %+v, want say", p.MessageCommand)
 	}
 }

@@ -157,7 +157,12 @@ func (s *Service) Get(ctx context.Context, req Request, id string) (User, error)
 }
 
 func (s *Service) load(ctx context.Context, id string) (User, error) {
-	r, err := s.st.Queries.GetUser(ctx, id)
+	return s.loadQ(ctx, s.st.Queries, id)
+}
+
+// loadQ is load read through q, such as the queries of a transaction.
+func (s *Service) loadQ(ctx context.Context, q *sqlitedb.Queries, id string) (User, error) {
+	r, err := q.GetUser(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}

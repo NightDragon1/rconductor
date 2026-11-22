@@ -44,15 +44,9 @@ func (s *apiServer) GetDiagnostics(ctx context.Context, req api.GetDiagnosticsRe
 // diagnostics_export; internal/diag checks role, source and period.
 // Without from, the last hour.
 func (s *apiServer) ListSystemLog(ctx context.Context, req api.ListSystemLogRequestObject) (api.ListSystemLogResponseObject, error) {
+	// limit, level and after are checked by internal/diag after the role
+	// (D-051): a refused role is 403 and audited whatever it sent.
 	p := req.Params
-	switch {
-	case p.Limit != nil && (*p.Limit < 1 || *p.Limit > 500):
-		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "limit is 1 to 500"}
-	case p.Level != nil && !p.Level.Valid():
-		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "level is info, warn or error"}
-	case p.After != nil && *p.After < 1:
-		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "after is at least 1"}
-	}
 	q := diag.LogQuery{Source: "panel", To: time.Now().UTC(), Level: "info", Limit: 200}
 	if p.Source != nil {
 		q.Source = *p.Source
@@ -69,6 +63,9 @@ func (s *apiServer) ListSystemLog(ctx context.Context, req api.ListSystemLogRequ
 	}
 	if p.After != nil {
 		q.After = *p.After
+		if q.After < 1 {
+			q.After = -1 // given and below 1: refused by the service
+		}
 	}
 	if p.Limit != nil {
 		q.Limit = *p.Limit

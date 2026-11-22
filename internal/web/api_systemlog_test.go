@@ -31,7 +31,9 @@ func TestSystemLog(t *testing.T) {
 			}
 		}
 	}
-	check(http.StatusForbidden, mod, panel.path, agent, "/api/v1/system-log?source=nope")
+	// D-051: the role first, also with parameters that are out of range.
+	check(http.StatusForbidden, mod, panel.path, agent, "/api/v1/system-log?source=nope",
+		"/api/v1/system-log?limit=501", "/api/v1/system-log?level=debug", "/api/v1/system-log?after=0")
 	check(http.StatusBadRequest, admin, "/api/v1/system-log?source=nope", "/api/v1/system-log?source=",
 		"/api/v1/system-log?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z",
 		"/api/v1/system-log?from=2026-11-19T00:00:00Z&to=2026-11-18T00:00:00Z",
@@ -69,7 +71,7 @@ func TestSystemLog(t *testing.T) {
 		t.Errorf("audited reads = %d (%v), want 2", viewed, err)
 	}
 	var refused int
-	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'system_log.viewed' AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
-		t.Errorf("audited refusals = %d (%v), want 3", refused, err)
+	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'system_log.viewed' AND result = 'denied'`).Scan(&refused); err != nil || refused != 6 {
+		t.Errorf("audited refusals = %d (%v), want 6", refused, err)
 	}
 }

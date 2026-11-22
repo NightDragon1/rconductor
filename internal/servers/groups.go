@@ -25,7 +25,15 @@ type Group struct {
 }
 
 func (s *Service) groupMembers(ctx context.Context) (map[string][]string, error) {
-	rows, err := s.st.Queries.ListServerGroupMemberships(ctx)
+	return s.groupMembersQ(ctx, nil)
+}
+
+// groupMembersQ reads through q when it is set, else through the pool.
+func (s *Service) groupMembersQ(ctx context.Context, q *sqlitedb.Queries) (map[string][]string, error) {
+	if q == nil {
+		q = s.st.Queries
+	}
+	rows, err := q.ListServerGroupMemberships(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -49,17 +57,29 @@ func (s *Service) mayReadGroups(ctx context.Context, req users.Request, action, 
 // groupInScope: the RCON admin sees every group; a server admin sees a
 // group only if it is not empty and all its servers are in his scope.
 func (s *Service) groupInScope(ctx context.Context, req users.Request, id string) (bool, error) {
+	return s.groupInScopeQ(ctx, nil, req, id)
+}
+
+// groupInScopeQ reads through q of a writing transaction when q is set:
+// rights past the cache and the members as the transaction sees them.
+func (s *Service) groupInScopeQ(ctx context.Context, q *sqlitedb.Queries, req users.Request, id string) (bool, error) {
 	if req.Actor.Role == perm.RCONAdmin {
 		return true, nil
 	}
 	if req.Actor.Role != perm.ServerAdmin {
 		return false, nil
 	}
-	rights, err := s.perm.For(ctx, req.Actor.ID)
+	var rights *perm.Rights
+	var err error
+	if q != nil {
+		rights, err = s.perm.FreshTx(ctx, q, req.Actor.ID)
+	} else {
+		rights, err = s.perm.For(ctx, req.Actor.ID)
+	}
 	if err != nil {
 		return false, err
 	}
-	members, err := s.groupMembers(ctx)
+	members, err := s.groupMembersQ(ctx, q)
 	if err != nil {
 		return false, err
 	}

@@ -172,6 +172,24 @@ func TestCommentWhileDeleted(t *testing.T) {
 	}
 }
 
+// TestC346StrangerAudited: who reads a message that is not his gets 404 as
+// for an unknown one, logged and audited as a refusal.
+func TestC346StrangerAudited(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	m, err := w.s.Send(ctx, w.sa, Input{Text: "hi", Audience: AudienceScopeModerators})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.s.Get(ctx, w.mod2, m.ID); !errors.Is(err, users.ErrNotFound) {
+		t.Fatalf("stranger = %v", err)
+	}
+	var n int
+	if err := w.s.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'message.read' AND result = 'denied' AND reason_code = 'not_found' AND target_id = ?`, m.ID).Scan(&n); err != nil || n != 1 {
+		t.Errorf("audited refusals = %d (%v), want 1", n, err)
+	}
+}
+
 // TestC257CursorRest: a cursor wins over before; a stranger with a broken
 // cursor on the comments of a message gets 404, not 400 (the rights come
 // first); the next page of comments follows also when the last comment of
