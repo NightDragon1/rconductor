@@ -110,6 +110,8 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 	// without the deadline; then further runs start until the deadline,
 	// so a run started then still ends in time.
 	first := true
+	var skipRights *perm.Rights
+	var skipErr error
 	deadline := s.now().Add(max(multiAnswerBy-s.timeout, 0))
 	over := false
 	var wg sync.WaitGroup
@@ -159,7 +161,11 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 			wait.Stop()
 		}
 		if over {
-			items[i] = s.multiSkipped(ctx, r, id, input)
+			// The rights of the caller, read once for all servers left out.
+			if skipRights == nil && skipErr == nil {
+				skipRights, skipErr = s.perm.For(ctx, req.Actor.ID)
+			}
+			items[i] = s.multiSkipped(ctx, r, id, input, skipRights, skipErr)
 			continue
 		}
 		wg.Go(func() {
@@ -174,8 +180,7 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 // multiSkipped is a server whose turn came after the time budget: in the
 // scope it gets its own audit entry, an error with the reason time_budget,
 // under its request ID and the batch; outside it is not_found as in Send.
-func (s *Service) multiSkipped(ctx context.Context, req users.Request, serverID, input string) MultiItem {
-	rights, err := s.perm.For(ctx, req.Actor.ID)
+func (s *Service) multiSkipped(ctx context.Context, req users.Request, serverID, input string, rights *perm.Rights, err error) MultiItem {
 	if err != nil {
 		s.log.Error("multi command failed", append(s.attrs(req, serverID), "err", err)...)
 		return MultiItem{ServerID: serverID, RequestID: req.RequestID, Result: ResultError}
