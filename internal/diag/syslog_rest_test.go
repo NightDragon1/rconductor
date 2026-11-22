@@ -56,10 +56,13 @@ func TestC325AgentLevelKnownOnly(t *testing.T) {
 // also when only an agent log was cut (D-090).
 func TestC382AuditShortenedByAgentLog(t *testing.T) {
 	var lines []string
-	for i := range agentproto.MaxLogBytes / 1024 {
-		lines = append(lines, fmt.Sprintf("agent line %d %s", i, strings.Repeat("y", 1000)))
+	// full logs: lines of the longest size up to the byte bound per agent
+	for i := range agentproto.MaxLogBytes / agentproto.MaxLogLine {
+		l := fmt.Sprintf("agent line %d ", i)
+		lines = append(lines, l+strings.Repeat("y", agentproto.MaxLogLine-len(l)))
 	}
-	ids := []string{agentOn, agentOff, "00000000-0000-4000-8000-0000000000a3"}
+	// two agents: the second is cut, the system log keeps a little room
+	ids := []string{agentOn, agentOff}
 	h := hubs{}
 	for _, id := range ids {
 		h[id] = &hub{code: agentproto.CodeOK, lines: lines}
@@ -71,8 +74,13 @@ func TestC382AuditShortenedByAgentLog(t *testing.T) {
 	}
 	exec(t, st, `INSERT INTO settings (id, key, value, updated_at) VALUES ('d1', ?, ?, 't')`, users.SettingDiagnosticsMaxBytes, fmt.Sprint(users.MinDiagnosticsMaxBytes))
 	now := time.Now().UTC()
-	if _, err := s.Export(context.Background(), admin, now.Add(-time.Hour), now); err != nil {
+	b, err := s.Export(context.Background(), admin, now.Add(-time.Hour), now)
+	if err != nil {
 		t.Fatal(err)
+	}
+	files := unzip(t, b)
+	if strings.Contains(files["system-log.txt"], "Shortened") || !strings.Contains(files["agents/"+agentOff+".log"], "Shortened") {
+		t.Fatalf("want only the agent log cut: system log %q", files["system-log.txt"])
 	}
 	var payload string
 	if err := st.DB.QueryRow(`SELECT payload FROM audit_log WHERE action = 'diagnostics.exported' AND result = 'ok'`).Scan(&payload); err != nil ||

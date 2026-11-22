@@ -46,8 +46,11 @@ var ErrBusy = errors.New("too many diagnostic packages at the same time")
 // and the system log of the period as text. Every file goes through
 // syslog.Rewrite, so its values are masked (D-088), blacked out and
 // pseudonymized as they were stored or logged, before the file is encoded
-// again. Above diagnostics.max_bytes the oldest lines of the system log
-// stay out and the package says so. Audited with period and size.
+// again. Within diagnostics.max_bytes the agent logs take their part
+// first, the system log the rest; the oldest lines of each stay out and
+// the file says so. The heads of the files are written also without room,
+// about 100 bytes per agent past the budget. Audited with period, size and
+// whether anything was cut.
 func (s *Service) Export(ctx context.Context, req users.Request, from, to time.Time) ([]byte, error) {
 	if req.Actor.Role != perm.RCONAdmin {
 		return nil, s.denied(ctx, req, "diagnostics.exported")
