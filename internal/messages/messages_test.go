@@ -137,7 +137,7 @@ func TestReadRoles(t *testing.T) {
 	const id = "00000000-0000-4000-8000-000000000001"
 	ops := map[string]func(users.Request) error{
 		"message.list": func(r users.Request) error {
-			if p, err := s.List(ctx, r, 50, id); err != nil || len(p.Items) != 0 {
+			if p, err := s.List(ctx, r, 50, id, ""); err != nil || len(p.Items) != 0 {
 				return err
 			}
 			return errEmptyPage
@@ -145,7 +145,7 @@ func TestReadRoles(t *testing.T) {
 		"message.read":            func(r users.Request) error { _, err := s.Get(ctx, r, id); return err },
 		"message.deleted":         func(r users.Request) error { return s.Delete(ctx, r, id) },
 		"message.mark_read":       func(r users.Request) error { return s.MarkRead(ctx, r, id) },
-		"message.comment_list":    func(r users.Request) error { _, err := s.Comments(ctx, r, id, 50, ""); return err },
+		"message.comment_list":    func(r users.Request) error { _, _, err := s.Comments(ctx, r, id, 50, "", ""); return err },
 		"message.commented":       func(r users.Request) error { _, err := s.Comment(ctx, r, id, "ok"); return err },
 		"message.comment_deleted": func(r users.Request) error { return s.DeleteComment(ctx, r, id, id) },
 	}

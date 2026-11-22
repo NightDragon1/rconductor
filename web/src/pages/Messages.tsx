@@ -57,12 +57,13 @@ export function MessagesPage() {
     queryFn: async ({ pageParam }) =>
       must(
         await api.GET('/messages', {
-          params: { query: { limit: pageSize, before: pageParam } },
+          params: { query: { limit: pageSize, cursor: pageParam } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) =>
-      last.items.length < pageSize ? undefined : last.items[last.items.length - 1]?.id,
+    // The backend says whether more follow (MSG-001): no extra request
+    // after a page of exactly pageSize, and none lost after a delete.
+    getNextPageParam: (last) => last.next_cursor,
   });
   const [open, setOpen] = useState<string | null>(null);
   const [compose, setCompose] = useState(false);
@@ -426,12 +427,13 @@ function Comments({ message: m, mine }: { message: Message; mine: boolean }) {
     queryFn: async ({ pageParam }) =>
       must(
         await api.GET('/messages/{id}/comments', {
-          params: { path: { id: m.id }, query: { limit: pageSize, after: pageParam } },
+          params: { path: { id: m.id }, query: { limit: pageSize, cursor: pageParam } },
         }),
       ),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) =>
-      last.items.length < pageSize ? undefined : last.items[last.items.length - 1]?.id,
+    // The backend says whether more follow (MSG-001): no extra request
+    // after a page of exactly pageSize, and none lost after a delete.
+    getNextPageParam: (last) => last.next_cursor,
   });
   const [text, setText] = useState('');
   const [note, setNote] = useState<Note>(null);

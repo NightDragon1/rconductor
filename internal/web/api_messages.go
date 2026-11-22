@@ -30,11 +30,18 @@ func (s *apiServer) ListMessages(ctx context.Context, req api.ListMessagesReques
 	if limit < 1 || limit > 100 {
 		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "limit is 1 to 100"}
 	}
-	p, err := s.messages.List(ctx, adminRequest(ctx), limit, before)
+	cursor := ""
+	if req.Params.Cursor != nil {
+		cursor = *req.Params.Cursor
+	}
+	p, err := s.messages.List(ctx, adminRequest(ctx), limit, before, cursor)
 	if err != nil {
 		return nil, messageError(err)
 	}
 	out := api.ListMessages200JSONResponse{Items: make([]api.Message, 0, len(p.Items)), Unread: p.Unread}
+	if p.Next != "" {
+		out.NextCursor = &p.Next
+	}
 	for _, m := range p.Items {
 		out.Items = append(out.Items, apiMessage(m))
 	}
@@ -107,11 +114,18 @@ func (s *apiServer) ListMessageComments(ctx context.Context, req api.ListMessage
 	if limit < 1 || limit > 100 {
 		return nil, &problem{status: http.StatusBadRequest, reason: api.ReasonCodeInvalid, detail: "limit is 1 to 100"}
 	}
-	list, err := s.messages.Comments(ctx, adminRequest(ctx), req.Id.String(), limit, after)
+	cursor := ""
+	if req.Params.Cursor != nil {
+		cursor = *req.Params.Cursor
+	}
+	list, next, err := s.messages.Comments(ctx, adminRequest(ctx), req.Id.String(), limit, after, cursor)
 	if err != nil {
 		return nil, messageError(err)
 	}
 	out := api.ListMessageComments200JSONResponse{Items: make([]api.MessageComment, 0, len(list))}
+	if next != "" {
+		out.NextCursor = &next
+	}
 	for _, c := range list {
 		out.Items = append(out.Items, apiComment(c))
 	}

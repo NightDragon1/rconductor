@@ -87,11 +87,11 @@ func TestCommentRights(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, who := range []users.Request{w.sa, w.admin, w.mod1} {
-		if list, err := w.s.Comments(ctx, who, m.ID, 50, ""); err != nil || len(list) != 1 || list[0].Text != "secret words" || list[0].AuthorID != w.mod1.Actor.ID {
+		if list, _, err := w.s.Comments(ctx, who, m.ID, 50, "", ""); err != nil || len(list) != 1 || list[0].Text != "secret words" || list[0].AuthorID != w.mod1.Actor.ID {
 			t.Errorf("%s sees %v, %v", who.Pseudonym, list, err)
 		}
 	}
-	if _, err := w.s.Comments(ctx, w.mod2, m.ID, 50, ""); !errors.Is(err, users.ErrNotFound) {
+	if _, _, err := w.s.Comments(ctx, w.mod2, m.ID, 50, "", ""); !errors.Is(err, users.ErrNotFound) {
 		t.Errorf("stranger lists = %v", err)
 	}
 	if got, _ := w.s.Get(ctx, w.mod1, m.ID); got.CommentCount != 1 {
@@ -145,7 +145,7 @@ func TestCommentsPaging(t *testing.T) {
 	foreign, _ := w.s.Comment(ctx, w.mod1, other.ID, "x")
 	var got []string
 	for after := ""; ; {
-		page, err := w.s.Comments(ctx, w.sa, m.ID, 2, after)
+		page, _, err := w.s.Comments(ctx, w.sa, m.ID, 2, after, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -160,7 +160,7 @@ func TestCommentsPaging(t *testing.T) {
 	if strings.Join(got, ",") != "c0,c1,c2,c3,c4" {
 		t.Errorf("pages = %v", got)
 	}
-	if page, err := w.s.Comments(ctx, w.sa, m.ID, 50, foreign.ID); err != nil || len(page) != 0 {
+	if page, _, err := w.s.Comments(ctx, w.sa, m.ID, 50, foreign.ID, ""); err != nil || len(page) != 0 {
 		t.Errorf("foreign cursor = %v, %v", page, err)
 	}
 }
