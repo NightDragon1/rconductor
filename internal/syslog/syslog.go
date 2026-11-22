@@ -18,6 +18,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -40,6 +42,13 @@ const (
 // Masker masks lines as for container logs (logmask.Provider).
 type Masker interface {
 	Lines(lines []string, profilePatterns [][]string) ([]string, int)
+}
+
+// serverMasker also knows the profile patterns of a server (D-088 b): an
+// entry about a server is masked with them too; one without a server only
+// with the built-in list and the texts of the RCON admin.
+type serverMasker interface {
+	PatternsFor(ctx context.Context, serverID string) [][]string
 }
 
 // Sink receives the JSON lines of the log handler.
@@ -130,33 +139,37 @@ func (s *Sink) tellLost(log *slog.Logger) {
 }
 
 func (s *Sink) write(ctx context.Context, st *store.Store, m Masker, lines []string) error {
+	// Masked before the write lock: the patterns of a server may need a read.
+	rows := make([]sqlitedb.InsertSystemLogParams, 0, len(lines))
+	for _, line := range lines {
+		h := headOf(line)
+		var patterns [][]string
+		if sm, ok := m.(serverMasker); ok && h.Server != "" {
+			if id, err := uuid.Parse(h.Server); err == nil {
+				patterns = sm.PatternsFor(ctx, id.String())
+			}
+		}
+		text, _ := maskLine(line, m, patterns)
+		if len(h.Event) > maxCode {
+			h.Event = ""
+		}
+		rows = append(rows, sqlitedb.InsertSystemLogParams{Ts: h.TS, Level: h.Level, Code: h.Event, Text: text, Size: int64(len(text))})
+	}
 	tx, err := st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
-	for _, line := range lines {
-		text, head := maskJSON(line, m)
-		if len(head.Event) > maxCode {
-			head.Event = ""
-		}
-		if err := q.InsertSystemLog(ctx, sqlitedb.InsertSystemLogParams{
-			Ts: head.TS, Level: head.Level, Code: head.Event, Text: text, Size: int64(len(text)),
-		}); err != nil {
+	for _, r := range rows {
+		if err := q.InsertSystemLog(ctx, r); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-type head struct{ TS, Level, Event string }
-
-// maskJSON masks a JSON line of the panel value by value through Rewrite
-// and reads its head.
-func maskJSON(line string, m Masker) (string, head) {
-	return MaskLine(line, m), headOf(line)
-}
+type head struct{ TS, Level, Event, Server string }
 
 // headOf reads ts, level and event of a JSON line from their first
 // occurrence: the handler writes them first, so an attribute of the same
@@ -193,6 +206,8 @@ func headOf(line string) head {
 			h.Level = str
 		case "event":
 			h.Event = str
+		case logging.KeyServer:
+			h.Server = str
 		}
 	}
 	return h
@@ -208,9 +223,14 @@ func MaskLine(line string, m Masker) string {
 // MaskLineCounted is MaskLine with the number of values the masker held
 // back for its time budget.
 func MaskLineCounted(line string, m Masker) (string, int) {
+	return maskLine(line, m, nil)
+}
+
+// maskLine masks a line value by value with the given profile patterns.
+func maskLine(line string, m Masker, patterns [][]string) (string, int) {
 	held := 0
 	out := Rewrite(line, func(texts []string) []string {
-		out, n := m.Lines(texts, nil)
+		out, n := m.Lines(texts, patterns)
 		held += n
 		return out
 	})

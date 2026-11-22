@@ -124,6 +124,16 @@ func (p *Provider) ProfilesChanged() {
 // read error is logged once until a read succeeds; withheld lines are
 // logged.
 func (p *Provider) ServerLines(ctx context.Context, serverID string, lines []string) []string {
+	out, withheld := p.Lines(lines, p.patternsFor(ctx, serverID))
+	if withheld > 0 {
+		p.log.Warn("log lines withheld: masking took too long", slog.String(logging.KeyServer, serverID), slog.Int("lines", withheld))
+	}
+	return out
+}
+
+// patternsFor gives the profile patterns of a server, read again only
+// after a change; when they cannot be read, the patterns as last read hold.
+func (p *Provider) patternsFor(ctx context.Context, serverID string) [][]string {
 	p.mu.RLock()
 	e, gen := p.servers[serverID], p.gen
 	fresh := e != nil && e.read && e.gen == gen
@@ -135,11 +145,7 @@ func (p *Provider) ServerLines(ctx context.Context, serverID string, lines []str
 	if !fresh {
 		patterns = p.readPatterns(ctx, serverID, gen, patterns)
 	}
-	out, withheld := p.Lines(lines, patterns)
-	if withheld > 0 {
-		p.log.Warn("log lines withheld: masking took too long", slog.String(logging.KeyServer, serverID), slog.Int("lines", withheld))
-	}
-	return out
+	return patterns
 }
 
 func (p *Provider) readPatterns(ctx context.Context, serverID string, gen uint64, last [][]string) [][]string {
@@ -194,6 +200,16 @@ func (a Always) Lines(lines []string, profilePatterns [][]string) ([]string, int
 		return ListLines(lines), 0
 	}
 	return a.p.masker(profilePatterns).Lines(lines, Budget{Max: budget})
+}
+
+// PatternsFor gives the profile patterns of the server an entry of the
+// system log is about (D-088 b): the masking of that server's container
+// logs applies to it too. Without a provider there are none.
+func (a Always) PatternsFor(ctx context.Context, serverID string) [][]string {
+	if a.p == nil {
+		return nil
+	}
+	return a.p.patternsFor(ctx, serverID)
 }
 
 // ListLines masks with the built-in list alone, for a way out of the panel
