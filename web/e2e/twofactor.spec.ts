@@ -122,6 +122,14 @@ test('a required second factor allows only its setup, after a forced password ch
   const name = await freshUser(req, anon.request, origin);
   await anon.close();
   const headers = { Origin: origin };
+  // Not before the admin has his own (D-104): 409 with its own reason.
+  const s0 = await req.get('api/v1/settings');
+  const refused = await req.patch('api/v1/settings', {
+    data: { 'auth.totp_required': true },
+    headers: { ...headers, 'If-Match': s0.headers().etag ?? '' },
+  });
+  expect(refused.status()).toBe(409);
+  expect((await refused.json()).reason).toBe('own_totp_required');
   // The requirement holds for the admin too: he sets up his own first, so
   // that he can switch it off again.
   const setup = await (

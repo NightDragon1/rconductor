@@ -33,6 +33,9 @@ var (
 	// ErrConflict means the object changed since the caller read it
 	// (revision 2.4 candidate 24).
 	ErrConflict = errors.New("changed by someone else")
+	// ErrOwnTOTPRequired refuses requiring the second factor for everyone
+	// while the caller has none of their own (D-104).
+	ErrOwnTOTPRequired = errors.New("set up your own second factor first")
 	// ErrPreconditionRequired means a versioned write named no version.
 	ErrPreconditionRequired = errors.New("the version read before is required")
 )

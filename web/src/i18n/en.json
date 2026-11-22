@@ -598,7 +598,8 @@
       "rate_limited": "Too many changes, try again shortly",
       "busy": "The panel is busy, try again",
       "other": "Failed",
-      "conflict": "Changed by someone else – reload"
+      "conflict": "Changed by someone else – reload",
+      "own_totp_required": "Set up two-factor sign-in for yourself first, under Your profile, then require it for everyone."
     },
     "lock": "Lock",
     "unlock": "Unlock",

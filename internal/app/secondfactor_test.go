@@ -158,6 +158,11 @@ func TestRequiredSecondFactorRestricts(t *testing.T) {
 	t.Cleanup(game.Close)
 	s := newStack(t, game.Addr, "rconpw")
 	admin := s.users["admin"]
+	// D-104: not while the RCON admin has no second factor of his own.
+	if status, reason := problemOf(t, admin, http.MethodPatch, "/settings", map[string]any{"auth.totp_required": true}); status != http.StatusConflict || reason != "own_totp_required" {
+		t.Fatalf("required without an own second factor = %d %s, want 409 own_totp_required", status, reason)
+	}
+	ownSecondFactor(t, admin, "the admin's own password")
 	admin.must(http.MethodPatch, "/settings", map[string]any{"auth.totp_required": true}, nil, http.StatusOK)
 
 	sa := login(t, s.base, "sa1", "password of sa1")
@@ -217,7 +222,8 @@ func TestC142F1PasswordChangeBeforeSecondFactor(t *testing.T) {
 	}
 	var reset struct{ Password string }
 	admin.must(http.MethodPost, "/users/"+id+"/password-reset", nil, &reset, http.StatusOK)
-	// Required for everyone only now: the admin has no second factor either.
+	// Required for everyone only now, once the admin has his own (D-104).
+	ownSecondFactor(t, admin, "the admin's own password")
 	admin.must(http.MethodPatch, "/settings", map[string]any{"auth.totp_required": true}, nil, http.StatusOK)
 
 	sa := login(t, s.base, "sa1", reset.Password)
@@ -250,4 +256,13 @@ func TestC142F1PasswordChangeBeforeSecondFactor(t *testing.T) {
 	sa.must(http.MethodPost, "/me/second-factor/setup", map[string]string{"password": pw}, &setup, http.StatusOK)
 	sa.must(http.MethodPost, "/me/second-factor/confirm", map[string]string{"code": codeAt(t, setup.Secret, 0)}, nil, http.StatusNoContent)
 	sa.must(http.MethodGet, "/servers", nil, nil, http.StatusOK)
+}
+
+// ownSecondFactor sets up the second factor of the user behind c; the RCON
+// admin needs one before requiring it for everyone (D-104).
+func ownSecondFactor(t *testing.T, c *client, password string) {
+	t.Helper()
+	var setup struct{ Secret string }
+	c.must(http.MethodPost, "/me/second-factor/setup", map[string]string{"password": password}, &setup, http.StatusOK)
+	c.must(http.MethodPost, "/me/second-factor/confirm", map[string]string{"code": codeAt(t, setup.Secret, 0)}, nil, http.StatusNoContent)
 }
