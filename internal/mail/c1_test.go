@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/store/secret"
 )
 
@@ -51,5 +52,20 @@ func TestC1PasswordState(t *testing.T) {
 	seal(otherBox)
 	if v := state(); v.PasswordState != PasswordUnreadable || !v.PasswordSet {
 		t.Errorf("password of another master key: %+v", v)
+	}
+	// A damaged value cannot be read either.
+	if _, err := f.st.DB.ExecContext(ctx, `UPDATE smtp_settings SET password = 'v1:broken' WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if v := state(); v.PasswordState != PasswordUnreadable {
+		t.Errorf("damaged password: %+v", v)
+	}
+	// Entering it again makes it readable; the answer of the write says so.
+	cur := state()
+	in := Input{Host: ptr("smtp.example.org"), Port: ptr(587), Encryption: ptr(EncryptionSTARTTLS),
+		Username: ptr("mailer"), Password: ptr(logging.Secret("new-pw-123")), From: ptr("panel@example.org")}
+	v, err := f.svc.Update(ctx, f.admin, in, &cur.Version)
+	if err != nil || v.PasswordState != PasswordSet {
+		t.Fatalf("after entering it again: %+v, %v", v, err)
 	}
 }

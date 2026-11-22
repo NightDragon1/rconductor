@@ -4312,8 +4312,9 @@ components:
           enum: [none, set, unreadable]
           description: >-
             none: no password stored; set: stored and readable; unreadable:
-            stored, but sealed with another master key (NFR-017), so mail
-            fails with category auth until the password is entered again.
+            stored, but it cannot be decrypted, e.g. it was sealed with
+            another master key (NFR-017), so mail fails with category auth
+            until the password is entered again.
         from:
           type: string
           description: Sender address.

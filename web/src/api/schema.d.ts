@@ -2113,7 +2113,7 @@ export interface components {
             /** @description Whether a password is stored; the password itself is never returned. */
             password_set: boolean;
             /**
-             * @description none: no password stored; set: stored and readable; unreadable: stored, but sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
+             * @description none: no password stored; set: stored and readable; unreadable: stored, but it cannot be decrypted, e.g. it was sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
              * @enum {string}
              */
             password_state: "none" | "set" | "unreadable";

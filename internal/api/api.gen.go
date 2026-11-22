@@ -1559,7 +1559,7 @@ type SMTPSettings struct {
 	// PasswordSet Whether a password is stored; the password itself is never returned.
 	PasswordSet bool `json:"password_set"`
 
-	// PasswordState none: no password stored; set: stored and readable; unreadable: stored, but sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
+	// PasswordState none: no password stored; set: stored and readable; unreadable: stored, but it cannot be decrypted, e.g. it was sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
 	PasswordState SMTPSettingsPasswordState `json:"password_state"`
 	Port          int                       `json:"port"`
 	Username      string                    `json:"username"`
@@ -1571,7 +1571,7 @@ type SMTPSettings struct {
 // SMTPSettingsEncryption defines model for SMTPSettings.Encryption.
 type SMTPSettingsEncryption string
 
-// SMTPSettingsPasswordState none: no password stored; set: stored and readable; unreadable: stored, but sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
+// SMTPSettingsPasswordState none: no password stored; set: stored and readable; unreadable: stored, but it cannot be decrypted, e.g. it was sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
 type SMTPSettingsPasswordState string
 
 // SMTPSettingsInput defines model for SMTPSettingsInput.
