@@ -15,7 +15,7 @@ import (
 // fmt.Fprint* and Write on os.Stdout or os.Stderr, a logger of its own
 // (slog.New with any handler but slog.DiscardHandler), and
 // reflect.ValueOf of a secret, whose String gives the plain value; and
-// Reveal taken as a method value outside the revealers.
+// Reveal taken as a method value or expression outside the revealers.
 func printsPastHandler(funcs map[*ssa.Function]bool, mod string) []finding {
 	var found []finding
 	seen := map[string]bool{}
@@ -55,6 +55,13 @@ func printsPastHandler(funcs map[*ssa.Function]bool, mod string) []finding {
 					continue
 				}
 				cp, name := pkgPath(callee), callee.Name()
+				// logging.Secret.Reveal as a method expression: a thunk
+				// whose first parameter is the secret.
+				if name == "Reveal$thunk" && !hasPrefix(p, mod, revealers) && len(callee.Params) > 0 &&
+					secretOrPointer(callee.Params[0].Type(), mod) {
+					add(rel, "reveals a secret outside its destinations")
+					continue
+				}
 				switch {
 				case cp == "fmt" && strings.HasPrefix(name, "Fprint") && len(cc.Args) > 0 && stdStream(cc.Args[0]):
 					add(rel, "prints past the redacting log handler")

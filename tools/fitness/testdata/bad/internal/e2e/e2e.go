@@ -3,7 +3,16 @@
 
 package e2e
 
-import "fmt"
+import (
+	"fmt"
+	"log/slog"
+	"os"
+)
 
-// P is a test program: it may print.
-func P() { fmt.Println("x") }
+// P is a test program: it may print, also past the handler.
+func P() *slog.Logger {
+	fmt.Println("x")
+	println("x")
+	fmt.Fprintln(os.Stdout, "x")
+	return slog.New(slog.NewJSONHandler(os.Stdout, nil))
+}

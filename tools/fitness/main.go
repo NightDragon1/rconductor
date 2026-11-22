@@ -10,7 +10,10 @@
 //	cmd    only the command pipeline calls Execute of the RCON packages
 //	redact secrets are revealed or converted to their plain value only at
 //	       their destinations (secret-destinations.txt); nothing in
-//	       internal/ prints past the redacting log handler (fmt.Print, log)
+//	       internal/ prints past the redacting log handler (fmt.Print, log,
+//	       print and println, Fprint and Write on stdout or stderr, a
+//	       logger of its own, reflect on a secret, Reveal as a method value
+//	       or expression)
 //	logmask the masking patterns of the shipped profiles stay within a time
 //	       budget per line, alone and as the costliest stack (D-088 b)
 //
