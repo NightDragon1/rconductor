@@ -98,6 +98,7 @@ redact:
 # the system log and the diagnostic export, blacked out before writing (D-090, D-091)
   - internal/diag/**
   - internal/syslog/**
+  - internal/store/queries/sqlite/systemlog.sql
 
 # audit: audit log and the fixed event codes
 audit:
@@ -147,9 +148,12 @@ rules:
   - web/index.html
   - web/vite.config.*
   - web/playwright.config.ts
+  - web/src/test/pseudo.ts
+  - .golangci.*
   - scripts/check-tool-origin.sh
   - scripts/web-build.sh
   - scripts/check-tool-origin-test.sh
+  - scripts/check-dockerfile*
   - Makefile
 # the license check: what reuse lint asks for (NFR-021)
   - REUSE.toml

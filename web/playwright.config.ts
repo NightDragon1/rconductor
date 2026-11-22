@@ -30,7 +30,7 @@ export default defineConfig<{ stack: string }>({
   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
   webServer: stacks.map((s) => ({
     // From the repository root: web/ has its own go.mod as a barrier.
-    command: `${s.dist ? `(cd web && npx vite build --mode language --outDir ${s.dist.replace('web/', '')}) && ` : ''}go run -tags e2e ./internal/e2e/stack -addr 127.0.0.1:${s.port} -base ${s.base}${s.host ? ` -host ${s.host}` : ''}${s.trusted ? ` -trusted ${s.trusted}` : ''} -dist ${s.dist || 'internal/webui/dist'} -state web/e2e/.state-${s.name}.json -log web/e2e/.panel-${s.name}.log`,
+    command: `${s.dist ? `(cd web && node node_modules/vite/bin/vite.js build --config vite.config.ts --mode language --outDir ${s.dist.replace('web/', '')}) && ` : ''}go run -tags e2e ./internal/e2e/stack -addr 127.0.0.1:${s.port} -base ${s.base}${s.host ? ` -host ${s.host}` : ''}${s.trusted ? ` -trusted ${s.trusted}` : ''} -dist ${s.dist || 'internal/webui/dist'} -state web/e2e/.state-${s.name}.json -log web/e2e/.panel-${s.name}.log`,
     cwd: '..',
     url: `http://127.0.0.1:${s.port}${s.base === '/' ? '' : s.base}/`,
     reuseExistingServer: false,

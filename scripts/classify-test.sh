@@ -89,8 +89,12 @@ check "message events and settings reader" 0 "stage-2 authz 2" "modified 1 0 int
   "modified 1 0 internal/store/settings.go"
 check "raw container log sources" 0 "stage-2 redact 2" "modified 1 0 internal/agentview/agentview.go" \
   "modified 1 0 internal/cache/agents.go"
-check "e2e config and tool origin" 0 "stage-2 rules 3" "modified 1 0 web/playwright.config.ts" \
-  "modified 1 0 scripts/check-tool-origin.sh" "modified 1 0 scripts/web-build.sh"
+check "e2e config and tool origin" 0 "stage-2 rules 9" "modified 1 0 web/playwright.config.ts" \
+  "modified 1 0 scripts/check-tool-origin.sh" "modified 1 0 scripts/web-build.sh" \
+  "modified 1 0 scripts/check-tool-origin-test.sh" "modified 1 0 scripts/check-dockerfile.sh" \
+  "modified 1 0 scripts/check-dockerfile-test.sh" "modified 1 0 web/src/test/pseudo.ts" \
+  "modified 1 0 .golangci.yml" "modified 1 0 .golangci.yaml"
+check "system log query" 0 "stage-2 redact 1" "modified 1 0 internal/store/queries/sqlite/systemlog.sql"
 check "sqlc config" 0 "stage-2 rules 1" "modified 1 0 sqlc.yaml"
 check "other profile and query files" 0 "stage-1  2" "modified 1 0 internal/profiles/catalog.go" \
   "modified 1 0 internal/store/queries/sqlite/smtp.sql"

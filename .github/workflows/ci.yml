@@ -40,6 +40,10 @@ on:
 permissions:
   contents: read
 
+# No workspace file changes the modules the checks build with (PRJ-005).
+env:
+  GOWORK: "off"
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -131,6 +135,7 @@ jobs:
       - run: scripts/script-isolation-test.sh
       - run: scripts/classify-test.sh
       - run: scripts/check-tool-origin-test.sh
+      - run: scripts/check-dockerfile-test.sh
       - run: scripts/fitness-ratchet-test.sh
       - run: scripts/release-test.sh
       - run: scripts/check-git-config-test.sh
@@ -276,10 +281,11 @@ jobs:
             ../api/openapi.yaml -o src/api/schema.d.ts
           git diff --exit-code -- src/api
       - run: node node_modules/prettier/bin/prettier.cjs --check .
-      - run: node node_modules/vitest/vitest.mjs run
+      - run: node node_modules/vitest/vitest.mjs run --config vite.config.ts
       - run: sh ../scripts/web-build.sh
-      # The image builds the UI the same way (Dockerfile, stage ui).
-      - run: grep -qx 'RUN sh /src/scripts/web-build.sh' ../Dockerfile
+      # The image builds the UI the same way; Dockerfile and .dockerignore
+      # change only together with the checksum of the core script.
+      - run: sh ../scripts/check-dockerfile.sh ..
       # The E2E shards use this build instead of making their own.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
