@@ -117,6 +117,10 @@ const (
 	WSSubscribe       Code = "ws.subscribe"
 	WSSubscribeDenied Code = "ws.subscribe.denied"
 	CacheStale        Code = "cache.stale"
+	// LogsLinesDropped: live container log lines of an agent dropped
+	// because the masking is behind (UI-022, D-077); deliveries and lines
+	// as numbers.
+	LogsLinesDropped Code = "logs.lines_dropped"
 )
 
 // Mail (NFR-017): only the recipient's domain and the reason as a
@@ -142,6 +146,6 @@ var AllCodes = []Code{
 	AgentConnected, AgentRejected, AgentPaired, AgentRevoked, AgentLimit, AgentDisconnected,
 	AgentHandshake, AgentForbidden, AgentUnsupported, DockerAction,
 	LogsFollowStart, LogsFollowStop, LogsTail,
-	WSSubscribe, WSSubscribeDenied, CacheStale,
+	WSSubscribe, WSSubscribeDenied, CacheStale, LogsLinesDropped,
 	MailSent, MailFailed,
 }

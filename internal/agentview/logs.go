@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
+	"github.com/NightDragon1/rconductor/internal/logging"
 )
 
 // Logs is the data of server.<id>.logs; the lines are foreign data
@@ -48,6 +49,10 @@ const maxMaskQueue = 64
 // dropWarnEvery spaces the warnings about dropped deliveries of an agent.
 const dropWarnEvery = time.Minute
 
+// maskIdle ends the worker and frees the queue of an agent without
+// deliveries for this long; the next delivery starts them again.
+const maskIdle = time.Minute
+
 type delivery struct {
 	agentID    string
 	ll         agentproto.LogLines
@@ -74,17 +79,44 @@ func (v *View) UseMasking(ctx context.Context, m Masking) {
 	if v.now == nil {
 		v.now = time.Now
 	}
+	if v.maskIdle == 0 {
+		v.maskIdle = maskIdle
+	}
 }
 
-func (v *View) maskLoop(q *agentQueue) {
+// maskLoop masks the deliveries of one agent in order; after maskIdle
+// without any it frees the queue and tells the drops not yet warned about.
+func (v *View) maskLoop(agentID string, q *agentQueue) {
+	idle := time.NewTimer(v.maskIdle)
+	defer idle.Stop()
 	for {
 		select {
 		case <-v.maskCtx.Done():
 			return
 		case d := <-q.ch:
 			v.publishLines(v.maskCtx, d)
+			idle.Reset(v.maskIdle)
+		case <-idle.C:
+			v.qmu.Lock()
+			if len(q.ch) > 0 {
+				v.qmu.Unlock()
+				idle.Reset(v.maskIdle)
+				continue
+			}
+			delete(v.queues, agentID) // deliveries are queued under qmu: none can come
+			n, lines := q.dropped, q.droppedLines
+			v.qmu.Unlock()
+			if n > 0 {
+				v.dropWarn(agentID, n, lines)
+			}
+			return
 		}
 	}
+}
+
+func (v *View) dropWarn(agentID string, deliveries, lines int) {
+	v.log.Warn("log lines dropped: masking is behind", logging.Event(logging.LogsLinesDropped), slog.String("agent_id", agentID),
+		slog.Int("deliveries", deliveries), slog.Int("lines", lines))
 }
 
 func (v *View) masked(ctx context.Context, serverID string, lines []string) []string {
@@ -118,8 +150,8 @@ func (v *View) lines(agentID string, ll agentproto.LogLines, seq, first uint64) 
 	q := v.queues[agentID]
 	if q == nil {
 		q = &agentQueue{ch: make(chan delivery, maxMaskQueue)}
-		v.queues[agentID] = q // one per admitted agent
-		go v.maskLoop(q)
+		v.queues[agentID] = q // one per agent with deliveries, freed when idle
+		go v.maskLoop(agentID, q)
 	}
 	select {
 	case q.ch <- d:
@@ -136,12 +168,12 @@ func (v *View) lines(agentID string, ll agentproto.LogLines, seq, first uint64) 
 	}
 	v.qmu.Unlock()
 	if warn {
-		v.log.Warn("log lines dropped: masking is behind", slog.String("agent_id", agentID),
-			slog.Int("deliveries", n), slog.Int("lines", lines))
+		v.dropWarn(agentID, n, lines)
 	}
 }
 
-// droppedDeliveries is the number of deliveries of an agent dropped so far.
+// droppedDeliveries is the number of deliveries of an agent dropped since
+// its queue was started.
 func (v *View) droppedDeliveries(agentID string) uint64 {
 	v.qmu.Lock()
 	defer v.qmu.Unlock()
