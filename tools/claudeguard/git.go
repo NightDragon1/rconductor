@@ -355,6 +355,11 @@ func (c *checker) gitPush(args []arg) {
 			c.deny("git push with a :refspec deletes a remote ref and is not allowed")
 			return
 		}
+		// Only Renovate rebases its branches (SEC-013).
+		if strings.Contains(a.val, "renovate/") {
+			c.deny("git push to a Renovate branch is not allowed")
+			return
+		}
 	}
 }
 

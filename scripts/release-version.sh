@@ -9,6 +9,9 @@
 # Docker Hub description alone (rc=true).
 set -eu
 [ $# -eq 1 ] || { echo "usage: release-version.sh TAG" >&2; exit 2; }
+# One line only: grep checks line by line, a second line would pass unseen.
+case $1 in *'
+'*) echo "not a release tag: more than one line" >&2; exit 1 ;; esac
 printf '%s\n' "$1" | grep -qE '^v[0-9]+\.[0-9]+(-rc[1-9][0-9]*)?$' || {
   echo "not a release tag: $1 (want v1.0, v1.1-rc1, or v0.9 for a test version)" >&2
   exit 1

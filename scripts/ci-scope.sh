@@ -26,9 +26,10 @@ SQLC='^(migrations/|internal/store/queries/|internal/store/sqlitedb/|sqlc\.yaml$
 # Documentation: no build, test or image is due for it. Files that tests
 # read stay code (README.md: Go and release script tests; the user guide
 # pages checked against the code; the logo templates, from which the web
-# test of scripts/logo.sh checks the generated files).
+# test of scripts/logo.sh checks the generated files; the Docker Hub texts,
+# which the release test compares with scripts/dockerhub-overview.sh).
 DOCS='(\.md$|^docs/|^assets/|^LICENSE|^\.github/ISSUE_TEMPLATE/)'
-DOCTESTED='^(README\.md|docs/user/configuration\.md|docs/user/technical\.md|assets/logo/.*)$'
+DOCTESTED='^(README\.md|docs/user/configuration\.md|docs/user/technical\.md|assets/logo/.*|deploy/dockerhub/overview-.*\.md)$'
 # Paths that need none of these stages.
 NONE='^(\.claude/|\.github/|\.githooks/|deploy/|docs/|scripts/|tools/|\.dockerignore$|\.editorconfig$|\.gitattributes$|\.gitignore$|\.golangci\.yml$|CHANGELOG\.md$|CLAUDE\.md$|CONTRIBUTING\.md$|Dockerfile$|LICENSE$|README\.md$|SECURITY\.md$|THIRD_PARTY_NOTICES\.md$|renovate\.json$)'
 
