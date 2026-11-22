@@ -5,10 +5,13 @@ package users
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"slices"
 	"sync"
 	"testing"
+
+	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 )
 
 // TestC397ServerAdminDeletes (D-106): a server admin deletes a moderator
@@ -79,5 +82,23 @@ func TestC397SameUserTwice(t *testing.T) {
 		if n := f.count(`SELECT count(*) FROM audit_log WHERE action = 'user.delete' AND result = 'ok' AND target_id = ?`, f.ids["m2"]); ok != 1 || n != 1 {
 			t.Fatalf("%d deletes succeeded, %d audit entries, want 1 and 1", ok, n)
 		}
+	}
+}
+
+// TestC397SoftDeleteOnce (D-106): the delete of a user touches him only
+// once; a second delete finds no row, which Delete answers with 404.
+func TestC397SoftDeleteOnce(t *testing.T) {
+	f := newFixture(t)
+	q := sqlitedb.New(f.st.DB)
+	p := sqlitedb.SoftDeleteUserParams{DeletedAt: sql.NullString{String: "t1", Valid: true}, UpdatedAt: "t1", ID: f.ids["m2"]}
+	if n, err := q.SoftDeleteUser(context.Background(), p); err != nil || n != 1 {
+		t.Fatalf("first delete = %d, %v", n, err)
+	}
+	p.DeletedAt.String = "t2"
+	if n, err := q.SoftDeleteUser(context.Background(), p); err != nil || n != 0 {
+		t.Errorf("second delete = %d, %v, want no row", n, err)
+	}
+	if n := f.count(`SELECT count(*) FROM users WHERE id = ? AND deleted_at = 't1'`, f.ids["m2"]); n != 1 {
+		t.Error("the time of the first delete was overwritten")
 	}
 }
