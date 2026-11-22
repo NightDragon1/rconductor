@@ -175,3 +175,22 @@ func TestAnswerOnlyInSystemLog(t *testing.T) {
 		}
 	}
 }
+
+// TestC323AnswerInGroupOnlyInSystemLog: an answer within a group or under
+// WithGroup does not reach stdout either (D-091).
+func TestC323AnswerInGroupOnlyInSystemLog(t *testing.T) {
+	for _, format := range []string{"json", "text"} {
+		var out, sys bytes.Buffer
+		f := New(&out, "panel", config.Log{Level: slog.LevelDebug, Format: format})
+		f.Also(&sys)
+		log := f.Module("cmd")
+		log.Info("grouped", slog.Group("cmd", slog.String(KeyAnswer, "Unknown command steve")))
+		log.WithGroup("cmd").Info("with group", slog.String(KeyAnswer, "Unknown command alex"))
+		if strings.Contains(out.String(), "steve") || strings.Contains(out.String(), "alex") || !strings.Contains(out.String(), "with group") {
+			t.Errorf("%s stdout: %s", format, out.String())
+		}
+		if !strings.Contains(sys.String(), "steve") || !strings.Contains(sys.String(), "alex") {
+			t.Errorf("%s system log: %s", format, sys.String())
+		}
+	}
+}
