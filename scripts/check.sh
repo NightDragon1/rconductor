@@ -55,7 +55,7 @@ fi
 
 step generated code
 go generate ./...
-docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1@sha256:70f53171d27b2424e9358869975455a6e955a5aa8e58a998a270a6e34e525537 diff
 (cd web && npm run -s gen:api >/dev/null && npx prettier --write src/api/schema.d.ts >/dev/null)
 git diff --exit-code -- internal/api web/src/api
 scripts/logo.sh --check

@@ -77,8 +77,10 @@ jobs:
         with:
           persist-credentials: false
       - run: scripts/check-spdx.sh
-      # The REUSE image by digest, not by tag (NFR-021).
-      - run: docker run --rm -v "$PWD:/data" fsfe/reuse:6.0.0@sha256:71d7cb4e153b8765e93280398a3447b0ef13d6766a0420033dc333ddb2f6d368 lint
+      # The REUSE image by digest, not by tag (NFR-021); Renovate keeps it.
+      - uses: docker://fsfe/reuse:6.0.0@sha256:71d7cb4e153b8765e93280398a3447b0ef13d6766a0420033dc333ddb2f6d368
+        with:
+          args: lint
 
   fitness:
     name: Fitness functions
@@ -127,6 +129,7 @@ jobs:
       - run: scripts/check-secrets-test.sh
       - run: scripts/script-isolation-test.sh
       - run: scripts/classify-test.sh
+      - run: scripts/release-test.sh
       - run: scripts/check-git-config-test.sh
       - run: scripts/lockfile-packages-test.sh
       - run: scripts/third-party-go-test.sh
