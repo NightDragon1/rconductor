@@ -72,10 +72,10 @@ func (s *apiServer) sessionOf(ctx context.Context, p auth.Principal) api.Session
 	}
 	if s.store != nil {
 		var on, supporters bool
-		if s.store.GlobalSetting(ctx, users.SettingShortcuts, &on) == nil {
+		if s.store.LoggedSetting(ctx, s.log, users.SettingShortcuts, &on) == nil {
 			out.Ui.ShortcutsEnabled = on
 		}
-		if s.store.GlobalSetting(ctx, perm.SettingSupportersEnabled, &supporters) == nil {
+		if s.store.LoggedSetting(ctx, s.log, perm.SettingSupportersEnabled, &supporters) == nil {
 			out.Ui.SupportersEnabled = supporters
 		}
 		if u, err := s.store.Queries.GetRightsUser(ctx, p.UserID); err == nil {

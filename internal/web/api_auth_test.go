@@ -127,7 +127,7 @@ func newAPIFixtureFeatures(t *testing.T, proxies Proxies, flags *features.Set) *
 		t.Fatal(err)
 	}
 	us.UseFeatures(flags)
-	hub := events.NewHub(checker, nil, svc, log, events.SettingsLimits(st))
+	hub := events.NewHub(checker, nil, svc, log, events.SettingsLimits(st, log))
 	svc.OnSessionsEnded(hub.CloseSessions)
 	panelKey, err := keys.LoadOrCreateIdentity(log, filepath.Join(t.TempDir(), keys.PanelKeyFile))
 	if err != nil {

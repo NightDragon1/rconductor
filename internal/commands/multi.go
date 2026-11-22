@@ -36,7 +36,7 @@ type MultiItem struct {
 
 func (s *Service) multiSetting(ctx context.Context, key string, def, lo int) int {
 	n := def
-	if err := s.st.GlobalSetting(ctx, key, &n); err != nil || n < lo {
+	if err := s.st.GuardedSetting(ctx, s.log, key, &n); err != nil || n < lo {
 		n = def
 	}
 	return n

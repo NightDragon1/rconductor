@@ -71,3 +71,61 @@ func TestC142B3GuardedSettingKeepsLastValue(t *testing.T) {
 		t.Errorf("a value in the log: %s", logged)
 	}
 }
+
+// TestD109BrokenRowsAndSwitches covers D-109: a broken row of a number is a
+// failed read too, logged, with the last value read before; a switch read
+// through LoggedSetting logs a broken row and a failed database and keeps
+// no value read before, so the caller keeps the protection on.
+func TestD109BrokenRowsAndSwitches(t *testing.T) {
+	st := storetest.New(t)
+	ctx := context.Background()
+	var out bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&out, nil))
+	if _, err := st.EnsureDefault(ctx, "login.max_failures", 3); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := st.GuardedSetting(ctx, log, "login.max_failures", &n); err != nil || n != 3 {
+		t.Fatalf("first read %d %v", n, err)
+	}
+	if _, err := st.DB.Exec(`UPDATE settings SET value = '"broken"' WHERE key = 'login.max_failures'`); err != nil {
+		t.Fatal(err)
+	}
+	n = 0
+	if err := st.GuardedSetting(ctx, log, "login.max_failures", &n); err != nil || n != 3 {
+		t.Errorf("broken row: %d %v, want the last value 3", n, err)
+	}
+	if !strings.Contains(out.String(), `"event":"setting.read_failed"`) || strings.Contains(out.String(), "broken") {
+		t.Errorf("broken row not logged by key alone: %s", out.String())
+	}
+	out.Reset()
+	if _, err := st.EnsureDefault(ctx, "supporters.enabled", true); err != nil {
+		t.Fatal(err)
+	}
+	var on bool
+	if err := st.LoggedSetting(ctx, log, "supporters.enabled", &on); err != nil || !on {
+		t.Fatalf("switch %v %v", on, err)
+	}
+	if err := st.LoggedSetting(ctx, log, "no.such.switch", &on); !errors.Is(err, sql.ErrNoRows) || out.Len() != 0 {
+		t.Errorf("missing switch %v, log %s", err, out.String())
+	}
+	if _, err := st.DB.Exec(`UPDATE settings SET value = '7654321' WHERE key = 'supporters.enabled'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LoggedSetting(ctx, log, "supporters.enabled", &on); err == nil || !strings.Contains(out.String(), `"setting":"supporters.enabled"`) ||
+		!strings.Contains(out.String(), `"reason":"decode"`) {
+		t.Errorf("broken switch: %v, log %s", err, out.String())
+	}
+	// SEC-012: the value never reaches the log, not even through the text
+	// of the decode error.
+	if strings.Contains(out.String(), "7654321") {
+		t.Errorf("value in the log: %s", out.String())
+	}
+	out.Reset()
+	if err := st.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.LoggedSetting(ctx, log, "supporters.enabled", &on); err == nil || !strings.Contains(out.String(), `"event":"setting.read_failed"`) {
+		t.Errorf("closed database: %v, log %s", err, out.String())
+	}
+}

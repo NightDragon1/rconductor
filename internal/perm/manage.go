@@ -69,7 +69,7 @@ func (c *Checker) Managed(ctx context.Context, actor Actor) (map[string]bool, er
 
 	if actor.Role == Moderator {
 		var enabled bool
-		if err := c.st.GlobalSetting(ctx, SettingSupportersEnabled, &enabled); err != nil || !enabled {
+		if err := c.st.LoggedSetting(ctx, c.log, SettingSupportersEnabled, &enabled); err != nil || !enabled {
 			return out, nil //nolint:nilerr // a missing switch means off
 		}
 		for _, u := range users {
@@ -137,7 +137,7 @@ func (c *Checker) MayManageUsers(ctx context.Context, actor Actor) (bool, error)
 		return false, nil
 	}
 	var enabled bool
-	if err := c.st.GlobalSetting(ctx, SettingSupportersEnabled, &enabled); err != nil || !enabled {
+	if err := c.st.LoggedSetting(ctx, c.log, SettingSupportersEnabled, &enabled); err != nil || !enabled {
 		return false, nil //nolint:nilerr // a missing switch means off
 	}
 	u, err := c.st.Queries.GetRightsUser(ctx, actor.ID)

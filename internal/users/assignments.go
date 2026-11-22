@@ -493,7 +493,7 @@ func (s *Service) applySupporterGrants(ck *checker, q *sqlitedb.Queries, u User,
 		return &InvalidError{Detail: "supporter grants are only for supporters"}
 	}
 	var enabled bool
-	if err := s.st.GlobalSetting(ck.ctx, perm.SettingSupportersEnabled, &enabled); err != nil {
+	if err := s.st.LoggedSetting(ck.ctx, s.log, perm.SettingSupportersEnabled, &enabled); err != nil {
 		enabled = false
 	}
 	wanted := map[SupporterGrant]bool{}

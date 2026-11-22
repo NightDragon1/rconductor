@@ -128,7 +128,7 @@ func (s *Service) endMarker(serverID string) string {
 // server with an HTTPS API.
 func (s *Service) httpParallel() int {
 	n := users.DefaultHTTPParallel
-	if err := s.st.GlobalSetting(context.Background(), users.SettingHTTPParallel, &n); err != nil || n < users.MinHTTPParallel {
+	if err := s.st.GuardedSetting(context.Background(), s.log, users.SettingHTTPParallel, &n); err != nil || n < users.MinHTTPParallel {
 		n = users.DefaultHTTPParallel
 	}
 	return n

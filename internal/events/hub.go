@@ -44,14 +44,14 @@ type LimitsFunc func(ctx context.Context) Limits
 // SettingsLimits reads the limits from the global settings
 // ws.max_sockets_per_session and ws.max_subscriptions_per_socket, which
 // only the RCON admin changes.
-func SettingsLimits(st *store.Store) LimitsFunc {
+func SettingsLimits(st *store.Store, log *slog.Logger) LimitsFunc {
 	return func(ctx context.Context) Limits {
 		l := Limits{SocketsPerSession: users.DefaultWSMaxSockets, SubsPerSocket: users.DefaultWSMaxSubs}
 		var n int
-		if err := st.GlobalSetting(ctx, users.SettingWSMaxSockets, &n); err == nil && n > 0 {
+		if err := st.GuardedSetting(ctx, log, users.SettingWSMaxSockets, &n); err == nil && n > 0 {
 			l.SocketsPerSession = n
 		}
-		if err := st.GlobalSetting(ctx, users.SettingWSMaxSubs, &n); err == nil && n > 0 {
+		if err := st.GuardedSetting(ctx, log, users.SettingWSMaxSubs, &n); err == nil && n > 0 {
 			l.SubsPerSocket = n
 		}
 		return l
