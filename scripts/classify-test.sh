@@ -48,7 +48,7 @@ check "stage 2 at 401" 1 "stage-2 input 401" "modified 200 100 internal/pattern/
 check "stage 1 over 400" 0 "stage-1  5000" "modified 5000 0 internal/servers/servers.go"
 check "lockfiles not counted" 0 "stage-2 boundary 2" "modified 1 1 .github/workflows/ci.yml" \
   "modified 600 20 web/package-lock.json" "modified 20 2 tools/go.sum" "modified 10 0 go.sum"
-check "move into generated counts" 0 "stage-2 cmd 7" "renamed 7 0 internal/api/c.go internal/commands/c.go"
+check "move into generated counts" 0 "stage-2 boundary,cmd 7" "renamed 7 0 internal/api/c.go internal/commands/c.go"
 check "workflow change" 0 "stage-2 boundary 2" "modified 1 1 .github/workflows/ci.yml"
 check "class file change" 0 "stage-2 boundary 1" "modified 1 0 .github/core-paths.yml"
 check "rules files" 0 "stage-2 rules 4" "modified 1 0 CLAUDE.md" "modified 1 0 scripts/release-notes.sh" \
@@ -122,6 +122,9 @@ check "queries and handler of the rights check" 0 "stage-2 authz 5" "modified 1 
   "modified 1 0 internal/store/queries/sqlite/groups.sql" \
   "modified 1 0 internal/web/api_secondfactor.go" \
   "modified 1 0 internal/store/queries/sqlite/users.sql"
+check "hand-written code of the API package" 0 "stage-2 boundary 1" "added 1 0 internal/api/x.go"
+check "generated API code alone" 0 "stage-1  0" "modified 1 0 internal/api/api.gen.go"
+check "move onto the generated name counts" 0 "stage-2 cmd 7" "renamed 7 0 internal/api/api.gen.go internal/commands/c.go"
 check "bad line" 2 "" "modified x 0 a.go"
 
 # The class file is read strictly: a line outside the format fails.
