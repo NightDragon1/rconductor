@@ -10,7 +10,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo/rconductor-logo-dark.svg">
-    <img src="assets/logo/rconductor-logo.svg" alt="ShadowGhost.NET RCONductor" width="375">
+    <img src="web/src/assets/logo/logo.svg" alt="ShadowGhost.NET RCONductor" width="375">
   </picture>
 </p>
 

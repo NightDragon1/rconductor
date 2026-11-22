@@ -5,7 +5,7 @@
 [![License AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](https://github.com/NightDragon1/rconductor/blob/main/LICENSE)
 ![Platforms amd64 and arm64](https://img.shields.io/badge/platforms-amd64%20%7C%20arm64-informational)
 
-![ShadowGhost.NET RCONductor](https://raw.githubusercontent.com/NightDragon1/rconductor/main/assets/logo/rconductor-logo.svg)
+![ShadowGhost.NET RCONductor](https://raw.githubusercontent.com/NightDragon1/rconductor/main/web/src/assets/logo/logo.svg)
 
 The agent of RCONductor, the self-hosted web panel for RCON-capable game
 servers (image `nightdragon1/rconductor-panel`). One agent runs on each game
