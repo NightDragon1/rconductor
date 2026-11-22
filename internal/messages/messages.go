@@ -484,7 +484,9 @@ func (s *Service) audited(ctx context.Context, tx *sql.Tx, req users.Request, ac
 }
 
 // Send sends a message: first the role and the audience (403), then the
-// input (400), then the count of the last hour (429), as in D-051.
+// input (400), then the count of the last hour (429); what depends on the
+// resolved audience (unknown user, no or too many recipients) comes after
+// it and counts against the hour.
 func (s *Service) Send(ctx context.Context, req users.Request, in Input) (Message, error) {
 	allowed := false
 	for _, a := range senders[req.Actor.Role] {
@@ -631,6 +633,13 @@ func (s *Service) store(ctx context.Context, req users.Request, in Input) (Messa
 	}
 	if sent >= int64(perHour) {
 		return Message{}, nil, ErrRateLimited
+	}
+	// A sender removed since the request was taken sends nothing and
+	// leaves no count behind (MSG-001).
+	if _, err := q.GetActiveUserRole(ctx, req.Actor.ID); errors.Is(err, sql.ErrNoRows) {
+		return Message{}, nil, users.ErrForbidden
+	} else if err != nil {
+		return Message{}, nil, err
 	}
 	created := now.Format(store.TimeLayout)
 	if err := q.DeleteOldMessageSends(ctx, sqlitedb.DeleteOldMessageSendsParams{UserID: req.Actor.ID, SentAt: hourAgo}); err != nil {
