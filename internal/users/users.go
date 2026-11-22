@@ -69,6 +69,9 @@ type Service struct {
 	// features are the flags whose settings keys the RCON admin may
 	// change (NFR-019).
 	features *features.Set
+	// beforeTx runs between the checks before a write and its transaction;
+	// tests only, to change the state in that window (nil in the panel).
+	beforeTx func()
 }
 
 // NewService returns the user administration.
@@ -172,6 +175,13 @@ func (s *Service) loadQ(ctx context.Context, q *sqlitedb.Queries, id string) (Us
 	return toUser(sqlitedb.ListUsersRow(r)), nil
 }
 
+// managedTx tells whether the caller still manages target, read through
+// the queries of the writing transaction (Design 3.6).
+func (s *Service) managedTx(ctx context.Context, q *sqlitedb.Queries, req Request, target string) (bool, error) {
+	m, err := s.perm.ManagedTx(ctx, q, req.Actor)
+	return m[target], err
+}
+
 // mayManageUsers rejects callers without user administration with
 // ErrForbidden, logged as perm.denied and audited (Design 2.2, 3.6).
 func (s *Service) mayManageUsers(ctx context.Context, req Request, action string) error {
@@ -257,6 +267,9 @@ func (s *Service) Update(ctx context.Context, req Request, id string, u Update) 
 	}
 
 	changes := map[string]any{}
+	if s.beforeTx != nil {
+		s.beforeTx()
+	}
 	tx, err := s.st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return User{}, err
@@ -264,6 +277,23 @@ func (s *Service) Update(ctx context.Context, req Request, id string, u Update) 
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	now := store.Now()
+	// Managed and the user as they are inside the lock: a change of role,
+	// lock or invitation in between decides, not the state read before.
+	if ok, err := s.managedTx(ctx, q, req, id); err != nil {
+		return User{}, err
+	} else if !ok {
+		_ = tx.Rollback()
+		s.denied(ctx, req, "user.update", id, "not_found", nil)
+		return User{}, ErrNotFound
+	}
+	if cur, err = s.loadQ(ctx, q, id); err != nil {
+		return User{}, err
+	}
+	if u.SupportersAllowed != nil && *u.SupportersAllowed != cur.SupportersAllowed && cur.Role != perm.Moderator {
+		_ = tx.Rollback()
+		s.denied(ctx, req, "user.update", id, "forbidden", map[string]bool{"supporters_allowed": *u.SupportersAllowed})
+		return User{}, ErrForbidden
+	}
 	// A moderator whose supporters lose what he passed on (the switch, a
 	// new role, a lock): their sessions end too, read in the transaction
 	// before the grants go (ROLE-006, AUTH-006).
@@ -322,6 +352,9 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	if err := s.mustManage(ctx, req, id, "user.delete"); err != nil {
 		return err
 	}
+	if s.beforeTx != nil {
+		s.beforeTx()
+	}
 	tx, err := s.st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -329,6 +362,13 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	now := store.Now()
+	if ok, err := s.managedTx(ctx, q, req, id); err != nil {
+		return err
+	} else if !ok {
+		_ = tx.Rollback()
+		s.denied(ctx, req, "user.delete", id, "not_found", nil)
+		return ErrNotFound
+	}
 	// Deleted meanwhile by another call: as for an unknown user (D-106).
 	n, err := q.SoftDeleteUser(ctx, sqlitedb.SoftDeleteUserParams{DeletedAt: sql.NullString{String: now, Valid: true}, UpdatedAt: now, ID: id})
 	if err != nil {

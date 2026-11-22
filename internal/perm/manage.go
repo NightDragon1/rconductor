@@ -31,7 +31,12 @@ type Actor struct {
 //
 // Soft-deleted users are never managed; disabled users are.
 func (c *Checker) Managed(ctx context.Context, actor Actor) (map[string]bool, error) {
-	q := c.st.Queries
+	return c.ManagedTx(ctx, c.st.Queries, actor)
+}
+
+// ManagedTx is Managed read through q, such as the queries of the writing
+// transaction, so that a change in between cannot widen what is managed.
+func (c *Checker) ManagedTx(ctx context.Context, q *sqlitedb.Queries, actor Actor) (map[string]bool, error) {
 	users, err := q.ListManageCandidates(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load users: %w", err)
@@ -69,7 +74,7 @@ func (c *Checker) Managed(ctx context.Context, actor Actor) (map[string]bool, er
 
 	if actor.Role == Moderator {
 		var enabled bool
-		if err := c.st.LoggedSetting(ctx, c.log, SettingSupportersEnabled, &enabled); err != nil || !enabled {
+		if err := c.st.LoggedSettingQ(ctx, q, c.log, SettingSupportersEnabled, &enabled); err != nil || !enabled {
 			return out, nil //nolint:nilerr // a missing switch means off
 		}
 		for _, u := range users {

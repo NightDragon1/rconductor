@@ -199,14 +199,23 @@ func (s *Service) durationSetting(ctx context.Context, key string, def, low time
 // cannot be read, or is anything but true or false (also null), means
 // required, so a fault never lowers the sign-in (fail closed).
 func (s *Service) TOTPRequired(ctx context.Context) bool {
+	return s.totpRequiredQ(ctx, s.st.Queries)
+}
+
+// totpRequiredQ reads the duty through q, also inside a transaction.
+func (s *Service) totpRequiredQ(ctx context.Context, q *sqlitedb.Queries) bool {
 	var raw json.RawMessage
 	// A failed read is logged by LoggedSetting (D-109); a value that is
-	// neither true nor false here.
-	err := s.st.LoggedSetting(ctx, s.log, SettingTOTPRequired, &raw)
+	// neither true nor false here, once until a good read.
+	err := s.st.LoggedSettingQ(ctx, q, s.log, SettingTOTPRequired, &raw)
 	if err == nil && string(raw) != "true" && string(raw) != "false" {
 		err = errors.New("not true or false")
-		s.log.Error("second factor setting not readable, treated as required", logging.Event(logging.SettingReadFailed),
-			slog.String("setting", SettingTOTPRequired), slog.Any("err", err))
+		if s.badTOTPSwitch.CompareAndSwap(false, true) {
+			s.log.Error("second factor setting not readable, treated as required", logging.Event(logging.SettingReadFailed),
+				slog.String("setting", SettingTOTPRequired), slog.Any("err", err))
+		}
+	} else if err == nil || errors.Is(err, sql.ErrNoRows) {
+		s.badTOTPSwitch.Store(false)
 	}
 	switch {
 	case err == nil:
@@ -564,26 +573,32 @@ func (s *Service) DisableTOTP(ctx context.Context, p Principal, c Client, pw, co
 	if len(r.TotpSecret) == 0 {
 		return ErrNoPending
 	}
-	return s.clearTOTP(ctx, p.UserID, p.Pseudonym, p.UserID, p.Role, p.SessionHash, c.RequestID, "self")
+	return s.clearTOTP(ctx, p.UserID, p.Pseudonym, p.UserID, p.Role, p.SessionHash, c.RequestID, "self", true)
 }
 
 // ClearTOTP resets the second factor of a user for an administrator, who
 // checked the right to manage the user before (AUTH-008); the sessions of
 // the user end.
 func (s *Service) ClearTOTP(ctx context.Context, userID, pseudonym, actorID, actorRole, sessionHash, requestID string) error {
-	if err := s.clearTOTP(ctx, userID, pseudonym, actorID, actorRole, sessionHash, requestID, "admin_reset"); err != nil {
+	if err := s.clearTOTP(ctx, userID, pseudonym, actorID, actorRole, sessionHash, requestID, "admin_reset", false); err != nil {
 		return err
 	}
 	return s.RevokeUser(ctx, userID, "totp_reset", requestID)
 }
 
-func (s *Service) clearTOTP(ctx context.Context, userID, pseudonym, actorID, actorRole, sessionHash, requestID, cause string) error {
+// clearTOTP switches the second factor of a user off; with duty, a duty
+// switched on meanwhile refuses it inside the same transaction (AUTH-008).
+func (s *Service) clearTOTP(ctx context.Context, userID, pseudonym, actorID, actorRole, sessionHash, requestID, cause string, duty bool) error {
 	tx, err := s.st.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	n, err := sqlitedb.New(tx).ClearTOTP(ctx, sqlitedb.ClearTOTPParams{UpdatedAt: store.Now(), ID: userID})
+	q := sqlitedb.New(tx)
+	if duty && s.totpRequiredQ(ctx, q) {
+		return ErrTOTPRequired
+	}
+	n, err := q.ClearTOTP(ctx, sqlitedb.ClearTOTPParams{UpdatedAt: store.Now(), ID: userID})
 	if err != nil {
 		return err
 	}
@@ -870,7 +885,7 @@ func (s *Service) RedeemRecovery(ctx context.Context, token, pw string, c Client
 	}
 	s.log.Info("recovery used", logging.Event(logging.AuthRecoveryUsed), slog.String(logging.KeyRequestID, c.RequestID),
 		slog.String(logging.KeyUser, r.Pseudonym))
-	if err := s.clearTOTP(ctx, r.UserID, r.Pseudonym, r.UserID, r.Role, "", c.RequestID, "recovery"); err != nil {
+	if err := s.clearTOTP(ctx, r.UserID, r.Pseudonym, r.UserID, r.Role, "", c.RequestID, "recovery", false); err != nil {
 		return err
 	}
 	return s.RevokeUser(ctx, r.UserID, "totp_recovery", c.RequestID)

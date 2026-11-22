@@ -176,3 +176,59 @@ func TestC260BrokenRowLoggedOnce(t *testing.T) {
 		t.Errorf("a failed read after a broken row: %d lines, %s", count(), out.String())
 	}
 }
+
+// TestC439FallbackInOrderAndLoggedReset (D-109, F-93): a guarded number
+// keeps the value read last through a run of broken reads, one after the
+// other, and takes the repaired value at once; a logged setting (no
+// fallback) is logged once per failure and again after a good read.
+func TestC439FallbackInOrderAndLoggedReset(t *testing.T) {
+	st := storetest.New(t)
+	ctx := context.Background()
+	var out bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&out, nil))
+	if _, err := st.EnsureDefault(ctx, "login.max_failures", 3); err != nil {
+		t.Fatal(err)
+	}
+	set := func(key, v string) {
+		t.Helper()
+		if _, err := st.DB.Exec(`UPDATE settings SET value = ? WHERE key = ?`, v, key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var n int
+	if err := st.GuardedSetting(ctx, log, "login.max_failures", &n); err != nil || n != 3 {
+		t.Fatalf("first read = %d, %v", n, err)
+	}
+	set("login.max_failures", `"broken`)
+	for i := range 3 {
+		n = 0
+		if err := st.GuardedSetting(ctx, log, "login.max_failures", &n); err != nil || n != 3 {
+			t.Fatalf("broken read %d = %d, %v, want the last value 3", i, n, err)
+		}
+	}
+	set("login.max_failures", `7`)
+	if err := st.GuardedSetting(ctx, log, "login.max_failures", &n); err != nil || n != 7 {
+		t.Fatalf("after the repair = %d, %v", n, err)
+	}
+	if _, err := st.EnsureDefault(ctx, "supporters.enabled", true); err != nil {
+		t.Fatal(err)
+	}
+	count := func() int { return strings.Count(out.String(), `supporters.enabled`) }
+	var on bool
+	set("supporters.enabled", `"x`)
+	_ = st.LoggedSetting(ctx, log, "supporters.enabled", &on)
+	_ = st.LoggedSetting(ctx, log, "supporters.enabled", &on)
+	first := count()
+	if first != 1 {
+		t.Fatalf("two broken reads logged %d times, want once", first)
+	}
+	set("supporters.enabled", `true`)
+	if err := st.LoggedSetting(ctx, log, "supporters.enabled", &on); err != nil || !on {
+		t.Fatalf("good read = %v, %v", on, err)
+	}
+	set("supporters.enabled", `"x`)
+	_ = st.LoggedSetting(ctx, log, "supporters.enabled", &on)
+	if count() <= first {
+		t.Error("a new failure after a good read is not logged again")
+	}
+}
