@@ -45,7 +45,7 @@ async function check(page: Page, state: StackState, what: string) {
 
 async function signIn(page: Page, user: string, password: string) {
   await page.goto('login');
-  await page.getByLabel('⟦Pseudonym⟧').fill(user);
+  await page.getByLabel('⟦Username⟧').fill(user);
   await page.getByLabel('⟦Password⟧', { exact: true }).fill(password);
   await page.getByRole('button', { name: '⟦Sign in⟧' }).click();
   await expect(page.getByRole('navigation').first()).toBeVisible();
@@ -53,7 +53,7 @@ async function signIn(page: Page, user: string, password: string) {
 
 test('the check finds a text outside the language files', async ({ page }) => {
   await page.goto('login');
-  await expect(page.getByLabel('⟦Pseudonym⟧')).toBeVisible();
+  await expect(page.getByLabel('⟦Username⟧')).toBeVisible();
   await page.evaluate(() => {
     document.body.insertAdjacentHTML(
       'beforeend',
@@ -66,7 +66,7 @@ test('the check finds a text outside the language files', async ({ page }) => {
 test('the sign-in page and its error', async ({ page, state }) => {
   await page.goto('login');
   await check(page, state, 'login');
-  await page.getByLabel('⟦Pseudonym⟧').fill('nobody');
+  await page.getByLabel('⟦Username⟧').fill('nobody');
   await page.getByLabel('⟦Password⟧', { exact: true }).fill('wrong');
   await page.getByRole('button', { name: '⟦Sign in⟧' }).click();
   await expect(page.getByRole('alert')).toBeVisible();

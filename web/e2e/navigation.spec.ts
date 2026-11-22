@@ -259,7 +259,7 @@ test('a password can be shown at sign-in and hides for sending (UI-013)', async 
   await field.fill('some password');
   await page.getByRole('button', { name: 'Show password' }).click();
   await expect(field).toHaveAttribute('type', 'text');
-  await page.getByLabel('Pseudonym').fill('admin');
+  await page.getByLabel('Username').fill('admin');
   await field.fill(secret(state, 'admin'));
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();

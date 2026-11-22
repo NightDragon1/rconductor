@@ -64,7 +64,7 @@ export function secret(state: StackState, user: string): string {
 
 export async function login(page: Page, pseudonym: string, password: string) {
   await page.goto('login');
-  await page.getByLabel('Pseudonym').fill(pseudonym);
+  await page.getByLabel('Username').fill(pseudonym);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
 }

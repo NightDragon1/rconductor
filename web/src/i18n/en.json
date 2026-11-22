@@ -37,10 +37,10 @@
   },
   "login": {
     "title": "Sign in",
-    "pseudonym": "Pseudonym",
+    "pseudonym": "Username",
     "password": "Password",
     "submit": "Sign in",
-    "failed": "Pseudonym or password is wrong.",
+    "failed": "Username or password is wrong.",
     "locked": "Too many attempts. Please wait and try again.",
     "busy": "The panel is busy. Please try again in a moment.",
     "codeTitle": "Enter the code",
@@ -518,12 +518,12 @@
   },
   "invite": {
     "title": "Accept the invitation",
-    "explain": "Choose your pseudonym and password. Others see you by your pseudonym.",
+    "explain": "Choose your username and password. Others see you by your username.",
     "submit": "Create my account",
-    "done": "Your account is ready. Sign in with your pseudonym and password.",
+    "done": "Your account is ready. Sign in with your username and password.",
     "noToken": "This link holds no invitation. Open the link you got once more.",
     "expired": "This invitation is not valid or has expired. Ask for a new link.",
-    "rejected": "The pseudonym is taken or not allowed. Choose another one."
+    "rejected": "The username is taken or not allowed. Choose another one."
   },
   "undo": {
     "undo": "Undo",
@@ -548,7 +548,7 @@
     "unlockText": "This user can sign in again.",
     "sessionsTitle": "End the sessions of {{name}}?",
     "sessionsText": "This user is signed out everywhere and has to sign in again.",
-    "search": "Pseudonym, moderator group, server …",
+    "search": "Username, moderator group, server …",
     "searchLabel": "Search users",
     "filterRole": "Filter by role",
     "filterStatus": "Filter by status",
@@ -654,7 +654,7 @@
     "invite": {
       "title": "Create invitation link",
       "fromTemplate": "Create from template",
-      "explain": "The invited person chooses pseudonym and password. A template passes on rights and assignments.",
+      "explain": "The invited person chooses username and password. A template passes on rights and assignments.",
       "template": "Template",
       "noTemplate": "No template",
       "create": "Create link",
@@ -1158,7 +1158,7 @@
     "none": "No entries."
   },
   "profile": {
-    "explain": "Your details, picture, password and second factor; others see you by your pseudonym, your real name, picture and contacts only those who manage you.",
+    "explain": "Your details, picture, password and second factor; others see you by your username, your real name, picture and contacts only those who manage you.",
     "about": "About you",
     "contacts": "Contacts",
     "contactKind": "Kind of contact",
@@ -1252,7 +1252,7 @@
   },
   "recover": {
     "title": "Reset two-factor sign-in",
-    "explain": "Enter your pseudonym. If two-factor sign-in is on and an address is on file, a link goes to that address.",
+    "explain": "Enter your username. If two-factor sign-in is on and an address is on file, a link goes to that address.",
     "send": "Send link",
     "sent": "If an account fits, a link is on its way. It is valid for a short time.",
     "redeemExplain": "Enter your password to reset two-factor sign-in. You sign in afterwards with your password.",
