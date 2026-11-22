@@ -181,10 +181,13 @@ type resultPayload struct {
 func (s *Service) limit(ctx context.Context, role string) Limit {
 	lim := DefaultLimits[role]
 	var n int
-	if err := s.st.GuardedSetting(ctx, s.log, settingPerMinute(role), &n); err == nil && n > 0 {
+	// A stored value outside the range of the core is not used (CMD-019).
+	if err := s.st.GuardedSetting(ctx, s.log, settingPerMinute(role), &n); err == nil &&
+		n >= limits.MinRatePerMinute && n <= limits.MaxRatePerMinute {
 		lim.PerMinute = n
 	}
-	if err := s.st.GuardedSetting(ctx, s.log, settingBurst(role), &n); err == nil && n > 0 {
+	if err := s.st.GuardedSetting(ctx, s.log, settingBurst(role), &n); err == nil &&
+		n >= limits.MinRateBurst && n <= limits.MaxRateBurst {
 		lim.Burst = n
 	}
 	return lim

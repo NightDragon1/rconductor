@@ -111,6 +111,16 @@ check "other web handler" 0 "stage-1  1" "modified 1 0 internal/web/api_servers.
 check "log masking" 0 "stage-2 redact 1" "added 1 0 internal/logmask/x.go"
 check "diagnostics" 0 "stage-2 redact 1" "added 1 0 internal/diag/x.go"
 check "system log" 0 "stage-2 redact 1" "added 1 0 internal/syslog/x.go"
+check "message events and settings reader" 0 "stage-2 authz 2" "modified 1 0 internal/events/hub.go" \
+  "modified 1 0 internal/store/settings.go"
+check "raw container log sources" 0 "stage-2 redact 2" "modified 1 0 internal/agentview/agentview.go" \
+  "modified 1 0 internal/cache/agents.go"
+check "e2e config and tool origin" 0 "stage-2 rules 9" "modified 1 0 web/playwright.config.ts" \
+  "modified 1 0 scripts/check-tool-origin.sh" "modified 1 0 scripts/web-build.sh" \
+  "modified 1 0 scripts/check-tool-origin-test.sh" "modified 1 0 scripts/check-dockerfile.sh" \
+  "modified 1 0 scripts/check-dockerfile-test.sh" "modified 1 0 web/src/test/pseudo.ts" \
+  "modified 1 0 .golangci.yml" "modified 1 0 .golangci.yaml"
+check "system log query" 0 "stage-2 redact 1" "modified 1 0 internal/store/queries/sqlite/systemlog.sql"
 check "sqlc config" 0 "stage-2 rules 1" "modified 1 0 sqlc.yaml"
 check "other profile and query files" 0 "stage-1  2" "modified 1 0 internal/profiles/catalog.go" \
   "modified 1 0 internal/store/queries/sqlite/smtp.sql"

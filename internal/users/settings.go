@@ -255,8 +255,8 @@ var settingRules = map[string]rule{
 // ratelimit.<role>.burst; the defaults come from the command pipeline.
 func init() {
 	for _, r := range perm.Roles {
-		settingRules["ratelimit."+string(r)+".per_minute"] = intRule(1, 10000)
-		settingRules["ratelimit."+string(r)+".burst"] = intRule(1, 1000)
+		settingRules["ratelimit."+string(r)+".per_minute"] = intRule(limits.MinRatePerMinute, limits.MaxRatePerMinute)
+		settingRules["ratelimit."+string(r)+".burst"] = intRule(limits.MinRateBurst, limits.MaxRateBurst)
 	}
 }
 

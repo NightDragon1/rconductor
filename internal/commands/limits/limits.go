@@ -29,3 +29,12 @@ const (
 	DefaultAuditLimit = 50
 	MaxAuditLimit     = 200
 )
+
+// Rate limit per role (CMD-019, Design 3.4): allowed range of
+// ratelimit.<role>.per_minute and ratelimit.<role>.burst.
+const (
+	MinRatePerMinute = 1
+	MaxRatePerMinute = 10000
+	MinRateBurst     = 1
+	MaxRateBurst     = 1000
+)
