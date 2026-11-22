@@ -51,6 +51,8 @@ size "back within the limit" 0 "100 300 within" "modified 300 0 internal/perm/pe
   "added 100 0 web/src/lib/x.test.ts"
 size "stage 1 over 400 is within" 0 "0 900 within" "modified 900 0 internal/servers/servers.go"
 size "a test file in a core path decides the stage" 0 "5 0 within" "added 5 0 internal/profiles/effective_test.go"
+check "a test file in a core path decides the stage (stage)" 0 "stage-2 cmd 5" "added 5 0 internal/profiles/effective_test.go"
+size "web fitness test script counts as test" 0 "3 0 within" "added 3 0 web/scripts/fitness-render-test.sh"
 size "generated files and lockfiles do not count" 0 "0 10 within" "modified 10 0 internal/perm/perm.go" \
   "modified 900 0 web/package-lock.json" "modified 900 0 internal/api/api.gen.go"
 

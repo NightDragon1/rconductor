@@ -193,3 +193,4 @@ tests:
   - web/e2e/**
   - web/scripts/testdata/**
   - scripts/*-test.sh
+  - web/scripts/*-test.sh
