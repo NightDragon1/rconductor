@@ -192,7 +192,7 @@ func TestC257CursorRest(t *testing.T) {
 	if err != nil || p1.Next == "" {
 		t.Fatalf("first page %+v %v", p1, err)
 	}
-	// before names the newest message, the cursor the first page: the
+	// before names the oldest message, the cursor the first page: the
 	// cursor counts.
 	p2, err := w.s.List(ctx, w.mod1, 1, ids[0], p1.Next)
 	if err != nil || len(p2.Items) != 1 || p2.Items[0].ID != ids[1] {

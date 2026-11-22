@@ -4,7 +4,6 @@
 package commands
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/commands/sayconf"
@@ -33,21 +32,21 @@ func TestC230SayPrefixChoice(t *testing.T) {
 	if _, err := w.send("admin", "say hi"); err != nil {
 		t.Fatal(err)
 	}
-	if got := last(); !strings.Contains(got, `{"text":"[\"B\"] "}`) {
+	if got := last(); got != `tellraw @a {"text":"","extra":[{"text":"[\"B\"] "},{"text":"admin: "},{"text":"hi"}]}` {
 		t.Errorf("byte order and quote: %s", got)
 	}
 	w.exec(`UPDATE server_groups SET deleted_at = 't' WHERE id = 'gb'`)
 	if _, err := w.send("admin", "say hi"); err != nil {
 		t.Fatal(err)
 	}
-	if got := last(); !strings.Contains(got, `{"text":"[a] "}`) {
+	if got := last(); got != `tellraw @a {"text":"","extra":[{"text":"[a] "},{"text":"admin: "},{"text":"hi"}]}` {
 		t.Errorf("deleted group still counts: %s", got)
 	}
 	w.exec(`UPDATE settings SET value = '123' WHERE scope_id = 'ga'`)
 	if _, err := w.send("admin", "say hi"); err != nil {
 		t.Fatal(err)
 	}
-	if got := last(); strings.Contains(got, "[a]") || !strings.Contains(got, `"admin: "`) {
+	if got := last(); got != `tellraw @a {"text":"","extra":[{"text":"admin: "},{"text":"hi"}]}` {
 		t.Errorf("a stored prefix that is no text: %s", got)
 	}
 }
