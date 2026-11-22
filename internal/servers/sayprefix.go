@@ -118,6 +118,14 @@ func (s *Service) SetSayPrefix(ctx context.Context, req users.Request, id, prefi
 		return "", err
 	}
 	defer func() { _ = tx.Rollback() }()
+	// The transaction holds the write lock from its start: the scope read
+	// again now cannot change before the commit.
+	if ok, err := s.groupInScope(ctx, req, id, true); err != nil {
+		return "", err
+	} else if !ok {
+		s.denied(ctx, req, actionSayPrefixUpdate, "server_group", id, "not_found")
+		return "", users.ErrNotFound
+	}
 	q := sqlitedb.New(tx)
 	n, err := q.BumpServerGroupVersion(ctx, sqlitedb.BumpServerGroupVersionParams{ID: id, Version: *version})
 	if err != nil {

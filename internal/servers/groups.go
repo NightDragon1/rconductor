@@ -48,14 +48,18 @@ func (s *Service) mayReadGroups(ctx context.Context, req users.Request, action, 
 
 // groupInScope: the RCON admin sees every group; a server admin sees a
 // group only if it is not empty and all its servers are in his scope.
-func (s *Service) groupInScope(ctx context.Context, req users.Request, id string) (bool, error) {
+func (s *Service) groupInScope(ctx context.Context, req users.Request, id string, fresh ...bool) (bool, error) {
 	if req.Actor.Role == perm.RCONAdmin {
 		return true, nil
 	}
 	if req.Actor.Role != perm.ServerAdmin {
 		return false, nil
 	}
-	rights, err := s.perm.For(ctx, req.Actor.ID)
+	read := s.perm.For
+	if len(fresh) > 0 && fresh[0] {
+		read = s.perm.Fresh // inside a writing transaction
+	}
+	rights, err := read(ctx, req.Actor.ID)
 	if err != nil {
 		return false, err
 	}

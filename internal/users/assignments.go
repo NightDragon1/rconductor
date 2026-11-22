@@ -132,7 +132,8 @@ type checker struct {
 	rights  map[string]*perm.Rights
 	managed map[string]bool
 	// q reads in the writing transaction once it is open: a target must
-	// still exist when the row that names it is written.
+	// still exist when the row that names it is written, and the rights
+	// are computed afresh past the cache (no scope change can come between).
 	q *sqlitedb.Queries
 	// denials are written after the transaction has ended, because the
 	// open write transaction holds the database lock.
@@ -143,7 +144,11 @@ func (c *checker) rightsOf(id string) (*perm.Rights, error) {
 	if r, ok := c.rights[id]; ok {
 		return r, nil
 	}
-	r, err := c.s.perm.For(c.ctx, id)
+	read := c.s.perm.For
+	if c.q != nil {
+		read = c.s.perm.Fresh
+	}
+	r, err := read(c.ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -252,6 +257,8 @@ func (s *Service) applyAssignments(ck *checker, u User, cur current, up Assignme
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	ck.q = q
+	// Rights read before the lock are read again inside it.
+	clear(ck.rights)
 	changes := map[string]any{}
 	now := store.Now()
 

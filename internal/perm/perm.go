@@ -135,6 +135,13 @@ func (c *Checker) Invalidate() {
 	}
 }
 
+// Fresh computes the rights of a user from the database, past the cache:
+// for a check inside a writing transaction, which holds the write lock, so
+// no change of a scope can come between the check and the commit.
+func (c *Checker) Fresh(ctx context.Context, userID string) (*Rights, error) {
+	return c.compute(ctx, userID)
+}
+
 // For returns the rights of a user. Unknown, disabled and deleted users
 // have no rights at all.
 func (c *Checker) For(ctx context.Context, userID string) (*Rights, error) {
