@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -57,9 +58,10 @@ func toAPIServer(s servers.Server) api.Server {
 }
 
 // formattingOf is the formatting of a profile or server for the API
-// (CMD-017); none is missing.
+// (CMD-017); none or a value the panel does not know is missing, also one
+// that was stored without the check of the profile.
 func formattingOf(f string) *api.Formatting {
-	if f == "" {
+	if !slices.Contains(profiles.Formattings, f) {
 		return nil
 	}
 	v := api.Formatting(f)
