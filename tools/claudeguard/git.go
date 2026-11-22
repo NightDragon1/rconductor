@@ -39,6 +39,10 @@ var gitReadOnly = setOf("status", "log", "diff", "show", "rev-parse", "rev-list"
 	"fsck", "verify-commit", "verify-tag", "verify-pack", "range-diff", "format-patch", "archive",
 	"cherry", "show-branch", "get-tar-commit-id")
 
+// writesFiles are read-only subcommands whose -o names a file or
+// directory to write; their arguments must be literal.
+var writesFiles = setOf("archive", "format-patch")
+
 // gitLocal are subcommands that write only to the local repository or
 // fetch from a remote; they accept any arguments.
 var gitLocal = setOf("add", "commit", "checkout", "switch", "restore", "reset", "merge", "cherry-pick",
@@ -153,6 +157,16 @@ func (c *checker) git(args []arg, depth int) {
 	case name == "grep":
 		c.gitGrep(rest)
 	case gitReadOnly[name] || gitLocal[name]:
+		for _, a := range rest {
+			if a.dyn || hasAnyPrefix(a.val, "--output", "--outp") ||
+				((name == "archive" || name == "format-patch") && strings.HasPrefix(a.val, "-o")) {
+				if a.dyn && !writesFiles[name] {
+					continue
+				}
+				c.deny("git " + name + " with --output writes a file the guard cannot check")
+				return
+			}
+		}
 	default:
 		c.deny("git " + name + " is not on the guard's list of known subcommands")
 	}

@@ -3965,6 +3965,9 @@ components:
           type: string
         max_length:
           type: integer
+          description: >-
+            Most characters of an entered command; a say the panel builds
+            with message_command counts the built command in bytes (D-081).
         wrappers:
           type: array
           items:
@@ -4009,6 +4012,9 @@ components:
           type: string
         max_length:
           type: integer
+          description: >-
+            Most characters of an entered command; a say the panel builds
+            with message_command counts the built command in bytes (D-081).
         wrappers:
           type: array
           items:
