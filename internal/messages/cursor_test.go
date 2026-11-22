@@ -171,3 +171,54 @@ func TestCommentWhileDeleted(t *testing.T) {
 		}
 	}
 }
+
+// TestC257CursorRest: a cursor wins over before; a stranger with a broken
+// cursor on the comments of a message gets 404, not 400 (the rights come
+// first); the next page of comments follows also when the last comment of
+// the page before is gone.
+func TestC257CursorRest(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	var ids []string
+	for i := range 3 {
+		w.clock = w.clock.Add(time.Second)
+		m, err := w.s.Send(ctx, w.sa, Input{Text: fmt.Sprint("m", i), Audience: AudienceScopeModerators})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, m.ID)
+	}
+	p1, err := w.s.List(ctx, w.mod1, 1, "", "")
+	if err != nil || p1.Next == "" {
+		t.Fatalf("first page %+v %v", p1, err)
+	}
+	// before names the newest message, the cursor the first page: the
+	// cursor counts.
+	p2, err := w.s.List(ctx, w.mod1, 1, ids[0], p1.Next)
+	if err != nil || len(p2.Items) != 1 || p2.Items[0].ID != ids[1] {
+		t.Errorf("cursor with before: %+v %v", p2, err)
+	}
+	if _, _, err := w.s.Comments(ctx, w.mod2, ids[2], 5, "", "%%%"); !errors.Is(err, users.ErrNotFound) {
+		t.Errorf("stranger with a broken cursor: %v, want not found", err)
+	}
+	var cs []Comment
+	for i := range 3 {
+		w.clock = w.clock.Add(time.Second)
+		c, err := w.s.Comment(ctx, w.mod1, ids[2], fmt.Sprint("c", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cs = append(cs, c)
+	}
+	first, next, err := w.s.Comments(ctx, w.sa, ids[2], 1, "", "")
+	if err != nil || len(first) != 1 || next == "" {
+		t.Fatalf("first comment page %v %q %v", first, next, err)
+	}
+	if err := w.s.DeleteComment(ctx, w.mod1, ids[2], first[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	rest, _, err := w.s.Comments(ctx, w.sa, ids[2], 5, "", next)
+	if err != nil || len(rest) != 2 || rest[0].ID != cs[1].ID {
+		t.Errorf("after a deleted comment: %+v %v", rest, err)
+	}
+}
