@@ -248,9 +248,9 @@ func TestCertSwapDuringConnectionC46(t *testing.T) {
 // connection that the server closes when it shows another certificate. A
 // command may still go out on the closed connection and fail without a
 // handshake; it reaches no handler and is not repeated, since a command
-// must not run twice. The next command starts with a handshake: it is
-// refused for the certificate, sets cert_mismatch at once and logs
-// server.cert.mismatch once.
+// must not run twice. The lost transport makes the worker dial again at
+// once, without the next command: that handshake is refused for the
+// certificate, sets cert_mismatch and logs server.cert.mismatch once.
 func TestCertSwapIdleConnectionC46(t *testing.T) {
 	const token = "tok-of-the-api"
 	cert1, fp1 := newCertificate(t)
@@ -264,24 +264,18 @@ func TestCertSwapIdleConnectionC46(t *testing.T) {
 	}
 
 	s.swap(cert2)
-	before, hs := s.requests.Load(), s.handshakes.Load()
+	before := s.requests.Load()
 	_, err := sm.Execute(ctx, "h1", "hello")
-	if !errors.Is(err, rcon.ErrCertMismatch) {
-		// Only the closed connection may give another error: no new
-		// handshake took place, the status stays and nothing is logged.
-		if err == nil || s.handshakes.Load() != hs {
-			t.Fatalf("first command after the swap: %v with %d new handshakes", err, s.handshakes.Load()-hs)
+	switch {
+	case errors.Is(err, rcon.ErrCertMismatch):
+		if st, _ := sm.Status("h1"); st != CertMismatch {
+			t.Errorf("status right after the refused command: %s, want %s", st, CertMismatch)
 		}
-		if st, _ := sm.Status("h1"); st != Connected || sm.events() != 0 {
-			t.Fatalf("after the closed connection: status %s, %d events", st, sm.events())
-		}
-		_, err = sm.Execute(ctx, "h1", "hello")
-	}
-	if !errors.Is(err, rcon.ErrCertMismatch) {
-		t.Fatalf("command after the swap: %v, want ErrCertMismatch", err)
-	}
-	if st, _ := sm.Status("h1"); st != CertMismatch {
-		t.Errorf("status right after the refused command: %s, want %s", st, CertMismatch)
+	case err == nil:
+		t.Fatal("first command after the swap answered")
+	default:
+		// The closed connection: the worker dials again by itself.
+		sm.waitFor(t, sm.is(CertMismatch), "redial after the closed connection")
 	}
 	if _, err := sm.Execute(ctx, "h1", "hello"); !errors.Is(err, ErrUnavailable) && !errors.Is(err, rcon.ErrCertMismatch) {
 		t.Errorf("further command: %v", err)
