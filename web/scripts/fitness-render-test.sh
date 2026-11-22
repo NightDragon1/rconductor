@@ -34,10 +34,11 @@ rc=$?
 [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'outside src/: .*lib/away.d.ts' ||
   { echo "render script: exit $rc on types outside src/, want 3" >&2; exit 1; }
 # ESLint runs with the fixed core config (-c, no lookup) and must report
-# the rule (exit 1; exit 2 is a broken config): in the test project, and
-# below a nested eslint.config.js that turns the rule off.
+# the rule (exit 1; exit 2 is a broken config): in the test project, below
+# a nested eslint.config.js that turns the rule off, and behind an
+# eslint-disable comment.
 eslint() { node node_modules/eslint/bin/eslint.js -c eslint.config.js --no-ignore "$1" 2>&1; }
-for p in "$d/src" scripts/testdata/render-eslint/src; do
+for p in "$d/src" scripts/testdata/render-eslint/src scripts/testdata/render-inline/src; do
   out=$(eslint "$p")
   rc=$?
   [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'Use ForeignText' &&
