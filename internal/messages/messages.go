@@ -147,6 +147,9 @@ func (s *Service) List(ctx context.Context, req users.Request, limit int, before
 	if err := s.read(ctx, req, "message.list"); err != nil {
 		return Page{}, err
 	}
+	if limit < 1 || limit > maxPage {
+		return Page{}, &users.InvalidError{Detail: "limit is 1 to 100"}
+	}
 	at, after := "", ""
 	switch {
 	case cursor != "":
@@ -303,6 +306,9 @@ type Comment struct {
 func (s *Service) Comments(ctx context.Context, req users.Request, id string, limit int, after, cursor string) ([]Comment, string, error) {
 	if _, err := s.one(ctx, req, "message.comment_list", id); err != nil {
 		return nil, "", err
+	}
+	if limit < 1 || limit > maxPage {
+		return nil, "", &users.InvalidError{Detail: "limit is 1 to 100"}
 	}
 	at := ""
 	switch {
@@ -669,8 +675,11 @@ func (s *Service) denied(ctx context.Context, req users.Request, action, target 
 	return users.ErrForbidden
 }
 
-// maxCursor bounds a cursor as the contract does.
-const maxCursor = 256
+// maxCursor bounds a cursor and maxPage a page as the contract does.
+const (
+	maxCursor = 256
+	maxPage   = 100
+)
 
 // encodeCursor makes the opaque position after an item: its time and ID.
 func encodeCursor(at, id string) string {
@@ -695,7 +704,7 @@ func decodeCursor(c string) (at, id string, err error) {
 	if _, err := time.Parse(store.TimeLayout, at); err != nil {
 		return "", "", bad
 	}
-	if _, err := uuid.Parse(id); err != nil {
+	if u, err := uuid.Parse(id); err != nil || u.String() != id {
 		return "", "", bad
 	}
 	return at, id, nil

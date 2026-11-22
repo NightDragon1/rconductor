@@ -49,7 +49,8 @@ func TestCursorPages(t *testing.T) {
 		t.Errorf("stranger with a foreign cursor: %+v %v", p, err)
 	}
 	var inv *users.InvalidError
-	for _, bad := range []string{"%%%", "bm90LWEtY3Vyc29y", strings.Repeat("A", 257), encodeCursor("not a time", ids[0]), encodeCursor("2026-11-22T00:00:00.000Z", "x")} {
+	for _, bad := range []string{"%%%", "bm90LWEtY3Vyc29y", strings.Repeat("A", 257), encodeCursor("not a time", ids[0]), encodeCursor("2026-11-22T00:00:00.000Z", "x"),
+		encodeCursor("2026-11-22T00:00:00.000Z", strings.ToUpper(ids[0])), encodeCursor("2026-11-22T00:00:00.000Z", "urn:uuid:"+ids[0])} {
 		if _, err := w.s.List(ctx, w.mod1, 2, "", bad); !errors.As(err, &inv) {
 			t.Errorf("cursor %.20q: %v, want invalid", bad, err)
 		}
@@ -76,7 +77,51 @@ func TestCursorPages(t *testing.T) {
 	if rest, _, err := w.s.Comments(ctx, w.sa, ids[0], 1, "", next); err != nil || len(rest) != 1 || rest[0].ID == list[0].ID {
 		t.Errorf("comments, second page: %+v %v", rest, err)
 	}
-	if other, _, err := w.s.Comments(ctx, w.sa, ids[1], 5, "", next); err != nil || len(other) != 0 {
+	// Another message with a comment later than the cursor: only its own
+	// comments come, never those of the message the cursor came from.
+	w.clock = w.clock.Add(time.Second)
+	own, err := w.s.Comment(ctx, w.mod1, ids[1], "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other, _, err := w.s.Comments(ctx, w.sa, ids[1], 5, "", next); err != nil || len(other) != 1 || other[0].ID != own.ID {
 		t.Errorf("a cursor of another message: %+v %v", other, err)
+	}
+	for _, limit := range []int{0, 101} {
+		if _, err := w.s.List(ctx, w.mod1, limit, "", ""); !errors.As(err, &inv) {
+			t.Errorf("limit %d: %v", limit, err)
+		}
+	}
+}
+
+// TestCursorSameTime: messages of the same time page by ID across a page
+// boundary, none twice and none lost.
+func TestCursorSameTime(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	seen := map[string]bool{}
+	for i := range 5 {
+		if _, err := w.s.Send(ctx, w.sa, Input{Text: fmt.Sprint("m", i), Audience: AudienceScopeModerators}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cursor := ""
+	for range 5 {
+		p, err := w.s.List(ctx, w.mod1, 2, "", cursor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range p.Items {
+			if seen[m.ID] {
+				t.Errorf("%s twice", m.ID)
+			}
+			seen[m.ID] = true
+		}
+		if cursor = p.Next; cursor == "" {
+			break
+		}
+	}
+	if len(seen) != 5 {
+		t.Errorf("%d of 5 messages seen", len(seen))
 	}
 }
