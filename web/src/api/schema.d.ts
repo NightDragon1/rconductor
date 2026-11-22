@@ -286,7 +286,7 @@ export interface paths {
         put?: never;
         /**
          * Add a game server; RCON admin only (SRV-001).
-         * @description A container is bound to at most one server (D-105): agent_id and container_name of another server are 409 with the reason container_bound.
+         * @description A container is bound to at most one server (D-105): agent_id and container_name of another server are 409 with the reason container_bound; deleted servers do not count.
          */
         post: operations["createServer"];
         delete?: never;
@@ -334,7 +334,7 @@ export interface paths {
         head?: never;
         /**
          * Change a server; a password replaces the stored one, a new host or port keeps it (D-050); RCON admin, or a server admin for profile_ids alone in its scope (SRV-008); profiles never change protocol or port, a change of protocol needs new credentials (D-076).
-         * @description 409 is a stale version (conflict) or a container that is bound to another server (container_bound, D-105).
+         * @description 409 is a stale version (conflict) or, when the request sets agent_id or container_name, a container that is bound to another server (container_bound, D-105; deleted servers do not count).
          */
         patch: operations["updateServer"];
         trace?: never;
@@ -768,7 +768,7 @@ export interface paths {
         };
         /**
          * Messages in the panel (MSG-001 to MSG-003, D-085): those sent to me and those I sent, newest first; the RCON admin sees all.
-         * @description The recipients of a message are fixed when it is sent; who comes into a scope later does not see older messages. Messages and comments go after messages.retention_days (D-086). Paged: limit (1 to 100, default 50) and before, the ID of the last message of the page before. before is only compared with the IDs of my view, never looked up: every valid UUID behaves the same.
+         * @description The recipients of a message are fixed when it is sent; who comes into a scope later does not see older messages. Messages and comments go after messages.retention_days (D-086). Paged: limit (1 to 100, default 50) and cursor, the next_cursor of the page before. The cursor is opaque and only compared with my view, never looked up; a malformed cursor or one over 256 characters is 400. With cursor, before is ignored. before (deprecated) is the ID of the last message of the page before, compared the same way: every valid UUID behaves the same.
          */
         get: operations["listMessages"];
         put?: never;
@@ -842,7 +842,7 @@ export interface paths {
         };
         /**
          * The comments of a message, oldest first (MSG-003, D-085); its recipients, its sender and the RCON admin.
-         * @description Anyone else gets 404, as for an unknown message. Paged: limit (1 to 100, default 50) and after, the ID of the last comment of the page before; after is only compared with the comments of this message, never looked up.
+         * @description Anyone else gets 404, as for an unknown message. Paged: limit (1 to 100, default 50) and cursor, the next_cursor of the page before. The cursor is opaque and only compared with the comments of this message, never looked up; a malformed cursor or one over 256 characters is 400. With cursor, after is ignored. after (deprecated) is the ID of the last comment of the page before, compared the same way.
          */
         get: operations["listMessageComments"];
         put?: never;
@@ -1305,7 +1305,7 @@ export interface paths {
         head?: never;
         /**
          * Change global settings; RCON admin only (AUD-003).
-         * @description Only known keys with valid values, all or nothing; for example audit.retention_days, supporters.enabled, session.idle_timeout, or features.<name> (true or false) for a feature flag of this build (NFR-019). Switching supporters off ends the sessions of all supporters. Switching auth.totp_required on while the caller has no second factor of their own is 409 with the reason own_totp_required (D-104).
+         * @description Only known keys with valid values, all or nothing; for example audit.retention_days, supporters.enabled, session.idle_timeout, or features.<name> (true or false) for a feature flag of this build (NFR-019). Switching supporters off ends the sessions of all supporters. Switching auth.totp_required on (from off) while the caller has no second factor of their own is 409 with the reason own_totp_required (D-104). Order: 403, 428, 400, 409 conflict, then 409 own_totp_required; a refused change writes nothing.
          */
         patch: operations["updateSettings"];
         trace?: never;
