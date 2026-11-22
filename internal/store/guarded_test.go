@@ -64,7 +64,8 @@ func TestC142B3GuardedSettingKeepsLastValue(t *testing.T) {
 		t.Errorf("unreadable without a value before = %q, %v, want an error", d, err)
 	}
 	logged := out.String()
-	if strings.Count(logged, `"event":"setting.read_failed"`) != 17 || !strings.Contains(logged, `"kept":false`) {
+	// One line per setting, not per read, until a read works again (C260).
+	if strings.Count(logged, `"event":"setting.read_failed"`) != 2 || !strings.Contains(logged, `"kept":false`) {
 		t.Errorf("log = %s", logged)
 	}
 	if strings.Contains(logged, `"2h"`) || strings.Contains(logged, `:3,`) || strings.Contains(logged, `:3}`) {
@@ -127,5 +128,51 @@ func TestD109BrokenRowsAndSwitches(t *testing.T) {
 	}
 	if err := st.LoggedSetting(ctx, log, "supporters.enabled", &on); err == nil || !strings.Contains(out.String(), `"event":"setting.read_failed"`) {
 		t.Errorf("closed database: %v, log %s", err, out.String())
+	}
+}
+
+// TestC260BrokenRowLoggedOnce (F-93, D-077): a broken row is logged once,
+// not on every read; after a read that works, a new failure is logged
+// again.
+func TestC260BrokenRowLoggedOnce(t *testing.T) {
+	st := storetest.New(t)
+	ctx := context.Background()
+	var out bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&out, nil))
+	if _, err := st.EnsureDefault(ctx, "login.max_failures", 3); err != nil {
+		t.Fatal(err)
+	}
+	set := func(v string) {
+		t.Helper()
+		if _, err := st.DB.Exec(`UPDATE settings SET value = ? WHERE key = 'login.max_failures'`, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var n int
+	count := func() int { return strings.Count(out.String(), `"event":"setting.read_failed"`) }
+	set(`"broken`)
+	for range 3 {
+		_ = st.GuardedSetting(ctx, log, "login.max_failures", &n)
+	}
+	if count() != 1 {
+		t.Fatalf("broken row logged %d times, want once", count())
+	}
+	set(`4`)
+	if err := st.GuardedSetting(ctx, log, "login.max_failures", &n); err != nil || n != 4 {
+		t.Fatalf("read after repair = %d, %v", n, err)
+	}
+	set(`"broken`)
+	_ = st.GuardedSetting(ctx, log, "login.max_failures", &n)
+	if count() != 2 {
+		t.Errorf("new failure after a good read logged %d times in all, want 2", count())
+	}
+	// Another reason is logged although the broken row still is.
+	if err := st.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.GuardedSetting(ctx, log, "login.max_failures", &n)
+	_ = st.GuardedSetting(ctx, log, "login.max_failures", &n)
+	if count() != 3 || !strings.Contains(out.String(), `"reason":"read"`) {
+		t.Errorf("a failed read after a broken row: %d lines, %s", count(), out.String())
 	}
 }
