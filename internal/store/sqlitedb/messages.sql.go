@@ -110,6 +110,24 @@ func (q *Queries) DeleteOldMessageSends(ctx context.Context, arg DeleteOldMessag
 	return err
 }
 
+const deleteUserCommentSends = `-- name: DeleteUserCommentSends :exec
+DELETE FROM comment_sends WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserCommentSends(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserCommentSends, userID)
+	return err
+}
+
+const deleteUserMessageSends = `-- name: DeleteUserMessageSends :exec
+DELETE FROM message_sends WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserMessageSends(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserMessageSends, userID)
+	return err
+}
+
 const getActiveUserRole = `-- name: GetActiveUserRole :one
 SELECT role FROM users WHERE id = ? AND deleted_at IS NULL AND disabled_at IS NULL
 `

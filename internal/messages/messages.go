@@ -145,7 +145,7 @@ type Page struct {
 // a cursor, before (deprecated) is the ID of the last message of the page
 // before, only compared with the caller's view.
 func (s *Service) List(ctx context.Context, req users.Request, limit int, before, cursor string) (Page, error) {
-	if err := s.read(ctx, req, "message.list"); err != nil {
+	if err := s.read(ctx, req, "message.list", ""); err != nil {
 		return Page{}, err
 	}
 	if limit < 1 || limit > maxPage {
@@ -191,7 +191,7 @@ func (s *Service) Get(ctx context.Context, req users.Request, id string) (Messag
 
 // one checks the role, then reads one message of the caller's view.
 func (s *Service) one(ctx context.Context, req users.Request, action, id string) (Message, error) {
-	if err := s.read(ctx, req, action); err != nil {
+	if err := s.read(ctx, req, action, id); err != nil {
 		return Message{}, err
 	}
 	m, err := s.view(ctx, req, id, "", "", 1)
@@ -201,7 +201,7 @@ func (s *Service) one(ctx context.Context, req users.Request, action, id string)
 	if len(m) == 0 {
 		// Unknown or not the caller's: 404 alike, logged and audited as a
 		// refusal like any other (MSG-003).
-		return Message{}, s.refused(ctx, req, action, id, "not_found", users.ErrNotFound)
+		return Message{}, s.refused(ctx, req, action, id, "not_found", users.ErrNotFound, nil)
 	}
 	return m[0], nil
 }
@@ -264,6 +264,8 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 	if _, err := audit.Write(ctx, tx, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
 		TargetType: "message", TargetID: id, Action: "message.deleted", Result: audit.ResultOK,
+		// the metadata only: sender and number of recipients, never the text (D-086)
+		Payload: map[string]any{"sender_id": m.SenderID, "recipients": m.RecipientCount},
 	}); err != nil {
 		return err
 	}
@@ -377,7 +379,7 @@ func (s *Service) Comment(ctx context.Context, req users.Request, id, text strin
 	}
 	text, _ = foreign.Text(text, len(text))
 	switch {
-	case strings.TrimSpace(text) == "":
+	case foreign.Blank(text):
 		return Comment{}, &users.InvalidError{Detail: "text is required"}
 	case len(text) > MaxCommentBytes,
 		utf8.RuneCountInString(text) > s.limit(ctx, users.SettingMessagesMaxComment, users.DefaultMessagesMaxComment, 1):
@@ -446,7 +448,8 @@ func (s *Service) DeleteComment(ctx context.Context, req users.Request, id, comm
 		return err
 	}
 	if req.Actor.Role != perm.RCONAdmin && m.SenderID != req.Actor.ID && (!c.AuthorID.Valid || c.AuthorID.String != req.Actor.ID) {
-		return s.denied(ctx, req, "message.comment_deleted", id)
+		return s.refused(ctx, req, "message.comment_deleted", id, "forbidden", users.ErrForbidden,
+			map[string]any{"comment_id": commentID})
 	}
 	tx, err := s.st.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -491,10 +494,10 @@ func (s *Service) Send(ctx context.Context, req users.Request, in Input) (Messag
 		return Message{}, s.denied(ctx, req, "message.sent", "")
 	}
 	// Control characters other than line ends and tabs go; a text of
-	// space alone is none (SEC-006, MSG-001).
+	// space or invisible characters alone is none (SEC-006, MSG-001).
 	in.Text, _ = foreign.Text(in.Text, len(in.Text))
 	switch {
-	case strings.TrimSpace(in.Text) == "":
+	case foreign.Blank(in.Text):
 		return Message{}, &users.InvalidError{Detail: "text is required"}
 	case len(in.Text) > MaxTextBytes:
 		return Message{}, &users.InvalidError{Detail: "text is too long"}
@@ -518,24 +521,21 @@ func (s *Service) Send(ctx context.Context, req users.Request, in Input) (Messag
 	if len(in.UserIDs) > s.limit(ctx, users.SettingMessagesMaxRecipients, users.DefaultMessagesMaxRecipients, 1) {
 		return Message{}, &users.InvalidError{Detail: "too many user_ids"}
 	}
-	to, err := s.recipients(ctx, req, in)
-	if err != nil {
-		return Message{}, err
-	}
-	m, err := s.store(ctx, req, in, to)
+	m, to, err := s.store(ctx, req, in)
 	if err == nil {
 		s.publish(to, "message", m.ID, "")
 	}
 	return m, err
 }
 
-// recipients resolves the audience at sending time (D-085); the sender is
-// never among them.
-func (s *Service) recipients(ctx context.Context, req users.Request, in Input) ([]string, error) {
+// recipients resolves the audience at sending time (D-085) through the
+// sending transaction; the sender is never among them. It stops as soon as
+// the audience has more than maxResolved users (MSG-001).
+func (s *Service) recipients(ctx context.Context, q *sqlitedb.Queries, req users.Request, in Input, maxResolved int) ([]string, error) {
 	var to []string
 	if in.Audience == AudienceUsers {
 		for _, id := range in.UserIDs {
-			if _, err := s.st.Queries.GetActiveUserRole(ctx, id); errors.Is(err, sql.ErrNoRows) {
+			if _, err := q.GetActiveUserRole(ctx, id); errors.Is(err, sql.ErrNoRows) {
 				return nil, &users.InvalidError{Detail: "user_ids names an unknown user"}
 			} else if err != nil {
 				return nil, err
@@ -545,13 +545,13 @@ func (s *Service) recipients(ctx context.Context, req users.Request, in Input) (
 			}
 		}
 	} else {
-		all, err := s.st.Queries.ListActiveUserRoles(ctx)
+		all, err := q.ListActiveUserRoles(ctx)
 		if err != nil {
 			return nil, err
 		}
 		var mine []string
 		if in.Audience == AudienceScope || in.Audience == AudienceScopeModerators {
-			r, err := s.perm.For(ctx, req.Actor.ID)
+			r, err := s.perm.FreshTx(ctx, q, req.Actor.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -561,19 +561,22 @@ func (s *Service) recipients(ctx context.Context, req users.Request, in Input) (
 			if u.ID == req.Actor.ID {
 				continue
 			}
-			ok, err := s.receives(ctx, in.Audience, perm.Role(u.Role), u.ID, mine)
+			ok, err := s.receives(ctx, q, in.Audience, perm.Role(u.Role), u.ID, mine)
 			if err != nil {
 				return nil, err
 			}
 			if ok {
 				to = append(to, u.ID)
 			}
+			if len(to) > maxResolved {
+				return nil, ErrTooManyRecipients
+			}
 		}
 	}
 	if len(to) == 0 {
 		return nil, &users.InvalidError{Detail: "the audience has no recipient"}
 	}
-	if len(to) > s.limit(ctx, users.SettingMessagesMaxResolved, users.DefaultMessagesMaxResolved, 1) {
+	if len(to) > maxResolved {
 		return nil, ErrTooManyRecipients
 	}
 	return to, nil
@@ -581,7 +584,7 @@ func (s *Service) recipients(ctx context.Context, req users.Request, in Input) (
 
 // receives reports whether a user of the given role belongs to the
 // audience; for a scope, by a server shared with the sender's scope.
-func (s *Service) receives(ctx context.Context, audience string, role perm.Role, id string, scope []string) (bool, error) {
+func (s *Service) receives(ctx context.Context, q *sqlitedb.Queries, audience string, role perm.Role, id string, scope []string) (bool, error) {
 	switch audience {
 	case AudienceAll:
 		return true, nil
@@ -593,7 +596,7 @@ func (s *Service) receives(ctx context.Context, audience string, role perm.Role,
 		if role != perm.Moderator && (audience == AudienceScopeModerators || role != perm.Supporter) {
 			return false, nil
 		}
-		r, err := s.perm.For(ctx, id)
+		r, err := s.perm.FreshTx(ctx, q, id)
 		if err != nil {
 			return false, err
 		}
@@ -602,60 +605,73 @@ func (s *Service) receives(ctx context.Context, audience string, role perm.Role,
 	return false, nil
 }
 
-// store writes the message, its recipients and the send in one
-// transaction, after the count of the last hour (429); the audit keeps
-// the audience and the number of recipients, never the text (D-086).
-func (s *Service) store(ctx context.Context, req users.Request, in Input, to []string) (Message, error) {
+// store counts the sends of the last hour (429), resolves the audience and
+// writes the message, its recipients and the send in one transaction. A
+// send refused by its audience counts against the hour too (MSG-001). The
+// audit keeps the audience and the number of recipients, never the text
+// (D-086).
+func (s *Service) store(ctx context.Context, req users.Request, in Input) (Message, []string, error) {
 	perHour := s.limit(ctx, users.SettingMessagesPerHour, users.DefaultMessagesPerHour, 1)
+	maxResolved := s.limit(ctx, users.SettingMessagesMaxResolved, users.DefaultMessagesMaxResolved, 1)
 	now := s.now()
 	hourAgo := now.Add(-time.Hour).Format(store.TimeLayout)
 	id, err := store.NewID()
 	if err != nil {
-		return Message{}, err
+		return Message{}, nil, err
 	}
 	tx, err := s.st.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return Message{}, err
+		return Message{}, nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
 	sent, err := q.CountMessageSends(ctx, sqlitedb.CountMessageSendsParams{UserID: req.Actor.ID, SentAt: hourAgo})
 	if err != nil {
-		return Message{}, err
+		return Message{}, nil, err
 	}
 	if sent >= int64(perHour) {
-		return Message{}, ErrRateLimited
+		return Message{}, nil, ErrRateLimited
 	}
 	created := now.Format(store.TimeLayout)
+	if err := q.DeleteOldMessageSends(ctx, sqlitedb.DeleteOldMessageSendsParams{UserID: req.Actor.ID, SentAt: hourAgo}); err != nil {
+		return Message{}, nil, err
+	}
+	if err := q.InsertMessageSend(ctx, sqlitedb.InsertMessageSendParams{UserID: req.Actor.ID, SentAt: created}); err != nil {
+		return Message{}, nil, err
+	}
+	to, err := s.recipients(ctx, q, req, in, maxResolved)
+	if err != nil {
+		var invalid *users.InvalidError
+		if errors.Is(err, ErrTooManyRecipients) || errors.As(err, &invalid) {
+			if cerr := tx.Commit(); cerr != nil {
+				return Message{}, nil, cerr
+			}
+		}
+		return Message{}, nil, err
+	}
 	if err := q.InsertMessage(ctx, sqlitedb.InsertMessageParams{
 		ID: id, SenderID: sql.NullString{String: req.Actor.ID, Valid: true}, SenderPseudonym: req.Pseudonym,
 		Audience: in.Audience, Text: in.Text, CreatedAt: created,
 	}); err != nil {
-		return Message{}, err
+		return Message{}, nil, err
 	}
 	for _, u := range to {
 		if err := q.InsertMessageRecipient(ctx, sqlitedb.InsertMessageRecipientParams{MessageID: id, UserID: u}); err != nil {
-			return Message{}, err
+			return Message{}, nil, err
 		}
-	}
-	if err := q.DeleteOldMessageSends(ctx, sqlitedb.DeleteOldMessageSendsParams{UserID: req.Actor.ID, SentAt: hourAgo}); err != nil {
-		return Message{}, err
-	}
-	if err := q.InsertMessageSend(ctx, sqlitedb.InsertMessageSendParams{UserID: req.Actor.ID, SentAt: created}); err != nil {
-		return Message{}, err
 	}
 	if _, err := audit.Write(ctx, tx, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
 		TargetType: "message", TargetID: id, Action: "message.sent", Result: audit.ResultOK,
 		Payload: map[string]any{"audience": in.Audience, "recipients": len(to)},
 	}); err != nil {
-		return Message{}, err
+		return Message{}, nil, err
 	}
 	if err := tx.Commit(); err != nil {
-		return Message{}, err
+		return Message{}, nil, err
 	}
 	return Message{ID: id, SenderID: req.Actor.ID, SenderPseudonym: req.Pseudonym, Audience: in.Audience, Text: in.Text,
-		CreatedAt: now, RecipientCount: len(to), Read: true}, nil
+		CreatedAt: now, RecipientCount: len(to), Read: true}, to, nil
 }
 
 // limit reads a number setting through the guarded read: missing, the
@@ -669,21 +685,24 @@ func (s *Service) limit(ctx context.Context, key string, def, minimum int) int {
 	return n
 }
 
-func (s *Service) read(ctx context.Context, req users.Request, action string) error {
+// read refuses a role that is no reader; target is the message asked for,
+// if any, so the audit names it (MSG-003).
+func (s *Service) read(ctx context.Context, req users.Request, action, target string) error {
 	for _, r := range readers {
 		if req.Actor.Role == r {
 			return nil
 		}
 	}
-	return s.denied(ctx, req, action, "")
+	return s.denied(ctx, req, action, target)
 }
 
 func (s *Service) denied(ctx context.Context, req users.Request, action, target string) error {
-	return s.refused(ctx, req, action, target, "forbidden", users.ErrForbidden)
+	return s.refused(ctx, req, action, target, "forbidden", users.ErrForbidden, nil)
 }
 
-// refused logs and audits a refusal with its reason and returns err.
-func (s *Service) refused(ctx context.Context, req users.Request, action, target, reason string, err error) error {
+// refused logs and audits a refusal with its reason and returns err; the
+// payload names what the target does not, such as a comment (MSG-003).
+func (s *Service) refused(ctx context.Context, req users.Request, action, target, reason string, err error, payload map[string]any) error {
 	perm.LogDenied(s.log, perm.Denial{
 		RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym,
 		Role: req.Actor.Role, Reason: reason, Action: action,
@@ -691,6 +710,7 @@ func (s *Service) refused(ctx context.Context, req users.Request, action, target
 	if _, werr := audit.Write(ctx, s.st.DB, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
 		TargetType: "message", TargetID: target, Action: action, Result: audit.ResultDenied, Reason: reason,
+		Payload: payload,
 	}); werr != nil {
 		s.log.Error("audit entry not written", slog.String("action", action), slog.Any("err", werr))
 	}

@@ -330,6 +330,13 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	if err := clearAssignments(ctx, q, id); err != nil {
 		return err
 	}
+	// The counts of the last hour have no use for a removed user (MSG-001, MSG-003).
+	if err := q.DeleteUserMessageSends(ctx, id); err != nil {
+		return err
+	}
+	if err := q.DeleteUserCommentSends(ctx, id); err != nil {
+		return err
+	}
 	owned, members, err := deleteOwned(ctx, tx, req, id, now)
 	if err != nil {
 		return err
