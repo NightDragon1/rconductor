@@ -34,8 +34,9 @@ const (
 )
 
 // multiAnswerBy is when the answer of a multi-server command leaves at the
-// latest, before the HTTP write deadline of 60 s; runs start only while one
-// still ends in time (a run takes at most the command timeout).
+// latest, before the HTTP write deadline of 60 s; further runs start only
+// while one still ends in time (a run takes at most the command timeout).
+// The first server always runs, also when its run alone fills the budget.
 const multiAnswerBy = 55 * time.Second
 
 // MultiItem is the result of one server of a multi-server command.
@@ -104,7 +105,8 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 	parallel := s.multiSetting(ctx, users.SettingMultiParallel, limits.DefaultMultiParallel, limits.MinMultiParallel, limits.MaxMultiParallel)
 	items := make([]MultiItem, len(ids))
 	slots := make(chan struct{}, parallel)
-	// Runs start until the deadline; a run started then still ends in time.
+	// The first run always starts; further runs start until the deadline,
+	// so a run started then still ends in time.
 	deadline := s.now().Add(max(multiAnswerBy-s.timeout, 0))
 	over := false
 	var wg sync.WaitGroup
@@ -114,7 +116,9 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 		if r.RequestID, err = store.NewID(); err != nil {
 			return "", nil, err
 		}
-		if !over {
+		if i == 0 {
+			slots <- struct{}{} // the first slot is free
+		} else if !over {
 			wait := time.NewTimer(deadline.Sub(s.now()))
 			select {
 			case slots <- struct{}{}:

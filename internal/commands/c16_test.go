@@ -88,7 +88,8 @@ func TestC16TimeBudget(t *testing.T) {
 }
 
 // TestC16OutsideScopeAfterBudget: a server outside the scope stays
-// not_found after the budget, without an audit entry (D-069).
+// not_found after the budget, without an audit entry (D-069); the first
+// server still runs.
 func TestC16OutsideScopeAfterBudget(t *testing.T) {
 	w := newWorld(t)
 	h := &heldExec{asked: make(chan struct{}), release: make(chan struct{})}
@@ -96,7 +97,7 @@ func TestC16OutsideScopeAfterBudget(t *testing.T) {
 	svc := NewService(w.st, w.c, h, w.svc.log)
 	svc.SetTimeout(multiAnswerBy) // no time to start any run
 	_, items, err := svc.Multi(context.Background(), w.as("sa"), []string{w.server, "00000000-0000-4000-8000-00000000dead"}, "list")
-	if err != nil || len(items) != 2 || items[0].Result != ResultSkipped || items[1].Result != ResultNotFound || items[1].RequestID != "" {
+	if err != nil || len(items) != 2 || items[0].Result != ResultOK || items[1].Result != ResultNotFound || items[1].RequestID != "" {
 		t.Fatalf("multi = %+v, %v", items, err)
 	}
 	var n int
@@ -114,17 +115,27 @@ func TestC16OutsideScopeAfterBudget(t *testing.T) {
 // for a refused one, and the console is told.
 func TestC16SkippedAuditOutlivesTheClient(t *testing.T) {
 	w := newWorld(t)
-	svc := NewService(w.st, w.c, &heldExec{asked: make(chan struct{}), release: make(chan struct{})}, w.svc.log)
+	b := w.second(t, "b")
+	h := &heldExec{asked: make(chan struct{}), release: make(chan struct{})}
+	close(h.release)
+	svc := NewService(w.st, w.c, h, w.svc.log)
 	svc.SetTimeout(multiAnswerBy)
 	var told []Entry
 	var mu sync.Mutex
-	svc.Publish = func(_ string, e Entry) { mu.Lock(); told = append(told, e); mu.Unlock() }
+	svc.Publish = func(_ string, e Entry) {
+		if e.Reason == ReasonTimeBudget {
+			mu.Lock()
+			told = append(told, e)
+			mu.Unlock()
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, items, err := svc.Multi(ctx, w.as("admin"), []string{w.server}, strings.Repeat("say x ", 1000))
-	if err != nil || len(items) != 1 || items[0].Result != ResultSkipped {
-		t.Fatalf("multi = %+v, %v", items, err)
+	_, all, err := svc.Multi(ctx, w.as("admin"), []string{w.server, b}, strings.Repeat("say x ", 1000))
+	if err != nil || len(all) != 2 || all[1].Result != ResultSkipped {
+		t.Fatalf("multi = %+v, %v", all, err)
 	}
+	items := all[1:]
 	var payload string
 	if err := w.st.DB.QueryRow(`SELECT payload FROM audit_log WHERE id = ? AND reason_code = 'time_budget'`, items[0].RequestID).Scan(&payload); err != nil {
 		t.Fatalf("no audit entry after the client left: %v", err)
@@ -136,5 +147,31 @@ func TestC16SkippedAuditOutlivesTheClient(t *testing.T) {
 	defer mu.Unlock()
 	if len(told) != 1 || told[0].Reason != ReasonTimeBudget || told[0].RequestID != items[0].RequestID {
 		t.Errorf("console told %+v", told)
+	}
+}
+
+// TestC16FirstServerAlwaysRuns: with a command timeout that fills the
+// whole budget, the first server still gets the command; only the further
+// servers are skipped with reason time_budget (CMD-010, D-069).
+func TestC16FirstServerAlwaysRuns(t *testing.T) {
+	w := newWorld(t)
+	b, c := w.second(t, "b"), w.second(t, "c")
+	h := &heldExec{asked: make(chan struct{}), release: make(chan struct{})}
+	close(h.release)
+	svc := NewService(w.st, w.c, h, w.svc.log)
+	svc.SetTimeout(multiAnswerBy + time.Second)
+	_, items, err := svc.Multi(context.Background(), w.as("admin"), []string{w.server, b, c}, "list")
+	if err != nil || len(items) != 3 || items[0].Result != ResultOK {
+		t.Fatalf("multi = %+v, %v", items, err)
+	}
+	for _, it := range items[1:] {
+		if it.Result != ResultSkipped || it.Reason != ReasonTimeBudget {
+			t.Errorf("further server = %+v", it)
+		}
+	}
+	select {
+	case <-h.asked:
+	default:
+		t.Error("the first server was not sent the command")
 	}
 }
