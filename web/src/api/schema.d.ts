@@ -1949,6 +1949,7 @@ export interface components {
             imported_at: string;
             case_sensitive: boolean;
             strip_prefix: string;
+            /** @description Most characters of an entered command; a say the panel builds with message_command counts the built command in bytes (D-081). */
             max_length: number;
             wrappers: string[];
             /** @description Game ports of the profile; only for the RCON admin and server admins (D-056), missing for other roles. */
@@ -1967,6 +1968,7 @@ export interface components {
             protocol: string;
             case_sensitive: boolean;
             strip_prefix: string;
+            /** @description Most characters of an entered command; a say the panel builds with message_command counts the built command in bytes (D-081). */
             max_length: number;
             wrappers: string[];
             separators: string[];

@@ -39,6 +39,41 @@ var gitReadOnly = setOf("status", "log", "diff", "show", "rev-parse", "rev-list"
 	"fsck", "verify-commit", "verify-tag", "verify-pack", "range-diff", "format-patch", "archive",
 	"cherry", "show-branch", "get-tar-commit-id")
 
+// writesFiles are read-only subcommands whose -o names a file or
+// directory to write; their arguments must be literal.
+var writesFiles = setOf("archive", "format-patch")
+
+// diffLike are read-only subcommands that take the diff options, among
+// them --output=<file>.
+var diffLike = setOf("log", "diff", "show", "diff-tree", "diff-index", "diff-files", "whatchanged",
+	"format-patch", "range-diff")
+
+// gitWritesFile tells why a read-only subcommand would write a file of the
+// caller's choice (--output, -o of archive and format-patch), or "".
+func gitWritesFile(name string, args []arg) string {
+	for _, a := range args {
+		v := a.val // the literal start of a word that expands
+		switch {
+		case isOutputOpt(v),
+			writesFiles[name] && (v == "--output-directory" || strings.HasPrefix(v, "--output-directory=")):
+			return "with --output writes a file the guard cannot check"
+		case writesFiles[name] && len(v) > 1 && v[0] == '-' && v[1] != '-' && strings.ContainsRune(v, 'o'):
+			return "with -o writes a file the guard cannot check"
+		case a.dyn && (diffLike[name] || writesFiles[name]) && (v == "" || strings.HasPrefix(v, "-")):
+			return "with a word that is not literal may take --output"
+		}
+	}
+	return ""
+}
+
+// isOutputOpt tells whether a word is --output or an abbreviation of it
+// down to --outp, with or without =value; --output-indicator-* is not.
+func isOutputOpt(v string) bool {
+	key, _, _ := strings.Cut(v, "=")
+	const opt = "--output"
+	return len(key) >= len("--outp") && len(key) <= len(opt) && opt[:len(key)] == key
+}
+
 // gitLocal are subcommands that write only to the local repository or
 // fetch from a remote; they accept any arguments.
 var gitLocal = setOf("add", "commit", "checkout", "switch", "restore", "reset", "merge", "cherry-pick",
@@ -153,6 +188,10 @@ func (c *checker) git(args []arg, depth int) {
 	case name == "grep":
 		c.gitGrep(rest)
 	case gitReadOnly[name] || gitLocal[name]:
+		if why := gitWritesFile(name, rest); why != "" {
+			c.deny("git " + name + " " + why)
+			return
+		}
 	default:
 		c.deny("git " + name + " is not on the guard's list of known subcommands")
 	}

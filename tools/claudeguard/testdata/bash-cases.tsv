@@ -177,6 +177,20 @@ allow	ok	git --no-pager log -3
 allow	ok	git log --oneline main..HEAD | head -5
 allow	ok	git log @{u}..HEAD
 allow	ok	git diff --stat; git diff --cached
+deny	C76	git log --output=.git/hooks/pre-commit -p
+deny	C76	git diff --output .git/hooks/pre-push
+deny	C76	git diff --outp=x
+deny	C76	git show --output=x HEAD
+deny	C76	git format-patch -o .git/hooks HEAD~1
+deny	C76	git archive -o x.tar HEAD
+deny	C76	git format-patch --output-directory=x HEAD~1
+allow	ok	git log --oneline -- output.txt
+deny	C76	F=.git/hooks/pre-commit; git log -1 --format=x --output=$F
+deny	C76	git diff "$OPT"
+deny	C76	git format-patch -ko .git/hooks HEAD~1
+deny	C76	git archive -vo x.tar HEAD
+allow	ok	git diff --output-indicator-new=+ HEAD
+allow	ok	git log --oneline origin/main..HEAD
 allow	ok	git add -A && git commit -m 'feat: x (NFR-013)'
 allow	ok	git commit -F msg.txt
 allow	ok	git checkout -b fix/x origin/main

@@ -1056,7 +1056,9 @@ type EffectiveProfile struct {
 
 	// GamePorts Game ports of the topmost profile that sets them (D-074), not the ports stored for the server (those are on the server); only for the RCON admin and the server admin of this server (D-056), missing for other roles.
 	GamePorts *[]GamePort `json:"game_ports,omitempty"`
-	MaxLength int         `json:"max_length"`
+
+	// MaxLength Most characters of an entered command; a say the panel builds with message_command counts the built command in bytes (D-081).
+	MaxLength int `json:"max_length"`
 
 	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped.
 	MessageCommand *MessageCommand `json:"message_command,omitempty"`
@@ -1118,7 +1120,9 @@ type GameProfile struct {
 	// LastError Reason of the last rejected file; RCON admin only.
 	LastError   *string    `json:"last_error,omitempty"`
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
-	MaxLength   int        `json:"max_length"`
+
+	// MaxLength Most characters of an entered command; a say the panel builds with message_command counts the built command in bytes (D-081).
+	MaxLength int `json:"max_length"`
 
 	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped.
 	MessageCommand *MessageCommand `json:"message_command,omitempty"`

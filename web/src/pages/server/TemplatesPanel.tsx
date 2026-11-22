@@ -14,6 +14,7 @@ import type { Values } from '@/lib/commandform';
 import { stripCodes } from '@/lib/serverpage';
 import { matchesTemplate, type Template } from '@/lib/templates';
 import { TemplateCard } from './CommandsTab';
+import { suggestable } from '@/lib/players';
 import { plainText } from '@/lib/foreign';
 
 function refusal(t: (k: string) => string, e: unknown): string {
@@ -119,7 +120,7 @@ export function TemplatesPanel({
         <datalist id={listId}>
           {names
             // Offered only as they are: a cleaned name would hit another player.
-            .filter((n) => plainText(n) === n)
+            .filter((n) => plainText(n) === n && suggestable(n))
             .map((n) => (
               <option key={n} value={plainText(n)} />
             ))}

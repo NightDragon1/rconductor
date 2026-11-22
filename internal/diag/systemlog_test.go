@@ -6,8 +6,10 @@ package diag
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -162,8 +164,9 @@ func TestC179FirstReadAudited(t *testing.T) {
 	}{
 		{in("s1"), panel, 1}, // first call with After
 		{in("s1"), panel, 1}, // poll
-		{in("s1"), LogQuery{Source: agent, Level: "info", Limit: 5, After: 1}, 2}, // other source
-		{in("s1"), LogQuery{Source: agent, Level: "info", Limit: 5, After: 7}, 2}, // poll
+		{in("s1"), LogQuery{Source: agent, Level: "info", Limit: 5, After: 1}, 2},                  // other source
+		{in("s1"), LogQuery{Source: agent, Level: "info", Limit: 5, After: 7}, 2},                  // poll
+		{in("s1"), LogQuery{Source: strings.ToUpper(agent), Level: "info", Limit: 5, After: 8}, 2}, // same agent, other spelling
 		{in("s2"), panel, 3}, // other session
 		{in("s2"), LogQuery{Source: "panel", From: panel.From, To: now, Level: "info", Limit: 5}, 4}, // without After, always
 	} {
@@ -173,6 +176,46 @@ func TestC179FirstReadAudited(t *testing.T) {
 		if got := viewed(); got != c.want {
 			t.Errorf("call %d: audited reads = %d, want %d", i, got, c.want)
 		}
+	}
+}
+
+// TestC360ViewedReadsBounded: parallel first reads of a session give at
+// least one audit entry; the noted reads stay bounded, and a full set
+// starts again, so a later read is audited once more (D-091).
+func TestC360ViewedReadsBounded(t *testing.T) {
+	st := storetest.New(t)
+	m, err := logmask.New(nil, logmask.DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := NewService(st, nil)
+	s.Use(&hub{code: agentproto.CodeOK, lines: []string{"line"}}, builtin{m})
+	id := storetest.CreateUser(t, st, storetest.User{Pseudonym: "a", Role: string(perm.RCONAdmin)})
+	req := users.Request{Actor: perm.Actor{ID: id, Role: perm.RCONAdmin}, SessionID: "s"}
+	now := time.Now().UTC()
+	q := LogQuery{Source: "panel", From: now.Add(-time.Hour), To: now, Level: "info", Limit: 5, After: 1}
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Go(func() {
+			if _, err := s.SystemLog(context.Background(), req, q); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	var n int
+	_ = st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'system_log.viewed'`).Scan(&n)
+	if n < 1 || n > 20 {
+		t.Errorf("%d audit entries for 20 parallel first reads", n)
+	}
+	for i := range maxViewed {
+		s.markRead(fmt.Sprintf("x%d", i), "panel")
+	}
+	if len(s.viewed) > maxViewed {
+		t.Errorf("%d noted reads, bound %d", len(s.viewed), maxViewed)
+	}
+	if !s.firstRead("s", "panel", 1) {
+		t.Error("a read after the set started again is not audited")
 	}
 }
 
