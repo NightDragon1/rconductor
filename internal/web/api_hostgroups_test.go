@@ -53,6 +53,8 @@ func TestHostGroups(t *testing.T) {
 		`{"display_name":"Rack\u0007"}`: 400, `{"display_name":"Rack\n1"}`: 400, `{"display_name":"\u001b[31mRack"}`: 400,
 		`{"display_name":"` + strings.Repeat("x", 65) + `"}`: 400, `{"display_name":"` + strings.Repeat("x", 1<<20) + `"}`: 400,
 		`{"display_name":"` + strings.Repeat("ä", 64) + `"}`: 200,
+		// UI-021: the field is required; a body without it changes nothing.
+		`{}`: 400, `{"other":"x"}`: 400,
 	} {
 		if got := set(b, body); got != want && (want != 400 || got != http.StatusRequestEntityTooLarge) {
 			t.Errorf("%.40s = %d, want %d", body, got, want)

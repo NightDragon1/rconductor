@@ -27,7 +27,8 @@ func TestHostsAndDiagnostics(t *testing.T) {
 			}
 		}
 	}
-	check(http.StatusForbidden, mod, rename, export, call{method: http.MethodGet, path: "/api/v1/diagnostics?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z"})
+	check(http.StatusForbidden, mod, rename, export, call{method: http.MethodGet, path: "/api/v1/diagnostics?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z"},
+		call{method: http.MethodPatch, path: rename.path, body: `{}`, origin: origin})
 	check(http.StatusBadRequest, admin, call{method: http.MethodGet, path: "/api/v1/diagnostics?from=2026-11-01T00:00:00Z&to=2026-11-19T00:00:00Z"})
 	check(http.StatusNotFound, admin, rename)
 	if rec := f.do(t, call{method: export.method, path: export.path, cookies: []*http.Cookie{admin}}); rec.Code != http.StatusOK ||
@@ -35,7 +36,7 @@ func TestHostsAndDiagnostics(t *testing.T) {
 		t.Errorf("export = %d %s, %d bytes", rec.Code, rec.Header().Get("Content-Type"), rec.Body.Len())
 	}
 	var refused int
-	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action IN ('agent.display_name_set', 'diagnostics.exported') AND result = 'denied'`).Scan(&refused); err != nil || refused != 3 {
-		t.Errorf("audited refusals = %d (%v), want 3", refused, err)
+	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action IN ('agent.display_name_set', 'diagnostics.exported') AND result = 'denied'`).Scan(&refused); err != nil || refused != 4 {
+		t.Errorf("audited refusals = %d (%v), want 4", refused, err)
 	}
 }
