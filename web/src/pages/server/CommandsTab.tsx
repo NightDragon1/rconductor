@@ -314,7 +314,7 @@ export function TemplateCard({
   );
 }
 
-function HistoryItem({ b }: { b: CmdBlock }) {
+export function HistoryItem({ b }: { b: CmdBlock }) {
   const { t, i18n } = useTranslation();
   // Answers are foreign data: text only, color codes dropped (SEC-006).
   const answer = b.response ? stripCodes(b.response) : '';
