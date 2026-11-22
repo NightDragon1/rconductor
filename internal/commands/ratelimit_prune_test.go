@@ -4,9 +4,12 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/NightDragon1/rconductor/internal/commands/limits"
 )
 
 // TestRateLimitPruneByOwnLimitC15: pruning a full limiter judges each bucket
@@ -60,6 +63,23 @@ func TestRateLimitPruneByOwnLimitC15(t *testing.T) {
 	l.take("admin", "third", adm, t1)
 	if n := len(l.buckets); n < maxBuckets {
 		t.Errorf("buckets after pruning a table of spent buckets = %d, want all %d kept", n, maxBuckets)
+	}
+}
+
+// TestC342RateLimitOutsideTheCoreRange: a stored rate limit above the range
+// of the core (written past the settings API) is not used; the default of
+// the role holds (CMD-019).
+func TestC342RateLimitOutsideTheCoreRange(t *testing.T) {
+	w := newWorld(t)
+	w.setting("ratelimit.server_admin.per_minute", limits.MaxRatePerMinute+1)
+	w.setting("ratelimit.server_admin.burst", limits.MaxRateBurst+1)
+	lim := w.svc.limit(context.Background(), "server_admin")
+	if lim != DefaultLimits["server_admin"] {
+		t.Errorf("limit = %+v, want the default %+v", lim, DefaultLimits["server_admin"])
+	}
+	w.setting("ratelimit.server_admin.burst", limits.MaxRateBurst)
+	if lim := w.svc.limit(context.Background(), "server_admin"); lim.Burst != limits.MaxRateBurst {
+		t.Errorf("burst at the upper end = %d", lim.Burst)
 	}
 }
 

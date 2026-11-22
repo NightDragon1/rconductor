@@ -27,8 +27,8 @@ func TestEachRuleFindsItsViolation(t *testing.T) {
 	// revealer with a method value) break no rule.
 	want := []string{"audit PostB", "authz GetC", "cmd internal/other", "redact internal/boundreveal", "redact internal/bprint",
 		"redact internal/deep", "redact internal/fprint", "redact internal/oswrite", "redact internal/other", "redact internal/ownlog",
-		"redact internal/pointer", "redact internal/printer", "redact internal/printer", "redact internal/printer",
-		"redact internal/reflectsecret", "redact internal/stdlog", "redact internal/thunk"}
+		"redact internal/pointer", "redact internal/printer", "redact internal/printer", "redact internal/printer", "redact internal/rawiface", "redact internal/rawlogs",
+		"redact internal/reflectsecret", "redact internal/servers", "redact internal/stdlog", "redact internal/sysbypass", "redact internal/sysiface", "redact internal/sysvalue", "redact internal/thunk"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("findings = %v, want %v", keys, want)
 	}

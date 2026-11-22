@@ -40,6 +40,11 @@ authz:
   - internal/web/api_users.go
 # the session with the role and lock the pipeline is handed
   - internal/store/queries/sqlite/sessions.sql
+# who of the open connections gets a message event (MSG-001, D-085)
+  - internal/events/hub.go
+# how a broken security setting is read: switches stay on, numbers keep the
+# last value (F-93, D-109)
+  - internal/store/settings.go
 
 # cmd: commands from input to game server, and the orders the agent executes,
 # with the profile rules and queries that decide what is checked and sent
@@ -87,9 +92,13 @@ redact:
   - internal/logmask/**
   - internal/agentview/logs.go
   - internal/servers/logs.go
+# the raw sources of container logs before the masking (UI-022)
+  - internal/agentview/agentview.go
+  - internal/cache/agents.go
 # the system log and the diagnostic export, blacked out before writing (D-090, D-091)
   - internal/diag/**
   - internal/syslog/**
+  - internal/store/queries/sqlite/systemlog.sql
 
 # audit: audit log and the fixed event codes
 audit:
@@ -138,6 +147,13 @@ rules:
   - web/.redocly.*
   - web/index.html
   - web/vite.config.*
+  - web/playwright.config.ts
+  - web/src/test/pseudo.ts
+  - .golangci.*
+  - scripts/check-tool-origin.sh
+  - scripts/web-build.sh
+  - scripts/check-tool-origin-test.sh
+  - scripts/check-dockerfile*
   - Makefile
 # the license check: what reuse lint asks for (NFR-021)
   - REUSE.toml
