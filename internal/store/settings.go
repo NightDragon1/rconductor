@@ -101,7 +101,7 @@ func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string
 		return fmt.Errorf("read setting %s: %w", key, err)
 	case err != nil:
 		last, ok := s.kept.Load(key)
-		s.logReadFailed(ctx, log, key, err)
+		s.logReadFailed(ctx, log, key, err, "read")
 		if !ok {
 			return fmt.Errorf("read setting %s: %w", key, err)
 		}
@@ -110,7 +110,7 @@ func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string
 	if err := json.Unmarshal([]byte(v), dst); err != nil {
 		// A broken row is a failed read too: logged, and the last value
 		// read before, if any (D-109).
-		s.logReadFailed(ctx, log, key, err)
+		s.logReadFailed(ctx, log, key, err, "decode")
 		if last, ok := s.kept.Load(key); ok && json.Unmarshal([]byte(last.(string)), dst) == nil {
 			return nil
 		}
@@ -127,18 +127,40 @@ func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string
 func (s *Store) LoggedSetting(ctx context.Context, log *slog.Logger, key string, dst any) error {
 	err := s.GlobalSetting(ctx, key, dst)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		s.logReadFailed(ctx, log, key, err)
+		s.logReadFailed(ctx, log, key, err, failure(err))
 	}
 	return err
 }
 
-// logReadFailed logs a setting that could not be read, with the key only;
+// LoggedSettingSince is LoggedSetting with the time of the last change,
+// for a switch that runs out (D-109).
+func (s *Store) LoggedSettingSince(ctx context.Context, log *slog.Logger, key string, dst any) (time.Time, error) {
+	since, err := s.GlobalSettingSince(ctx, key, dst)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		s.logReadFailed(ctx, log, key, err, failure(err))
+	}
+	return since, err
+}
+
+// failure names what went wrong without the error text, which can hold the
+// value: decode for a broken row, read otherwise.
+func failure(err error) string {
+	var syn *json.SyntaxError
+	var typ *json.UnmarshalTypeError
+	if errors.As(err, &syn) || errors.As(err, &typ) {
+		return "decode"
+	}
+	return "read"
+}
+
+// logReadFailed logs a setting that could not be read, with the key and a
+// fixed reason only, never the error text (it can hold the value, SEC-012);
 // a request or job that ended is no fault of the database.
-func (s *Store) logReadFailed(ctx context.Context, log *slog.Logger, key string, err error) {
+func (s *Store) logReadFailed(ctx context.Context, log *slog.Logger, key string, err error, reason string) {
 	if log == nil || ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return
 	}
 	_, kept := s.kept.Load(key)
 	log.Error("setting not readable", logging.Event(logging.SettingReadFailed),
-		slog.String("setting", key), slog.Bool("kept", kept), slog.Any("err", err))
+		slog.String("setting", key), slog.Bool("kept", kept), slog.String(logging.KeyReason, reason))
 }

@@ -109,11 +109,17 @@ func TestD109BrokenRowsAndSwitches(t *testing.T) {
 	if err := st.LoggedSetting(ctx, log, "no.such.switch", &on); !errors.Is(err, sql.ErrNoRows) || out.Len() != 0 {
 		t.Errorf("missing switch %v, log %s", err, out.String())
 	}
-	if _, err := st.DB.Exec(`UPDATE settings SET value = '7' WHERE key = 'supporters.enabled'`); err != nil {
+	if _, err := st.DB.Exec(`UPDATE settings SET value = '7654321' WHERE key = 'supporters.enabled'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.LoggedSetting(ctx, log, "supporters.enabled", &on); err == nil || !strings.Contains(out.String(), `"setting":"supporters.enabled"`) {
+	if err := st.LoggedSetting(ctx, log, "supporters.enabled", &on); err == nil || !strings.Contains(out.String(), `"setting":"supporters.enabled"`) ||
+		!strings.Contains(out.String(), `"reason":"decode"`) {
 		t.Errorf("broken switch: %v, log %s", err, out.String())
+	}
+	// SEC-012: the value never reaches the log, not even through the text
+	// of the decode error.
+	if strings.Contains(out.String(), "7654321") {
+		t.Errorf("value in the log: %s", out.String())
 	}
 	out.Reset()
 	if err := st.DB.Close(); err != nil {

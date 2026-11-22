@@ -443,7 +443,7 @@ func (s *Service) Delete(ctx context.Context, req users.Request, id string) erro
 // not yet past its 30 minutes (revision 2.3 candidate 3).
 func (s *Service) PairingOpen(ctx context.Context) bool {
 	var on bool
-	since, err := s.st.GlobalSettingSince(ctx, users.SettingFingerprintPairing, &on)
+	since, err := s.st.LoggedSettingSince(ctx, s.log, users.SettingFingerprintPairing, &on)
 	return err == nil && on && s.now().Sub(since) < users.PairingWindow
 }
 
@@ -466,7 +466,10 @@ func (s *Service) ClosePairing(ctx context.Context, every time.Duration) {
 
 func (s *Service) closeExpiredPairing(ctx context.Context) error {
 	var on bool
-	since, err := s.st.GlobalSettingSince(ctx, users.SettingFingerprintPairing, &on)
+	since, err := s.st.LoggedSettingSince(ctx, s.log, users.SettingFingerprintPairing, &on)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil // never switched on
+	}
 	if err != nil || !on || s.now().Sub(since) < users.PairingWindow {
 		return err
 	}

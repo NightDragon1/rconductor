@@ -189,11 +189,13 @@ func (s *Service) loginPolicy(ctx context.Context) loginLimits {
 	ints := map[string]*int{SettingMaxFailures: &lim.maxFailures, SettingMaxClientFailures: &lim.maxClientFailures, SettingMaxTracked: &lim.maxTracked, SettingOverflowLine: &lim.overflowLine}
 	for key, dst := range ints {
 		var n int
-		read := s.st.GlobalSetting // capacity and tuning stay at the default
+		// Every login value logs a failed read (D-109); the limits keep the
+		// last value, capacity and tuning fall back to the default.
+		read := s.st.LoggedSetting
 		if key == SettingMaxFailures || key == SettingMaxClientFailures {
-			read = func(ctx context.Context, key string, dst any) error { return s.st.GuardedSetting(ctx, s.log, key, dst) }
+			read = s.st.GuardedSetting
 		}
-		if err := read(ctx, key, &n); err != nil {
+		if err := read(ctx, s.log, key, &n); err != nil {
 			continue
 		}
 		if n >= 1 {
