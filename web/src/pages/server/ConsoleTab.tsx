@@ -236,8 +236,7 @@ export function ConsoleTab() {
 
   const items = visible(buf, { ...tracks, logs: tracks.logs && hasAgent }, filter, me);
   // TanStack Virtual keeps its own state, so the React Compiler skips this
-  // component; it renders as plain React.
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // component; it renders as plain React (rule off in eslint.config.js).
   const rows = useVirtualizer({
     count: items.length,
     getScrollElement: () => scroller.current,

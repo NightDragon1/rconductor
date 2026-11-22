@@ -31,6 +31,7 @@ import { fillTemplate, matchesTemplate, templateParams, type Template } from '@/
 import { playerCount } from '@/lib/players';
 import { cn } from '@/lib/utils';
 import { useConsoleFeed } from './useConsoleFeed';
+import { plainText } from '@/lib/foreign';
 
 // Reason codes with their own text (Design 3.5).
 const reasons = [
@@ -417,9 +418,12 @@ function ServerCommands() {
   return (
     <div className="grid gap-4 max-md:pb-44 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <datalist id={listId}>
-        {names.map((n) => (
-          <option key={n} value={n} />
-        ))}
+        {names
+          // Offered only as they are: a cleaned name would hit another player.
+          .filter((n) => plainText(n) === n)
+          .map((n) => (
+            <option key={n} value={plainText(n)} />
+          ))}
       </datalist>
       <div className="flex min-w-0 flex-col gap-4">
         <section aria-label={t('server.tab.commands')} className="min-w-0">
@@ -532,7 +536,7 @@ function ServerCommands() {
                             : 'border-control',
                         )}
                       >
-                        <bdi>{n}</bdi>
+                        <ForeignText text={n} />
                       </button>
                     </li>
                   );

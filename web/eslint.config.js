@@ -9,6 +9,9 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   { ignores: ['dist', '.dist-language', 'src/api/schema.d.ts', 'scripts/testdata'] },
+  // No eslint-disable comments in the code (PRJ-005): an exception stands
+  // here, per file and rule, where the class file covers it.
+  { linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: 'error' } },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.strict, prettier],
@@ -60,5 +63,16 @@ export default tseslint.config(
     files: ['e2e/**/*.ts', 'playwright.config.ts'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
     rules: { 'react-hooks/rules-of-hooks': 'off' },
+  },
+  // The exceptions last, so no later block turns the rules on again.
+  {
+    // Control characters are what these checks look for.
+    files: ['src/lib/commandform.ts', 'src/lib/logfilter.ts'],
+    rules: { 'no-control-regex': 'off' },
+  },
+  {
+    // TanStack Virtual keeps its own state; the React Compiler skips it.
+    files: ['src/pages/server/ConsoleTab.tsx'],
+    rules: { 'react-hooks/incompatible-library': 'off' },
   },
 );

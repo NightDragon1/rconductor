@@ -100,8 +100,9 @@ jobs:
       - run: go -C tools tool golangci-lint run ./fitness
       - run: go -C tools test ./fitness
       - run: go -C tools run ./fitness -dir ..
-      # Scheduled and manual runs have no base to compare the list with.
-      - if: github.event_name == 'pull_request' || github.event_name == 'push'
+      # Scheduled and manual runs have no base to compare the list with, nor
+      # a tag push (the release calls this workflow): its before is zero.
+      - if: (github.event_name == 'pull_request' || github.event_name == 'push') && github.ref_type != 'tag'
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: scripts/fitness-ratchet.sh "$BASE"
@@ -129,6 +130,7 @@ jobs:
       - run: scripts/check-secrets-test.sh
       - run: scripts/script-isolation-test.sh
       - run: scripts/classify-test.sh
+      - run: scripts/fitness-ratchet-test.sh
       - run: scripts/release-test.sh
       - run: scripts/check-git-config-test.sh
       - run: scripts/lockfile-packages-test.sh

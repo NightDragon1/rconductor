@@ -57,7 +57,6 @@ export interface LogFilter {
 }
 
 // Control characters, as in log lines from foreign servers.
-// eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 
 // problemOf checks one filter part as typed.
