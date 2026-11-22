@@ -93,6 +93,14 @@ func (v *View) maskLoop(agentID string, q *agentQueue) {
 			v.freeQueue(agentID, q)
 			return
 		case d := <-q.ch:
+			if v.maskCtx.Err() != nil {
+				// Ended meanwhile: this one and the waiting ones are dropped.
+				v.qmu.Lock()
+				q.dropped, q.droppedLines = q.dropped+1, q.droppedLines+len(d.ll.Lines)
+				v.qmu.Unlock()
+				v.freeQueue(agentID, q)
+				return
+			}
 			v.publishLines(v.maskCtx, d)
 			idle.Reset(maskIdle)
 		case <-idle.C:
@@ -162,7 +170,7 @@ func (v *View) lines(agentID string, ll agentproto.LogLines, seq, first uint64) 
 		return
 	}
 	if v.maskCtx.Err() != nil {
-		return // the panel stops: no new worker
+		return // the panel stops: no new worker, the line is not counted
 	}
 	v.qmu.Lock()
 	q := v.queues[agentID]
