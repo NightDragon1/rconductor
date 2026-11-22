@@ -724,7 +724,11 @@ paths:
         batch_id that ties the runs together in the audit; a batch_id or
         any other unknown field in the request is refused with 400. Up to
         commands.multi_max_servers servers, commands.multi_parallel at a
-        time; the answer comes when every server has its result.
+        time; the answer comes when every server has its result. Runs start
+        only while one still ends before the answer is due (55 s less the
+        command timeout); a server whose turn comes later is not sent the
+        command and gets skipped with reason time_budget, its own request
+        ID and its own audit entry (an error with that reason).
       tags: [commands]
       requestBody:
         required: true
@@ -3066,7 +3070,7 @@ components:
           description: Missing for not_found.
         result:
           type: string
-          enum: [ok, denied, error, timeout, not_found]
+          enum: [ok, denied, error, timeout, not_found, skipped]
         reason:
           $ref: "#/components/schemas/ReasonCode"
         detail:
@@ -4875,6 +4879,7 @@ components:
         - command_failed
         - message_too_long
         - too_many_recipients
+        - time_budget
 
     Problem:
       type: object

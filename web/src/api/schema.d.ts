@@ -424,7 +424,7 @@ export interface paths {
         put?: never;
         /**
          * Send one command to several servers at once (CMD-010, D-069).
-         * @description Only RCON admin and server admin. Every server gets a normal run of the pipeline (Design 3.3) with its own request ID: scope, the syntax of its profile, the rate limit of the bucket (user, server) as for a single command, audit and console. A server outside the scope and an unknown ID both give not_found. The panel makes the batch_id that ties the runs together in the audit; a batch_id or any other unknown field in the request is refused with 400. Up to commands.multi_max_servers servers, commands.multi_parallel at a time; the answer comes when every server has its result.
+         * @description Only RCON admin and server admin. Every server gets a normal run of the pipeline (Design 3.3) with its own request ID: scope, the syntax of its profile, the rate limit of the bucket (user, server) as for a single command, audit and console. A server outside the scope and an unknown ID both give not_found. The panel makes the batch_id that ties the runs together in the audit; a batch_id or any other unknown field in the request is refused with 400. Up to commands.multi_max_servers servers, commands.multi_parallel at a time; the answer comes when every server has its result. Runs start only while one still ends before the answer is due (55 s less the command timeout); a server whose turn comes later is not sent the command and gets skipped with reason time_budget, its own request ID and its own audit entry (an error with that reason).
          */
         post: operations["sendMultiCommand"];
         delete?: never;
@@ -1518,7 +1518,7 @@ export interface components {
              */
             request_id?: string;
             /** @enum {string} */
-            result: "ok" | "denied" | "error" | "timeout" | "not_found";
+            result: "ok" | "denied" | "error" | "timeout" | "not_found" | "skipped";
             reason?: components["schemas"]["ReasonCode"];
             detail?: string;
             /** @description The command as sent, after cleaning. */
@@ -2360,7 +2360,7 @@ export interface components {
          * @description Machine-readable reason of a rejection (Design 3.5).
          * @enum {string}
          */
-        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "own_totp_required" | "container_bound" | "command_failed" | "message_too_long" | "too_many_recipients";
+        ReasonCode: "unauthenticated" | "not_found" | "not_in_list" | "wrapper_blocked" | "invalid" | "rate_limited" | "server_unavailable" | "forbidden" | "busy" | "password_change_required" | "timeout" | "agent_unavailable" | "agent_unsupported" | "action_failed" | "conflict" | "precondition_required" | "totp_setup_required" | "own_totp_required" | "container_bound" | "command_failed" | "message_too_long" | "too_many_recipients" | "time_budget";
         /** @description Problem Details for HTTP APIs (RFC 9457). */
         Problem: {
             /**

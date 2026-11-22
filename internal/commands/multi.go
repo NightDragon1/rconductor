@@ -7,10 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/users"
@@ -20,6 +23,19 @@ import (
 // besides those of the history: the server is outside the scope or
 // unknown.
 const ResultNotFound = "not_found"
+
+// ResultSkipped and ReasonTimeBudget: a server of a multi-server command
+// whose turn came after the time budget; it is not sent the command and
+// its audit entry is an error with this reason (CMD-010, D-069).
+const (
+	ResultSkipped    = "skipped"
+	ReasonTimeBudget = "time_budget"
+)
+
+// multiAnswerBy is when the answer of a multi-server command leaves at the
+// latest, before the HTTP write deadline of 60 s; runs start only while one
+// still ends in time (a run takes at most the command timeout).
+const multiAnswerBy = 55 * time.Second
 
 // MultiItem is the result of one server of a multi-server command.
 type MultiItem struct {
@@ -87,6 +103,9 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 	parallel := s.multiSetting(ctx, users.SettingMultiParallel, users.DefaultMultiParallel, users.MinMultiParallel)
 	items := make([]MultiItem, len(ids))
 	slots := make(chan struct{}, parallel)
+	// Runs start until the deadline; a run started then still ends in time.
+	deadline := s.now().Add(max(multiAnswerBy-s.timeout, 0))
+	over := false
 	var wg sync.WaitGroup
 	for i, id := range ids {
 		r := req
@@ -94,7 +113,23 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 		if r.RequestID, err = store.NewID(); err != nil {
 			return "", nil, err
 		}
-		slots <- struct{}{}
+		if !over {
+			wait := time.NewTimer(deadline.Sub(s.now()))
+			select {
+			case slots <- struct{}{}:
+				if !s.now().Before(deadline) {
+					<-slots // the slot came too late
+					over = true
+				}
+			case <-wait.C:
+				over = true
+			}
+			wait.Stop()
+		}
+		if over {
+			items[i] = s.multiSkipped(ctx, r, id, input)
+			continue
+		}
 		wg.Go(func() {
 			defer func() { <-slots }()
 			items[i] = s.multiOne(ctx, r, id, input)
@@ -102,6 +137,39 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 	}
 	wg.Wait()
 	return batch, items, nil
+}
+
+// multiSkipped is a server whose turn came after the time budget: in the
+// scope it gets its own audit entry, an error with the reason time_budget,
+// under its request ID and the batch; outside it is not_found as in Send.
+func (s *Service) multiSkipped(ctx context.Context, req users.Request, serverID, input string) MultiItem {
+	rights, err := s.perm.For(ctx, req.Actor.ID)
+	if err != nil {
+		s.log.Error("multi command failed", append(s.attrs(req, serverID), "err", err)...)
+		return MultiItem{ServerID: serverID, RequestID: req.RequestID, Result: ResultError}
+	}
+	if _, ok := rights.Server(serverID); !ok {
+		perm.LogDenied(s.log, perm.Denial{
+			RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym, Role: req.Actor.Role,
+			Server: serverID, Reason: "not_found", Action: "command",
+		})
+		return MultiItem{ServerID: serverID, Result: ResultNotFound, Reason: "not_found"}
+	}
+	s.log.Warn("multi command: server left out after the time budget",
+		append(s.attrs(req, serverID), logging.Event(logging.CmdDenied), slog.String(logging.KeyReason, ReasonTimeBudget))...)
+	// Unsent, so uncleaned: kept short as a refused input is. The entry is
+	// written even when the client has gone (one per server, CMD-010).
+	command := truncate(input, 256)
+	if err := s.entry(context.WithoutCancel(ctx), req, serverID, ActionDenied, audit.Entry{
+		Payload: payload{Command: command, BatchID: req.BatchID}, Result: audit.ResultError, Reason: ReasonTimeBudget,
+	}); err != nil {
+		s.log.Error("audit entry not written", append(s.attrs(req, serverID), "err", err)...)
+	}
+	s.publish(serverID, Entry{
+		RequestID: req.RequestID, TS: s.now().UTC(), UserID: req.Actor.ID, Pseudonym: req.Pseudonym,
+		Role: string(req.Actor.Role), Command: command, Result: ResultError, Reason: ReasonTimeBudget,
+	})
+	return MultiItem{ServerID: serverID, RequestID: req.RequestID, Result: ResultSkipped, Reason: ReasonTimeBudget}
 }
 
 func (s *Service) multiOne(ctx context.Context, req users.Request, serverID, input string) MultiItem {

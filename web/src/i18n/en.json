@@ -367,7 +367,8 @@
       "denied": "denied",
       "error": "error",
       "timeout": "timeout",
-      "not_found": "not found"
+      "not_found": "not found",
+      "skipped": "not sent, time budget used up"
     }
   },
   "templates": {
