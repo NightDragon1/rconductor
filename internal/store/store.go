@@ -75,5 +75,12 @@ func IsBusy(err error) bool {
 	return errors.As(err, &e) && e.Code()&0xff == sqlite3.SQLITE_BUSY
 }
 
+// IsForeignKey reports whether err means that a foreign key constraint
+// failed, such as a row that refers to one deleted in the meantime.
+func IsForeignKey(err error) bool {
+	var e *sqlite.Error
+	return errors.As(err, &e) && e.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY
+}
+
 // Close closes the database.
 func (s *Store) Close() error { return s.DB.Close() }

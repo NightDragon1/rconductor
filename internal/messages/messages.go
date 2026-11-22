@@ -411,7 +411,7 @@ func (s *Service) Comment(ctx context.Context, req users.Request, id, text strin
 		AuthorPseudonym: req.Pseudonym, Text: text, CreatedAt: created,
 	}); err != nil {
 		// The message went in the meantime: as for an unknown one.
-		if strings.Contains(err.Error(), "FOREIGN KEY") {
+		if store.IsForeignKey(err) {
 			return Comment{}, users.ErrNotFound
 		}
 		return Comment{}, err
@@ -634,11 +634,15 @@ func (s *Service) store(ctx context.Context, req users.Request, in Input) (Messa
 	if sent >= int64(perHour) {
 		return Message{}, nil, ErrRateLimited
 	}
-	// A sender removed since the request was taken sends nothing and
-	// leaves no count behind (MSG-001).
-	if _, err := q.GetActiveUserRole(ctx, req.Actor.ID); errors.Is(err, sql.ErrNoRows) {
-		return Message{}, nil, users.ErrForbidden
-	} else if err != nil {
+	// A sender removed or given another role since the request was taken
+	// sends nothing and leaves no count behind (MSG-001); the refusal is
+	// logged and audited after the transaction (no audit inside it).
+	role, err := q.GetActiveUserRole(ctx, req.Actor.ID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows) || (err == nil && role != string(req.Actor.Role)):
+		_ = tx.Rollback()
+		return Message{}, nil, s.refused(ctx, req, "message.sent", "", "forbidden", users.ErrForbidden, nil)
+	case err != nil:
 		return Message{}, nil, err
 	}
 	created := now.Format(store.TimeLayout)
