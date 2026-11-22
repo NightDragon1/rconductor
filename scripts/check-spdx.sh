@@ -15,14 +15,14 @@ cd "$(dirname "$0")/.."
 # Licenses come only from file headers and the REUSE.toml at the root
 # (core path): a nested REUSE.toml or a .license file beside a file would
 # license it past that file (NFR-021).
-others=$(git ls-files | grep -E '(^|/)REUSE\.toml$|\.license$' | grep -vx 'REUSE.toml' || true)
+others=$(git -c core.quotePath=false ls-files | grep -E '(^|/)REUSE\.toml$|\.license$' | grep -vx 'REUSE.toml' || true)
 if [ -n "$others" ]; then
   echo "licenses only from headers and the REUSE.toml at the root, not from:"
   echo "$others"
   exit 1
 fi
 # REUSE-IgnoreStart
-missing=$(git ls-files |
+missing=$(git -c core.quotePath=false ls-files |
   grep -vE '^docs/|\.md$|^LICENSE$|^LICENSES/|^AUTHORS$|\.json$|(^|/)go\.(mod|sum)$|(^|/)\.gitkeep$' |
   while IFS= read -r f; do
     grep -Iq . "$f" 2>/dev/null || continue # binary or empty

@@ -59,7 +59,7 @@ func printsPastHandler(funcs map[*ssa.Function]bool, mod string) []finding {
 				// logging.Secret.Reveal as a method expression: a thunk
 				// whose first parameter is the secret.
 				if name == "Reveal$thunk" && !hasPrefix(p, mod, revealers) && len(callee.Params) > 0 &&
-					secretOrPointer(callee.Params[0].Type(), mod) {
+					(secretOrPointer(callee.Params[0].Type(), mod) || revealIface(callee.Params[0].Type())) {
 					add(rel, "reveals a secret outside its destinations")
 					continue
 				}
@@ -99,8 +99,6 @@ func isGlobal(v ssa.Value, pkg, name string) bool {
 	return ok && g.Pkg != nil && g.Pkg.Pkg.Path() == pkg && g.Name() == name
 }
 
-// fromSecret reports whether v is a secret, or a pointer to one, put into
-// an interface.
 // fromSecret tells whether the value handed to reflect may hold a secret:
 // a value made into an interface here whose type holds one anywhere
 // (fields, elements, pointers), or an interface value from elsewhere, whose
@@ -137,6 +135,16 @@ func holdsSecret(t types.Type, mod string, seen map[types.Type]bool) bool {
 		return holdsSecret(u.Elem(), mod, seen)
 	case *types.Map:
 		return holdsSecret(u.Key(), mod, seen) || holdsSecret(u.Elem(), mod, seen)
+	case *types.Chan:
+		return holdsSecret(u.Elem(), mod, seen)
+	case *types.Signature:
+		for _, tup := range []*types.Tuple{u.Params(), u.Results()} {
+			for i := range tup.Len() {
+				if holdsSecret(tup.At(i).Type(), mod, seen) {
+					return true
+				}
+			}
+		}
 	case *types.Interface:
 		return true
 	}

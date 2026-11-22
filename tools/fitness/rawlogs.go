@@ -6,6 +6,7 @@ package main
 import (
 	"go/constant"
 	"go/token"
+	"go/types"
 	"path/filepath"
 	"strings"
 
@@ -58,8 +59,9 @@ func inFiles(fset *token.FileSet, fn *ssa.Function, root string, files []string)
 	return false
 }
 
-// rawLogValues finds raw log reads taken as a method value (RequestData,
-// Logs or OnLines of hub and cache as $bound), which the call graph sees
+// rawLogValues finds raw log reads taken as a method value ($bound) or a
+// method expression ($thunk) of RequestData, Logs or OnLines of hub and
+// cache, or of an interface with such a method, which the call graph sees
 // only as a call of the wrapper, outside the files of rawLogFiles.
 func rawLogValues(funcs map[*ssa.Function]bool, mod string, fset *token.FileSet, root string) []finding {
 	seen := map[finding]bool{}
@@ -71,17 +73,24 @@ func rawLogValues(funcs map[*ssa.Function]bool, mod string, fset *token.FileSet,
 		}
 		for _, b := range fn.Blocks {
 			for _, in := range b.Instrs {
-				mc, ok := in.(*ssa.MakeClosure)
-				if !ok {
+				var f *ssa.Function
+				switch v := in.(type) {
+				case *ssa.MakeClosure: // a method value ($bound)
+					f, _ = v.Fn.(*ssa.Function)
+				case ssa.CallInstruction: // a method expression ($thunk)
+					f = v.Common().StaticCallee()
+				}
+				if f == nil || f.Object() == nil || f.Object().Pkg() == nil ||
+					(!strings.HasSuffix(f.Name(), "$bound") && !strings.HasSuffix(f.Name(), "$thunk")) {
 					continue
 				}
-				f, _ := mc.Fn.(*ssa.Function)
-				if f == nil || f.Object() == nil || f.Object().Pkg() == nil {
-					continue
-				}
-				name, cp := strings.TrimSuffix(f.Name(), "$bound"), f.Object().Pkg().Path()
-				if name == "RequestData" && cp == mod+"/internal/agenthub" ||
-					(name == "Logs" || name == "OnLines") && cp == mod+"/internal/cache" {
+				name := strings.TrimSuffix(strings.TrimSuffix(f.Name(), "$bound"), "$thunk")
+				cp := f.Object().Pkg().Path()
+				// A method of an interface with the name of a log source counts
+				// too: the value behind it may be the hub or the cache.
+				_, iface := f.Object().Type().(*types.Signature).Recv().Type().Underlying().(*types.Interface)
+				if name == "RequestData" && (cp == mod+"/internal/agenthub" || iface) ||
+					(name == "Logs" || name == "OnLines") && (cp == mod+"/internal/cache" || iface) {
 					x := finding{"redact", strings.TrimPrefix(p, mod+"/"), "reads raw container logs outside the masking"}
 					if !seen[x] {
 						seen[x] = true
