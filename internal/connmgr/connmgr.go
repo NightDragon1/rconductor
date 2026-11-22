@@ -161,6 +161,36 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
+// Refresh reads all servers again and reconnects those whose connection
+// changed, such as by a changed game profile (end marker, dialect); the
+// others keep their connection (PROT-001, PROT-003).
+func (m *Manager) Refresh(ctx context.Context) error {
+	m.mu.Lock()
+	started := m.ctx != nil
+	m.mu.Unlock()
+	if !started {
+		return nil
+	}
+	targets, err := m.source.Targets(ctx)
+	if err != nil {
+		return err
+	}
+	for _, t := range targets {
+		m.mu.Lock()
+		w, ok := m.workers[t.ID]
+		m.mu.Unlock()
+		if ok && w.current() == t {
+			continue
+		}
+		// Read the server again right before taking it over, as Reload
+		// does: a change or deletion in the meantime wins over the list.
+		if err := m.Reload(ctx, t.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Wait blocks until all workers have stopped after the start context ended.
 func (m *Manager) Wait() { m.wg.Wait() }
 

@@ -240,6 +240,14 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	defer wg.Wait()
 	wg.Go(func() { backup.Schedule(ctx, st, backups) })
 	wg.Go(func() { cleanup.Schedule(ctx, st, logs.Module("audit")) })
+	// A changed profile can change a connection (end marker, dialect): the
+	// servers concerned reconnect at once, not at the next break (PROT-001).
+	importer.OnImported(func() {
+		masking.ProfilesChanged()
+		if err := conns.Refresh(ctx); err != nil {
+			logs.Module("rcon").Error("connections not refreshed", slog.Any("err", err))
+		}
+	})
 	wg.Go(func() { importer.Watch(ctx) })
 
 	// Agent port with the panel's own key pair (Design 1.1, NFR-001).

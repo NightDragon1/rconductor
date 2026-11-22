@@ -312,10 +312,10 @@ func parse(data []byte) (*Profile, *ast.File, error) {
 			return nil, file, &Error{Problems: []string{yaml.FormatError(err, false, false)}}
 		}
 	}
+	p.Set = setFields(file)
 	if probs := p.check(); len(probs) > 0 {
 		return nil, file, &Error{Problems: probs}
 	}
-	p.Set = setFields(file)
 	p.defaults()
 	return &p, file, nil
 }
@@ -499,7 +499,8 @@ func (p *Profile) check() []string {
 			bad("ports.game[%d]: port 1 to 65535, proto tcp or udp and a name", i)
 		}
 	}
-	if m := p.Syntax.MaxLength; m < 0 || m > maxMaxLength {
+	// 0 written in the file is no length; only a missing key takes the default (D-074).
+	if m := p.Syntax.MaxLength; m < 0 || m > maxMaxLength || m == 0 && p.Sets(FieldMaxLength) {
 		bad("syntax.max_length must be 1 to %d", maxMaxLength)
 	}
 	for i, w := range p.Syntax.Wrappers {
