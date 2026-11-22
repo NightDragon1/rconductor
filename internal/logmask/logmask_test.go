@@ -121,7 +121,7 @@ func TestC239MoreForms(t *testing.T) {
 		`{'password': 'hun ter2', 'user': 'steve'}`:     `{'password': '•••', 'user': 'steve'}`,
 		`msg="{\"password\":\"hun ter2\",\"port\":1}"`:  `msg="{\"password\":\"•••\",\"port\":1}"`,
 		`password := hunter2 next`:                      `password := ••• next`,
-		`RCON_PASSWORD:="two words" next`:               `RCON_PASSWORD:•••"•••" next`,
+		`RCON_PASSWORD:="two words" next`:               `RCON_PASSWORD:="•••" next`,
 		`dsn root:hun@ter2@tcp(db:3306)/game`:           `dsn root:•••@tcp(db:3306)/game`,
 		`GET https://steve:p@ss@example.com/x?mail=a@b`: `GET https://•••@example.com/x?mail=a@b`,
 		`password=a\b next`:                             `password=••• next`,

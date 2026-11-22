@@ -54,8 +54,9 @@ var builtin = []*regexp.Regexp{
 	// Escaped JSON inside a string: \"key\":\"value\", where \\\" is a
 	// quote of the value.
 	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `\\")(?:[^\\]|\\\\\\"|\\[^"])*`),
-	// A bare value; a backslash before a quote opens an escaped value.
-	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `)(?:[^\s"',;&\\]|\\[^"']|\\$)+`),
+	// A bare value; a backslash before a quote opens an escaped value, and
+	// an = before a quote belongs to the separator.
+	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `)(?:=?[^\s"',;&\\=]|\\[^"']|\\$)(?:[^\s"',;&\\]|\\[^"']|\\$)*`),
 	// Command-line flags: --rcon-password value, -password "value",
 	// --rcon-password 'value'.
 	regexp.MustCompile(`(?i)(-` + secretKey + `\s+")` + dquoted),

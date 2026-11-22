@@ -100,7 +100,9 @@ type stack struct {
 	agentAddr string
 	logs      *syncBuffer
 	server    string
-	users     map[string]*client
+	// dataDir is the data directory of the panel, with profiles/.
+	dataDir string
+	users   map[string]*client
 }
 
 // newStack starts the panel and connects it to the RCON server at addr.
@@ -110,7 +112,7 @@ func newStack(t *testing.T, addr, rconPassword string) *stack {
 	var out, console syncBuffer
 	a, stop := startPanel(t, cfg, &out, &console)
 	t.Cleanup(func() { _ = stop() })
-	s := &stack{t: t, base: "http://" + a, logs: &out, users: map[string]*client{}}
+	s := &stack{t: t, base: "http://" + a, logs: &out, users: map[string]*client{}, dataDir: cfg.DataDir}
 	if v, ok := agentAddrs.Load(cfg.SecretsDir); ok {
 		s.agentAddr = v.(string)
 	}
