@@ -147,8 +147,8 @@ func TestC253QueueFreedWhenIdle(t *testing.T) {
 }
 
 // TestC253QueueFreedWhenMaskingEnds covers UI-022: when the masking ends,
-// the queue goes; each waiting delivery is either still sent masked or
-// counted as dropped and told, and no new worker starts.
+// the queue goes; the delivery being masked may still go out masked, the
+// waiting ones are counted as dropped and told, and no new worker starts.
 func TestC253QueueFreedWhenMaskingEnds(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var logs lockedBuffer
@@ -165,17 +165,25 @@ func TestC253QueueFreedWhenMaskingEnds(t *testing.T) {
 		}
 		cancel()
 		synctest.Wait()
-		sent := len(bus.logs) - 1 // the held one is sent once released
 		dropped := 0.0
-		if w := dropWarnings(t, logs.String()); len(w) == 1 {
+		w := dropWarnings(t, logs.String())
+		if len(w) == 1 {
 			dropped = w[0]["deliveries"].(float64)
 		}
-		if queueAlive(v, "a0") || sent+int(dropped) != 3 {
-			t.Fatalf("after the end: alive %t, %d sent, %v dropped of 3 waiting", queueAlive(v, "a0"), sent, dropped)
+		// Only the held delivery may still go out, masked; the waiting
+		// ones are dropped and told.
+		sent := len(bus.logs)
+		for i := range sent {
+			if l := <-bus.logs; l.Seq != uint64(i+1) || strings.Join(l.Lines, "") != "masked" {
+				t.Errorf("sent after the end: %+v", l)
+			}
+		}
+		if queueAlive(v, "a0") || sent > 1 || sent+int(dropped) != 4 {
+			t.Fatalf("after the end: alive %t, %d sent, %v dropped of 4, warnings %v", queueAlive(v, "a0"), sent, dropped, w)
 		}
 		v.lines("a0", agentproto.LogLines{Container: "mc", Lines: []string{"a"}}, 9, 9)
 		synctest.Wait()
-		if queueAlive(v, "a0") {
+		if queueAlive(v, "a0") || len(bus.logs) != 0 || len(dropWarnings(t, logs.String())) != len(w) {
 			t.Error("a new worker started after the end")
 		}
 	})
@@ -230,5 +238,50 @@ func TestC254ParallelFloods(t *testing.T) {
 	case l := <-bus.logs:
 		t.Errorf("one delivery too many: %+v", l)
 	default:
+	}
+}
+
+// TestC253FreeQueueKeepsWaiting covers UI-022: while the masking runs, a
+// queue with a waiting delivery is never freed.
+func TestC253FreeQueueKeepsWaiting(t *testing.T) {
+	v := nAgents(t, 1, slog.New(slog.DiscardHandler), &logBus{logs: make(chan Logs, 1)})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	v.UseMasking(ctx, &slowMasking{release: make(chan struct{})})
+	q := &agentQueue{ch: make(chan delivery, maxMaskQueue)}
+	v.qmu.Lock()
+	v.queues["a0"] = q
+	v.qmu.Unlock()
+	q.ch <- delivery{agentID: "a0"}
+	if v.freeQueue("a0", q) || !queueAlive(v, "a0") {
+		t.Fatal("queue with a waiting delivery freed")
+	}
+	<-q.ch
+	if !v.freeQueue("a0", q) || queueAlive(v, "a0") {
+		t.Fatal("empty queue kept")
+	}
+}
+
+// TestC253NothingSentAfterTheEnd covers UI-022: a worker that finds the
+// masking ended sends none of the waiting deliveries, whichever case its
+// select takes, and tells them as dropped.
+func TestC253NothingSentAfterTheEnd(t *testing.T) {
+	for range 20 {
+		var logs lockedBuffer
+		bus := &logBus{logs: make(chan Logs, maxMaskQueue)}
+		v := nAgents(t, 1, panelLog(&logs), bus)
+		ctx, cancel := context.WithCancel(context.Background())
+		v.UseMasking(ctx, &slowMasking{release: make(chan struct{})})
+		cancel()
+		q := &agentQueue{ch: make(chan delivery, maxMaskQueue)}
+		v.queues["a0"] = q
+		for i := range 3 {
+			q.ch <- delivery{agentID: "a0", ll: agentproto.LogLines{Container: "mc", Lines: []string{"a"}}, seq: uint64(i + 1)}
+		}
+		v.maskLoop("a0", q)
+		w := dropWarnings(t, logs.String())
+		if len(bus.logs) != 0 || queueAlive(v, "a0") || len(w) != 1 || w[0]["deliveries"] != 3.0 {
+			t.Fatalf("sent %d, alive %t, warnings %v", len(bus.logs), queueAlive(v, "a0"), w)
+		}
 	}
 }

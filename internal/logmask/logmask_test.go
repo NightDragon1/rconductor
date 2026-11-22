@@ -121,11 +121,21 @@ func TestC239MoreForms(t *testing.T) {
 		`{'password': 'hun ter2', 'user': 'steve'}`:     `{'password': '•••', 'user': 'steve'}`,
 		`msg="{\"password\":\"hun ter2\",\"port\":1}"`:  `msg="{\"password\":\"•••\",\"port\":1}"`,
 		`password := hunter2 next`:                      `password := ••• next`,
-		`RCON_PASSWORD:="two words" next`:               `RCON_PASSWORD:•••"•••" next`,
+		`RCON_PASSWORD:="two words" next`:               `RCON_PASSWORD:="•••" next`,
 		`dsn root:hun@ter2@tcp(db:3306)/game`:           `dsn root:•••@tcp(db:3306)/game`,
 		`GET https://steve:p@ss@example.com/x?mail=a@b`: `GET https://•••@example.com/x?mail=a@b`,
 		`password=a\b next`:                             `password=••• next`,
 		`mail steve@example.com at 12:30 for help`:      `mail steve@example.com at 12:30 for help`,
+		`password==hunter2 next`:                        `password==••• next`,
+		`password: =abc next`:                           `password: ••• next`,
+		`password: ==abc next`:                          `password: ••• next`,
+		`password: =\x next`:                            `password: ••• next`,
+		`password====x next`:                            `password==••• next`,
+		`password=abc\`:                                 `password=•••`,
+		`msg="{\"password\":\"a\\\"b\"}"`:               `msg="{\"password\":\"•••\"}"`,
+		`dsn root:hun/ter2@/game`:                       `dsn root:•••@/game`,
+		`postgres://app:pa#ss@db:5432/x`:                `postgres://•••@db:5432/x`,
+		`postgres://app:pa?ss@db:5432/x`:                `postgres://•••@db:5432/x`,
 	} {
 		if got := (*Masker)(nil).Line(in); got != want {
 			t.Errorf("%q: got %q, want %q", in, got, want)
