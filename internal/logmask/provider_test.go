@@ -31,7 +31,7 @@ func TestProviderFollowsSettings(t *testing.T) {
 		t.Errorf("defaults: %q", got)
 	}
 	admin := settingsRequest(t, s, perm.RCONAdmin)
-	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{{Value: secretText}}}); err != nil {
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{NewText(secretText, false)}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := line(p, "token=a "+secretText); got != "token=••• •••" {
@@ -75,7 +75,7 @@ func TestProviderReadErrors(t *testing.T) {
 	s, logs := newSettings(t)
 	ctx := context.Background()
 	admin := settingsRequest(t, s, perm.RCONAdmin)
-	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{{Value: secretText}}}); err != nil {
+	if _, err := s.Write(ctx, admin, SettingsInput{IfMatch: version(0), SetTexts: true, Texts: []Text{NewText(secretText, false)}}); err != nil {
 		t.Fatal(err)
 	}
 	p := NewProvider(ctx, s, nil)

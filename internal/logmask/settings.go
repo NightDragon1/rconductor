@@ -165,7 +165,7 @@ func (s *Settings) OpenTexts(st State) ([]Text, error) {
 	}
 	texts := make([]Text, len(sealed))
 	for i, t := range sealed {
-		texts[i] = Text(t)
+		texts[i] = NewText(t.Value, t.Fold)
 	}
 	return texts, nil
 }
@@ -301,7 +301,7 @@ func (s *Settings) apply(cur State, in SettingsInput) (State, bool, error) {
 		}
 		sealed := make([]sealedText, len(texts))
 		for i, t := range texts {
-			sealed[i] = sealedText(t)
+			sealed[i] = sealedText{Value: t.Value(), Fold: t.Fold}
 		}
 		plain, err := json.Marshal(sealed)
 		if err != nil {

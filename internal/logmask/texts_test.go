@@ -4,6 +4,7 @@
 package logmask
 
 import (
+	"fmt"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -17,7 +18,7 @@ import (
 // TestTexts covers D-088 c): fixed texts, no expressions, exact or without
 // case of A to Z; every place is masked, overlapping places as their union.
 func TestTexts(t *testing.T) {
-	m, err := New([]Text{{Value: "s3cr3t.v4lue"}, {Value: "hunter2", Fold: true}, {Value: "abab"}, {Value: "(?i).*"}}, DefaultLimits)
+	m, err := New([]Text{NewText("s3cr3t.v4lue", false), NewText("hunter2", true), NewText("abab", false), NewText("(?i).*", false)}, DefaultLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,11 +44,11 @@ func TestTexts(t *testing.T) {
 func TestTextBounds(t *testing.T) {
 	lim := Limits{Texts: 3, TextRunes: 8}
 	for name, texts := range map[string][]Text{
-		"too short":     {{Value: "abc"}},
-		"too long":      {{Value: "abcdefghi"}},
-		"line break":    {{Value: "ab\ncd"}},
-		"invalid UTF-8": {{Value: "ab\xffcd"}},
-		"too many":      {{Value: "aaaa"}, {Value: "bbbb"}, {Value: "cccc"}, {Value: "dddd"}},
+		"too short":     {NewText("abc", false)},
+		"too long":      {NewText("abcdefghi", false)},
+		"line break":    {NewText("ab\ncd", false)},
+		"invalid UTF-8": {NewText("ab\xffcd", false)},
+		"too many":      {NewText("aaaa", false), NewText("bbbb", false), NewText("cccc", false), NewText("dddd", false)},
 	} {
 		_, err := New(texts, lim)
 		if err == nil {
@@ -55,17 +56,17 @@ func TestTextBounds(t *testing.T) {
 			continue
 		}
 		for _, x := range texts {
-			if strings.Contains(err.Error(), x.Value) {
+			if strings.Contains(err.Error(), x.Value()) {
 				t.Errorf("%s: error holds the text: %v", name, err)
 			}
 		}
 	}
-	if _, err := New([]Text{{Value: "äöüß"}, {Value: "abcdefgh"}, {Value: "1234"}}, lim); err != nil {
+	if _, err := New([]Text{NewText("äöüß", false), NewText("abcdefgh", false), NewText("1234", false)}, lim); err != nil {
 		t.Errorf("at the bounds: %v", err)
 	}
 	many := make([]Text, MaxTexts+1)
 	for i := range many {
-		many[i] = Text{Value: strings.Repeat("x", MinTextRunes) + string(rune('a'+i%26)) + string(rune('a'+i/26))}
+		many[i] = NewText(strings.Repeat("x", MinTextRunes)+string(rune('a'+i%26))+string(rune('a'+i/26)), false)
 	}
 	if _, err := New(many, Limits{Texts: 10000, TextRunes: 10000}); err == nil {
 		t.Error("more than MaxTexts accepted")
@@ -88,7 +89,7 @@ var lineBound = func() time.Duration {
 func TestLineCost(t *testing.T) {
 	texts := make([]Text, MaxTexts)
 	for i := range texts {
-		texts[i] = Text{Value: strings.Repeat("a", MaxTextRunes-i), Fold: i%2 == 0}
+		texts[i] = NewText(strings.Repeat("a", MaxTextRunes-i), i%2 == 0)
 	}
 	m, err := New(texts, Limits{Texts: MaxTexts, TextRunes: MaxTextRunes})
 	if err != nil {
@@ -109,7 +110,7 @@ func TestLineCost(t *testing.T) {
 
 // TestParallel: one masker serves parallel lines.
 func TestParallel(t *testing.T) {
-	m, _ := New([]Text{{Value: "hunter2", Fold: true}}, DefaultLimits)
+	m, _ := New([]Text{NewText("hunter2", true)}, DefaultLimits)
 	var wg sync.WaitGroup
 	for range 32 {
 		wg.Go(func() {
@@ -125,7 +126,7 @@ func TestParallel(t *testing.T) {
 // the built-in list is masked as a whole; every source searches the
 // original line.
 func TestC147N1TextsSeeTheLineAsItCame(t *testing.T) {
-	m, err := New([]Text{{Value: "two words"}, {Value: "hunter,2"}, {Value: "pw;x;y"}}, DefaultLimits)
+	m, err := New([]Text{NewText("two words", false), NewText("hunter,2", false), NewText("pw;x;y", false)}, DefaultLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +144,7 @@ func TestC147N1TextsSeeTheLineAsItCame(t *testing.T) {
 // TestC147N2TextAtTheLineBound: the start of a text at the end of a line
 // cut at the bound is masked.
 func TestC147N2TextAtTheLineBound(t *testing.T) {
-	m, err := New([]Text{{Value: "s3cr3t-value"}}, DefaultLimits)
+	m, err := New([]Text{NewText("s3cr3t-value", false)}, DefaultLimits)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +170,7 @@ func TestC147N5MessageCost(t *testing.T) {
 	for _, lim := range []Limits{DefaultLimits, {Texts: MaxTexts, TextRunes: MaxTextRunes}} {
 		texts := make([]Text, lim.Texts)
 		for i := range texts {
-			texts[i] = Text{Value: strings.Repeat("a", lim.TextRunes-i%(lim.TextRunes-MinTextRunes)), Fold: i%2 == 0}
+			texts[i] = NewText(strings.Repeat("a", lim.TextRunes-i%(lim.TextRunes-MinTextRunes)), i%2 == 0)
 		}
 		m, err := New(texts, lim)
 		if err != nil {
@@ -185,6 +186,23 @@ func TestC147N5MessageCost(t *testing.T) {
 		t.Logf("one message of %d lines of %d bytes, %d texts of up to %d characters: %s", n, len(line), lim.Texts, lim.TextRunes, took)
 		if took > time.Duration(n)*lineBound {
 			t.Errorf("one message took %s, bound %s", took, time.Duration(n)*lineBound)
+		}
+	}
+}
+
+// TestC249BadVerb: a text and a masker stay out of fmt output also for a
+// verb that fmt rejects before it asks Format, such as %p (SEC-012).
+func TestC249BadVerb(t *testing.T) {
+	text := NewText("s3cr3t-value", false)
+	m, err := New([]Text{text, NewText("hunter2x", true)}, DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []any{text, []Text{text}, *m, m, struct{ T Text }{text}} {
+		for _, verb := range []string{"%p", "%d", "%v", "%+v", "%#v", "%s", "%x"} {
+			if got := fmt.Sprintf(verb, v); strings.Contains(got, "s3cr3t") || strings.Contains(got, "hunter2") {
+				t.Errorf("%s of %T: %q", verb, v, got)
+			}
 		}
 	}
 }
