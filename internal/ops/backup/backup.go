@@ -87,7 +87,7 @@ func EnsureDefaults(ctx context.Context, s *store.Store) error {
 func LoadPolicy(ctx context.Context, s *store.Store, log *slog.Logger) Policy {
 	p := DefaultPolicy()
 	var interval string
-	if err := s.GlobalSetting(ctx, SettingInterval, &interval); err == nil {
+	if err := s.GuardedSetting(ctx, log, SettingInterval, &interval); err == nil {
 		d, err := time.ParseDuration(interval)
 		switch {
 		case err != nil:
@@ -101,7 +101,7 @@ func LoadPolicy(ctx context.Context, s *store.Store, log *slog.Logger) Policy {
 	}
 	for key, dst := range map[string]*int{SettingKeepAuto: &p.KeepAuto, SettingKeepPreMigration: &p.KeepPreMigration} {
 		var n int
-		if err := s.GlobalSetting(ctx, key, &n); err == nil {
+		if err := s.GuardedSetting(ctx, log, key, &n); err == nil {
 			if n < 1 {
 				log.Warn("backup retention below 1, using 1", slog.String("setting", key))
 				n = 1

@@ -310,7 +310,7 @@ func (c *Checker) ownerScope(ctx context.Context, ownerID string) (map[string]bo
 // allowed to have supporters (ROLE-006).
 func (c *Checker) supporterRights(ctx context.Context, userID string, r *Rights) error {
 	var enabled bool
-	if err := c.st.GlobalSetting(ctx, SettingSupportersEnabled, &enabled); err != nil || !enabled {
+	if err := c.st.LoggedSetting(ctx, c.log, SettingSupportersEnabled, &enabled); err != nil || !enabled {
 		return nil //nolint:nilerr // a missing switch means off
 	}
 	q := c.st.Queries

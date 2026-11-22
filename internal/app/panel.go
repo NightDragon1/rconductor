@@ -222,7 +222,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	})
 	runtime = cache.New(st, conns, logs.Module("cache"))
 	runtime.SetRefresh(cfg.PlayersRefresh)
-	hub = eventbus.NewHub(checker, runtime, authSvc, logs.Module("ws"), eventbus.SettingsLimits(st))
+	hub = eventbus.NewHub(checker, runtime, authSvc, logs.Module("ws"), eventbus.SettingsLimits(st, logs.Module("ws")))
 	authSvc.OnSessionsEnded(hub.CloseSessions)
 	serverSvc.SetConnections(conns)
 	if err := conns.Start(ctx); err != nil {

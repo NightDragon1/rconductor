@@ -197,7 +197,7 @@ func (s *Service) GetTemplate(ctx context.Context, req users.Request, serverID, 
 
 func (s *Service) templatesPerServer(ctx context.Context) int64 {
 	n := users.DefaultTemplatesPerServer
-	if err := s.st.GlobalSetting(ctx, users.SettingTemplatesPerServer, &n); err != nil || n < users.MinTemplatesPerServer {
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingTemplatesPerServer, &n); err != nil || n < users.MinTemplatesPerServer {
 		n = users.DefaultTemplatesPerServer
 	}
 	return int64(n)
