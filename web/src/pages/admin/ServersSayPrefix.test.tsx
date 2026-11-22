@@ -26,7 +26,7 @@ const groups = [
   { id: 'g2', name: 'Zeta', server_ids: ['s1'], version: 'gv2' },
 ];
 
-const data = (role: string, features: string[]): [readonly unknown[], unknown][] => [
+const data = (role: string): [readonly unknown[], unknown][] => [
   [
     sessionKey,
     {
@@ -37,7 +37,6 @@ const data = (role: string, features: string[]): [readonly unknown[], unknown][]
         shortcuts_enabled: false,
         supporters_enabled: false,
         supporters_allowed: false,
-        features,
       },
     },
   ],
@@ -71,18 +70,18 @@ function readPrefixes(prefixes: Prefixes) {
 const prefixReads = (get: { mock: { calls: unknown[][] } }) =>
   get.mock.calls.filter((c) => c[0] === '/server-groups/{id}/say-prefix');
 
-async function open(name: string, role = 'rcon_admin', features = ['say_sender']) {
-  return (await openWithClient(name, role, features)).panel;
+async function open(name: string, role = 'rcon_admin') {
+  return (await openWithClient(name, role)).panel;
 }
 
-async function openWithClient(name: string, role = 'rcon_admin', features = ['say_sender']) {
+async function openWithClient(name: string, role = 'rcon_admin') {
   const { qc } = await renderPage(
     () => (
       <UndoProvider>
         <ServersAdminPage />
       </UndoProvider>
     ),
-    data(role, features),
+    data(role),
   );
   fireEvent.click(screen.getByRole('button', { name }));
   return { panel: screen.getByRole('complementary'), qc };
@@ -254,6 +253,9 @@ describe('say prefix of a server group (CMD-020, D-082)', () => {
     fireEvent.change(field, { target: { value: '[R]' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Save prefix' }));
     await waitFor(() => expect(field.readOnly).toBe(true));
+    // A second click while the first write runs sends nothing more.
+    fireEvent.click(within(panel).getByRole('button', { name: 'Save prefix' }));
+    expect(api.PUT).toHaveBeenCalledTimes(1);
     prefixes.g1 = { say_prefix: '[R]', version: '2' };
     act(() => finish(ok(prefixes.g1)));
     await waitFor(() => expect(field.readOnly).toBe(false));
