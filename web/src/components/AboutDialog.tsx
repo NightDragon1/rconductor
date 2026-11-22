@@ -66,7 +66,10 @@ function AboutDialog({ open, onClose }: { open: boolean; onClose: () => void }) 
   // Only with a known user: the entry of an anonymous caller may hold an
   // answer fetched while a session was still sent along (D-080).
   const user = session?.user.id;
-  const { data, isError } = useAbout(user, open && user !== undefined);
+  const about = useAbout(user, open && user !== undefined);
+  // The empty entry is never shown, even when it holds an answer.
+  const data = user === undefined ? undefined : about.data;
+  const isError = user !== undefined && about.isError;
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
