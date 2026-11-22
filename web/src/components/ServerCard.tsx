@@ -112,7 +112,11 @@ export function ServerCard({
           </h3>
           {(image ?? profile) && (
             <p className="wrap-anywhere md:truncate font-mono text-sm text-muted">
-              {image ? <bdi>{stripCodes(image)}</bdi> : t('card.profile', { name: profile })}
+              {image ? (
+                <ForeignText text={stripCodes(image)} />
+              ) : (
+                t('card.profile', { name: profile })
+              )}
             </p>
           )}
         </div>

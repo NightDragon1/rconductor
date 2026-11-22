@@ -117,9 +117,12 @@ export function TemplatesPanel({
         <DialogTitle>{t('templates.title')}</DialogTitle>
         <DialogDescription>{t('templates.explain')}</DialogDescription>
         <datalist id={listId}>
-          {names.map((n) => (
-            <option key={n} value={plainText(n)} />
-          ))}
+          {names
+            // Offered only as they are: a cleaned name would hit another player.
+            .filter((n) => plainText(n) === n)
+            .map((n) => (
+              <option key={n} value={plainText(n)} />
+            ))}
         </datalist>
         <div className="flex flex-wrap gap-2">
           <Input

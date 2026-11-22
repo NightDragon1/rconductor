@@ -4,3 +4,8 @@
 export function plainText(text: string): string {
   return text;
 }
+
+// Leaves the text as it is: no cleaning, whatever name it is imported as.
+export function rawText(text: string): string {
+  return text;
+}

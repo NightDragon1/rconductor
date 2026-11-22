@@ -25,7 +25,7 @@ export function foreignFields(yaml: string): Set<string> {
   for (const line of yaml.split('\n')) {
     const s = /^ {4}([A-Za-z0-9]+):$/.exec(line);
     if (s) schema = s[1];
-    const p = /^ {8}([a-z_]+):$/.exec(line);
+    const p = /^ {8}([A-Za-z0-9_]+):$/.exec(line);
     if (p) prop = p[1];
     if (line === '          x-foreign: true') out.add(`${schema}.${prop}`);
   }
@@ -159,7 +159,12 @@ function within(e: ts.Node, seen = new Set<ts.Node>()): string | undefined {
     if (sym && sym.flags & ts.SymbolFlags.Alias) sym = checker.getAliasedSymbol(sym);
     const decl = sym?.declarations?.[0];
     const file = decl && resolve(decl.getSourceFile().fileName);
-    if (file === resolve(src, 'lib', 'foreign.ts') && e.expression.getText().endsWith('plainText'))
+    if (
+      file === resolve(src, 'lib', 'foreign.ts') &&
+      sym?.name === 'plainText' &&
+      decl !== undefined &&
+      ts.isFunctionDeclaration(decl)
+    )
       return;
   }
   const f = fieldOf(e, seen);

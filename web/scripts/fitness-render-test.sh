@@ -35,13 +35,13 @@ rc=$?
   { echo "render script: exit $rc on types outside src/, want 3" >&2; exit 1; }
 # Calls, element access, template literals, names bound to a field, the
 # elements of a foreign list, attributes and mapped values count (exit 1,
-# nine lines); the three lines marked ok in the project are not reported.
+# nine lines and an alias of plainText); the three lines marked ok in the project are not reported.
 w=scripts/testdata/render-wide
 out=$(node scripts/fitness-render.ts "$w" "$w/openapi.yaml" 2>&1)
 rc=$?
 n=$(printf '%s\n' "$out" | grep -c 'shown without ForeignText')
-[ "$rc" -eq 1 ] && [ "$n" -eq 9 ] && ! printf '%s' "$out" | grep -qE 'App.tsx:(34|36|38) ' ||
-  { echo "render script: exit $rc with $n findings on the wide project, want 1 with 9" >&2; exit 1; }
+[ "$rc" -eq 1 ] && [ "$n" -eq 10 ] && ! printf '%s' "$out" | grep -qE 'App.tsx:(38|40|42) ' ||
+  { echo "render script: exit $rc with $n findings on the wide project, want 1 with 10" >&2; exit 1; }
 # A .jsx file outside src/ enters the program and fails it (exit 3).
 x=scripts/testdata/render-outside-jsx
 out=$(node scripts/fitness-render.ts "$x" "$x/openapi.yaml" 2>&1)

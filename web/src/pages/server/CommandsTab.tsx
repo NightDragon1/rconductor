@@ -418,9 +418,12 @@ function ServerCommands() {
   return (
     <div className="grid gap-4 max-md:pb-44 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <datalist id={listId}>
-        {names.map((n) => (
-          <option key={n} value={plainText(n)} />
-        ))}
+        {names
+          // Offered only as they are: a cleaned name would hit another player.
+          .filter((n) => plainText(n) === n)
+          .map((n) => (
+            <option key={n} value={plainText(n)} />
+          ))}
       </datalist>
       <div className="flex min-w-0 flex-col gap-4">
         <section aria-label={t('server.tab.commands')} className="min-w-0">
