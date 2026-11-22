@@ -29,6 +29,7 @@ authz:
   - internal/store/queries/sqlite/commandlists.sql
   - internal/store/queries/sqlite/assignments.sql
   - internal/store/queries/sqlite/groups.sql
+  - internal/store/queries/sqlite/users.sql
 # the operations allowed while the second factor is being set up
   - internal/web/api_secondfactor.go
 # who sees which message (MSG-001, MSG-002), with the handlers and the
@@ -61,6 +62,7 @@ cmd:
   - internal/profiles/slash_test.go
   - internal/profiles/profile_test.go
   - internal/profiles/message_test.go
+  - internal/profiles/c7_test.go
 # the queries the pipeline and its rights check run
   - internal/store/queries/sqlite/perm.sql
   - internal/store/queries/sqlite/audit.sql
@@ -136,6 +138,7 @@ rules:
   - Makefile
 # the license check: what reuse lint asks for (NFR-021)
   - REUSE.toml
+  - .reuse/**
   - LICENSES/**
   - scripts/check-spdx.sh
 # which query files sqlc generates the database code from
