@@ -9,10 +9,11 @@
 FROM --platform=$BUILDPLATFORM node:26-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS ui
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund --ignore-scripts
 COPY web/ ./
+COPY scripts/web-build.sh /src/scripts/web-build.sh
 COPY internal/webui/dist/.gitkeep /src/internal/webui/dist/.gitkeep
-RUN npm run build
+RUN sh /src/scripts/web-build.sh
 
 # /licenses in each image (NFR-021): the license and the licenses of the
 # linked Go modules, for the panel also those of the bundled UI. A stage of

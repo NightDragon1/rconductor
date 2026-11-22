@@ -28,7 +28,7 @@ func TestEachRuleFindsItsViolation(t *testing.T) {
 	want := []string{"audit PostB", "authz GetC", "cmd internal/other", "redact internal/boundreveal", "redact internal/bprint",
 		"redact internal/deep", "redact internal/fprint", "redact internal/oswrite", "redact internal/other", "redact internal/ownlog",
 		"redact internal/pointer", "redact internal/printer", "redact internal/printer", "redact internal/printer",
-		"redact internal/reflectsecret", "redact internal/stdlog", "redact internal/thunk"}
+		"redact internal/reflectsecret", "redact internal/stdlog", "redact internal/sysbypass", "redact internal/thunk"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("findings = %v, want %v", keys, want)
 	}
