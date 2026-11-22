@@ -77,6 +77,15 @@ func (s *Service) SystemLog(ctx context.Context, req users.Request, q LogQuery) 
 	if req.Actor.Role != perm.RCONAdmin {
 		return Page{}, s.denied(ctx, req, "system_log.viewed")
 	}
+	_, known := ranks[q.Level]
+	switch {
+	case q.Limit < 1 || q.Limit > maxLogLimit:
+		return Page{}, &users.InvalidError{Detail: "limit is 1 to 500"}
+	case !known:
+		return Page{}, &users.InvalidError{Detail: "level is info, warn or error"}
+	case q.After < 0:
+		return Page{}, &users.InvalidError{Detail: "after is at least 1"}
+	}
 	if q.Source != "panel" {
 		if _, err := uuid.Parse(q.Source); err != nil {
 			return Page{}, &users.InvalidError{Detail: "source is panel or the ID of an agent"}
@@ -192,3 +201,6 @@ func (s *Service) tail(ctx context.Context, agentID string, n int) ([]string, bo
 	lines, cut := agentproto.LimitLines(got.Lines)
 	return lines, got.Truncated || cut, nil
 }
+
+// maxLogLimit bounds a page of the system log as the contract does.
+const maxLogLimit = 500
