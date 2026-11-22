@@ -81,10 +81,32 @@ func TestC380SupporterAuthor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("supporter comment = %v", err)
 	}
-	if err := w.s.DeleteComment(ctx, w.mod1, m.ID, c.ID); err == nil {
-		t.Error("a moderator deleted the comment of a supporter")
+	if err := w.s.DeleteComment(ctx, w.mod1, m.ID, c.ID); !errors.Is(err, users.ErrForbidden) {
+		t.Errorf("a moderator deletes the comment of a supporter = %v, want 403", err)
 	}
 	if err := w.s.DeleteComment(ctx, w.sup, m.ID, c.ID); err != nil {
 		t.Errorf("supporter deletes the own comment = %v", err)
+	}
+}
+
+// TestC288CommentWhileDeleted (MSG-003): a comment while its message is
+// deleted is stored or 404, never another error.
+func TestC288CommentWhileDeleted(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	for range 20 {
+		m, err := w.s.Send(ctx, w.admin, Input{Text: "hi", Audience: AudienceModerators})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wg sync.WaitGroup
+		var errComment, errDelete error
+		wg.Go(func() { _, errComment = w.s.Comment(ctx, w.mod1, m.ID, "x") })
+		wg.Go(func() { errDelete = w.s.Delete(ctx, w.admin, m.ID) })
+		wg.Wait()
+		if errDelete != nil || (errComment != nil && !errors.Is(errComment, users.ErrNotFound)) {
+			t.Fatalf("comment = %v, delete = %v", errComment, errDelete)
+		}
+		w.clock = w.clock.Add(time.Hour)
 	}
 }
