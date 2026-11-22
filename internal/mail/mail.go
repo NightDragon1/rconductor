@@ -88,8 +88,10 @@ type View struct {
 	Encryption  string
 	Username    string
 	PasswordSet bool
-	From        string
-	Version     int64
+	// PasswordState is PasswordNone, PasswordSet or PasswordUnreadable.
+	PasswordState string
+	From          string
+	Version       int64
 }
 
 // Input holds the changes of a PUT; nil fields stay. An empty Password
@@ -183,12 +185,27 @@ func (s *Service) Get(ctx context.Context, req users.Request) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	return toView(r), nil
+	return s.toView(r), nil
 }
 
-func toView(r sqlitedb.GetSMTPSettingsRow) View {
+// States of the stored password (NFR-017): a password sealed with another
+// master key is stored but cannot be read.
+const (
+	PasswordNone       = "none"
+	PasswordSet        = "set"
+	PasswordUnreadable = "unreadable"
+)
+
+func (s *Service) toView(r sqlitedb.GetSMTPSettingsRow) View {
+	state := PasswordNone
+	if len(r.Password) > 0 {
+		state = PasswordSet
+		if _, err := s.box.Open(r.Password, secretContext()); err != nil {
+			state = PasswordUnreadable
+		}
+	}
 	return View{Host: r.Host, Port: int(r.Port), Encryption: r.Encryption, Username: r.Username,
-		PasswordSet: len(r.Password) > 0, From: r.Sender, Version: r.Version}
+		PasswordSet: len(r.Password) > 0, PasswordState: state, From: r.Sender, Version: r.Version}
 }
 
 // hasControl reports control or format characters, among them CR and LF

@@ -15,7 +15,8 @@ import (
 
 func toAPISMTP(v mail.View) api.SMTPSettings {
 	return api.SMTPSettings{Host: v.Host, Port: v.Port, Encryption: api.SMTPSettingsEncryption(v.Encryption),
-		Username: v.Username, PasswordSet: v.PasswordSet, From: v.From, Version: versionString(v.Version)}
+		Username: v.Username, PasswordSet: v.PasswordSet, PasswordState: api.SMTPSettingsPasswordState(v.PasswordState),
+		From: v.From, Version: versionString(v.Version)}
 }
 
 func mailError(err error) error {
