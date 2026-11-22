@@ -419,8 +419,8 @@ func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error 
 	return err
 }
 
-const softDeleteUser = `-- name: SoftDeleteUser :exec
-UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ?
+const softDeleteUser = `-- name: SoftDeleteUser :execrows
+UPDATE users SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL
 `
 
 type SoftDeleteUserParams struct {
@@ -429,9 +429,12 @@ type SoftDeleteUserParams struct {
 	ID        string
 }
 
-func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) error {
-	_, err := q.db.ExecContext(ctx, softDeleteUser, arg.DeletedAt, arg.UpdatedAt, arg.ID)
-	return err
+func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, softDeleteUser, arg.DeletedAt, arg.UpdatedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateProfile = `-- name: UpdateProfile :exec
