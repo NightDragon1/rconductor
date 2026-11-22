@@ -117,10 +117,12 @@ func (s *Sink) drain(ctx context.Context, st *store.Store, m Masker, log *slog.L
 }
 
 // tellLost reports the lines lost since the last report, at most once per
-// drain, with the event code (D-077, D-091).
+// drain, with the event code (D-077, D-091). While writes fail it waits:
+// its own line would be lost too and keep the report going; the next
+// drain that writes tells the number.
 func (s *Sink) tellLost(log *slog.Logger) {
 	all := s.Lost()
-	if all == s.told {
+	if all == s.told || s.failing {
 		return
 	}
 	log.Warn("system log lines lost", logging.Event(logging.SyslogLinesLost), slog.Int64("lost", all-s.told), slog.Int64("lost_total", all))

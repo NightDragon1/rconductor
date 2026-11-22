@@ -174,10 +174,10 @@ func (s *Service) agentLog(ctx context.Context, q LogQuery) (Page, error) {
 		// The agent logs JSON: each value is masked as it was logged.
 		var n int
 		l, n = syslog.MaskLineCounted(l, s.mask)
-		held += n
 		if known && level != "" && ranks[level] < ranks[q.Level] {
 			continue
 		}
+		held += n // only for the lines shown
 		p.Items = append(p.Items, Entry{Level: level, Text: l})
 	}
 	if held > 0 {

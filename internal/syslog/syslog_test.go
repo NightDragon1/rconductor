@@ -301,3 +301,31 @@ func (s *syncBuf) String() string {
 	defer s.mu.Unlock()
 	return s.b.String()
 }
+
+// TestC312LostWhileWritesFail (D-091, D-077): with the logger writing into
+// the sink itself, as in the panel, a failing database neither keeps the
+// report going nor counts it; the lost lines are told once writes work.
+func TestC312LostWhileWritesFail(t *testing.T) {
+	sink := NewSink()
+	var out syncBuf
+	logs := logging.New(&out, "panel", config.Log{Format: "json"})
+	logs.Also(sink)
+	log := logs.Module("syslog")
+	broken := storetest.New(t)
+	_ = broken.DB.Close()
+	for range queueSize + 3 {
+		_, _ = sink.Write([]byte(`{"level":"info"}`))
+	}
+	for range 5 {
+		sink.drain(context.Background(), broken, newBuiltin(t), log)
+	}
+	if n := strings.Count(out.String(), `"event":"syslog.lines_lost"`); n != 0 {
+		t.Fatalf("told %d times while writes fail", n)
+	}
+	// The next line the panel logs is written, then the loss is told.
+	_, _ = sink.Write([]byte(`{"level":"info"}`))
+	sink.drain(context.Background(), storetest.New(t), newBuiltin(t), log)
+	if n := strings.Count(out.String(), `"event":"syslog.lines_lost"`); n != 1 {
+		t.Errorf("told %d times after writes work, want 1:\n%s", n, out.String())
+	}
+}

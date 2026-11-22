@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -78,6 +79,19 @@ func TestC324AnswerCutExactly(t *testing.T) {
 	// "Unknown command " is 16 bytes, ä is 2: an even rest fits exactly.
 	if len(got) != MaxLoggedAnswer || !strings.HasPrefix(long, got) {
 		t.Errorf("answer of %d bytes, want %d as a prefix", len(got), MaxLoggedAnswer)
+	}
+	// One byte more before the ä: the cut falls inside one and leaves it out.
+	odd := "Unknown command! " + strings.Repeat("ä", MaxLoggedAnswer)
+	sys2 := &lockedLog{}
+	logs2 := logging.New(&out, "panel", config.Log{Format: "json"})
+	logs2.Also(sys2)
+	svc2 := NewService(w.st, w.c, failing{answer: odd}, logs2.Module("cmd"))
+	if _, err := svc2.Send(context.Background(), w.as("admin"), w.server, "nope"); err != nil {
+		t.Fatal(err)
+	}
+	got = answerOf(t, sys2.String(), "cmd.response")
+	if len(got) != MaxLoggedAnswer-1 || !utf8.ValidString(got) || !strings.HasPrefix(odd, got) {
+		t.Errorf("odd cut: %d bytes, valid %t", len(got), utf8.ValidString(got))
 	}
 }
 
