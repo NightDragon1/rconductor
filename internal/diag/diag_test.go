@@ -44,3 +44,15 @@ func TestExportRolesAndPeriod(t *testing.T) {
 		t.Errorf("7 days = %d bytes, %v", len(b), err)
 	}
 }
+
+// TestPseudonymIPv6NextToColon: an IPv6 address next to a colon of the
+// text is still replaced, the colon stays.
+func TestPseudonymIPv6NextToColon(t *testing.T) {
+	p := newPseudonyms(nil)
+	got := p.apply([]string{"k:fe80::1", "fe80::1: x", "at [2001:db8::7]:25565"})
+	for i, want := range []string{"k:ip-1", "ip-1: x", "at [ip-2]:25565"} {
+		if got[i] != want {
+			t.Errorf("%d: %q, want %q", i, got[i], want)
+		}
+	}
+}

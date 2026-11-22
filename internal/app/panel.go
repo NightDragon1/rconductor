@@ -158,7 +158,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	importer.OnImported(masking.ProfilesChanged)
 	sctx, stopSink := context.WithCancel(ctx)
 	sinkDone := make(chan struct{})
-	go func() { sink.Run(sctx, st, masking, logs.Module("syslog"), time.Now); close(sinkDone) }()
+	go func() { sink.Run(sctx, st, masking.Always(), logs.Module("syslog"), time.Now); close(sinkDone) }()
 	defer func() { stopSink(); <-sinkDone }()
 	if err := importer.Sync(ctx); err != nil {
 		return err
@@ -263,7 +263,7 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	views.SetPlayers(runtime)
 	hub.SetAgentViews(views)
 	diagSvc := diag.NewService(st, logs.Module("diag"))
-	diagSvc.Use(agents, masking)
+	diagSvc.Use(agents, masking.Always())
 	serverSvc.OnChange(func(string) {
 		masking.ProfilesChanged()
 		views.Wake()
