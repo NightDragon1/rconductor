@@ -144,11 +144,13 @@ func (c *checker) rightsOf(id string) (*perm.Rights, error) {
 	if r, ok := c.rights[id]; ok {
 		return r, nil
 	}
-	read := c.s.perm.For
+	var r *perm.Rights
+	var err error
 	if c.q != nil {
-		read = c.s.perm.Fresh
+		r, err = c.s.perm.FreshTx(c.ctx, c.q, id) // through the transaction
+	} else {
+		r, err = c.s.perm.For(c.ctx, id)
 	}
-	r, err := read(c.ctx, id)
 	if err != nil {
 		return nil, err
 	}
