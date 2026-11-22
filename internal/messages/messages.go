@@ -199,7 +199,9 @@ func (s *Service) one(ctx context.Context, req users.Request, action, id string)
 		return Message{}, err
 	}
 	if len(m) == 0 {
-		return Message{}, users.ErrNotFound
+		// Unknown or not the caller's: 404 alike, logged and audited as a
+		// refusal like any other (MSG-003).
+		return Message{}, s.refused(ctx, req, action, id, "not_found", users.ErrNotFound)
 	}
 	return m[0], nil
 }
@@ -671,17 +673,22 @@ func (s *Service) read(ctx context.Context, req users.Request, action string) er
 }
 
 func (s *Service) denied(ctx context.Context, req users.Request, action, target string) error {
+	return s.refused(ctx, req, action, target, "forbidden", users.ErrForbidden)
+}
+
+// refused logs and audits a refusal with its reason and returns err.
+func (s *Service) refused(ctx context.Context, req users.Request, action, target, reason string, err error) error {
 	perm.LogDenied(s.log, perm.Denial{
 		RequestID: req.RequestID, SessionRef: req.SessionRef, User: req.Pseudonym,
-		Role: req.Actor.Role, Reason: "forbidden", Action: action,
+		Role: req.Actor.Role, Reason: reason, Action: action,
 	})
-	if _, err := audit.Write(ctx, s.st.DB, audit.Entry{
+	if _, werr := audit.Write(ctx, s.st.DB, audit.Entry{
 		Kind: audit.KindAdmin, ActorID: req.Actor.ID, ActorRole: string(req.Actor.Role), SessionID: req.SessionID,
-		TargetType: "message", TargetID: target, Action: action, Result: audit.ResultDenied, Reason: "forbidden",
-	}); err != nil {
-		s.log.Error("audit entry not written", slog.String("action", action), slog.Any("err", err))
+		TargetType: "message", TargetID: target, Action: action, Result: audit.ResultDenied, Reason: reason,
+	}); werr != nil {
+		s.log.Error("audit entry not written", slog.String("action", action), slog.Any("err", werr))
 	}
-	return users.ErrForbidden
+	return err
 }
 
 // maxCursor bounds a cursor and maxPage a page as the contract does.
