@@ -13,9 +13,13 @@
 #   stage   stage-2 if a file that is not generated matches a core glob by
 #           its name or its previous name (rename, deletion), else stage-1
 #   areas   the matched areas, comma-separated
-#   lines   additions plus deletions, without generated files
-# Exit 1: a stage 2 pull request over 400 changed lines (the outputs are
-# printed first). Exit 2: bad arguments, class file or file list.
+#   lines       additions plus deletions, without generated files
+#   test_lines  of those, the lines of files in the list "tests"
+#   code_lines  lines minus test_lines
+#   size        within, over-tests (stage 2 over 400 lines through tests
+#               alone) or over (stage 2 with more than 400 code lines)
+# Exit 1: size over (the outputs are printed first). Exit 2: bad arguments,
+# class file or file list.
 set -euo pipefail
 export LC_ALL=C
 limit=400
@@ -52,7 +56,7 @@ glob_re() {
   printf '^%s$' "$re"
 }
 
-areas=() res=() gen=()
+areas=() res=() gen=() tst=()
 area= n=0
 while IFS= read -r line || [[ -n $line ]]; do
   n=$((n + 1))
@@ -65,6 +69,8 @@ while IFS= read -r line || [[ -n $line ]]; do
     [[ $glob == '*'* || $glob == *[[:space:]]* ]] && die "$class:$n: bad glob: $glob"
     if [[ $area == generated ]]; then
       gen+=("$(glob_re "$glob")")
+    elif [[ $area == tests ]]; then
+      tst+=("$(glob_re "$glob")")
     else
       areas+=("$area") res+=("$(glob_re "$glob")")
     fi
@@ -80,8 +86,14 @@ generated() {
   return 1
 }
 
+is_test() {
+  local re
+  for re in "${tst[@]}"; do [[ $1 =~ $re ]] && return 0; done
+  return 1
+}
+
 declare -A hit=()
-lines=0 n=0
+lines=0 tests=0 n=0
 while IFS=$'\t' read -r status add del name prev || [[ -n ${status:-} ]]; do
   n=$((n + 1))
   [[ -n $status && -n $name && $add =~ ^[0-9]+$ && $del =~ ^[0-9]+$ ]] ||
@@ -96,7 +108,10 @@ while IFS=$'\t' read -r status add del name prev || [[ -n ${status:-} ]]; do
   done
   # Lines count unless every name of the file is generated, so a move
   # into a generated directory still counts.
-  $counted && lines=$((lines + 10#$add + 10#$del))
+  if $counted; then
+    lines=$((lines + 10#$add + 10#$del))
+    is_test "$name" && tests=$((tests + 10#$add + 10#$del))
+  fi
 done <"$list"
 
 stage=stage-1
@@ -106,7 +121,14 @@ for a in $(printf '%s\n' "${!hit[@]}" | sort); do matched+=${matched:+,}$a; done
 echo "stage=$stage"
 echo "areas=$matched"
 echo "lines=$lines"
+echo "test_lines=$tests"
+echo "code_lines=$((lines - tests))"
+size=within
 if [[ $stage == stage-2 ]] && ((lines > limit)); then
-  echo "classify: stage 2 pull request with $lines changed lines (generated files excluded); the limit is $limit, split it" >&2
+  if ((lines - tests > limit)); then size=over; else size=over-tests; fi
+fi
+echo "size=$size"
+if [[ $size == over ]]; then
+  echo "classify: stage 2 pull request with $((lines - tests)) changed lines of code (generated files and tests excluded); the limit is $limit, split it" >&2
   exit 1
 fi

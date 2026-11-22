@@ -14,7 +14,9 @@
 # characters within one path segment, "?" one character other than "/".
 # A glob must not start with "*" (YAML would read it as an alias).
 # The list "generated" holds generated files: they never decide the stage
-# and do not count toward the size limit of 400 changed lines.
+# and do not count toward the size limit of 400 changed lines. The list
+# "tests" holds tests: they decide the stage like any file, but count apart,
+# so that an overrun through tests alone shows as over-limit-tests.
 
 # authz: rights, sessions, login, and the API middleware that enforces them
 authz:
@@ -139,6 +141,7 @@ rules:
   - web/scripts/fitness-render*
   - web/scripts/testdata/**
   - scripts/classify*
+  - scripts/line-limit.sh
   - scripts/ci-scope*
   - scripts/go-test-shard*
   - .npmrc
@@ -177,3 +180,17 @@ generated:
   - go.sum
   - tools/go.sum
   - web/package-lock.json
+
+# tests: test code and test data; counted apart from the code (PRJ-005)
+tests:
+  - internal/**/*_test.go
+  - cmd/**/*_test.go
+  - tools/**/*_test.go
+  - internal/**/testdata/**
+  - tools/**/testdata/**
+  - web/src/**/*.test.ts
+  - web/src/**/*.test.tsx
+  - web/e2e/**
+  - web/scripts/testdata/**
+  - scripts/*-test.sh
+  - web/scripts/*-test.sh
