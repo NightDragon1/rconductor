@@ -140,6 +140,12 @@ denied 'gh api repos/x/y --method POST' C28
 denied 'gh api -X POST repos/x/y/issues' C28
 denied 'gh api repos/x/y/issues -f title=t' C28
 denied 'gh api repos/x/y/issues -F title=t' C28
+# Bundled short options: -i or -h before the method or a field (F-129).
+denied 'gh api -iXPOST repos/x/y/issues' C28
+denied 'gh api repos/x/y/issues -iX POST' C28
+denied 'gh api -hiXDELETE repos/x/y' C28
+denied 'gh api repos/x/y/issues -iftitle=t' C28
+denied 'gh api repos/x/y/issues -hF title=t' C28
 denied 'gh api repos/x/y/issues --field title=t' C28
 denied 'gh api repos/x/y/issues --raw-field title=t' C28
 denied 'gh api repos/x/y/issues --input body.json' C28
