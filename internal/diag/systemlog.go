@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -156,6 +157,7 @@ func (s *Service) agentLog(ctx context.Context, q LogQuery) (Page, error) {
 		return Page{}, err
 	}
 	p := Page{Source: q.Source, Truncated: cut, Items: []Entry{}}
+	held := 0
 	for _, l := range lines {
 		// The level from the line as it came: masking may change its keys.
 		var head struct {
@@ -170,11 +172,18 @@ func (s *Service) agentLog(ctx context.Context, q LogQuery) (Page, error) {
 			level = ""
 		}
 		// The agent logs JSON: each value is masked as it was logged.
-		l = syslog.MaskLine(l, s.mask)
+		var n int
+		l, n = syslog.MaskLineCounted(l, s.mask)
 		if known && level != "" && ranks[level] < ranks[q.Level] {
 			continue
 		}
+		held += n // only for the lines shown
 		p.Items = append(p.Items, Entry{Level: level, Text: l})
+	}
+	if held > 0 {
+		// Values held back for the time budget: the page is not whole.
+		p.Truncated = true
+		s.log.Warn("agent log values withheld: masking took too long", slog.String("source", q.Source), slog.Int("values", held))
 	}
 	return p, nil
 }
