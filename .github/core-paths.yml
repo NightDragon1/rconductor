@@ -108,6 +108,9 @@ input:
 # boundary: API contract, database schema and CI
 boundary:
   - api/**
+# the hand-written code of the generated API package, such as how request
+# bodies decode; api.gen.go itself is generated and decides nothing
+  - internal/api/**
   - migrations/**
   - .github/**
 

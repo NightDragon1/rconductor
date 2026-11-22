@@ -111,7 +111,13 @@ jobs:
       - name: At most 400 changed lines in stage 2
         env:
           OVER: ${{ needs.classify.outputs.over }}
+          CLASSIFIED: ${{ needs.classify.result }}
         run: |
+          # Without a result of Classify the size is unknown, never within.
+          if [ "$CLASSIFIED" != success ] && [ -z "$OVER" ]; then
+            echo "::error::line count unknown: Classify did not finish"
+            exit 1
+          fi
           if [ "$OVER" = true ]; then
             echo "::error::stage 2 pull request over 400 changed lines (generated files excluded); split it, or note a test-only overrun in the PR text"
             exit 1
