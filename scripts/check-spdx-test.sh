@@ -4,6 +4,9 @@
 #
 # Tests of check-spdx.sh (NFR-021) on small repositories.
 set -eu
+# A hook sets these for the repository it runs in; the test repositories
+# below must not reach it.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_COMMON_DIR GIT_PREFIX
 here=$(cd "$(dirname "$0")" && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
