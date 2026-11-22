@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { plainText } from '@/lib/foreign';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useId, useState } from 'react';
@@ -144,7 +145,7 @@ export function SystemLogPage() {
             <option value="panel">{t('systemLog.panel')}</option>
             {active.map((a) => (
               <option key={a.id} value={a.id}>
-                <ForeignText text={a.name} />
+                {plainText(a.name)}
               </option>
             ))}
           </select>

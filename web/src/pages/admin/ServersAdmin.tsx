@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { plainText } from '@/lib/foreign';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -34,7 +35,6 @@ import { Card, Cards } from './Cards';
 import { PhoneNote } from './PhoneNote';
 import { ProfileList } from './ProfileList';
 import { SayPrefixField } from './SayPrefix';
-import { ForeignText } from '@/components/ForeignText';
 import { PageHeader } from '@/components/PageHeader';
 
 type GamePort = components['schemas']['GamePort'];
@@ -411,7 +411,7 @@ function ServerPanel({
                 .filter((a) => a.status === 'active' || a.id === d.agent_id)
                 .map((a) => (
                   <option key={a.id} value={a.id}>
-                    <ForeignText text={a.name} />
+                    {plainText(a.name)}
                   </option>
                 ))}
               {!canSeeAgents && d.agent_id && (
@@ -434,12 +434,15 @@ function ServerPanel({
                 <option value="">{t('servers.choose')}</option>
                 {(containers.data?.items ?? []).map((c) => (
                   <option key={c.name} value={c.name}>
-                    {t('servers.containerOption', { name: stripCodes(c.name), state: c.state })}
+                    {t('servers.containerOption', {
+                      name: plainText(stripCodes(c.name)),
+                      state: c.state,
+                    })}
                   </option>
                 ))}
                 {d.container_name &&
                   !(containers.data?.items ?? []).some((c) => c.name === d.container_name) && (
-                    <option value={d.container_name}>{d.container_name}</option>
+                    <option value={d.container_name}>{plainText(d.container_name)}</option>
                   )}
               </select>
             )}
