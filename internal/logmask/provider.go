@@ -5,6 +5,7 @@ package logmask
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log/slog"
 	"strconv"
@@ -208,6 +209,16 @@ func (a Always) Lines(lines []string, profilePatterns [][]string) ([]string, int
 func (a Always) PatternsFor(ctx context.Context, serverID string) [][]string {
 	if a.p == nil {
 		return nil
+	}
+	// Only a server that exists gets an entry: an ID from a refused request
+	// must not fill the table the container logs share.
+	a.p.mu.RLock()
+	_, known := a.p.servers[serverID]
+	a.p.mu.RUnlock()
+	if !known {
+		if _, err := a.p.settings.st.Queries.GetServer(ctx, serverID); errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
 	}
 	return a.p.patternsFor(ctx, serverID)
 }

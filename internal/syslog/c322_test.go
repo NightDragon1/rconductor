@@ -12,8 +12,12 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/store/storetest"
 )
+
+// The masking of the panel gives the patterns of a server to the sink.
+var _ serverMasker = logmask.Always{}
 
 // byServer masks the word of a server's profile pattern only where the
 // sink hands that server's patterns over.
