@@ -23,6 +23,7 @@ import { agentCan, isAdmin, stripCodes, tabsFor } from '@/lib/serverpage';
 import { cardStatus, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
 import { ServerActions } from './ServerActions';
+import { ForeignText } from '@/components/ForeignText';
 
 const edge: Record<Tone, string> = {
   ok: 'border-l-ok',
@@ -139,7 +140,7 @@ function Head({ server, role }: { server: Server; role?: string }) {
           )}
           {server.runtime?.game_version && (
             <Fact label={t('card.version')}>
-              <bdi>{stripCodes(server.runtime.game_version)}</bdi>
+              <ForeignText text={stripCodes(server.runtime.game_version)} />
             </Fact>
           )}
           {c?.cpu_percent !== undefined && (
@@ -158,7 +159,11 @@ function Head({ server, role }: { server: Server; role?: string }) {
           {admin && server.agent_id && c && (
             <span className="max-md:hidden">
               <span className="text-muted">{t('server.agent')}</span>{' '}
-              {agentName && <bdi className="mr-1">{agentName}</bdi>}
+              {agentName && (
+                <span className="mr-1">
+                  <ForeignText text={agentName} />
+                </span>
+              )}
               <span className={c.agent_connected ? 'text-ok' : 'text-danger'}>
                 {t(c.agent_connected ? 'server.agentConnected' : 'server.agentGone')}
               </span>

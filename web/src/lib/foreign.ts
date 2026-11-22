@@ -17,3 +17,13 @@ export function bidiLabel(control: string): string {
   const code = (control.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0');
   return `⟨U+${code}⟩`;
 }
+
+// plainText is foreign text for places that take no ForeignText, such as
+// an attribute or a translation value: bidi controls become their visible
+// stand-in, other control characters go (SEC-006). The render fitness
+// function accepts its result.
+export function plainText(text: string): string {
+  return splitBidi(text)
+    .map((part, i) => (i % 2 ? bidiLabel(part) : part.replace(/\p{Cc}/gu, '')))
+    .join('');
+}

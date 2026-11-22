@@ -599,7 +599,8 @@
       "busy": "The panel is busy, try again",
       "other": "Failed",
       "conflict": "Changed by someone else – reload",
-      "container_bound": "This container already belongs to another server."
+      "container_bound": "This container already belongs to another server.",
+      "own_totp_required": "Set up two-factor sign-in for yourself first, under Your profile, then require it for everyone."
     },
     "lock": "Lock",
     "unlock": "Unlock",

@@ -77,6 +77,12 @@ func problemOf(t *testing.T, c *client, method, path string, body any) (int, str
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", c.base)
 	req.AddCookie(c.cookie)
+	// The version as call sends it, so a refusal after it shows (D-051).
+	if (method == http.MethodPatch || method == http.MethodPut) && versionedPath.MatchString(path) {
+		if v := c.version(path); v != "" {
+			req.Header.Set("If-Match", v)
+		}
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

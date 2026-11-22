@@ -33,7 +33,6 @@ export function playerRule(pattern?: string): (name: string) => boolean {
       // Fall back below; the backend checks anyway.
     }
   }
-  // eslint-disable-next-line no-control-regex
   return (name) => name !== '' && !/^@|["'`\s\u0000-\u001f\u007f]/.test(name);
 }
 

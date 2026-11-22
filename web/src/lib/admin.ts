@@ -11,6 +11,7 @@ const known = [
   'busy',
   'conflict',
   'container_bound',
+  'own_totp_required',
 ];
 
 // reasonText names a refusal. An input refused as invalid shows the

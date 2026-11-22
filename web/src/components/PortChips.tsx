@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useTranslation } from 'react-i18next';
 import type { Port } from '@/lib/ports';
+import { plainText } from '@/lib/foreign';
 
 // PortChips shows ports as chips: the host port if published, else the
 // container port marked as not published; a Steam link where the profile
@@ -22,7 +23,12 @@ export function PortChips({ ports, label }: { ports: Port[]; label: string }) {
           <span>
             {t('ports.value', {
               port: p.public ?? p.private,
-              proto: p.proto === 'tcp' || p.proto === 'udp' ? t(`ports.proto.${p.proto}`) : p.proto,
+              proto:
+                p.proto === 'tcp'
+                  ? t('ports.proto.tcp')
+                  : p.proto === 'udp'
+                    ? t('ports.proto.udp')
+                    : plainText(p.proto),
             })}
           </span>
           {p.public === undefined && <span className="text-muted">{t('ports.internal')}</span>}

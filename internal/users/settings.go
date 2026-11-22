@@ -374,6 +374,17 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 	for _, r := range rows {
 		cur[r.Key] = json.RawMessage(r.Value)
 	}
+	// Switching the second factor on for everyone needs one of the caller's
+	// own; checked last, so nothing is written (D-104).
+	if values[auth.SettingTOTPRequired] == "true" && string(cur[auth.SettingTOTPRequired]) != "true" {
+		u, err := q.GetUser(ctx, req.Actor.ID)
+		if err != nil {
+			return nil, err
+		}
+		if u.TotpEnabled == 0 {
+			return nil, ErrOwnTOTPRequired
+		}
+	}
 	changes := map[string]any{}
 	for k, v := range values {
 		if string(cur[k]) == v {

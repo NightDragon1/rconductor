@@ -128,7 +128,7 @@ are written like `24h`, `15m`, `30s`.
 | `agent.version_window` (new in 1.1) | duration | 10m | 1m to 24h | how long the panel looks for the game version after it first sees a container run |
 | `agent.volume_interval` (new in 1.1) | duration | 2h | 10m to 7 days | how often each agent measures the used size of its volumes, in one call for all containers |
 | `agent.volume_stale` (new in 1.1) | duration | 6h | 30m to 30 days | after this a measured volume size counts as old |
-| `auth.totp_required` (new in 1.1) | boolean | off | on, off | two-factor sign-in for everyone; who has none yet must set it up before anything else |
+| `auth.totp_required` (new in 1.1) | boolean | off | on, off | two-factor sign-in for everyone; who has none yet must set it up before anything else; switching it on needs one of your own (1.3) |
 | `auth.second_factor_window` (new in 1.1) | duration | 5m | 1m to 1h | time for the code after the right password; 5 wrong codes end it too |
 | `auth.recovery_lifetime` (new in 1.1) | duration | 30m | 5m to 24h | validity of a recovery link for the second factor; only the last one requested holds |
 | `auth.recovery_per_hour` (new in 1.1) | number | 3 | 1 to 100 | recovery requests per user and per client address (IPv6 per /64) and hour; while the table of client addresses is full, all new addresses share one such limit |
