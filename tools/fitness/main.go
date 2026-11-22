@@ -205,6 +205,9 @@ func check(dir string, dests map[string]string) ([]finding, error) {
 			}
 		}
 	}
+	for _, f := range printsPastHandler(funcs, mod) {
+		edges[f] = true
+	}
 	for _, f := range secretConversions(funcs, mod, dests) {
 		edges[f] = true
 	}

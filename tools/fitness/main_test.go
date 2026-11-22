@@ -22,7 +22,12 @@ func TestEachRuleFindsItsViolation(t *testing.T) {
 		keys = append(keys, f.key())
 	}
 	slices.Sort(keys)
-	want := []string{"audit PostB", "authz GetC", "cmd internal/other", "redact internal/deep", "redact internal/other", "redact internal/pointer", "redact internal/printer", "redact internal/printer", "redact internal/printer"}
+	// internal/quiet (a buffer, slog.DiscardHandler) and internal/e2e (the
+	// harness) break no rule.
+	want := []string{"audit PostB", "authz GetC", "cmd internal/other", "redact internal/boundreveal", "redact internal/bprint",
+		"redact internal/deep", "redact internal/fprint", "redact internal/oswrite", "redact internal/other", "redact internal/ownlog",
+		"redact internal/pointer", "redact internal/printer", "redact internal/printer", "redact internal/printer",
+		"redact internal/reflectsecret", "redact internal/stdlog"}
 	if !slices.Equal(keys, want) {
 		t.Errorf("findings = %v, want %v", keys, want)
 	}
