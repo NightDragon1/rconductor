@@ -56,7 +56,7 @@ var builtin = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `\\")(?:[^\\]|\\\\\\"|\\[^"])*`),
 	// A bare value; a backslash before a quote opens an escaped value, and
 	// an = before a quote belongs to the separator.
-	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `)=*(?:[^\s"',;&\\=]|\\[^"']|\\$)(?:[^\s"',;&\\]|\\[^"']|\\$)*`),
+	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `)=*(?:[^\s"',;&\\=\x1b]|\\[^"']|\\$)(?:[^\s"',;&\\]|\\[^"']|\\$)*`),
 	// Command-line flags: --rcon-password value, -password "value",
 	// --rcon-password 'value'.
 	regexp.MustCompile(`(?i)(-` + secretKey + `\s+")` + dquoted),
