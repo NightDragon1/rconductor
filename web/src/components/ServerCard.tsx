@@ -10,6 +10,7 @@ import { ago, decimal, gib, span } from '@/lib/format';
 import { stripCodes } from '@/lib/serverpage';
 import { cardStatus, shownImage, toneOf, type Tone } from '@/lib/status';
 import { cn } from '@/lib/utils';
+import { ForeignText } from '@/components/ForeignText';
 
 const edge: Record<Tone, string> = {
   ok: 'border-l-ok',
@@ -153,7 +154,9 @@ export function ServerCard({
         {rt?.game_version && (
           <span>
             <span className="text-muted">{t('card.version')}</span>{' '}
-            <bdi className="font-mono">{stripCodes(rt.game_version)}</bdi>
+            <span className="font-mono">
+              <ForeignText text={stripCodes(rt.game_version)} />
+            </span>
           </span>
         )}
         {c?.started_at && c.state === 'running' && (

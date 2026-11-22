@@ -101,7 +101,7 @@ export function OverviewTab() {
                 key={name}
                 className="rounded-md border border-border px-2 py-1 font-mono text-sm"
               >
-                <bdi>{name}</bdi>
+                <ForeignText text={name} />
               </li>
             ))}
           </ul>

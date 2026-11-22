@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { bidiLabel, splitBidi } from './foreign';
+import { bidiLabel, plainText, splitBidi } from './foreign';
 
 describe('splitBidi (SEC-006)', () => {
   it('keeps plain text whole', () => {
@@ -27,5 +27,14 @@ describe('bidiLabel', () => {
   it('names the code point', () => {
     expect(bidiLabel('\u202E')).toBe('⟨U+202E⟩');
     expect(bidiLabel('\u061C')).toBe('⟨U+061C⟩');
+  });
+});
+
+describe('plainText (SEC-006)', () => {
+  it('shows bidi controls as stand-ins and drops other control characters', () => {
+    expect(plainText('ab\u202Ecd')).toBe('ab⟨U+202E⟩cd');
+    expect(plainText('a\u0000b\u001bc\u007fd\nx')).toBe('abcdx');
+    expect(plainText('Steve')).toBe('Steve');
+    expect(plainText('a\u200Db')).toBe('a\u200Db');
   });
 });

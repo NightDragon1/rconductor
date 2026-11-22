@@ -14,6 +14,7 @@ import type { Values } from '@/lib/commandform';
 import { stripCodes } from '@/lib/serverpage';
 import { matchesTemplate, type Template } from '@/lib/templates';
 import { TemplateCard } from './CommandsTab';
+import { plainText } from '@/lib/foreign';
 
 function refusal(t: (k: string) => string, e: unknown): string {
   return reasonText(t, e instanceof ApiError ? e.problem : undefined);
@@ -117,7 +118,7 @@ export function TemplatesPanel({
         <DialogDescription>{t('templates.explain')}</DialogDescription>
         <datalist id={listId}>
           {names.map((n) => (
-            <option key={n} value={n} />
+            <option key={n} value={plainText(n)} />
           ))}
         </datalist>
         <div className="flex flex-wrap gap-2">

@@ -33,6 +33,27 @@ out=$(node scripts/fitness-render.ts "$t" "$t/openapi.yaml" 2>&1)
 rc=$?
 [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'outside src/: .*lib/away.d.ts' ||
   { echo "render script: exit $rc on types outside src/, want 3" >&2; exit 1; }
+# Calls, element access, template literals, names bound to a field, the
+# elements of a foreign list, attributes and mapped values count (exit 1,
+# nine lines); the three lines marked ok in the project are not reported.
+w=scripts/testdata/render-wide
+out=$(node scripts/fitness-render.ts "$w" "$w/openapi.yaml" 2>&1)
+rc=$?
+n=$(printf '%s\n' "$out" | grep -c 'shown without ForeignText')
+[ "$rc" -eq 1 ] && [ "$n" -eq 9 ] && ! printf '%s' "$out" | grep -qE 'App.tsx:(34|36|38) ' ||
+  { echo "render script: exit $rc with $n findings on the wide project, want 1 with 9" >&2; exit 1; }
+# A .jsx file outside src/ enters the program and fails it (exit 3).
+x=scripts/testdata/render-outside-jsx
+out=$(node scripts/fitness-render.ts "$x" "$x/openapi.yaml" 2>&1)
+rc=$?
+[ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'outside src/: .*lib/Away.jsx' ||
+  { echo "render script: exit $rc on a .jsx file outside src/, want 3" >&2; exit 1; }
+# A mark the reader does not see fails the check (exit 2).
+i=scripts/testdata/render-indent
+out=$(node scripts/fitness-render.ts "$i" "$i/openapi.yaml" 2>&1)
+rc=$?
+[ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'x-foreign marks' ||
+  { echo "render script: exit $rc on a mark at another indent, want 2" >&2; exit 1; }
 # ESLint runs with the fixed core config (-c, no lookup) and must report
 # the rule (exit 1; exit 2 is a broken config): in the test project, below
 # a nested eslint.config.js that turns the rule off, and behind an
