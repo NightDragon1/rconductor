@@ -6,15 +6,31 @@ package connmgr
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/NightDragon1/rconductor/internal/rcon/source"
 )
 
-// failingOne cannot read one server again.
+// failingOne cannot read one server again; it lists that server first.
 type failingOne struct {
 	*fakeSource
 	bad string
+}
+
+func (f failingOne) Targets(ctx context.Context) ([]Target, error) {
+	all, err := f.fakeSource.Targets(ctx)
+	slices.SortFunc(all, func(a, b Target) int {
+		switch {
+		case a.ID == f.bad:
+			return -1
+		case b.ID == f.bad:
+			return 1
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	return all, err
 }
 
 func (f failingOne) Target(ctx context.Context, id string) (Target, bool, error) {
@@ -40,10 +56,9 @@ func TestC449RefreshGoesOnAfterAFailure(t *testing.T) {
 	broken.ID = "bad"
 	f.src.set(broken)
 	f.m.source = failingOne{fakeSource: f.src, bad: "bad"}
-	for range 5 { // map order: the failing server before and after s1
-		if err := f.m.Refresh(context.Background()); err == nil {
-			t.Fatal("the failure is not told")
-		}
+	// The failing server comes first; s1 is still taken over.
+	if err := f.m.Refresh(context.Background()); err == nil || !strings.Contains(err.Error(), "server bad") {
+		t.Fatalf("the failure is not told: %v", err)
 	}
 	if got := w.current().EndMarker; got != source.EndMarkerNone {
 		t.Errorf("end marker = %q, the change of s1 was not taken", got)

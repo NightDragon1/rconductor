@@ -11,6 +11,7 @@ package connmgr
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math/rand/v2"
@@ -176,8 +177,8 @@ func (m *Manager) Refresh(ctx context.Context) error {
 		return err
 	}
 	// A server that fails does not keep the others on their old setup; the
-	// first error is told after all were tried.
-	var first error
+	// errors of all are told after all were tried.
+	var errs []error
 	for _, t := range targets {
 		m.mu.Lock()
 		w, ok := m.workers[t.ID]
@@ -187,11 +188,11 @@ func (m *Manager) Refresh(ctx context.Context) error {
 		}
 		// Read the server again right before taking it over, as Reload
 		// does: a change or deletion in the meantime wins over the list.
-		if err := m.Reload(ctx, t.ID); err != nil && first == nil {
-			first = err
+		if err := m.Reload(ctx, t.ID); err != nil {
+			errs = append(errs, fmt.Errorf("server %s: %w", t.ID, err))
 		}
 	}
-	return first
+	return errors.Join(errs...)
 }
 
 // Wait blocks until all workers have stopped after the start context ended.
