@@ -599,6 +599,7 @@
       "busy": "The panel is busy, try again",
       "other": "Failed",
       "conflict": "Changed by someone else – reload",
+      "container_bound": "This container already belongs to another server.",
       "own_totp_required": "Set up two-factor sign-in for yourself first, under Your profile, then require it for everyone."
     },
     "lock": "Lock",
@@ -798,6 +799,7 @@
     "noAgent": "No agent",
     "agentSet": "set",
     "container": "Container",
+    "containerOnce": "A container belongs to one server only. A container another server uses is refused.",
     "containerOption": "{{name}} · {{state}}",
     "agentAway": "The agent is disconnected; the containers are the last known ones.",
     "ownPorts": "Own game ports instead of the profile's",

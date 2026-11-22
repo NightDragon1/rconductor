@@ -5,8 +5,10 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -315,5 +317,92 @@ func TestServerNumberMigration(t *testing.T) {
 	var cols int
 	if err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('servers') WHERE name = 'number'`).Scan(&cols); err != nil || cols != 0 {
 		t.Errorf("down left servers.number (%d, %v)", cols, err)
+	}
+}
+
+// TestOneBindingMigration covers D-105: 00024 keeps the binding of a
+// container at the oldest server not deleted (ties by ID), releases it at
+// the others with a log line db.migrate.binding_released and an audit
+// entry, leaves deleted servers and other containers alone, then refuses a
+// second binding; down drops the index only.
+func TestOneBindingMigration(t *testing.T) {
+	s := openStore(t, filepath.Join(t.TempDir(), "data"))
+	ctx := context.Background()
+	p, err := goose.NewProvider(goose.DialectSQLite3, s.DB, migrations.SQLite(), goose.WithGoMigrations(migrations.SQLiteGo()...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.UpTo(ctx, 23); err != nil {
+		t.Fatal(err)
+	}
+	exec := func(q string, args ...any) error {
+		_, err := s.DB.ExecContext(ctx, q, args...)
+		return err
+	}
+	if err := exec(`INSERT INTO agents (id, name, public_key, fingerprint, status, created_at) VALUES ('ag', 'nas', x'00', 'f', 'active', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	// A server whose agent was revoked keeps its container name only.
+	if err := exec(`INSERT INTO servers (id, name, created_at, updated_at, container_name) VALUES ('detached', 'detached', 't', 't', 'mc')`); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range [][4]string{
+		{"b-new", "2026-03-01T00:00:00Z", "mc", ""},
+		{"a-old", "2026-01-01T00:00:00Z", "mc", ""},
+		{"a-tie", "2026-01-01T00:00:00Z", "mc", ""}, // same time as a-old: by ID it comes second
+		{"gone", "2025-12-01T00:00:00Z", "mc", "2026-02-01T00:00:00Z"},
+		{"other", "2026-03-01T00:00:00Z", "web", ""},
+	} {
+		if err := exec(`INSERT INTO servers (id, name, created_at, updated_at, agent_id, container_name, deleted_at) VALUES (?, ?, ?, ?, 'ag', ?, NULLIF(?, ''))`,
+			r[0], r[0], r[1], r[1], r[2], r[3]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var logs syncBuffer
+	if _, err := s.Migrate(ctx, testLogger(&logs), MigrateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	bound := func(id string) bool {
+		t.Helper()
+		var agent sql.NullString
+		if err := s.DB.QueryRowContext(ctx, `SELECT agent_id FROM servers WHERE id = ?`, id).Scan(&agent); err != nil {
+			t.Fatal(err)
+		}
+		return agent.Valid
+	}
+	for id, want := range map[string]bool{"a-old": true, "a-tie": false, "b-new": false, "gone": true, "other": true} {
+		if got := bound(id); got != want {
+			t.Errorf("%s bound = %v, want %v", id, got, want)
+		}
+	}
+	var audited int
+	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM audit_log WHERE action = 'server.binding_released'
+		AND target_id IN ('a-tie', 'b-new') AND payload LIKE '%"kept_by":"a-old"%'`).Scan(&audited); err != nil || audited != 2 {
+		t.Errorf("audit entries = %d (%v), want 2", audited, err)
+	}
+	if n := strings.Count(logs.String(), `"event":"db.migrate.binding_released"`); n != 2 {
+		t.Errorf("log lines = %d, want 2:\n%s", n, logs.String())
+	}
+	var name sql.NullString
+	if err := s.DB.QueryRowContext(ctx, `SELECT container_name FROM servers WHERE id = 'detached'`).Scan(&name); err != nil || name.String != "mc" {
+		t.Errorf("the detached server changed: %v %v", name, err)
+	}
+	if strings.Contains(logs.String(), "detached") {
+		t.Error("the detached server was released")
+	}
+	if strings.Contains(logs.String(), `"mc"`) {
+		t.Error("the log names the container")
+	}
+	if err := exec(`UPDATE servers SET agent_id = 'ag', container_name = 'mc' WHERE id = 'b-new'`); err == nil {
+		t.Error("a second binding of the container was stored")
+	}
+	if err := exec(`UPDATE servers SET agent_id = 'ag', container_name = 'mc', deleted_at = 't' WHERE id = 'b-new'`); err != nil {
+		t.Errorf("a deleted server keeps no container from others: %v", err)
+	}
+	if _, err := p.DownTo(ctx, 23); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec(`UPDATE servers SET agent_id = 'ag', container_name = 'mc', deleted_at = NULL WHERE id = 'b-new'`); err != nil {
+		t.Errorf("down left the index: %v", err)
 	}
 }

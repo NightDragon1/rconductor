@@ -12,6 +12,7 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/perm"
+	"github.com/NightDragon1/rconductor/internal/servers"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
@@ -30,6 +31,8 @@ func adminError(err error) error {
 	switch {
 	case errors.Is(err, users.ErrBusy):
 		return &problem{status: http.StatusServiceUnavailable, reason: api.ReasonCodeBusy, retryAfter: 5, detail: "busy, try again"}
+	case errors.Is(err, servers.ErrContainerBound):
+		return &problem{status: http.StatusConflict, reason: api.ReasonCodeContainerBound, detail: err.Error()}
 	case errors.Is(err, users.ErrNotFound):
 		return &problem{status: http.StatusNotFound, reason: api.ReasonCodeNotFound}
 	case errors.Is(err, users.ErrConflict):

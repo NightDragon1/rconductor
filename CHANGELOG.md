@@ -4,6 +4,7 @@
 
 ### Changed
 - Two-factor sign-in for everyone can be switched on only by an RCON admin who has set up his own; otherwise the panel refuses with a hint (AUTH-008).
+- A container belongs to one server only; a second server on it is refused. Update note: if several servers share a container, the oldest keeps it and the others lose agent and container, each with an audit entry and a log line db.migrate.binding_released (SRV-001).
 - The functions of 1.2 can no longer be switched off; Settings has no group Features. API: the session has no ui.features, and PATCH /settings refuses the keys features.<name> of 1.2; stored values stay unused (NFR-019).
 
 ## 1.2

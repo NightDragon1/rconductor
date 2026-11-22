@@ -10,6 +10,7 @@ const known = [
   'rate_limited',
   'busy',
   'conflict',
+  'container_bound',
   'own_totp_required',
 ];
 

@@ -159,6 +159,9 @@ Keyboard shortcuts are off unless the RCON admin switches them on.
 (changed in 1.3) The functions of 1.2 can no longer be switched off; Settings has no
 group Features.
 
+(changed in 1.3) A container belongs to one server only: the form refuses a
+container that another server uses, and says so.
+
 ### Game profiles of a server
 
 In the server form, Game profiles is a list, top first. **+** adds a profile, **−**
