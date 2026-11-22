@@ -83,7 +83,30 @@ func NewDocker(cfg config.Agent, log *slog.Logger) (*Docker, error) {
 	}
 	d := newDocker(c, cfg, log)
 	d.selfID = ownContainerID("/proc/self/mountinfo")
+	d.checkSelf(context.Background())
 	return d, nil
+}
+
+// checkSelf keeps the own container only when the daemon knows it: a
+// remote daemon or Docker in Docker has another one, and then the agent
+// reports no own logs (D-091).
+func (d *Docker) checkSelf(ctx context.Context) {
+	if d.selfID == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if _, err := d.resolveSelf(ctx); err != nil {
+		d.log.Info("own container not known to the daemon, no own logs", slog.String("reason", selfReason(err)))
+		d.selfID = ""
+	}
+}
+
+func selfReason(err error) string {
+	if errors.Is(err, errSelfUnknown) {
+		return "unknown"
+	}
+	return "unreachable"
 }
 
 func newDocker(api dockerAPI, cfg config.Agent, log *slog.Logger) *Docker {
@@ -234,10 +257,13 @@ func (d *Docker) resolveSelf(ctx context.Context) (container.Summary, error) {
 			return s, nil
 		}
 	}
-	return container.Summary{}, errForbidden
+	return container.Summary{}, errSelfUnknown
 }
 
-var errForbidden = errors.New("container not allowed")
+var (
+	errForbidden   = errors.New("container not allowed")
+	errSelfUnknown = errors.New("own container not known to the daemon")
+)
 
 // containerMount finds the ID of the own container in the mounts Docker
 // sets up for it (hostname, hosts, resolv.conf).
@@ -250,8 +276,16 @@ func ownContainerID(mountinfo string) string {
 	if err != nil {
 		return ""
 	}
-	if m := containerMount.FindSubmatch(b); m != nil {
-		return string(m[1])
+	// Only the mount of /etc/hostname names the own container; another
+	// mount under .../containers/<id>/ can be a foreign one.
+	for line := range strings.Lines(string(b)) {
+		f := strings.Fields(line)
+		if len(f) < 5 || f[4] != "/etc/hostname" {
+			continue
+		}
+		if m := containerMount.FindStringSubmatch(f[3]); m != nil {
+			return m[1]
+		}
 	}
 	return ""
 }
@@ -565,6 +599,9 @@ func (d *Docker) allow(ctx context.Context, name, typ string) (container.Summary
 func (d *Docker) action(ctx context.Context, s container.Summary, name, action string) (code, msg string) {
 	actx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	// Logged before the call too, so that an agent ended during it still
+	// shows the order (AGT-003).
+	d.log.Info("container action requested", slog.String("container", name), slog.String("action", action))
 	var err error
 	switch action {
 	case agentproto.ActionStart:
