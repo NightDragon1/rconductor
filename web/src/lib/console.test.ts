@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addCommands,
   addDelivery,
+  addGap,
   addLogLines,
   isRunning,
   RUNNING_MS,
@@ -254,9 +255,21 @@ describe('log lines by number', () => {
   });
 
   it('keeps a container line that reads like the mark a line (C261)', () => {
-    const b = addDelivery(held(3), { lines: ['⋯ 5 lines omitted'], first: 4, run: 'r' }, ts);
-    expect(b.logs.some((l) => l.gap !== undefined)).toBe(false);
+    const b = addDelivery(held(3), { lines: ['⋯ 5 lines omitted'], first: 9, run: 'r' }, ts);
+    const marks = b.logs.filter((l) => l.gap !== undefined);
+    expect(marks).toEqual([expect.objectContaining({ gap: 5, lines: [] })]);
     expect(lines(b).slice(-1)).toEqual(['⋯ 5 lines omitted']);
+  });
+
+  it('joins gaps that follow each other and counts a mark as one line (C261, G3)', () => {
+    let b = addGap(held(3), 2, ts);
+    b = addGap(b, 3, ts);
+    expect(b.logs.filter((l) => l.gap !== undefined)).toEqual([
+      expect.objectContaining({ gap: 5 }),
+    ]);
+    for (let i = 0; i < 300; i++) b = addLogLines(addGap(b, 1, ts), [`l${i}`, `m${i}`], ts);
+    const size = b.logs.reduce((n, l) => n + (l.gap !== undefined ? 1 : l.lines.length), 0);
+    expect(size).toBeLessThanOrEqual(MAX_LOG_LINES);
   });
 
   it('starts over with a new count, by text for a new subscription', () => {

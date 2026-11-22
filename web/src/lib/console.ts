@@ -122,7 +122,12 @@ export function addDelivery(buf: ConsoleBuffer, d: LogDelivery, ts: string): Con
 }
 
 // addGap appends the mark of lines omitted at a gap (K-6, UI-022).
+// Gaps that follow each other become one mark.
 export function addGap(buf: ConsoleBuffer, omitted: number, ts: string): ConsoleBuffer {
+  const last = buf.logs[buf.logs.length - 1];
+  if (last?.gap !== undefined) {
+    return { ...buf, logs: [...buf.logs.slice(0, -1), { ...last, gap: last.gap + omitted }] };
+  }
   return {
     ...buf,
     logs: [...buf.logs, { kind: 'log', id: `log-${++logSeq}`, ts, lines: [], gap: omitted }],
@@ -134,14 +139,16 @@ export function addGap(buf: ConsoleBuffer, omitted: number, ts: string): Console
 export function addLogLines(buf: ConsoleBuffer, lines: string[], ts: string): ConsoleBuffer {
   if (lines.length === 0) return buf;
   const logs = [...buf.logs, { kind: 'log' as const, id: `log-${++logSeq}`, ts, lines }];
-  let total = logs.reduce((n, l) => n + l.lines.length, 0);
+  // A mark of a gap counts as one line (G3).
+  const size = (l: LogBlock) => (l.gap !== undefined ? 1 : l.lines.length);
+  let total = logs.reduce((n, l) => n + size(l), 0);
   while (total > MAX_LOG_LINES && logs.length > 0) {
     const first = logs[0];
     if (!first) break;
     const drop = total - MAX_LOG_LINES;
-    if (first.lines.length <= drop) {
+    if (size(first) <= drop) {
       logs.shift();
-      total -= first.lines.length;
+      total -= size(first);
     } else {
       logs[0] = { ...first, lines: first.lines.slice(drop) };
       total -= drop;

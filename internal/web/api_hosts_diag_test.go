@@ -60,6 +60,10 @@ func TestC283CrossSiteReadRefused(t *testing.T) {
 	if exported != 0 {
 		t.Errorf("%d exports written for refused reads", exported)
 	}
+	if rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/diagnostics", cookies: []*http.Cookie{admin},
+		headers: map[string]string{"Sec-Fetch-Site": "same-origin"}}); rec.Code != http.StatusOK {
+		t.Errorf("export from the panel itself = %d", rec.Code)
+	}
 	for _, site := range []string{"same-origin", "none", ""} {
 		c := call{method: http.MethodGet, path: "/api/v1/me", cookies: []*http.Cookie{admin}}
 		if site != "" {
