@@ -65,9 +65,9 @@ EOF
 expect "docs, assets, licence, issue template: code" false "$(field code)"
 expect "docs, assets, licence, issue template: e2e" false "$(field e2e)"
 
-for f in README.md docs/user/configuration.md docs/user/technical.md assets/logo/rconductor-mark.svg; do
+for f in README.md docs/user/configuration.md docs/user/technical.md assets/logo/rconductor-mark.svg deploy/dockerhub/overview-panel.md; do
   change "tested doc $f" <<EOF
-mkdir -p docs/user assets/logo
+mkdir -p docs/user assets/logo deploy/dockerhub
 echo x >>$f
 EOF
   expect "a doc that tests read ($f): code" true "$(field code)"

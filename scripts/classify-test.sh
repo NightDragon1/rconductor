@@ -60,6 +60,9 @@ check "gate scripts and test data" 0 "stage-2 rules 4" "modified 1 0 scripts/cla
 check "npm config" 0 "stage-2 rules 2" "added 1 0 web/.npmrc" "added 1 0 .npmrc"
 check "tool and bundler config" 0 "stage-2 rules 4" "added 1 0 web/redocly.yaml" \
   "added 1 0 web/.redocly.yml" "modified 1 0 web/index.html" "modified 1 0 web/vite.config.ts"
+check "build config" 0 "stage-2 rules 3" "modified 1 0 Makefile" "added 1 0 web/vite.config.js" \
+  "added 1 0 web/vite.config.mjs"
+check "hand file next to the sqlc code counts" 0 "stage-1  1" "added 1 0 internal/store/sqlitedb/helper.go"
 check "exact file only" 0 "stage-1  2" "modified 1 0 internal/logging/witness_eventlog.go" "added 1 0 docs/CLAUDE.md"
 check "several areas" 0 "stage-2 audit,redact 2" "modified 1 0 internal/logging/events.go" \
   "modified 1 0 internal/logging/redact.go"

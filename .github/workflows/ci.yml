@@ -77,7 +77,10 @@ jobs:
         with:
           persist-credentials: false
       - run: scripts/check-spdx.sh
-      - uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6.0.0
+      # The REUSE image by digest, not by tag (NFR-021); Renovate keeps it.
+      - uses: docker://fsfe/reuse:6.0.0@sha256:71d7cb4e153b8765e93280398a3447b0ef13d6766a0420033dc333ddb2f6d368
+        with:
+          args: lint
 
   fitness:
     name: Fitness functions
@@ -126,6 +129,7 @@ jobs:
       - run: scripts/check-secrets-test.sh
       - run: scripts/script-isolation-test.sh
       - run: scripts/classify-test.sh
+      - run: scripts/release-test.sh
       - run: scripts/check-git-config-test.sh
       - run: scripts/lockfile-packages-test.sh
       - run: scripts/third-party-go-test.sh
@@ -161,7 +165,7 @@ jobs:
           git diff --exit-code
       - name: Queries and schema fit the generated code
         if: needs.scope.outputs.sqlc == 'true'
-        run: docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1 diff
+        run: docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc:1.31.1@sha256:70f53171d27b2424e9358869975455a6e955a5aa8e58a998a270a6e34e525537 diff
       - run: go vet ./...
       # the control listener of the e2e stack exists only with the tag e2e
       - run: go vet -tags e2e ./internal/e2e/stack

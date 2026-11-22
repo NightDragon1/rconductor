@@ -119,7 +119,8 @@ rules:
   - web/redocly.*
   - web/.redocly.*
   - web/index.html
-  - web/vite.config.ts
+  - web/vite.config.*
+  - Makefile
 # which query files sqlc generates the database code from
   - sqlc.yaml
 
@@ -127,7 +128,9 @@ rules:
 # lockfiles
 generated:
   - internal/api/api.gen.go
-  - internal/store/sqlitedb/**
+  - internal/store/sqlitedb/*.sql.go
+  - internal/store/sqlitedb/db.go
+  - internal/store/sqlitedb/models.go
   - web/src/api/schema.d.ts
 # Lockfiles: the PR text lists the packages they add (name@version and
 # origin) and the changed origins or checksums, as scripts/lockfile-packages.py
