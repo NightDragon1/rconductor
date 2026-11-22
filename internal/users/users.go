@@ -325,13 +325,69 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	if err := clearAssignments(ctx, q, id); err != nil {
 		return err
 	}
-	if err := s.audit(ctx, tx, req, "user.delete", id, nil); err != nil {
+	owned, members, err := deleteOwned(ctx, tx, req, id, now)
+	if err != nil {
+		return err
+	}
+	if err := s.audit(ctx, tx, req, "user.delete", id, owned); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
-	return s.rightsChanged(ctx, req, "user.delete", id)
+	return s.rightsChanged(ctx, req, "user.delete", append([]string{id}, members...)...)
+}
+
+// deleteOwned deletes the user groups and command lists of user id with
+// him, inside tx (D-106): the groups lose their grants as on their own
+// delete. It returns what it deleted for the audit, and the members of
+// deleted moderator groups, whose rights change.
+func deleteOwned(ctx context.Context, tx *sql.Tx, req Request, id, now string) (map[string]any, []string, error) {
+	q := sqlitedb.New(tx)
+	deleted := sql.NullString{String: now, Valid: true}
+	type named struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	groups, lists := []named{}, []named{}
+	var members []string
+	all, err := q.ListGroups(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, g := range all {
+		if g.OwnerID != id {
+			continue
+		}
+		if g.Kind == KindModerator {
+			m, err := q.ListGroupMembers(ctx, g.ID)
+			if err != nil {
+				return nil, nil, err
+			}
+			members = append(members, m...)
+		}
+		if err := q.SoftDeleteGroup(ctx, sqlitedb.SoftDeleteGroupParams{DeletedAt: deleted, UpdatedAt: now, ID: g.ID}); err != nil {
+			return nil, nil, err
+		}
+		if err := endGroupGrants(ctx, tx, req, g.ID, "user.delete"); err != nil {
+			return nil, nil, err
+		}
+		groups = append(groups, named{g.ID, g.Name})
+	}
+	cls, err := q.ListCommandLists(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, l := range cls {
+		if l.OwnerID != id {
+			continue
+		}
+		if err := q.SoftDeleteCommandList(ctx, sqlitedb.SoftDeleteCommandListParams{DeletedAt: deleted, UpdatedAt: now, ID: l.ID}); err != nil {
+			return nil, nil, err
+		}
+		lists = append(lists, named{l.ID, l.Name})
+	}
+	return map[string]any{"groups": groups, "command_lists": lists}, members, nil
 }
 
 // EndSessions ends all sessions of a managed user (AUTH-006, revision 2.4

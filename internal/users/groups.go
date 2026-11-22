@@ -453,7 +453,7 @@ func (s *Service) DeleteGroup(ctx context.Context, req Request, id string) error
 	if err := s.auditOn(ctx, tx, req, "group.delete", "user_group", id, map[string]string{"name": g.Name}); err != nil {
 		return err
 	}
-	if err := endGroupGrants(ctx, tx, req, id); err != nil {
+	if err := endGroupGrants(ctx, tx, req, id, "group.delete"); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -466,8 +466,9 @@ func (s *Service) DeleteGroup(ctx context.Context, req Request, id string) error
 	return s.rightsChanged(ctx, req, "group.delete", members...)
 }
 
-// endGroupGrants removes the grants of user group id inside tx.
-func endGroupGrants(ctx context.Context, tx *sql.Tx, req Request, id string) error {
+// endGroupGrants removes the grants of user group id inside tx; cause is
+// the action that ended them.
+func endGroupGrants(ctx context.Context, tx *sql.Tx, req Request, id, cause string) error {
 	rows, err := sqlitedb.New(tx).DeleteGroupGrants(ctx, id)
 	if err != nil {
 		return err
@@ -484,7 +485,7 @@ func endGroupGrants(ctx context.Context, tx *sql.Tx, req Request, id string) err
 		list = append(list, Removed{Section: "grants", ID: r.ID, TargetType: tt, Target: t,
 			ServerID: r.ServerID.String, Entry: entry})
 	}
-	return WriteRemoved(ctx, tx, req, "group.delete", list)
+	return WriteRemoved(ctx, tx, req, cause, list)
 }
 
 func keys(m map[string]bool) []string {

@@ -20,6 +20,7 @@ import {
   type User,
   type UserGroup,
 } from '@/api/users';
+import { OwnedObjects } from '@/pages/admin/OwnedObjects';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CopyButton } from '@/components/CopyButton';
 import { Button } from '@/components/ui/button';
@@ -640,7 +641,9 @@ export function UserPanel({
             t('admin.removed'),
           ).then(onClose);
         }}
-      />
+      >
+        <OwnedObjects ids={[user.id]} />
+      </ConfirmDialog>
     </aside>
   );
 }
