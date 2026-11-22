@@ -22,7 +22,7 @@ type Message = { ok: boolean; text: string } | null;
 const sayPrefixKey = (id: string) => ['server-groups', id, 'say-prefix'] as const;
 
 // sayPrefixQuery reads the prefix of a group (CMD-020, D-082). 403 and
-// 404 (flag off, group outside the scope, role without the right) are an
+// 404 (group outside the scope, role without the right) are an
 // answer, not a fault: the field is not shown.
 const sayPrefixQuery = (id: string) => ({
   queryKey: sayPrefixKey(id),

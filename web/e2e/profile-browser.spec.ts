@@ -3,7 +3,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Profile browser (UI-020) behind the flag profile_browser: every role with
+// Profile browser (UI-020): every role with
 // access to a server reads the profiles and the effective profile of its
 // servers; the game ports only the RCON admin and the server admin in scope
 // (D-056); read only.
@@ -32,8 +32,6 @@ async function openBrowser(page: Page) {
 }
 
 test.describe('profile browser on', () => {
-  test.use({ flags: ['profile_browser'] });
-
   test('admin searches the catalog and reads the effective profile with ports', async ({
     page,
     state,
@@ -111,23 +109,5 @@ test.describe('profile browser on', () => {
       'Nothing matches.',
     );
     expect(errors).toEqual([]);
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['profile_browser'] });
-
-  test('profile browser off: no menu entry and 404', async ({ page, playwright, state }) => {
-    await login(page, 'admin', secret(state, 'admin'));
-    await expect(page.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
-    await expect(
-      page.getByRole('navigation').getByRole('link', { name: 'Game profiles' }),
-    ).toHaveCount(0);
-    const mod = await api(playwright, state, 'mod');
-    try {
-      expect((await mod.get(`api/v1/servers/${state.server_id}/profile`)).status()).toBe(404);
-    } finally {
-      await mod.dispose();
-    }
   });
 });

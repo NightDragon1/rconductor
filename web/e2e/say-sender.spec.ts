@@ -3,7 +3,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Say with sender (CMD-020, D-082) behind the flag say_sender: the prefix
+// Say with sender (CMD-020, D-082): the prefix
 // of messages to the players is set per server group in the server
 // administration. survival (profile minecraft-java, in the group
 // minecraft) answers every command with "Done: <command>"
@@ -66,7 +66,7 @@ async function setPrefix(api: APIRequestContext, id: string, value: string) {
 }
 
 // cleanup clears the prefix of minecraft and deletes the groups of this
-// spec; the flag is still on here (the flag switch ends after the test).
+// spec.
 async function cleanup(playwright: Playwright, state: StackState) {
   const api = await adminApi(playwright, state);
   try {
@@ -86,8 +86,6 @@ async function cleanup(playwright: Playwright, state: StackState) {
 }
 
 test.describe('say with sender on', () => {
-  test.use({ flags: ['say_sender'] });
-
   test('the RCON admin sets a prefix; a say reaches the server as tellraw', async ({
     page,
     playwright,
@@ -209,22 +207,5 @@ test.describe('say with sender on', () => {
     } finally {
       await cleanup(playwright, state);
     }
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['say_sender'] });
-
-  test('flag off: no prefix field and no request for it', async ({ page, state }) => {
-    const reads: string[] = [];
-    page.on('request', (r) => {
-      if (r.url().includes('/say-prefix')) reads.push(r.url());
-    });
-    await as(page, state, 'admin');
-    await openGroup(page);
-    await expect(groupPanel(page)).toBeVisible();
-    await page.waitForLoadState('networkidle');
-    await expect(field(page)).toHaveCount(0);
-    expect(reads).toEqual([]);
   });
 });

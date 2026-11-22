@@ -78,22 +78,15 @@ describe('servers and agents', () => {
     expect(unmarked(container).filter((s) => !isData.test(s))).toEqual([]);
   });
 
-  it('agents page shows the Docker host only with docker_host (AGT-014)', async () => {
+  it('agents page shows the Docker host as the agent sent it (AGT-014)', async () => {
     setLanguage('en');
     const withHost = data.map(([k, v]): [readonly unknown[], unknown] => {
-      if (k === sessionKey) {
-        const s = v as { ui: object };
-        return [k, { ...s, ui: { ...s.ui, features: ['docker_host'] } }];
-      }
       if (k === agentsKey) {
         const [a, b] = v as object[];
         return [k, [{ ...a, docker_host: { name: '<b>nas</b>', ip: '192.168.1.5' } }, b]];
       }
       return [k, v];
     });
-    const off = await renderPage(AgentsPage, data);
-    expect(off.container.textContent).not.toContain('Docker host');
-    off.unmount();
     const { container } = await renderPage(AgentsPage, withHost);
     expect(screen.getByRole('columnheader', { name: 'Docker host' })).toBeTruthy();
     expect(container.textContent).toContain('<b>nas</b> (192.168.1.5)');

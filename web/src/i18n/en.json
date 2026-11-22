@@ -492,7 +492,6 @@
     "wrap": "Wrap lines",
     "clear": "Clear view",
     "copy": "Copy the shown lines",
-    "filterLabel": "Filter the logs",
     "earlier": "Load earlier lines",
     "lines": "Log lines",
     "empty": "No log lines yet.",

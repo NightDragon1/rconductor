@@ -37,7 +37,7 @@ const data = (role: string, features: string[]): [readonly unknown[], unknown][]
 ];
 
 describe('server number (UI-018)', () => {
-  it('is the first column ID in Manage servers and server groups with the flag server_number', async () => {
+  it('is the first column ID in Manage servers and server groups', async () => {
     setLanguage('en');
     await renderPage(
       () => (
@@ -52,26 +52,13 @@ describe('server number (UI-018)', () => {
     expect(screen.getByRole('cell', { name: '7' })).toBeTruthy();
   });
 
-  it('has no column ID while the flag is off', async () => {
-    setLanguage('en');
-    await renderPage(
-      () => (
-        <UndoProvider>
-          <ServersAdminPage />
-        </UndoProvider>
-      ),
-      data('rcon_admin', []),
-    );
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).not.toContain('ID');
-  });
-
-  it('shows the badge for every role with the flag, nothing without', async () => {
+  it('shows the badge for every role, nothing without a number', async () => {
     setLanguage('en');
     await renderPage(() => <ServerNumber number={7} />, data('supporter', ['server_number']));
     expect(screen.getByText('Server number 7')).toBeTruthy();
     expect(screen.getByText('#7').getAttribute('aria-hidden')).toBe('true');
     cleanup();
-    await renderPage(() => <ServerNumber number={7} />, data('supporter', []));
-    expect(screen.queryByText('Server number 7')).toBeNull();
+    await renderPage(() => <ServerNumber />, data('supporter', []));
+    expect(screen.queryByText(/Server number/)).toBeNull();
   });
 });

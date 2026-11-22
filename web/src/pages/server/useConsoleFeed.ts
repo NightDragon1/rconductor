@@ -9,7 +9,6 @@ import {
   addCommands,
   addDelivery,
   bufferWriter,
-  LOG_MASKING_FLAG,
   updateBuffer,
   useBuffer,
   type CmdBlock,
@@ -53,12 +52,9 @@ const latestRefill = new Map<string, number>();
 export function useLogsFeed(id: string, on: boolean) {
   const [write] = useState(bufferWriter);
   const { t } = useTranslation();
-  const { data: session } = useSession();
   // A gap names the lines omitted, also those dropped while the masking
   // was behind (UI-022).
-  const gapLine = session?.ui.features?.includes(LOG_MASKING_FLAG)
-    ? (n: number) => t('console.omitted', { count: n })
-    : undefined;
+  const gapLine = (n: number) => t('console.omitted', { count: n });
   useTopic(id && on ? `server.${id}.logs` : undefined, (m) => {
     const d = m.data as
       { lines?: unknown; current?: unknown; first?: unknown; run?: unknown } | undefined;

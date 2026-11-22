@@ -3,7 +3,7 @@
 import type { Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Two-part log filter (UI-019) behind the flag log_filter_split: the bracket
+// Two-part log filter (UI-019): the bracket
 // part and the text after it, joined with and, or, xor.
 
 const bracket = (page: Page) => page.getByRole('searchbox', { name: 'Filter the bracket part' });
@@ -20,8 +20,6 @@ async function openLogs(page: Page, state: StackState) {
 }
 
 test.describe('two-part log filter on', () => {
-  test.use({ flags: ['log_filter_split'] });
-
   test('bracket part and text with and, or, xor', async ({ page, state }) => {
     await openLogs(page, state);
     await expect(page.getByRole('searchbox', { name: 'Filter the logs' })).toHaveCount(0);
@@ -58,15 +56,5 @@ test.describe('two-part log filter on', () => {
     await expect(page.getByRole('region', { name: 'Logs' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Logs' })).not.toContainText(/tick \d+/);
     expect(errors).toEqual([]);
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['log_filter_split'] });
-
-  test('two-part log filter off: one filter', async ({ page, state }) => {
-    await openLogs(page, state);
-    await expect(page.getByRole('searchbox', { name: 'Filter the logs' })).toBeVisible();
-    await expect(bracket(page)).toHaveCount(0);
   });
 });

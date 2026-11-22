@@ -26,7 +26,7 @@ import {
 import { playerRule } from '@/lib/commandform';
 import { clock } from '@/lib/format';
 import { stripCodes } from '@/lib/serverpage';
-import { COLOR_CODES_FLAG, type Formatting } from '@/lib/formatting';
+import { type Formatting } from '@/lib/formatting';
 import { cn } from '@/lib/utils';
 import { MultiCommand } from './MultiCommand';
 import { TemplatesPanel } from './TemplatesPanel';
@@ -204,11 +204,8 @@ export function ConsoleTab() {
   const server = useServer();
   const id = server?.id ?? '';
   const hasAgent = !!server?.agent_id;
-  // Styles only with the flag on and a scheme from the profiles (CMD-017).
-  const formatting =
-    session?.ui.features?.includes(COLOR_CODES_FLAG) && server?.formatting
-      ? server.formatting
-      : undefined;
+  // Styles only with a scheme from the profiles (CMD-017).
+  const formatting = server?.formatting;
   const allowed = useAllowedCommands(id, !!id);
   // Running commands turn into failed ones without any event.
   const [now, setNow] = useState(Date.now);

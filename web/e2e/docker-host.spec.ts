@@ -3,7 +3,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, login, secret, test, type StackState } from './fixtures';
 
-// Docker host of the agents (AGT-014) behind the flag docker_host: the fake
+// Docker host of the agents (AGT-014): the fake
 // daemon of host-1 names its host "<b>nas</b>-1" with a direction override
 // and the address 192.168.1.5 (internal/e2e/stack); the agent host-legacy
 // sends none, as an agent of 1.1.
@@ -35,8 +35,6 @@ async function connectedFrom(at: Locator, a?: { remote?: string; docker_host?: {
 }
 
 test.describe('docker host on', () => {
-  test.use({ flags: ['docker_host'] });
-
   test('the RCON admin sees the Docker host as text in agent list and server page, not in the topology', async ({
     page,
     state,
@@ -90,22 +88,5 @@ test.describe('docker host on', () => {
     html = await page.content();
     expect(html).not.toContain(hostIP);
     expect(html).not.toContain('Docker host');
-  });
-});
-
-test.describe('flag off', () => {
-  test.use({ flagsOff: ['docker_host'] });
-
-  test('docker host off: the agent data are as in 1.1', async ({ page, state }) => {
-    await as(page, state, 'admin');
-    const r = await page.request.get('api/v1/agents');
-    const { items } = (await r.json()) as { items: { docker_host?: unknown }[] };
-    expect(items.every((a) => a.docker_host === undefined)).toBe(true);
-    await page.goto('topology');
-    await expect(agentNode(page, 'survival')).toContainText('connected');
-    await expect(agentNode(page, 'survival')).not.toContainText(hostIP);
-    await page.goto('admin/agents');
-    await expect(page.getByRole('row').filter({ hasText: 'host-1' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Docker host' })).toHaveCount(0);
   });
 });

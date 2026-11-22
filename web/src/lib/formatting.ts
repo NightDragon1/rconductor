@@ -5,12 +5,9 @@
 // formatting names the scheme; minecraft turns § codes into styles of the
 // fixed list below. The class of a segment is always one of the strings in
 // this file, never a value from the answer: a code only picks an entry
-// (SEC-006). Unknown codes stay in the text, as with the flag off.
+// (SEC-006). Unknown codes stay in the text, as without a scheme.
 
 export type Formatting = 'minecraft';
-
-// The flag name the backend reports in ui.features.
-export const COLOR_CODES_FLAG = 'color_codes';
 
 // One Minecraft color per code, as a theme token with a light and a dark
 // value of at least 4.5:1 on every surface (index.css).
@@ -43,8 +40,8 @@ const decorationClass = {
 } as const;
 
 // MAX_STYLED caps the styled segments of one text: a long answer full of
-// codes stays cheap to show; after the cap the rest is shown as with the
-// flag off, codes removed.
+// codes stays cheap to show; after the cap the rest is shown with the
+// codes removed.
 export const MAX_STYLED = 2000;
 
 export type Segment = { text: string; className: string };

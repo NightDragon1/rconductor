@@ -5,14 +5,13 @@ import { useState, type FormEvent } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api, must, patchVersioned } from '@/api/client';
-import { sessionKey, useSession } from '@/api/session';
+import { sessionKey } from '@/api/session';
 import { outcome } from '@/api/users';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useWide } from '@/components/DenseTable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reasonText } from '@/lib/admin';
-import { LOG_MASKING_FLAG } from '@/lib/console';
 import { formatDuration, isGoDuration, parseDuration } from '@/lib/duration';
 import { usePhone } from '@/lib/phone';
 import { cn } from '@/lib/utils';
@@ -210,13 +209,11 @@ const settingsQuery = {
 // (revision 2.4 candidate 24); switching supporters off asks first, as
 // it ends the sessions of all supporters. A phone only reads (UI-012).
 // SettingsPage holds the global settings, the SMTP setup (NFR-017) and,
-// behind the flag log_masking_ui, the masking of container logs (UI-022).
+// the masking of container logs (UI-022).
 // From 1024 px the groups stand on the left and only the chosen one on the
 // right (O8); below, all groups follow one another as before.
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { data: session } = useSession();
-  const masking = !!session?.ui.features?.includes(LOG_MASKING_FLAG);
   const phone = usePhone();
   const wide = useWide();
   const [showHelp, setShowHelp] = useState(storedHelp);
@@ -252,7 +249,7 @@ export function SettingsPage() {
     <div className="flex min-w-0 flex-col gap-5">
       <SettingsForm group={group} showHelp={showHelp} />
       {system && <SmtpPanel />}
-      {system && masking && <LogMaskingPanel />}
+      {system && <LogMaskingPanel />}
     </div>
   );
   if (!wide) {

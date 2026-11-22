@@ -39,7 +39,7 @@ const servers = [
 
 // The overview by host (UI-021, D-089): a frame per host with the display
 // name as text or a neutral placeholder, the count and the status summary;
-// servers without agent in their own frame. With the flag off it is as before.
+// servers without agent in their own frame.
 describe('overview by host', () => {
   it('frames the cards per host', async () => {
     setLanguage('en');
@@ -59,17 +59,5 @@ describe('overview by host', () => {
     const none = screen.getByRole('region', { name: 'Servers without agent' });
     expect(within(none).getByText('delta')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /collapse|expand/i })).toBeNull();
-  });
-
-  it('shows the cards as before with the flag off', async () => {
-    setLanguage('en');
-    await renderPage(HomePage, [
-      [sessionKey, session([])],
-      [serversKey, servers],
-      [profilesKey, []],
-    ]);
-    expect(screen.getByText('gamma')).toBeTruthy();
-    expect(screen.queryByRole('region', { name: 'Host 1' })).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Servers without agent' })).toBeNull();
   });
 });
