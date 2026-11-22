@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
+	"github.com/NightDragon1/rconductor/internal/commands/limits"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
@@ -50,9 +51,9 @@ type MultiItem struct {
 	Truncated bool
 }
 
-func (s *Service) multiSetting(ctx context.Context, key string, def, lo int) int {
+func (s *Service) multiSetting(ctx context.Context, key string, def, lo, hi int) int {
 	n := def
-	if err := s.st.GuardedSetting(ctx, s.log, key, &n); err != nil || n < lo {
+	if err := s.st.GuardedSetting(ctx, s.log, key, &n); err != nil || n < lo || n > hi {
 		n = def
 	}
 	return n
@@ -92,7 +93,7 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 	if strings.TrimSpace(input) == "" {
 		return "", nil, &users.InvalidError{Detail: "a command is required"}
 	}
-	limit := s.multiSetting(ctx, users.SettingMultiMaxServers, users.DefaultMultiMaxServers, users.MinMultiMaxServers)
+	limit := s.multiSetting(ctx, users.SettingMultiMaxServers, limits.DefaultMultiMaxServers, limits.MinMultiMaxServers, limits.MaxMultiMaxServers)
 	if len(ids) > limit {
 		return "", nil, &users.InvalidError{Detail: fmt.Sprintf("at most %d servers at once", limit)}
 	}
@@ -100,7 +101,7 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 	if err != nil {
 		return "", nil, err
 	}
-	parallel := s.multiSetting(ctx, users.SettingMultiParallel, users.DefaultMultiParallel, users.MinMultiParallel)
+	parallel := s.multiSetting(ctx, users.SettingMultiParallel, limits.DefaultMultiParallel, limits.MinMultiParallel, limits.MaxMultiParallel)
 	items := make([]MultiItem, len(ids))
 	slots := make(chan struct{}, parallel)
 	// Runs start until the deadline; a run started then still ends in time.
