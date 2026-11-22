@@ -31,30 +31,31 @@ const quoted = `(?:[^']|'\\'')*`
 // dquoted is the inside of double quotes, where \" is a quote of the value.
 const dquoted = `(?:[^"\\]|\\.)*`
 
-// ansi is any run of terminal escape sequences (CSI), as a colored log
-// puts them around a name or a separator.
-const ansi = `(?:\x1b\[[0-9;?]*[ -/]*[@-~])*`
+// gap is space and terminal escape sequences, as a colored log puts them
+// around a name or a separator: CSI with any parameters, also colon ones,
+// and the choice of a character set such as ESC ( B.
+const gap = `(?:\s|\x1b(?:\[[0-?]*[ -/]*[@-~]|[()]\w))*`
 
 // sep is the end of a name and the separator: a closing quote of the name,
 // also an escaped one or one of a Python dict, then =, ==, : or :=, with
-// escape sequences and space around it.
-const sep = `(?:\\?["'])?` + ansi + `\s*(?::=|==?|:)\s*` + ansi
+// a gap around it.
+const sep = `(?:\\?["'])?` + gap + `(?::=|==?|:)` + gap
 
 // builtin keeps the name, separator and any opening quote (group 1) and
 // any group 2, and masks the rest of the match: up to the closing quote, or
 // the line end for an open one; a bare value up to space or a separator.
 var builtin = []*regexp.Regexp{
 	// 'KEY=value' as a whole in single quotes: up to the closing quote.
-	regexp.MustCompile(`(?i)('` + secretKey + ansi + `\s*(?::=|[=:])\s*)` + quoted),
+	regexp.MustCompile(`(?i)('` + secretKey + gap + `(?::=|[=:])\s*)` + quoted),
 	// KEY=value, key: value, "key": "value", 'key': 'value', key := value,
 	// also with prefixes such as RCON_PASSWORD or db_password.
 	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `")` + dquoted),
 	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `')` + quoted),
-	// Escaped JSON inside a string: \"key\":\"value\".
-	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `\\")(?:[^\\]|\\[^"])*`),
-	// A bare value; a backslash before a quote opens an escaped value. It
-	// starts with neither an escape sequence nor =, which belong to sep.
-	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `)(?:[^\s"',;&\\\x1b=]|\\[^"'])(?:[^\s"',;&\\]|\\[^"'])*`),
+	// Escaped JSON inside a string: \"key\":\"value\", where \\\" is a
+	// quote of the value.
+	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `\\")(?:[^\\]|\\\\\\"|\\[^"])*`),
+	// A bare value; a backslash before a quote opens an escaped value.
+	regexp.MustCompile(`(?i)(\b` + secretKey + sep + `)(?:[^\s"',;&\\]|\\[^"']|\\$)+`),
 	// Command-line flags: --rcon-password value, -password "value",
 	// --rcon-password 'value'.
 	regexp.MustCompile(`(?i)(-` + secretKey + `\s+")` + dquoted),
@@ -62,11 +63,12 @@ var builtin = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(-` + secretKey + `\s+)[^\s"']+`),
 	// Authorization: Bearer <token>.
 	regexp.MustCompile(`(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+`),
-	// User info of a URL: scheme://user:password@host, up to the last @
-	// before the host, so that an @ in the password stays masked.
+	// User info of a URL: scheme://user:password@host, up to the first @
+	// and, for an @ in the password, up to the last one before the path.
+	regexp.MustCompile(`(?i)(\b[a-z][a-z0-9+.-]*://)[^\s/@]+(@)`),
 	regexp.MustCompile(`(?i)(\b[a-z][a-z0-9+.-]*://)[^\s/?#]+(@)`),
-	// DSN of a Go SQL driver: user:password@tcp(host)/db.
-	regexp.MustCompile(`(?i)(\b[A-Za-z0-9_.-]+:)[^\s/]+(@(?:tcp|tcp6|udp|unix)\()`),
+	// DSN of a Go SQL driver: user:password@tcp(host)/db, user:password@/db.
+	regexp.MustCompile(`(?i)(\b[A-Za-z0-9_.-]+:)[^\s]+?(@(?:(?:tcp6?|udp|unix)\(|/))`),
 }
 
 // Line masks one line: built-in values keep their name, a text of the
