@@ -367,6 +367,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	if err := s.entry(ctx, req, serverID, ActionSent, audit.Entry{Payload: p, Result: audit.ResultOK}); err != nil {
 		return Result{}, err
 	}
+	passed(ctx) // every check passed, the command goes out
 	// 11: one connection, one queue per server.
 	ectx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
