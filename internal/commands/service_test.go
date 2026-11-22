@@ -21,7 +21,6 @@ import (
 	"github.com/NightDragon1/rconductor/internal/commands/sayconf"
 	"github.com/NightDragon1/rconductor/internal/config"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
-	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/logtest"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -284,7 +283,7 @@ func TestSupporterPassableOnly(t *testing.T) {
 }
 
 // TestCleaningAtTheServer covers CMD-006 end to end: say a\nop x runs as
-// one single command.
+// one single command, the message of the profile (CMD-020).
 func TestCleaningAtTheServer(t *testing.T) {
 	w := newWorld(t)
 	before := len(w.gameReceived())
@@ -292,7 +291,7 @@ func TestCleaningAtTheServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := w.gameReceived()[before:]
-	if !slices.Equal(got, []string{"say aop x"}) {
+	if !slices.Equal(got, []string{`tellraw @a {"text":"","extra":[{"text":"admin: "},{"text":"aop x"}]}`}) {
 		t.Errorf("game server received %q", got)
 	}
 }
@@ -739,22 +738,13 @@ func TestUnreadableProfileRefusesC23(t *testing.T) {
 }
 
 // TestSayWithSender covers CMD-020 (D-081, D-082, D-083) in the pipeline:
-// with the flag say_sender on, "say <text>" goes to the game as tellraw
+// "say <text>" goes to the game as tellraw
 // with the prefix of the first group by name and the sender; the checks
 // run on the input, so a moderator without say in the list is refused; a
 // built command over the length of the profile is refused, never cut; the
-// audit holds input and sent command. With the flag off, say goes as typed.
+// audit holds input and sent command.
 func TestSayWithSender(t *testing.T) {
 	w := newWorld(t)
-	flags, err := features.New(features.Flag{Name: FeatureSaySender})
-	if err != nil {
-		t.Fatal(err)
-	}
-	w.svc.UseFeatures(flags)
-	if _, err := w.send("admin", "say flag off"); err != nil {
-		t.Fatal(err)
-	}
-	w.exec(`INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('f', ?, 'true', 'global', '', 't')`, features.Key(FeatureSaySender))
 	// Two groups with a prefix: "beta" before "gamma" by name; "alpha" has none.
 	for i, g := range []struct{ id, name, prefix string }{{"g1", "gamma", `"[G]"`}, {"g2", "beta", `"[B]"`}, {"g3", "alpha", ""}} {
 		w.exec(`INSERT INTO server_groups (id, name, created_at, updated_at) VALUES (?, ?, 't', 't')`, g.id, g.name)
@@ -770,8 +760,8 @@ func TestSayWithSender(t *testing.T) {
 	}
 	want := `tellraw @a {"text":"","extra":[{"text":"[B] "},{"text":"admin: "},{"text":"hi \"]},{\"text\":\"x\""}]}`
 	got := w.gameReceived()
-	if len(got) != 2 || got[0] != "say flag off" || got[1] != want {
-		t.Fatalf("game received %q, want [say flag off %s]", got, want)
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("game received %q, want [%s]", got, want)
 	}
 	if r.Command != `say hi "]},{"text":"x"` {
 		t.Errorf("result command = %q, want the input", r.Command)
@@ -793,7 +783,7 @@ func TestSayWithSender(t *testing.T) {
 	if _, err := w.send("admin", "say "+strings.Repeat("a", 990)); reason(err) != ReasonMessageTooLong {
 		t.Errorf("too long built = %v, want message_too_long", err)
 	}
-	if n := len(w.gameReceived()); n != 2 {
-		t.Errorf("game received %d commands, want 2", n)
+	if n := len(w.gameReceived()); n != 1 {
+		t.Errorf("game received %d commands, want 1", n)
 	}
 }

@@ -89,13 +89,12 @@ func recordTopics(t *testing.T, f *rightsFixture, role string, servers ...string
 }
 
 // TestDockerHostOnlyRCONAdmin covers AGT-014 and D-084 with a real agent and
-// hub session: with the flag docker_host on, the Docker host and the
+// hub session: the Docker host and the
 // address the agent connected from reach the RCON admin in the agent data, and no other role in any
 // answer over HTTP or in any WebSocket topic.
 func TestDockerHostOnlyRCONAdmin(t *testing.T) {
 	f := newRightsFixture(t)
 	const name, ip, remote = "nas-7f3", "198.51.100.7", "203.0.113.9"
-	f.as(rA).must(http.MethodPatch, "/settings", map[string]any{"features.docker_host": true}, nil, http.StatusOK)
 	others := []string{rSI, rSO, rMR, rMN, rSU, rP}
 	rec := map[string]*wsRecorder{}
 	for _, role := range append([]string{rA}, others...) {

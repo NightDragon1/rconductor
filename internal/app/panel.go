@@ -234,7 +234,6 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	}
 	cmdSvc := commands.NewService(st, checker, conns, logs.Module("cmd"))
 	cmdSvc.SetTimeout(cfg.CommandTimeout)
-	cmdSvc.UseFeatures(features.Default())
 	cmdSvc.Publish = hub.PublishConsole
 
 	var wg sync.WaitGroup
@@ -265,14 +264,12 @@ func runPanel(ctx context.Context, cfg config.Panel, logs *logging.Factory, sink
 	hub.SetAgentViews(views)
 	diagSvc := diag.NewService(st, logs.Module("diag"))
 	diagSvc.Use(agents, masking)
-	hub.SetMessages(func(ctx context.Context) bool { return features.Default().Enabled(ctx, st, "messages") })
 	serverSvc.OnChange(func(string) {
 		masking.ProfilesChanged()
 		views.Wake()
 	})
 	wg.Go(func() { views.Run(ctx) })
 	agentSvc.SetHub(agents)
-	agentSvc.UseFeatures(features.Default())
 	wg.Go(func() { agentSvc.ClosePairing(ctx, time.Minute) })
 	agentAddr := make(chan net.Addr, 1)
 	agentErr := make(chan error, 1)

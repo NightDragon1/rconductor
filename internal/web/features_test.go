@@ -11,7 +11,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/NightDragon1/rconductor/internal/api"
 	"github.com/NightDragon1/rconductor/internal/features"
 )
 
@@ -29,13 +28,18 @@ func flagFixture(t *testing.T) (f *apiFixture, get func(*http.Cookie) int, patch
 	patch = func(c *http.Cookie, body string) int {
 		return f.do(t, call{method: http.MethodPatch, path: "/api/v1/settings", cookies: []*http.Cookie{c}, origin: "http://panel.lan", body: body}).Code
 	}
+	// on lists the flags switched on as the settings hold them; only the
+	// RCON admin reads them.
 	on = func(c *http.Cookie) []string {
-		var s api.Session
-		_ = json.Unmarshal(f.do(t, call{method: http.MethodGet, path: "/api/v1/auth/session", cookies: []*http.Cookie{c}}).Body.Bytes(), &s)
-		if s.Ui.Features == nil {
-			return nil
+		var values map[string]json.RawMessage
+		_ = json.Unmarshal(f.do(t, call{method: http.MethodGet, path: "/api/v1/settings", cookies: []*http.Cookie{c}}).Body.Bytes(), &values)
+		var names []string
+		for k, v := range values {
+			if name, ok := strings.CutPrefix(k, features.KeyPrefix); ok && string(v) == "true" {
+				names = append(names, name)
+			}
 		}
-		return *s.Ui.Features
+		return names
 	}
 	return f, get, patch, on
 }
@@ -57,8 +61,8 @@ func TestFeatureFlagOffIsNotFound(t *testing.T) {
 	if got := patch(admin, `{"features.test_flag":true}`); got != http.StatusOK {
 		t.Fatalf("admin switches the flag: %d", got)
 	}
-	if got := on(mod); get(mod) != http.StatusOK || len(got) != 1 || got[0] != "test_flag" {
-		t.Errorf("flag on: endpoint %d, session %v", get(mod), got)
+	if got := on(admin); get(mod) != http.StatusOK || len(got) != 1 || got[0] != "test_flag" {
+		t.Errorf("flag on: endpoint %d, settings %v", get(mod), got)
 	}
 	audited := 0
 	if err := f.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'settings.update' AND result = 'ok'
@@ -96,6 +100,27 @@ func TestFeatureFlagSettingsAbuse(t *testing.T) {
 	}
 	wg.Wait()
 	if (len(on(admin)) == 1) != (get(admin) == http.StatusOK) {
-		t.Errorf("session says %v, endpoint answers %d", on(admin), get(admin))
+		t.Errorf("settings say %v, endpoint answers %d", on(admin), get(admin))
+	}
+}
+
+// TestStoredFlagOfOldBuild: a value stored for a flag this build no longer
+// has (the flags of 1.2) stays in the database without a migration, is not
+// read back through /settings and cannot be written again (NFR-019).
+func TestStoredFlagOfOldBuild(t *testing.T) {
+	f, _, patch, _ := flagFixture(t)
+	admin := f.login(t, "Boss")
+	if _, err := f.st.DB.Exec(`INSERT INTO settings (id, key, value, scope_type, scope_id, updated_at) VALUES ('old', 'features.messages', 'false', 'global', '', 't')`); err != nil {
+		t.Fatal(err)
+	}
+	rec := f.do(t, call{method: http.MethodGet, path: "/api/v1/settings", cookies: []*http.Cookie{admin}})
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "features.messages") || !strings.Contains(rec.Body.String(), "features.test_flag") {
+		t.Errorf("settings = %d %s", rec.Code, rec.Body.String())
+	}
+	if got := patch(admin, `{"features.messages":true}`); got < 400 || got >= 500 {
+		t.Errorf("writing the old flag = %d, want a 4xx refusal", got)
+	}
+	if got := f.do(t, call{method: http.MethodGet, path: "/api/v1/messages", cookies: []*http.Cookie{admin}}).Code; got != http.StatusOK {
+		t.Errorf("messages with the old flag stored off = %d, want 200", got)
 	}
 }

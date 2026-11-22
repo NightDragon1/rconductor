@@ -19,10 +19,6 @@ import (
 	"github.com/NightDragon1/rconductor/internal/users"
 )
 
-// FeatureSaySender is the flag of messages with sender (CMD-020); while it
-// is off, the message command is sent as typed.
-const FeatureSaySender = "say_sender"
-
 // maxSender bounds the sender (D-081).
 const maxSender = 32
 
@@ -143,12 +139,9 @@ func (s *Service) sayPrefix(ctx context.Context, serverID string) (string, error
 }
 
 // message is the command to send for cmd: the message in the form of the
-// profile while the flag say_sender is on and cmd is the message command
-// with a text, otherwise cmd itself (CMD-020, D-081).
+// profile when cmd is the message command with a text, otherwise cmd
+// itself (CMD-020, D-081).
 func (s *Service) message(ctx context.Context, req users.Request, serverID, cmd string, syn Syntax) (string, error) {
-	if s.flags == nil || !s.flags.Enabled(ctx, s.st, FeatureSaySender) {
-		return cmd, nil
-	}
 	text, ok := messageText(cmd, syn.Message, syn.CaseSensitive)
 	if !ok {
 		return cmd, nil

@@ -71,7 +71,8 @@ func TestMultiPerServer(t *testing.T) {
 			seenReq[it.RequestID] = true
 		}
 	}
-	if items[0].Response != "ok: say hi" {
+	// say goes as the message of the profile (CMD-020).
+	if items[0].Response != `ok: tellraw @a {"text":"","extra":[{"text":"sa: "},{"text":"hi"}]}` {
 		t.Errorf("answer = %q", items[0].Response)
 	}
 	// Audit per server, all with the batch ID.

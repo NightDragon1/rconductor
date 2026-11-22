@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3
+
+### Changed
+- The functions of 1.2 can no longer be switched off; Settings has no group Features. API: the session has no ui.features, and PATCH /settings refuses the keys features.<name> of 1.2; stored values stay unused (NFR-019).
+
 ## 1.2
 
 ### New

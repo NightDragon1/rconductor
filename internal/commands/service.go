@@ -16,7 +16,6 @@ import (
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
-	"github.com/NightDragon1/rconductor/internal/features"
 	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -142,7 +141,6 @@ type Service struct {
 	exec    Executor
 	log     *slog.Logger
 	limiter *limiter
-	flags   *features.Set
 	now     func() time.Time
 	// timeout overrides Timeout, for tests.
 	timeout time.Duration
@@ -155,10 +153,6 @@ type Service struct {
 func NewService(st *store.Store, c *perm.Checker, exec Executor, log *slog.Logger) *Service {
 	return &Service{st: st, perm: c, exec: exec, log: log, limiter: newLimiter(), now: time.Now, timeout: Timeout}
 }
-
-// UseFeatures names the feature flags the pipeline checks (say_sender);
-// without, every flag counts as off.
-func (s *Service) UseFeatures(f *features.Set) { s.flags = f }
 
 // SetTimeout replaces Timeout; zero keeps it.
 func (s *Service) SetTimeout(d time.Duration) {
