@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAbout, webUrl } from '@/api/about';
+import { aboutKey, useAbout, webUrl } from '@/api/about';
 import { api } from '@/api/client';
 import { sessionKey } from '@/api/session';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,9 @@ export function LoginPage() {
     data: { must_change_password: boolean; totp_setup_required: boolean } | undefined,
   ) {
     qc.setQueryData(sessionKey, data);
+    // An answer of an earlier session (another role) does not show again
+    // (UI-024).
+    qc.removeQueries({ queryKey: aboutKey().slice(0, 1) });
     await navigate({
       to: data?.must_change_password
         ? '/change-password'
