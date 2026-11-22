@@ -46,6 +46,12 @@ func unzip(t *testing.T, b []byte) map[string]string {
 // are blacked out; every area is valid JSON; the export is audited with
 // period and size, without content.
 func TestExportBlackedOut(t *testing.T) {
+	t.Run("with masker", func(t *testing.T) { exportBlackedOut(t, true) })
+	// D-107: without a masker the built-in list still applies.
+	t.Run("without masker", func(t *testing.T) { exportBlackedOut(t, false) })
+}
+
+func exportBlackedOut(t *testing.T, withMasker bool) {
 	st := storetest.New(t)
 	ctx := context.Background()
 	for _, q := range []string{
@@ -67,7 +73,9 @@ func TestExportBlackedOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := NewService(st, nil)
-	s.Use(nil, builtin{m})
+	if withMasker {
+		s.Use(nil, builtin{m})
+	}
 	admin := users.Request{Actor: perm.Actor{ID: storetest.CreateUser(t, st, storetest.User{Pseudonym: "a", Role: string(perm.RCONAdmin)}), Role: perm.RCONAdmin}}
 	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
 	b, err := s.Export(ctx, admin, now.Add(-time.Hour), now)

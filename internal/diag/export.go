@@ -18,6 +18,7 @@ import (
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -60,9 +61,12 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 		return nil, err
 	}
 	p := newPseudonyms(known)
+	// Without a masker the built-in list still applies (D-107, fail closed).
 	clean := func(texts []string) []string {
 		if s.mask != nil {
 			texts, _ = s.mask.Lines(texts, nil)
+		} else {
+			texts = logmask.ListLines(texts)
 		}
 		return p.apply(texts)
 	}
