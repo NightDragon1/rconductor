@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
+
+	"log/slog"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/perm"
@@ -20,6 +23,12 @@ import (
 // besides those of the history: the server is outside the scope or
 // unknown.
 const ResultNotFound = "not_found"
+
+// MultiBudget bounds how long a multi-server command starts new runs: a
+// run takes at most Timeout, so the answer leaves before the HTTP write
+// deadline of 60 s (CMD-010). Servers whose turn comes later get the
+// result timeout without being sent the command.
+const MultiBudget = 45 * time.Second
 
 // MultiItem is the result of one server of a multi-server command.
 type MultiItem struct {
@@ -87,6 +96,9 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 	parallel := s.multiSetting(ctx, users.SettingMultiParallel, users.DefaultMultiParallel, users.MinMultiParallel)
 	items := make([]MultiItem, len(ids))
 	slots := make(chan struct{}, parallel)
+	budget := time.NewTimer(s.multiBudget)
+	defer budget.Stop()
+	late := 0
 	var wg sync.WaitGroup
 	for i, id := range ids {
 		r := req
@@ -94,13 +106,29 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 		if r.RequestID, err = store.NewID(); err != nil {
 			return "", nil, err
 		}
-		slots <- struct{}{}
+		select {
+		case slots <- struct{}{}:
+		case <-budget.C:
+			// From here on no run starts; the timer fired once, so the
+			// rest is late at once.
+			for k := i; k < len(ids); k++ {
+				items[k] = MultiItem{ServerID: ids[k], Result: ResultTimeout, Reason: ReasonTimeout}
+			}
+			late = len(ids) - i
+		}
+		if late > 0 {
+			break
+		}
 		wg.Go(func() {
 			defer func() { <-slots }()
 			items[i] = s.multiOne(ctx, r, id, input)
 		})
 	}
 	wg.Wait()
+	if late > 0 {
+		s.log.Warn("multi command: servers left out after the time budget",
+			append(s.attrs(req, ""), slog.String("batch_id", batch), slog.Int("servers", late))...)
+	}
 	return batch, items, nil
 }
 

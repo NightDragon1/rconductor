@@ -142,8 +142,9 @@ type Service struct {
 	log     *slog.Logger
 	limiter *limiter
 	now     func() time.Time
-	// timeout overrides Timeout, for tests.
-	timeout time.Duration
+	// timeout overrides Timeout and multiBudget MultiBudget, for tests.
+	timeout     time.Duration
+	multiBudget time.Duration
 	// Publish, if set, receives every finished or refused command for
 	// the live console (event bus).
 	Publish func(serverID string, e Entry)
@@ -151,7 +152,8 @@ type Service struct {
 
 // NewService returns the command pipeline.
 func NewService(st *store.Store, c *perm.Checker, exec Executor, log *slog.Logger) *Service {
-	return &Service{st: st, perm: c, exec: exec, log: log, limiter: newLimiter(), now: time.Now, timeout: Timeout}
+	return &Service{st: st, perm: c, exec: exec, log: log, limiter: newLimiter(), now: time.Now, timeout: Timeout,
+		multiBudget: MultiBudget}
 }
 
 // SetTimeout replaces Timeout; zero keeps it.

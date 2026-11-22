@@ -128,6 +128,10 @@ type Hub struct {
 	// maxConns and maxClientConns bound the agent port.
 	maxConns, maxClientConns int
 
+	// life orders a session's start after the end of the session before:
+	// onDisconnect of the old one runs before the new one is registered,
+	// so it never marks the new one's data stale (AGT-003).
+	life     sync.Mutex
 	mu       sync.Mutex
 	sessions map[string]*Session
 	// caps keeps the capabilities of each agent's last hello, also after
@@ -494,6 +498,8 @@ func (h *Hub) send(ctx context.Context, conn *websocket.Conn, typ, ref string, p
 }
 
 func (h *Hub) register(s *Session) {
+	h.life.Lock()
+	defer h.life.Unlock()
 	h.mu.Lock()
 	old := h.sessions[s.AgentID]
 	h.sessions[s.AgentID] = s
@@ -512,6 +518,8 @@ func (h *Hub) register(s *Session) {
 }
 
 func (h *Hub) unregister(s *Session) {
+	h.life.Lock()
+	defer h.life.Unlock()
 	h.mu.Lock()
 	last := h.sessions[s.AgentID] == s
 	if last {
