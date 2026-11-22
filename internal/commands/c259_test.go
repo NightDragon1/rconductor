@@ -21,7 +21,7 @@ func TestC259SeparatorInBuiltCommand(t *testing.T) {
 	syn := Syntax{Message: &profiles.MessageCommand{Path: "say", Render: profiles.RenderMinecraftTellraw}, Separators: []string{`\"`}}
 	ctx := context.Background()
 	var denied *DeniedError
-	if _, err := w.svc.message(ctx, w.as("mod"), w.server, `say a"b`, syn, true); !errors.As(err, &denied) || denied.Reason != ReasonInvalid {
+	if _, err := w.svc.message(ctx, w.as("m"), w.server, `say a"b`, syn, true); !errors.As(err, &denied) || denied.Reason != ReasonInvalid {
 		t.Errorf("bound: %v, want invalid", err)
 	}
 	if built, err := w.svc.message(ctx, w.as("admin"), w.server, `say a"b`, syn, false); err != nil || !strings.Contains(built, `a\"b`) {
@@ -30,7 +30,7 @@ func TestC259SeparatorInBuiltCommand(t *testing.T) {
 }
 
 // TestC259PrefixReadFails (CMD-020, D-082): a prefix that cannot be read
-// refuses the say; nothing reaches the game server.
+// gives no command to send: the say is refused.
 func TestC259PrefixReadFails(t *testing.T) {
 	w := newWorld(t)
 	w.exec(`INSERT INTO server_groups (id, name, created_at, updated_at) VALUES ('ga', 'a', 't', 't')`)
@@ -47,6 +47,10 @@ func TestC259PrefixReadFails(t *testing.T) {
 func TestC262ProtocolBound(t *testing.T) {
 	if tooLong(strings.Repeat("x", source.MaxCommand), Syntax{}) || !tooLong(strings.Repeat("x", source.MaxCommand+1), Syntax{}) {
 		t.Error("protocol bound not exact")
+	}
+	// A max_length above the protocol does not lift its bound.
+	if !tooLong(strings.Repeat("x", source.MaxCommand+1), Syntax{MaxLength: 10000}) {
+		t.Error("max_length above the protocol lifts its bound")
 	}
 	if !tooLong("12345", Syntax{MaxLength: 4}) || tooLong("1234", Syntax{MaxLength: 4}) {
 		t.Error("max_length not exact")
