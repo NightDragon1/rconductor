@@ -25,6 +25,16 @@ func TestD104OwnSecondFactorFirst(t *testing.T) {
 	}
 	on := map[string]json.RawMessage{auth.SettingTOTPRequired: json.RawMessage(`true`)}
 	before := f.version("settings", "")
+	// Order of the contract: a stale version and a bad value come first.
+	stale := *before - 1
+	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), on, &stale); !errors.Is(err, ErrConflict) {
+		t.Errorf("stale version: %v, want ErrConflict", err)
+	}
+	bad := map[string]json.RawMessage{auth.SettingTOTPRequired: json.RawMessage(`true`), "audit.retention_days": json.RawMessage(`"x"`)}
+	var inv *InvalidError
+	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), bad, before); !errors.As(err, &inv) {
+		t.Errorf("bad value: %v, want InvalidError", err)
+	}
 	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), on, before); !errors.Is(err, ErrOwnTOTPRequired) {
 		t.Fatalf("without an own second factor: %v, want ErrOwnTOTPRequired", err)
 	}
@@ -44,12 +54,13 @@ func TestD104OwnSecondFactorFirst(t *testing.T) {
 	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), on, f.version("settings", "")); err != nil {
 		t.Fatalf("with an own second factor: %v", err)
 	}
-	// Already on: the admin without a second factor changes another key
-	// in the same request; that is no switch of auth.totp_required.
+	// Already on: the admin without a second factor sends it again with
+	// another key; that is no switch of auth.totp_required.
 	if _, err := f.st.DB.Exec(`UPDATE users SET totp_secret = NULL WHERE id = ?`, f.ids["admin"]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), on, f.version("settings", "")); err != nil {
+	again := map[string]json.RawMessage{auth.SettingTOTPRequired: json.RawMessage(`true`), "audit.retention_days": json.RawMessage(`120`)}
+	if _, err := f.svc.UpdateSettings(ctx, f.as("admin"), again, f.version("settings", "")); err != nil {
 		t.Errorf("value already on: %v", err)
 	}
 }
