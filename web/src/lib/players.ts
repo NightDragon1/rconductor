@@ -16,3 +16,10 @@ export function playerCount(p: PlayerList | undefined): {
   const count = p?.count ?? names;
   return { count, max: p?.max, noNames: !!p?.available && names === 0 && count > 0 };
 }
+
+// suggestable tells whether a player name is offered in the template form:
+// a name with a space, a quote or a command separator would turn into more
+// than one argument or another command, so it is not offered (CMD-004).
+export function suggestable(name: string): boolean {
+  return name !== '' && !/[\s;|&"'`\\]/.test(name);
+}

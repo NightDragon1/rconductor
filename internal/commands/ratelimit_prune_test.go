@@ -82,3 +82,26 @@ func TestC342RateLimitOutsideTheCoreRange(t *testing.T) {
 		t.Errorf("burst at the upper end = %d", lim.Burst)
 	}
 }
+
+// TestRateLimitPruneOncePerInterval: a full table where no bucket is full
+// again is scanned at most once per interval, not on every command; after
+// the interval the next command scans again and drops what refilled
+// (CMD-019, D-076).
+func TestRateLimitPruneOncePerInterval(t *testing.T) {
+	l := newLimiter()
+	t0 := time.Unix(1_000_000, 0)
+	for i := range maxBuckets {
+		l.buckets[bucketKey{user: fmt.Sprintf("u%d", i)}] = &bucket{tokens: 0, last: t0, rate: 1, burst: 2}
+	}
+	for i := range 50 {
+		l.take(fmt.Sprintf("n%d", i), "s", Limit{PerMinute: 60, Burst: 2}, t0.Add(time.Duration(i)*time.Millisecond))
+	}
+	if l.scans != 1 {
+		t.Errorf("%d scans for 50 commands within the interval, want 1", l.scans)
+	}
+	later := t0.Add(pruneEvery + 2*time.Second) // every bucket is full again
+	l.take("late", "s", Limit{PerMinute: 60, Burst: 2}, later)
+	if l.scans != 2 || len(l.buckets) > 2 {
+		t.Errorf("after the interval: %d scans, %d buckets", l.scans, len(l.buckets))
+	}
+}
