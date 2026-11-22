@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
+	"github.com/NightDragon1/rconductor/internal/commands/limits"
 	"github.com/NightDragon1/rconductor/internal/connmgr"
 	"github.com/NightDragon1/rconductor/internal/foreign"
 	"github.com/NightDragon1/rconductor/internal/logging"
@@ -458,9 +459,9 @@ func (s *Service) History(ctx context.Context, req users.Request, serverID strin
 		return nil, "", users.ErrNotFound
 	}
 	if limit <= 0 {
-		limit = users.DefaultAuditLimit
+		limit = limits.DefaultAuditLimit
 	}
-	limit = min(limit, users.MaxAuditLimit)
+	limit = min(limit, limits.MaxAuditLimit)
 	cts, cid, err := users.DecodeCursor(cursor)
 	if err != nil {
 		return nil, "", err

@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
+	"github.com/NightDragon1/rconductor/internal/commands/limits"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -196,9 +197,9 @@ func (s *Service) GetTemplate(ctx context.Context, req users.Request, serverID, 
 }
 
 func (s *Service) templatesPerServer(ctx context.Context) int64 {
-	n := users.DefaultTemplatesPerServer
-	if err := s.st.GuardedSetting(ctx, s.log, users.SettingTemplatesPerServer, &n); err != nil || n < users.MinTemplatesPerServer {
-		n = users.DefaultTemplatesPerServer
+	n := limits.DefaultTemplatesPerServer
+	if err := s.st.GuardedSetting(ctx, s.log, users.SettingTemplatesPerServer, &n); err != nil || n < limits.MinTemplatesPerServer {
+		n = limits.DefaultTemplatesPerServer
 	}
 	return int64(n)
 }
