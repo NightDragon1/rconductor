@@ -128,7 +128,7 @@ test('the server admin sees his invitation open, then the new user (UI-008)', as
   const guest = await browser.newContext();
   const invitee = await guest.newPage();
   await invitee.goto(url);
-  await invitee.getByLabel('Pseudonym').fill(name);
+  await invitee.getByLabel('Username').fill(name);
   await invitee.getByLabel('Password', { exact: true }).fill('a fine invited password');
   await invitee.getByLabel('Repeat the new password').fill('a fine invited password');
   await invitee.getByRole('button', { name: 'Create my account' }).click();
@@ -179,7 +179,7 @@ test('a user from a template gets its assignments; a role change warns (UI-008)'
   const guest = await browser.newContext();
   const invitee = await guest.newPage();
   await invitee.goto(url);
-  await invitee.getByLabel('Pseudonym').fill(name);
+  await invitee.getByLabel('Username').fill(name);
   await invitee.getByLabel('Password', { exact: true }).fill('a fine invited password');
   await invitee.getByLabel('Repeat the new password').fill('a fine invited password');
   await invitee.getByRole('button', { name: 'Create my account' }).click();
@@ -248,7 +248,7 @@ test('a role change ends the session at once, socket included (AUTH-006)', async
   const second = await browser.newContext();
   const modPage = await second.newPage();
   await modPage.goto(url);
-  await modPage.getByLabel('Pseudonym').fill(name);
+  await modPage.getByLabel('Username').fill(name);
   await modPage.getByLabel('Password', { exact: true }).fill(password);
   await modPage.getByLabel('Repeat the new password').fill(password);
   await modPage.getByRole('button', { name: 'Create my account' }).click();
@@ -335,7 +335,7 @@ test('O1: the server scope shows the stored assignments (ROLE-003)', async ({
   const guest = await browser.newContext();
   const invitee = await guest.newPage();
   await invitee.goto(url);
-  await invitee.getByLabel('Pseudonym').fill(name);
+  await invitee.getByLabel('Username').fill(name);
   await invitee.getByLabel('Password', { exact: true }).fill('a fine invited password');
   await invitee.getByLabel('Repeat the new password').fill('a fine invited password');
   await invitee.getByRole('button', { name: 'Create my account' }).click();

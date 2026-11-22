@@ -37,7 +37,7 @@ test('an invitation link keeps its token out of paths and logs (UI-008)', async 
   await expect(invitee.getByRole('heading', { name: 'Accept the invitation' })).toBeVisible();
   // The address bar loses the token at once.
   expect(new URL(invitee.url()).hash).toBe('');
-  await invitee.getByLabel('Pseudonym').fill(`invited-${Date.now() % 100000}`);
+  await invitee.getByLabel('Username').fill(`invited-${Date.now() % 100000}`);
   await invitee.getByLabel('Password', { exact: true }).fill('a fine invited password');
   await invitee.getByLabel('Repeat the new password').fill('a fine invited password');
   await invitee.getByRole('button', { name: 'Create my account' }).click();
@@ -77,17 +77,17 @@ test('the pseudonym is required and unique (AUTH-009)', async ({ page, browser, 
   });
   await create.click();
   expect(
-    await invitee.getByLabel('Pseudonym').evaluate((e: HTMLInputElement) => e.validity.valid),
+    await invitee.getByLabel('Username').evaluate((e: HTMLInputElement) => e.validity.valid),
   ).toBe(false);
   expect(posts).toBe(0);
 
-  await invitee.getByLabel('Pseudonym').fill('admin');
+  await invitee.getByLabel('Username').fill('admin');
   await create.click();
   await expect(invitee.getByRole('alert')).toHaveText(
-    'The pseudonym is taken or not allowed. Choose another one.',
+    'The username is taken or not allowed. Choose another one.',
   );
 
-  await invitee.getByLabel('Pseudonym').fill(`unique-${Date.now() % 100000}`);
+  await invitee.getByLabel('Username').fill(`unique-${Date.now() % 100000}`);
   await create.click();
   await expect(invitee.getByRole('status')).toContainText('Your account is ready');
   await guest.close();
@@ -95,7 +95,7 @@ test('the pseudonym is required and unique (AUTH-009)', async ({ page, browser, 
 
 test('an expired invitation says so (UI-008)', async ({ page, state }) => {
   await page.goto(`invite#${state.expired_invite}`);
-  await page.getByLabel('Pseudonym').fill('too-late');
+  await page.getByLabel('Username').fill('too-late');
   await page.getByLabel('Password', { exact: true }).fill('a fine invited password');
   await page.getByLabel('Repeat the new password').fill('a fine invited password');
   await page.getByRole('button', { name: 'Create my account' }).click();
