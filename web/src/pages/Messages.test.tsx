@@ -246,6 +246,32 @@ describe('messages (MSG-001 to MSG-003, D-085)', () => {
     );
   });
 
+  it('offers the RCON admin no reply where he is no recipient (D-085)', async () => {
+    setLanguage('en');
+    mock({
+      '/messages': list([
+        msg('m1', { audience: 'moderators', sender: { id: 'sa', pseudonym: 'sa' } }),
+      ]),
+      '/messages/{id}/comments': noComments,
+    });
+    await renderPage(MessagesPage, [[sessionKey, session('rcon_admin')]]);
+    await openMessage();
+    const comments = await screen.findByRole('region', { name: 'Comments' });
+    expect(within(comments).queryByLabelText('Your reply')).toBeNull();
+  });
+
+  it('offers the RCON admin a reply on a message to all', async () => {
+    setLanguage('en');
+    mock({
+      '/messages': list([msg('m1', { sender: { id: 'sa', pseudonym: 'sa' } })]),
+      '/messages/{id}/comments': noComments,
+    });
+    await renderPage(MessagesPage, [[sessionKey, session('rcon_admin')]]);
+    await openMessage();
+    const comments = await screen.findByRole('region', { name: 'Comments' });
+    expect(within(comments).getByLabelText('Your reply')).toBeTruthy();
+  });
+
   it('deletes a comment only where author, sender or RCON admin', async () => {
     setLanguage('en');
     mock({

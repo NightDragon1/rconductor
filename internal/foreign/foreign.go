@@ -60,14 +60,14 @@ func Name(s string, maxRunes int) string {
 // Blank reports whether a text shows nothing: it is empty or holds only
 // space, control, format characters (such as U+200B or bidi marks),
 // variation selectors and the characters that render as blank (Hangul
-// fillers, the blank Braille pattern). Such a text counts as missing
-// (SEC-006).
+// fillers, Khmer inherent vowels, the blank Braille pattern). Such a text
+// counts as missing (SEC-006).
 func Blank(s string) bool {
 	for _, r := range s {
 		switch {
 		case unicode.IsSpace(r), unicode.IsControl(r), unicode.Is(unicode.Cf, r),
 			unicode.Is(unicode.Variation_Selector, r):
-		case r == '͏', r == 'ᅟ', r == 'ᅠ', r == '⠀', r == 'ㅤ', r == 'ﾠ':
+		case r == '\u034F', r == '\u115F', r == '\u1160', r == '\u17B4', r == '\u17B5', r == '\u2800', r == '\u3164', r == '\uFFA0':
 		default:
 			return false
 		}
