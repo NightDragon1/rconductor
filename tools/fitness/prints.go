@@ -4,6 +4,7 @@
 package main
 
 import (
+	"go/types"
 	"strings"
 
 	"golang.org/x/tools/go/ssa"
@@ -36,7 +37,7 @@ func printsPastHandler(funcs map[*ssa.Function]bool, mod string) []finding {
 				// s.Reveal as a method value: a closure over the secret.
 				if mc, ok := in.(*ssa.MakeClosure); ok && !hasPrefix(p, mod, revealers) {
 					if f, ok := mc.Fn.(*ssa.Function); ok && f.Name() == "Reveal$bound" && len(mc.Bindings) == 1 &&
-						secretOrPointer(mc.Bindings[0].Type(), mod) {
+						(secretOrPointer(mc.Bindings[0].Type(), mod) || revealIface(mc.Bindings[0].Type())) {
 						add(rel, "reveals a secret outside its destinations")
 					}
 					continue
@@ -100,7 +101,59 @@ func isGlobal(v ssa.Value, pkg, name string) bool {
 
 // fromSecret reports whether v is a secret, or a pointer to one, put into
 // an interface.
+// fromSecret tells whether the value handed to reflect may hold a secret:
+// a value made into an interface here whose type holds one anywhere
+// (fields, elements, pointers), or an interface value from elsewhere, whose
+// content is not known here.
 func fromSecret(v ssa.Value, mod string) bool {
 	mi, ok := v.(*ssa.MakeInterface)
-	return ok && secretOrPointer(mi.X.Type(), mod)
+	if !ok {
+		return true
+	}
+	return holdsSecret(mi.X.Type(), mod, map[types.Type]bool{})
+}
+
+// holdsSecret looks through pointers, structs, arrays, slices and maps.
+func holdsSecret(t types.Type, mod string, seen map[types.Type]bool) bool {
+	if seen[t] {
+		return false
+	}
+	seen[t] = true
+	if isSecret(t, mod) {
+		return true
+	}
+	switch u := t.Underlying().(type) {
+	case *types.Pointer:
+		return holdsSecret(u.Elem(), mod, seen)
+	case *types.Struct:
+		for i := range u.NumFields() {
+			if holdsSecret(u.Field(i).Type(), mod, seen) {
+				return true
+			}
+		}
+	case *types.Slice:
+		return holdsSecret(u.Elem(), mod, seen)
+	case *types.Array:
+		return holdsSecret(u.Elem(), mod, seen)
+	case *types.Map:
+		return holdsSecret(u.Key(), mod, seen) || holdsSecret(u.Elem(), mod, seen)
+	case *types.Interface:
+		return true
+	}
+	return false
+}
+
+// revealIface tells whether t is an interface with a method Reveal: a
+// method value of it may reveal a secret behind it.
+func revealIface(t types.Type) bool {
+	it, ok := t.Underlying().(*types.Interface)
+	if !ok {
+		return false
+	}
+	for i := range it.NumMethods() {
+		if it.Method(i).Name() == "Reveal" {
+			return true
+		}
+	}
+	return false
 }

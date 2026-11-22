@@ -59,7 +59,7 @@ var (
 	// or an order type that is no constant) and Logs and OnLines of the agent
 	// cache are called only from these core files.
 	rawLogFiles = []string{"internal/servers/logs.go", "internal/diag/", "internal/agentview/logs.go",
-		"internal/agentview/agentview.go", "internal/cache/agents.go"}
+		"internal/agentview/agentview.go", "internal/agentview/insight.go", "internal/cache/agents.go"}
 	// sysLog writes the system log; only the masking sink (D-091) calls it.
 	sysLogQueries, sysLogSink = "/internal/store/sqlitedb", "/internal/syslog"
 )
@@ -231,6 +231,9 @@ func check(dir string, dests map[string]string) ([]finding, error) {
 				edges[finding{"redact", rel, "prints past the redacting log handler"}] = true
 			}
 		}
+	}
+	for _, f := range rawLogValues(funcs, mod, prog.Fset, root) {
+		edges[f] = true
 	}
 	for _, f := range systemLogWrites(funcs, mod) {
 		edges[f] = true

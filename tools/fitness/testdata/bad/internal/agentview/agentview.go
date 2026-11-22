@@ -5,11 +5,13 @@
 package agentview
 
 import (
+	"context"
+
 	"example.invalid/bad/internal/agenthub"
 	"example.invalid/bad/internal/cache"
 )
 
 func Read(h *agenthub.Hub, d *cache.AgentData) []string {
-	_, _ = h.RequestData("a", "logs.tail")
+	_, _ = h.RequestData(context.Background(), "a", "logs.tail", nil, nil)
 	return d.Logs("a", "c")
 }

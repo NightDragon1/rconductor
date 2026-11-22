@@ -134,6 +134,7 @@ jobs:
       - run: scripts/check-secrets-test.sh
       - run: scripts/script-isolation-test.sh
       - run: scripts/classify-test.sh
+      - run: scripts/check-spdx-test.sh
       - run: scripts/classify-size-test.sh
       - run: scripts/check-tool-origin-test.sh
       - run: scripts/check-dockerfile-test.sh

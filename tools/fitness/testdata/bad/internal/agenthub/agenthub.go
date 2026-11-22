@@ -4,6 +4,10 @@
 // Package agenthub stands for the hub of the agent connections.
 package agenthub
 
+import "context"
+
 type Hub struct{}
 
-func (h *Hub) RequestData(agentID, typ string) (string, error) { return "", nil }
+func (h *Hub) RequestData(ctx context.Context, agentID, typ string, payload any, collect func(string)) (string, error) {
+	return "", nil
+}

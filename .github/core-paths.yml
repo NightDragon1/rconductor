@@ -96,6 +96,7 @@ redact:
   - internal/servers/logs.go
 # the raw sources of container logs before the masking (UI-022)
   - internal/agentview/agentview.go
+  - internal/agentview/insight.go
   - internal/cache/agents.go
 # the system log and the diagnostic export, blacked out before writing (D-090, D-091)
   - internal/diag/**
@@ -163,6 +164,7 @@ rules:
   - .reuse/**
   - LICENSES/**
   - scripts/check-spdx.sh
+  - scripts/check-spdx-test.sh
 # which query files sqlc generates the database code from
   - sqlc.yaml
 
