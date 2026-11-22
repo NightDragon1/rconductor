@@ -75,8 +75,17 @@ func (p *pseudonyms) apply(texts []string) []string {
 		s = emailValue.ReplaceAllString(s, "[email]")
 		s = fpValue.ReplaceAllString(s, "[fingerprint]")
 		s = ipv6Value.ReplaceAllStringFunc(s, func(c string) string {
-			if (strings.Count(c, ":") >= 7 || strings.Contains(c, "::")) && net.ParseIP(c) != nil {
-				return p.name("ip", c)
+			// A colon next to the address (k:fe80::1, fe80::1: x) is not
+			// part of it; it stays as it was.
+			pre, ip, post := "", c, ""
+			if strings.HasPrefix(ip, ":") && !strings.HasPrefix(ip, "::") {
+				pre, ip = ":", ip[1:]
+			}
+			if strings.HasSuffix(ip, ":") && !strings.HasSuffix(ip, "::") {
+				ip, post = ip[:len(ip)-1], ":"
+			}
+			if (strings.Count(ip, ":") >= 7 || strings.Contains(ip, "::")) && net.ParseIP(ip) != nil {
+				return pre + p.name("ip", ip) + post
 			}
 			return c
 		})

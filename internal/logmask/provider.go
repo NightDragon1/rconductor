@@ -171,6 +171,31 @@ func (p *Provider) readPatterns(ctx context.Context, serverID string, gen uint64
 	return last
 }
 
+// Always is the masking of the system log and the diagnostic export: while
+// the masking is switched off, the built-in list still applies there
+// (D-107, SEC-012). A nil provider gives the built-in list alone.
+func (p *Provider) Always() Always { return Always{p: p} }
+
+// Always masks like its provider, and with the built-in list while the
+// provider is switched off.
+type Always struct{ p *Provider }
+
+// Lines masks one batch of lines, as Provider.Lines.
+func (a Always) Lines(lines []string, profilePatterns [][]string) ([]string, int) {
+	if a.p == nil {
+		return ListLines(lines), 0
+	}
+	// Switch and budget read once: a switch in between cannot leave a
+	// batch without the list.
+	a.p.mu.RLock()
+	enabled, budget := a.p.enabled, a.p.budget
+	a.p.mu.RUnlock()
+	if !enabled {
+		return ListLines(lines), 0
+	}
+	return a.p.masker(profilePatterns).Lines(lines, Budget{Max: budget})
+}
+
 // ListLines masks with the built-in list alone, for a way out of the panel
 // that has no provider (fail closed).
 func ListLines(lines []string) []string {

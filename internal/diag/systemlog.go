@@ -145,12 +145,14 @@ func (s *Service) agentLog(ctx context.Context, q LogQuery) (Page, error) {
 	}
 	p := Page{Source: q.Source, Truncated: cut, Items: []Entry{}}
 	for _, l := range lines {
-		// The agent logs JSON: each value is masked as it was logged.
-		l = syslog.MaskLine(l, s.mask)
+		// The level from the line as it came: masking may change its keys.
 		var head struct {
 			Level string `json:"level"`
 		}
-		if json.Unmarshal([]byte(l), &head) == nil && ranks[head.Level] < ranks[q.Level] {
+		known := json.Unmarshal([]byte(l), &head) == nil
+		// The agent logs JSON: each value is masked as it was logged.
+		l = syslog.MaskLine(l, s.mask)
+		if known && ranks[head.Level] < ranks[q.Level] {
 			continue
 		}
 		p.Items = append(p.Items, Entry{Level: head.Level, Text: l})

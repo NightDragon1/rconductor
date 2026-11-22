@@ -13,11 +13,13 @@ import (
 	"net"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/NightDragon1/rconductor/internal/agentproto"
 	"github.com/NightDragon1/rconductor/internal/audit"
 	"github.com/NightDragon1/rconductor/internal/buildinfo"
 	"github.com/NightDragon1/rconductor/internal/logging"
+	"github.com/NightDragon1/rconductor/internal/logmask"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
@@ -60,9 +62,12 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 		return nil, err
 	}
 	p := newPseudonyms(known)
+	// Without a masker the built-in list still applies (D-107, fail closed).
 	clean := func(texts []string) []string {
 		if s.mask != nil {
 			texts, _ = s.mask.Lines(texts, nil)
+		} else {
+			texts = logmask.ListLines(texts)
 		}
 		return p.apply(texts)
 	}
@@ -98,7 +103,7 @@ func (s *Service) Export(ctx context.Context, req users.Request, from, to time.T
 			b.WriteString("Only the last lines of the log.\n")
 		}
 		for _, l := range lines {
-			b.WriteString(syslog.Rewrite(l, clean) + "\n")
+			b.WriteString(oneLine(syslog.Rewrite(l, clean)) + "\n")
 		}
 		all = append(all, out{"agents/" + a.ID + ".log", b.String()})
 	}
@@ -288,4 +293,16 @@ func rawOr(v, def string) json.RawMessage {
 		return json.RawMessage(v)
 	}
 	return json.RawMessage(def)
+}
+
+// oneLine keeps a foreign log line on its line and in its order: control
+// characters other than the tab (line breaks included), line and paragraph
+// separators and format characters (bidi controls) become U+FFFD (SEC-006).
+func oneLine(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r != '\t' && (unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf)) {
+			return '\uFFFD'
+		}
+		return r
+	}, s)
 }
