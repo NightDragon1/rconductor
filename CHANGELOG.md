@@ -3,13 +3,22 @@
 ## 1.3
 
 ### Changed
-- Deleting a user deletes his user groups and command lists with him; the dialog names them, the audit lists them (AUTH-002, ROLE-005).
-- Two-factor sign-in for everyone can be switched on only by an RCON admin who has set up his own; otherwise the panel refuses with a hint (AUTH-008).
-- A container belongs to one server only; a second server on it is refused. Update note: if several servers share a container, the oldest keeps it and the others lose agent and container, each with an audit entry and a log line db.migrate.binding_released (SRV-001).
-- The functions of 1.2 can no longer be switched off; Settings has no group Features. API: the session has no ui.features, and PATCH /settings refuses the keys features.<name> of 1.2; stored values stay unused (NFR-019).
+- Deleting a user deletes their user groups and command lists too; the dialog names them, the audit lists them (AUTH-002, ROLE-005).
+- Two-factor sign-in for everyone (auth.totp_required) can be switched on only by an RCON admin with an own second factor; otherwise the panel refuses with a hint (AUTH-008).
+- A container belongs to one server only; a second server on it is refused. Update note: migration 00024 releases double bindings; the oldest server keeps the container, the others lose agent and container, each with an audit entry and a log line db.migrate.binding_released (SRV-001).
+- The functions of 1.2 can no longer be switched off; Settings has no group Features. API: the field features is gone from the settings and the session (ui.features), PATCH /settings refuses the keys features.<name>; stored values stay unused (NFR-019).
+- The sign-in and profile field is called Username in the interface and the docs; the API field stays pseudonym (AUTH-009).
+- A multi-server command answers in time: the first server always runs, servers whose turn comes too late are skipped with reason time_budget and their own audit entry (CMD-010).
 
 ### Fixed
-- Messages and comments: Load more goes on after a deleted item and is not offered after a last page of exactly 50 (MSG-001, MSG-003). API: cursor and next_cursor; before and after are deprecated.
+- Messages and comments: Load more goes on after a deleted item and is not offered after a last page of exactly 50; API: cursor and next_cursor, before and after are deprecated (MSG-001, MSG-003).
+- A broken RCON connection redials at once, a profile change reconnects at once, and a reload no longer waits for running commands (PROT-001, PROT-003).
+- A say prefix draft survives a change by someone else and shows the conflict; max_length 0 in a profile is refused (CMD-020, CAT-006).
+
+### Security
+- The built-in list blacks out the system log and the diagnostic export also while the masking is off; more secret forms are masked, domains and the mail server pseudonymized (UI-022, NFR-018).
+- Rights, scopes and the say prefix are checked again inside the writing transaction (ROLE-003, ROLE-004).
+- A new role or a lock of a moderator ends the sessions of their supporters; a setting that cannot be read keeps the protection on, with a log (ROLE-006, AUTH-006).
 
 ## 1.2
 

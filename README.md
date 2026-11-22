@@ -31,7 +31,7 @@ is the job of a reverse proxy. Never publish the RCON port of a game server.
 
 Images: `docker.io/nightdragon1/rconductor-panel` and `rconductor-agent`, for amd64
 and arm64. The same images are on ghcr.io: use `ghcr.io/nightdragon1/` instead.
-Use the exact version such as `1.2`, or `1` for the newest 1.x.
+Use the exact version such as `1.3`, or `1` for the newest 1.x.
 
 ### How to run – A: docker run
 
@@ -44,7 +44,7 @@ docker run -d --name rconductor-panel --network rconductor --restart unless-stop
   --memory 1g --pids-limit 256 \
   -p 8080:8080 -e RCD_AGENT_PUBLIC_ADDR=rconductor-panel:8443 \
   -v rconductor-data:/data -v rconductor-secrets:/secrets -v rconductor-backups:/backups \
-  docker.io/nightdragon1/rconductor-panel:1.2
+  docker.io/nightdragon1/rconductor-panel:1.3
 until docker logs rconductor-panel 2>&1 | grep password:; do sleep 1; done
 ```
 
@@ -57,7 +57,7 @@ docker run -d --name rconductor-agent --network rconductor --restart unless-stop
   --group-add "$(stat -c %g /var/run/docker.sock)" \
   -e RCD_PAIRING_TOKEN=rcd1.... \
   -v /var/run/docker.sock:/var/run/docker.sock -v rconductor-agent-secrets:/secrets \
-  docker.io/nightdragon1/rconductor-agent:1.2
+  docker.io/nightdragon1/rconductor-agent:1.3
 ```
 
 The agent runs as a non-root user and reaches the Docker socket through the
@@ -71,7 +71,7 @@ memory limit; raise it together with `RCD_MAX_CONNECTIONS`.
 ```yaml
 services:
   panel:
-    image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-panel:1.2
+    image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-panel:1.3
     restart: unless-stopped
     read_only: true
     mem_limit: 1g
@@ -89,7 +89,7 @@ services:
       - secrets:/secrets
       - backups:/backups
   agent:
-    image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-agent:1.2
+    image: ${RCD_IMAGE_REPO:-docker.io/nightdragon1}/rconductor-agent:1.3
     restart: unless-stopped
     read_only: true
     mem_limit: 1g

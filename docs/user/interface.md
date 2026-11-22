@@ -1,7 +1,7 @@
 # Interface
 
-> **Version:** applies to RCONductor 1.2. Parts marked (new in 1.2)
-> are not in 1.1, parts marked (new in 1.1) are not in 1.0.
+> **Version:** applies to RCONductor 1.3. Parts marked (changed in 1.3) differ from 1.2,
+> parts marked (new in 1.2) are not in 1.1, parts marked (new in 1.1) are not in 1.0.
 
 The interface is in English and comes in a dark design (default) and a light one.
 Entries you may not use are hidden, not greyed out. (new in 1.2) Below the heading
