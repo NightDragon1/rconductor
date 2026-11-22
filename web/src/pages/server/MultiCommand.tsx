@@ -18,6 +18,7 @@ const tone: Record<MultiResult['items'][number]['result'], string> = {
   error: 'text-danger',
   timeout: 'text-warn',
   not_found: 'text-danger',
+  skipped: 'text-warn',
 };
 
 // MultiCommand sends one command to several servers of the caller's scope

@@ -298,6 +298,7 @@ const (
 	MultiCommandItemResultError    MultiCommandItemResult = "error"
 	MultiCommandItemResultNotFound MultiCommandItemResult = "not_found"
 	MultiCommandItemResultOk       MultiCommandItemResult = "ok"
+	MultiCommandItemResultSkipped  MultiCommandItemResult = "skipped"
 	MultiCommandItemResultTimeout  MultiCommandItemResult = "timeout"
 )
 
@@ -311,6 +312,8 @@ func (e MultiCommandItemResult) Valid() bool {
 	case MultiCommandItemResultNotFound:
 		return true
 	case MultiCommandItemResultOk:
+		return true
+	case MultiCommandItemResultSkipped:
 		return true
 	case MultiCommandItemResultTimeout:
 		return true
@@ -383,6 +386,7 @@ const (
 	ReasonCodePreconditionRequired   ReasonCode = "precondition_required"
 	ReasonCodeRateLimited            ReasonCode = "rate_limited"
 	ReasonCodeServerUnavailable      ReasonCode = "server_unavailable"
+	ReasonCodeTimeBudget             ReasonCode = "time_budget"
 	ReasonCodeTimeout                ReasonCode = "timeout"
 	ReasonCodeTooManyRecipients      ReasonCode = "too_many_recipients"
 	ReasonCodeTotpSetupRequired      ReasonCode = "totp_setup_required"
@@ -426,6 +430,8 @@ func (e ReasonCode) Valid() bool {
 	case ReasonCodeRateLimited:
 		return true
 	case ReasonCodeServerUnavailable:
+		return true
+	case ReasonCodeTimeBudget:
 		return true
 	case ReasonCodeTimeout:
 		return true
