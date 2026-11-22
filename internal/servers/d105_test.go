@@ -52,6 +52,11 @@ func TestD105OneBindingPerContainer(t *testing.T) {
 	if _, err := f.svc.Update(ctx, f.as("admin"), a.ID, Input{ProfileIDs: &[]string{profile}, Version: f.version(a.ID)}); err != nil {
 		t.Errorf("profiles of a bound server: %v", err)
 	}
+	// So for a server admin in scope, who may change the profiles alone.
+	f.exec(`INSERT INTO admin_scopes (id, user_id, server_id, assigned_by, created_at) VALUES ('d105', ?, ?, ?, 't')`, f.ids["sa"], a.ID, f.ids["admin"])
+	if _, err := f.svc.Update(ctx, f.as("sa"), a.ID, Input{ProfileIDs: &[]string{profile}, Version: f.version(a.ID)}); err != nil {
+		t.Errorf("profiles of a bound server by a server admin: %v", err)
+	}
 	if err := f.svc.Delete(ctx, f.as("admin"), a.ID); err != nil {
 		t.Fatal(err)
 	}

@@ -342,6 +342,10 @@ func TestOneBindingMigration(t *testing.T) {
 	if err := exec(`INSERT INTO agents (id, name, public_key, fingerprint, status, created_at) VALUES ('ag', 'nas', x'00', 'f', 'active', 't')`); err != nil {
 		t.Fatal(err)
 	}
+	// A server whose agent was revoked keeps its container name only.
+	if err := exec(`INSERT INTO servers (id, name, created_at, updated_at, container_name) VALUES ('detached', 'detached', 't', 't', 'mc')`); err != nil {
+		t.Fatal(err)
+	}
 	for _, r := range [][4]string{
 		{"b-new", "2026-03-01T00:00:00Z", "mc", ""},
 		{"a-old", "2026-01-01T00:00:00Z", "mc", ""},
@@ -378,6 +382,13 @@ func TestOneBindingMigration(t *testing.T) {
 	}
 	if n := strings.Count(logs.String(), `"event":"db.migrate.binding_released"`); n != 2 {
 		t.Errorf("log lines = %d, want 2:\n%s", n, logs.String())
+	}
+	var name sql.NullString
+	if err := s.DB.QueryRowContext(ctx, `SELECT container_name FROM servers WHERE id = 'detached'`).Scan(&name); err != nil || name.String != "mc" {
+		t.Errorf("the detached server changed: %v %v", name, err)
+	}
+	if strings.Contains(logs.String(), "detached") {
+		t.Error("the detached server was released")
 	}
 	if strings.Contains(logs.String(), `"mc"`) {
 		t.Error("the log names the container")
