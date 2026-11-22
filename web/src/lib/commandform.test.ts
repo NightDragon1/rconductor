@@ -74,6 +74,19 @@ describe('command form (CMD-003)', () => {
     // A pattern the browser cannot read falls back to the plain rule.
     expect(playerRule('(?<x')('@a')).toBe(false);
   });
+
+  it('C240: never runs a backtracking pattern over a name from the game server (SEC-006)', () => {
+    // (a+)+$ backtracks for 2^n steps in JavaScript; the plain rule applies.
+    const start = performance.now();
+    const rule = playerRule('^(a+)+$');
+    expect(rule('a'.repeat(40) + '!')).toBe(true);
+    expect(rule('@a')).toBe(false);
+    expect(playerRule('^a*a*$')('@a')).toBe(false);
+    expect(playerRule('^(?:x|y)$')('z')).toBe(true);
+    expect(performance.now() - start).toBeLessThan(1000);
+    // One quantifier stays the profile's pattern.
+    expect(playerRule('^[A-Za-z0-9_]{1,16}$')('Ünal')).toBe(false);
+  });
 });
 
 describe('matches', () => {
