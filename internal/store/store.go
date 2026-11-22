@@ -44,6 +44,9 @@ type Store struct {
 	Queries *sqlitedb.Queries
 	// kept holds the last value read of each guarded setting (GuardedSetting).
 	kept sync.Map
+	// failing holds the settings whose failed read is logged and not read
+	// well since, so that a broken row is logged once, not on every read.
+	failing sync.Map
 }
 
 // Open creates the data directory if needed and opens (or creates) the

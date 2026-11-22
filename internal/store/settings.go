@@ -92,8 +92,9 @@ func (s *Store) GlobalSetting(ctx context.Context, key string, dst any) error {
 // default. When the database cannot be read, it decodes the last value read
 // before, if any, and returns nil; otherwise the error, so the caller takes
 // its default too. Never an extreme value: degrade, do not close (D-077).
-// The failure is logged with the key only, never a value; a context that
-// ended takes the same way without a log.
+// The failure is logged with the key only, never a value, once per key and
+// reason until a read works again; a context that ended takes the same way
+// without a log.
 func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string, dst any) error {
 	v, err := s.Queries.GetSetting(ctx, sqlitedb.GetSettingParams{Key: key, ScopeType: ScopeGlobal, ScopeID: ""})
 	switch {
@@ -105,7 +106,8 @@ func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string
 		if !ok {
 			return fmt.Errorf("read setting %s: %w", key, err)
 		}
-		v = last.(string)
+		// The value read before stands in; the database still fails.
+		return json.Unmarshal([]byte(last.(string)), dst)
 	}
 	if err := json.Unmarshal([]byte(v), dst); err != nil {
 		// A broken row is a failed read too: logged, and the last value
@@ -117,6 +119,7 @@ func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string
 		return fmt.Errorf("decode setting %s: %w", key, err)
 	}
 	s.kept.Store(key, v)
+	s.readWell(key)
 	return nil
 }
 
@@ -126,7 +129,10 @@ func (s *Store) GuardedSetting(ctx context.Context, log *slog.Logger, key string
 // is an error without a log, as in GlobalSetting.
 func (s *Store) LoggedSetting(ctx context.Context, log *slog.Logger, key string, dst any) error {
 	err := s.GlobalSetting(ctx, key, dst)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	switch {
+	case err == nil:
+		s.readWell(key)
+	case !errors.Is(err, sql.ErrNoRows):
 		s.logReadFailed(ctx, log, key, err, failure(err))
 	}
 	return err
@@ -143,7 +149,10 @@ func (s *Store) LoggedSettingQ(ctx context.Context, q *sqlitedb.Queries, log *sl
 	} else {
 		err = fmt.Errorf("read setting %s: %w", key, err)
 	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	switch {
+	case err == nil:
+		s.readWell(key)
+	case !errors.Is(err, sql.ErrNoRows):
 		s.logReadFailed(ctx, log, key, err, failure(err))
 	}
 	return err
@@ -153,10 +162,19 @@ func (s *Store) LoggedSettingQ(ctx context.Context, q *sqlitedb.Queries, log *sl
 // for a switch that runs out (D-109).
 func (s *Store) LoggedSettingSince(ctx context.Context, log *slog.Logger, key string, dst any) (time.Time, error) {
 	since, err := s.GlobalSettingSince(ctx, key, dst)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	switch {
+	case err == nil:
+		s.readWell(key)
+	case !errors.Is(err, sql.ErrNoRows):
 		s.logReadFailed(ctx, log, key, err, failure(err))
 	}
 	return since, err
+}
+
+// readWell ends the logged failures of key: the next one is logged again.
+func (s *Store) readWell(key string) {
+	s.failing.Delete(key + "\x00read")
+	s.failing.Delete(key + "\x00decode")
 }
 
 // failure names what went wrong without the error text, which can hold the
@@ -176,6 +194,9 @@ func failure(err error) string {
 func (s *Store) logReadFailed(ctx context.Context, log *slog.Logger, key string, err error, reason string) {
 	if log == nil || ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return
+	}
+	if _, logged := s.failing.LoadOrStore(key+"\x00"+reason, true); logged {
+		return // logged once per reason until a read works again
 	}
 	_, kept := s.kept.Load(key)
 	log.Error("setting not readable", logging.Event(logging.SettingReadFailed),

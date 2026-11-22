@@ -333,6 +333,11 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 		s.deniedOn(ctx, req, "settings.update", "settings", "", "forbidden", map[string]any{"keys": keysTried})
 		return nil, ErrForbidden
 	}
+	// The version is required, checked after the role and before the
+	// values (403, 428, 400 as the contract says).
+	if version == nil {
+		return nil, ErrPreconditionRequired
+	}
 	values := map[string]string{}
 	for k, raw := range in {
 		r, ok := settingRules[k]
@@ -355,11 +360,7 @@ func (s *Service) UpdateSettings(ctx context.Context, req Request, in map[string
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := sqlitedb.New(tx)
-	// Optimistic locking in one statement (revision 2.4 candidate 24);
-	// the version is required, checked after the role.
-	if version == nil {
-		return nil, ErrPreconditionRequired
-	}
+	// Optimistic locking in one statement (revision 2.4 candidate 24).
 	n, err := q.BumpSettingsVersion(ctx, *version)
 	if err != nil {
 		return nil, err

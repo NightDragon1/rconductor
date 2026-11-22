@@ -327,6 +327,12 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	if err := q.SoftDeleteUser(ctx, sqlitedb.SoftDeleteUserParams{DeletedAt: sql.NullString{String: now, Valid: true}, UpdatedAt: now, ID: id}); err != nil {
 		return err
 	}
+	// The supporters of a moderator lose what he passed on: their sessions
+	// end too (ROLE-006, AUTH-006).
+	supporters, err := q.ListSupportersOfModerator(ctx, id)
+	if err != nil {
+		return err
+	}
 	if err := clearAssignments(ctx, q, id); err != nil {
 		return err
 	}
@@ -347,7 +353,7 @@ func (s *Service) Delete(ctx context.Context, req Request, id string) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
-	return s.rightsChanged(ctx, req, "user.delete", append([]string{id}, members...)...)
+	return s.rightsChanged(ctx, req, "user.delete", append(append([]string{id}, members...), supporters...)...)
 }
 
 // EndSessions ends all sessions of a managed user (AUTH-006, revision 2.4
