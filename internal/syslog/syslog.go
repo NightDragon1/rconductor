@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/store"
 	"github.com/NightDragon1/rconductor/internal/store/sqlitedb"
 	"github.com/NightDragon1/rconductor/internal/users"
@@ -47,6 +48,8 @@ type Sink struct {
 	lost  atomic.Int64
 	// failing: the last write failed (logged once; writer goroutine only).
 	failing bool
+	// told is the number of lost lines reported so far (writer goroutine).
+	told int64
 }
 
 // NewSink returns an empty sink; lines wait in the queue until Run.
@@ -98,18 +101,30 @@ func (s *Sink) drain(ctx context.Context, st *store.Store, m Masker, log *slog.L
 			break
 		}
 		if len(lines) == 0 {
+			s.tellLost(log)
 			return
 		}
 		if err := s.write(ctx, st, m, lines); err != nil {
 			s.lost.Add(int64(len(lines)))
 			if !s.failing {
-				log.Warn("system log not written", slog.Int64("lost", s.Lost()), slog.Any("err", err))
+				log.Warn("system log not written", slog.Any("err", err))
 			}
 			s.failing = true
 		} else {
 			s.failing = false
 		}
 	}
+}
+
+// tellLost reports the lines lost since the last report, at most once per
+// drain, with the event code (D-077, D-091).
+func (s *Sink) tellLost(log *slog.Logger) {
+	all := s.Lost()
+	if all == s.told {
+		return
+	}
+	log.Warn("system log lines lost", logging.Event(logging.SyslogLinesLost), slog.Int64("lost", all-s.told), slog.Int64("lost_total", all))
+	s.told = all
 }
 
 func (s *Sink) write(ctx context.Context, st *store.Store, m Masker, lines []string) error {
@@ -184,10 +199,20 @@ func headOf(line string) head {
 // MaskLine masks a log line through Rewrite, such as the agent's own log
 // (D-091).
 func MaskLine(line string, m Masker) string {
-	return Rewrite(line, func(texts []string) []string {
-		out, _ := m.Lines(texts, nil)
+	out, _ := MaskLineCounted(line, m)
+	return out
+}
+
+// MaskLineCounted is MaskLine with the number of values the masker held
+// back for its time budget.
+func MaskLineCounted(line string, m Masker) (string, int) {
+	held := 0
+	out := Rewrite(line, func(texts []string) []string {
+		out, n := m.Lines(texts, nil)
+		held += n
 		return out
 	})
+	return out, held
 }
 
 // Rewrite hands the text values of an encoded line or document to f, in a

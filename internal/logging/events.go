@@ -23,6 +23,10 @@ const (
 	BackupFailed      Code = "backup.failed"
 	AuditPurge        Code = "audit.purge"
 	AuditLost         Code = "audit.entry_lost"
+	// SyslogLinesLost: lines of the panel log not kept in the system log
+	// (full queue or a failed write, D-091); the number since the last
+	// report and in all.
+	SyslogLinesLost Code = "syslog.lines_lost"
 	// SettingReadFailed: a setting that guards something could not be
 	// read; the key and whether the last value read is kept, never a value.
 	SettingReadFailed Code = "setting.read_failed"
@@ -134,7 +138,7 @@ const (
 // AllCodes lists every defined code, in the order of Design 8.3.
 var AllCodes = []Code{
 	AppStart, AppReady, DBMigrateStart, DBMigrateDone, DBMigrateLockWt, DBBindingReleased,
-	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge, AuditLost, SettingReadFailed,
+	KeyCreated, KeyLoaded, BackupDone, BackupFailed, AuditPurge, AuditLost, SyslogLinesLost, SettingReadFailed,
 	AuthLoginOK, AuthLoginFailed, AuthLockout, AuthLogout, AuthSessionRevoked,
 	AuthInitialPassword, AuthInviteUsed, AuthEmergencyReset,
 	AuthTOTPEnabled, AuthTOTPDisabled, AuthRecoveryRequested, AuthRecoveryUsed, AuthRecoveryDropped,

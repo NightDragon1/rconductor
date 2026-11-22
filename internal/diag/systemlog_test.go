@@ -6,6 +6,7 @@ package diag
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -172,5 +173,36 @@ func TestC179FirstReadAudited(t *testing.T) {
 		if got := viewed(); got != c.want {
 			t.Errorf("call %d: audited reads = %d, want %d", i, got, c.want)
 		}
+	}
+}
+
+// slowBuiltin holds back every value after the first, as a masker whose
+// time budget is spent.
+type slowBuiltin struct{}
+
+func (slowBuiltin) Lines(lines []string, _ [][]string) ([]string, int) {
+	out := make([]string, len(lines))
+	for i := range out {
+		out[i] = logmask.Withheld
+	}
+	return out, len(lines)
+}
+
+// TestC326WithheldValuesTold (D-091, UI-022): values of the agent log held
+// back for the time budget mark the page as not whole and are logged with
+// their number, never with a value.
+func TestC326WithheldValuesTold(t *testing.T) {
+	st := storetest.New(t)
+	var logs strings.Builder
+	h := &hub{code: agentproto.CodeOK, lines: []string{`{"level":"error","msg":"secret-abc12345"}`}}
+	s := NewService(st, slog.New(slog.NewJSONHandler(&logs, nil)))
+	s.Use(h, slowBuiltin{})
+	admin := users.Request{Actor: perm.Actor{ID: storetest.CreateUser(t, st, storetest.User{Pseudonym: "a", Role: string(perm.RCONAdmin)}), Role: perm.RCONAdmin}}
+	p, err := s.SystemLog(context.Background(), admin, LogQuery{Source: "00000000-0000-4000-8000-000000000001", Level: "info", Limit: 50})
+	if err != nil || !p.Truncated || len(p.Items) != 1 || strings.Contains(p.Items[0].Text, "abc12345") {
+		t.Fatalf("page %+v, %v", p, err)
+	}
+	if !strings.Contains(logs.String(), `"values":4`) || strings.Contains(logs.String(), "abc12345") {
+		t.Errorf("log: %s", logs.String())
 	}
 }

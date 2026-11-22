@@ -257,3 +257,47 @@ func TestRewriteManyKeysMeet(t *testing.T) {
 		t.Errorf("%d bytes for %d", len(got), b.Len())
 	}
 }
+
+// TestC312LostLinesTold (D-091, D-077): lines lost to a full queue are
+// told with the event code once per drain, with the number since the last
+// report and in all; a drain without new losses tells nothing.
+func TestC312LostLinesTold(t *testing.T) {
+	sink := NewSink()
+	for range queueSize + 5 {
+		_, _ = sink.Write([]byte(`{"level":"info"}`))
+	}
+	var logs syncBuf
+	log := logging.New(&logs, "panel", config.Log{Format: "json"}).Module("syslog")
+	st := storetest.New(t)
+	sink.drain(context.Background(), st, newBuiltin(t), log)
+	sink.drain(context.Background(), st, newBuiltin(t), log)
+	for range queueSize + 2 {
+		_, _ = sink.Write([]byte(`{"level":"info"}`))
+	}
+	sink.drain(context.Background(), st, newBuiltin(t), log)
+	got := logs.String()
+	if n := strings.Count(got, `"event":"syslog.lines_lost"`); n != 2 {
+		t.Fatalf("told %d times, want 2:\n%s", n, got)
+	}
+	if !strings.Contains(got, `"lost":5,"lost_total":5`) || !strings.Contains(got, `"lost":2,"lost_total":7`) {
+		t.Errorf("numbers: %s", got)
+	}
+}
+
+// syncBuf is a log buffer safe for the writer and the test.
+type syncBuf struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuf) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuf) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
