@@ -390,9 +390,12 @@ jobs:
           docker load --input "$RUNNER_TEMP/images/agent.tar"
       - run: scripts/acceptance-run.sh -v
 
-  # Secret scan (SEC-012): a pull request scans its diff, every other run
-  # the full history. gitleaks (MIT) as release binary, pinned by checksum.
-  # Known test values: .gitleaksignore or the comment gitleaks:allow.
+  # Secret scan (SEC-012): a pull request scans its diff, a push to main the
+  # commits of the push, every other run (nightly, manual, release) the full
+  # history of the checked-out commit only, not the other branches the
+  # checkout fetches. gitleaks (MIT) as release binary, pinned by checksum.
+  # Known test values: .gitleaksignore or the comment gitleaks:allow. The
+  # log lists each finding by rule, file and commit, never its value.
   secrets:
     name: Secret scan
     runs-on: ${{ inputs.runner || vars.CI_RUNNER || 'ubuntu-26.04' }}
@@ -415,13 +418,26 @@ jobs:
       - name: Scan
         env:
           EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
           BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
         run: |
+          report=$RUNNER_TEMP/gitleaks.json
+          opts=(--no-banner --redact --report-format json --report-path "$report")
+          rc=0
           if [ "$EVENT" = pull_request ]; then
-            git diff --merge-base "$BASE" HEAD | "$RUNNER_TEMP/gitleaks" stdin --no-banner --redact
+            git diff --merge-base "$BASE" HEAD | "$RUNNER_TEMP/gitleaks" stdin "${opts[@]}" || rc=$?
+          elif [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ] && [ -n "$BEFORE" ] &&
+            [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            "$RUNNER_TEMP/gitleaks" git "${opts[@]}" --log-opts="$BEFORE..HEAD" . || rc=$?
           else
-            "$RUNNER_TEMP/gitleaks" git --no-banner --redact .
+            "$RUNNER_TEMP/gitleaks" git "${opts[@]}" --log-opts=HEAD . || rc=$?
           fi
+          if [ -s "$report" ]; then
+            jq -r 'def or_diff: if (. // "") == "" then "diff" else . end;
+              .[] | "::error::\(.RuleID) in \(.File | or_diff):\(.StartLine) commit \(.Commit | or_diff)"' "$report"
+          fi
+          exit "$rc"
 
   # Size of each pull request (PRJ-005): scripts/pr-size.sh counts the
   # changed lines without generated files (.github/core-paths.yml) and sets

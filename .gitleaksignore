@@ -7,3 +7,6 @@
 4a2ea33f01c9c3801114249576bb3224b1449b14:internal/auth/totp/totp_test.go:generic-api-key:51
 4a2ea33f01c9c3801114249576bb3224b1449b14:web/src/pages/SecondFactor.test.tsx:generic-api-key:84
 4a2ea33f01c9c3801114249576bb3224b1449b14:web/src/pages/SecondFactor.test.tsx:generic-api-key:85
+# Commit of #311 that came to main with its merge commit (D-121).
+07bb6f73a7dc6211919ff6796f23eb6c6fac11cb:acceptance/d107_test.go:generic-api-key:23
+07bb6f73a7dc6211919ff6796f23eb6c6fac11cb:acceptance/d107_test.go:generic-api-key:24
