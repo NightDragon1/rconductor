@@ -138,6 +138,8 @@ function CommandView({
 
 function LogView({ b }: { b: Extract<Block, { kind: 'log' }> }) {
   const { t } = useTranslation();
+  // The mark of the panel, apart from the foreign lines (UI-022).
+  if (b.gap !== undefined) return <GapMark omitted={b.gap} />;
   return (
     <section
       aria-label={t('console.logLines')}
@@ -148,6 +150,22 @@ function LogView({ b }: { b: Extract<Block, { kind: 'log' }> }) {
         <ForeignText text={b.lines.map((l) => stripCodes(l)).join('\n')} />
       </pre>
     </section>
+  );
+}
+
+// GapMark tells how many log lines passed meanwhile. It is set apart from
+// the lines (own element, no monospace, an icon-free note role), so that a
+// container line with the same text cannot pass for it.
+export function GapMark({ omitted }: { omitted: number }) {
+  const { t } = useTranslation();
+  return (
+    <span
+      role="note"
+      data-gap=""
+      className="my-1 block rounded bg-surface px-2 py-0.5 font-sans text-xs text-warn italic"
+    >
+      {t('console.omitted', { count: omitted })}
+    </span>
   );
 }
 
@@ -275,6 +293,10 @@ export function ConsoleTab() {
     const command = input.trim();
     if (!command || send.isPending) return;
     atEnd.current = true;
+    // The page above the console can be taller than the window (a phone
+    // with a wrapped toolbar), so the end of the console would sit below
+    // it; bring the console's end into the window, above the input (C427).
+    scroller.current?.scrollIntoView({ block: 'nearest' });
     setInput('');
     setWalk(-1);
     send.mutate(command);
@@ -369,7 +391,7 @@ export function ConsoleTab() {
           </nav>
           <div
             ref={scroller}
-            className="h-[60vh] min-h-72 flex-1 overflow-y-auto px-3 py-3"
+            className="h-[60vh] min-h-72 flex-1 overflow-y-auto max-md:scroll-mb-20 px-3 py-3"
             onScroll={(e) => {
               const el = e.currentTarget;
               atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;

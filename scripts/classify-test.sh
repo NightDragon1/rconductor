@@ -22,13 +22,41 @@ check() {
   : >"$tmp/in"
   for l in "$@"; do printf '%s\n' "${l// /$T}" >>"$tmp/in"; done
   got=$("$src/scripts/classify.sh" "$class" "$tmp/in" 2>"$tmp/err") || rc=$?
-  got=$(printf '%s\n' "$got" | sed 's/^[a-z]*=//' | paste -sd' ')
+  got=$(printf '%s\n' "$got" | sed -n '1,3s/^[a-z_]*=//p' | paste -sd' ')
   if [[ $rc != "$want_rc" || $got != "$want" ]]; then
     echo "$name: want exit $want_rc [$want], got exit $rc [$got] $(cat "$tmp/err")" >&2
     fails=$((fails + 1))
   fi
 }
 
+# size NAME WANT_EXIT WANT ("test_lines code_lines size") FILE_LINE...
+size() {
+  local name=$1 want_rc=$2 want=$3 rc=0 got
+  shift 3
+  : >"$tmp/in"
+  for l in "$@"; do printf '%s\n' "${l// /$T}" >>"$tmp/in"; done
+  got=$("$src/scripts/classify.sh" "$class" "$tmp/in" 2>"$tmp/err") || rc=$?
+  got=$(printf '%s\n' "$got" | sed -n '4,6s/^[a-z_]*=//p' | paste -sd' ')
+  if [[ $rc != "$want_rc" || $got != "$want" ]]; then
+    echo "$name: want exit $want_rc [$want], got exit $rc [$got] $(cat "$tmp/err")" >&2
+    fails=$((fails + 1))
+  fi
+}
+
+size "stage 2 over 400 through tests alone" 0 "450 50 over-tests" "modified 40 10 internal/perm/perm.go" \
+  "added 300 0 internal/perm/perm_test.go" "added 100 0 web/e2e/x.spec.ts" "added 50 0 scripts/x-test.sh"
+size "stage 2 over 400 in the code" 1 "10 410 over" "modified 400 10 internal/perm/perm.go" \
+  "added 10 0 internal/perm/testdata/a.txt"
+size "back within the limit" 0 "100 300 within" "modified 300 0 internal/perm/perm.go" \
+  "added 100 0 web/src/lib/x.test.ts"
+size "stage 1 over 400 is within" 0 "0 900 within" "modified 900 0 internal/servers/servers.go"
+size "a test file in a core path decides the stage" 0 "5 0 within" "added 5 0 internal/profiles/effective_test.go"
+check "a test file in a core path decides the stage (stage)" 0 "stage-2 cmd 5" "added 5 0 internal/profiles/effective_test.go"
+size "web fitness test script counts as test" 0 "3 0 within" "added 3 0 web/scripts/fitness-render-test.sh"
+size "generated files and lockfiles do not count" 0 "0 10 within" "modified 10 0 internal/perm/perm.go" \
+  "modified 900 0 web/package-lock.json" "modified 900 0 internal/api/api.gen.go"
+
+check "line limit script" 0 "stage-2 rules 1" "modified 1 0 scripts/line-limit.sh"
 check "plain change" 0 "stage-1  12" "modified 10 2 internal/servers/servers.go"
 check "docs and web" 0 "stage-1  3" "added 1 0 docs/user/a.md" "modified 1 1 web/src/App.tsx"
 check "core file" 0 "stage-2 authz 5" "modified 4 1 internal/perm/perm.go"
@@ -85,6 +113,16 @@ check "other web handler" 0 "stage-1  1" "modified 1 0 internal/web/api_servers.
 check "log masking" 0 "stage-2 redact 1" "added 1 0 internal/logmask/x.go"
 check "diagnostics" 0 "stage-2 redact 1" "added 1 0 internal/diag/x.go"
 check "system log" 0 "stage-2 redact 1" "added 1 0 internal/syslog/x.go"
+check "message events and settings reader" 0 "stage-2 authz 2" "modified 1 0 internal/events/hub.go" \
+  "modified 1 0 internal/store/settings.go"
+check "raw container log sources" 0 "stage-2 redact 2" "modified 1 0 internal/agentview/agentview.go" \
+  "modified 1 0 internal/cache/agents.go"
+check "e2e config and tool origin" 0 "stage-2 rules 9" "modified 1 0 web/playwright.config.ts" \
+  "modified 1 0 scripts/check-tool-origin.sh" "modified 1 0 scripts/web-build.sh" \
+  "modified 1 0 scripts/check-tool-origin-test.sh" "modified 1 0 scripts/check-dockerfile.sh" \
+  "modified 1 0 scripts/check-dockerfile-test.sh" "modified 1 0 web/src/test/pseudo.ts" \
+  "modified 1 0 .golangci.yml" "modified 1 0 .golangci.yaml"
+check "system log query" 0 "stage-2 redact 1" "modified 1 0 internal/store/queries/sqlite/systemlog.sql"
 check "sqlc config" 0 "stage-2 rules 1" "modified 1 0 sqlc.yaml"
 check "other profile and query files" 0 "stage-1  2" "modified 1 0 internal/profiles/catalog.go" \
   "modified 1 0 internal/store/queries/sqlite/smtp.sql"

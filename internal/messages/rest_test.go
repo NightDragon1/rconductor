@@ -4,11 +4,15 @@
 package messages
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/NightDragon1/rconductor/internal/config"
+	"github.com/NightDragon1/rconductor/internal/logging"
 	"github.com/NightDragon1/rconductor/internal/perm"
 	"github.com/NightDragon1/rconductor/internal/users"
 )
@@ -158,5 +162,45 @@ func TestC297DeleteCommentRefusalNamesComment(t *testing.T) {
 	if err := w.s.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'message.comment_deleted' AND result = 'denied'
 		AND target_id = ? AND json_extract(payload, '$.comment_id') = ?`, m.ID, c.ID).Scan(&n); err != nil || n != 1 {
 		t.Errorf("audited with comment = %d (%v), want 1", n, err)
+	}
+}
+
+// TestC443DeleteForeignCommentAudited: a comment ID of another message or
+// an unknown one is not found, logged as perm.denied and audited with the
+// comment ID, like a foreign message (MSG-003).
+func TestC443DeleteForeignCommentAudited(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	var logs bytes.Buffer
+	w.s.log = logging.New(&logs, "panel", config.Log{Format: "json"}).Module("messages")
+	m1, err := w.s.Send(ctx, w.admin, Input{Text: "one", Audience: AudienceModerators})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m2, err := w.s.Send(ctx, w.admin, Input{Text: "two", Audience: AudienceModerators})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := w.s.Comment(ctx, w.mod1, m2.ID, "on two")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{c.ID, "00000000-0000-4000-8000-000000000443"} {
+		if err := w.s.DeleteComment(ctx, w.mod1, m1.ID, id); !errors.Is(err, users.ErrNotFound) {
+			t.Errorf("delete %s on another message = %v, want 404", id, err)
+		}
+		var n int
+		if err := w.s.st.DB.QueryRow(`SELECT count(*) FROM audit_log WHERE action = 'message.comment_deleted' AND result = 'denied'
+			AND reason_code = 'not_found' AND target_id = ? AND json_extract(payload, '$.comment_id') = ?`, m1.ID, id).Scan(&n); err != nil || n != 1 {
+			t.Errorf("audited %s = %d (%v), want 1", id, n, err)
+		}
+	}
+	if got := strings.Count(logs.String(), `"event":"perm.denied"`); got != 2 || !strings.Contains(logs.String(), "message.comment_deleted") {
+		t.Errorf("perm.denied logged %d times for the comments, want 2", got)
+	}
+	var left int
+	_ = w.s.st.DB.QueryRow(`SELECT count(*) FROM message_comments WHERE id = ?`, c.ID).Scan(&left)
+	if left != 1 {
+		t.Error("the comment of the other message is gone")
 	}
 }

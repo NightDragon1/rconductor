@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"unicode/utf8"
 
@@ -139,7 +140,16 @@ func (s *Service) message(ctx context.Context, req users.Request, serverID, cmd 
 	}
 	built, ok := renderMessage(syn.Message.Render, prefix, senderName(req.Pseudonym), text)
 	if !ok {
-		return "", s.deny(ctx, req, serverID, cmd, ReasonInvalid, 0)
+		// A fault of the profile, not of the input: said so in the log and
+		// the answer (CMD-020).
+		s.log.Error("say not built: the game profile names an unknown message render",
+			append(s.attrs(req, serverID), slog.String("render", syn.Message.Render))...)
+		err := s.deny(ctx, req, serverID, cmd, ReasonInvalid, 0)
+		var d *DeniedError
+		if errors.As(err, &d) {
+			d.Detail = "the game profile has no known message form"
+		}
+		return "", err
 	}
 	// For those bound to lists, the built command holds no separator
 	// either, whatever the escaping made of the text (CMD-005).

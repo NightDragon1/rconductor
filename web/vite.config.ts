@@ -39,6 +39,10 @@ export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), thirdParty, ...(mode === 'language' ? [testLanguage] : [])],
   // Relative asset URLs; the panel sets <base href> from RCD_BASE_PATH.
   base: './',
+  // No lookup of .env or postcss files beside this config: what the build
+  // reads is fixed here (PRJ-005).
+  envDir: false,
+  css: { postcss: {} },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

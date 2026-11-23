@@ -724,9 +724,11 @@ paths:
         batch_id that ties the runs together in the audit; a batch_id or
         any other unknown field in the request is refused with 400. Up to
         commands.multi_max_servers servers, commands.multi_parallel at a
-        time; the answer comes when every server has its result. Runs start
-        only while one still ends before the answer is due (55 s less the
-        command timeout); a server whose turn comes later is not sent the
+        time; the answer comes when every server has its result. The first
+        run that passes its checks (known, in scope, list, rate limit)
+        always goes out; further runs start only while one still ends
+        before the answer is due (55 s less the command timeout); a server
+        whose turn comes later is not sent the
         command and gets skipped with reason time_budget, its own request
         ID and its own audit entry (an error with that reason).
       tags: [commands]
@@ -2560,7 +2562,7 @@ paths:
         decodable request: 403, 428, 400, 409 (a body that cannot be read
         is 400 first; over 256 KiB 413). Missing fields stay; texts
         replaces all, [] removes them; {} changes nothing: same version, no
-        audit entry. Off, nothing is masked: list, profiles and texts. Fixed texts, no expressions, sealed with
+        audit entry. Off, nothing is masked in container logs: list, profiles and texts; system log and diagnostics keep the built-in list (D-107). Fixed texts, no expressions, sealed with
         the master key in their own row, never in /settings (D-058): each
         4 to max_text_chars characters on one line, at most max_texts (1 to
         200, default 50; max_text_chars 4 to 1024, default 256), checked
@@ -3965,6 +3967,9 @@ components:
           type: string
         max_length:
           type: integer
+          description: >-
+            Most characters of an entered command; a say the panel builds
+            with message_command counts the built command in bytes (D-081).
         wrappers:
           type: array
           items:
@@ -4009,6 +4014,9 @@ components:
           type: string
         max_length:
           type: integer
+          description: >-
+            Most characters of an entered command; a say the panel builds
+            with message_command counts the built command in bytes (D-081).
         wrappers:
           type: array
           items:
@@ -4285,7 +4293,7 @@ components:
 
     SMTPSettings:
       type: object
-      required: [host, port, encryption, username, password_set, from, version]
+      required: [host, port, encryption, username, password_set, password_state, from, version]
       properties:
         host:
           type: string
@@ -4299,6 +4307,14 @@ components:
         password_set:
           type: boolean
           description: Whether a password is stored; the password itself is never returned.
+        password_state:
+          type: string
+          enum: [none, set, unreadable]
+          description: >-
+            none: no password stored; set: stored and readable; unreadable:
+            stored, but it cannot be decrypted, e.g. it was sealed with
+            another master key (NFR-017), so mail fails with category auth
+            until the password is entered again.
         from:
           type: string
           description: Sender address.

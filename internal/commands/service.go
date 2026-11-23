@@ -181,10 +181,13 @@ type resultPayload struct {
 func (s *Service) limit(ctx context.Context, role string) Limit {
 	lim := DefaultLimits[role]
 	var n int
-	if err := s.st.GuardedSetting(ctx, s.log, settingPerMinute(role), &n); err == nil && n > 0 {
+	// A stored value outside the range of the core is not used (CMD-019).
+	if err := s.st.GuardedSetting(ctx, s.log, settingPerMinute(role), &n); err == nil &&
+		n >= limits.MinRatePerMinute && n <= limits.MaxRatePerMinute {
 		lim.PerMinute = n
 	}
-	if err := s.st.GuardedSetting(ctx, s.log, settingBurst(role), &n); err == nil && n > 0 {
+	if err := s.st.GuardedSetting(ctx, s.log, settingBurst(role), &n); err == nil &&
+		n >= limits.MinRateBurst && n <= limits.MaxRateBurst {
 		lim.Burst = n
 	}
 	return lim
@@ -345,6 +348,12 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 			}
 		}
 	}
+	// 8: rate limit (CMD-019), before the prefix of a message is read: a
+	// flood of refused commands costs no reads; role and scope still come
+	// first (D-051).
+	if ok, wait := s.limiter.take(req.Actor.ID, serverID, s.limit(ctx, string(req.Actor.Role)), s.now()); !ok {
+		return Result{}, s.deny(ctx, req, serverID, cmd, ReasonRateLimited, wait)
+	}
 	// 7c: a message to the players goes out in the fixed form of the
 	// profile, with the sender and the prefix of the server group; the
 	// checks above ran on the input, the built command is not checked
@@ -352,10 +361,6 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	sent, err := s.message(ctx, req, serverID, cmd, syn, !sr.AllCommands)
 	if err != nil {
 		return Result{}, err
-	}
-	// 8: rate limit (CMD-019).
-	if ok, wait := s.limiter.take(req.Actor.ID, serverID, s.limit(ctx, string(req.Actor.Role)), s.now()); !ok {
-		return Result{}, s.deny(ctx, req, serverID, cmd, ReasonRateLimited, wait)
 	}
 	// 9 and 10: marked with request ID, session, user and role; audit
 	// before sending (CMD-007).
@@ -367,6 +372,7 @@ func (s *Service) Send(ctx context.Context, req users.Request, serverID, input s
 	if err := s.entry(ctx, req, serverID, ActionSent, audit.Entry{Payload: p, Result: audit.ResultOK}); err != nil {
 		return Result{}, err
 	}
+	passed(ctx) // every check passed, the command goes out
 	// 11: one connection, one queue per server.
 	ectx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()

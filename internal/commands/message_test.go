@@ -5,6 +5,7 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -111,5 +112,23 @@ func TestMessageText(t *testing.T) {
 	// The path as the profile check normalizes it (space around it).
 	if got, ok := messageText("say hi", &profiles.MessageCommand{Path: " say ", Render: profiles.RenderMinecraftTellraw}, false); !ok || got != "hi" {
 		t.Errorf("path with space around it: %q %v", got, ok)
+	}
+}
+
+// TestC234UnknownRenderSaysSo: a profile whose message_command names a
+// render outside the list refuses the say with a detail that names the
+// profile, not the input, and logs the fault (CMD-020, D-081).
+func TestC234UnknownRenderSaysSo(t *testing.T) {
+	w := newWorld(t)
+	w.exec(`UPDATE game_profiles SET rules = json_set(rules, '$.message_command.render', 'other')
+		WHERE id IN (SELECT profile_id FROM server_profiles WHERE server_id = ?)`, w.server)
+	w.c.Invalidate()
+	_, err := w.send("admin", "say hello")
+	var denied *DeniedError
+	if !errors.As(err, &denied) || denied.Reason != ReasonInvalid || !strings.Contains(denied.Detail, "game profile") {
+		t.Fatalf("say with an unknown render: %v %+v", err, denied)
+	}
+	if !strings.Contains(w.logs.String(), "unknown message render") {
+		t.Error("the fault of the profile is not logged")
 	}
 }

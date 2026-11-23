@@ -1,0 +1,104 @@
+// SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package main
+
+import (
+	"go/constant"
+	"go/token"
+	"go/types"
+	"path/filepath"
+	"strings"
+
+	"golang.org/x/tools/go/ssa"
+)
+
+// noLogOrders are the order types whose answer holds no container log
+// content; every other one (logs.tail, logs.follow, version.detect and any
+// new type) is a log order (UI-022).
+var noLogOrders = map[string]bool{"container.action": true, "logs.stop": true, "volumes.size": true}
+
+// logOrder tells whether a call of RequestData may order container log
+// content: its order type is not one of noLogOrders, or no constant.
+func logOrder(site ssa.CallInstruction) bool {
+	if site == nil {
+		return true
+	}
+	cc := site.Common()
+	i := 2 // ctx, agentID, typ
+	if !cc.IsInvoke() {
+		i = 3 // the receiver comes first
+	}
+	if i >= len(cc.Args) {
+		return true
+	}
+	c, ok := cc.Args[i].(*ssa.Const)
+	if !ok || c.Value == nil || c.Value.Kind() != constant.String {
+		return true
+	}
+	return !noLogOrders[constant.StringVal(c.Value)]
+}
+
+// inFiles tells whether fn lies in one of files (paths below root; one
+// ending in "/" stands for a directory).
+func inFiles(fset *token.FileSet, fn *ssa.Function, root string, files []string) bool {
+	if fn == nil || !fn.Pos().IsValid() {
+		return false
+	}
+	// The real file, not one a //line directive names.
+	rel, err := filepath.Rel(root, fset.PositionFor(fn.Pos(), false).Filename)
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	for _, f := range files {
+		if rel == f || strings.HasSuffix(f, "/") && strings.HasPrefix(rel, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// rawLogValues finds raw log reads taken as a method value ($bound) or a
+// method expression ($thunk) of RequestData, Logs or OnLines of hub and
+// cache, or of an interface with such a method, which the call graph sees
+// only as a call of the wrapper, outside the files of rawLogFiles.
+func rawLogValues(funcs map[*ssa.Function]bool, mod string, fset *token.FileSet, root string) []finding {
+	seen := map[finding]bool{}
+	var out []finding
+	for fn := range funcs {
+		p := pkgPath(fn)
+		if p == "" || !strings.HasPrefix(p, mod+"/") || hasPrefix(p, mod, harness) || inFiles(fset, fn, root, rawLogFiles) {
+			continue
+		}
+		for _, b := range fn.Blocks {
+			for _, in := range b.Instrs {
+				var f *ssa.Function
+				switch v := in.(type) {
+				case *ssa.MakeClosure: // a method value ($bound)
+					f, _ = v.Fn.(*ssa.Function)
+				case ssa.CallInstruction: // a method expression ($thunk)
+					f = v.Common().StaticCallee()
+				}
+				if f == nil || f.Object() == nil || f.Object().Pkg() == nil ||
+					(!strings.HasSuffix(f.Name(), "$bound") && !strings.HasSuffix(f.Name(), "$thunk")) {
+					continue
+				}
+				name := strings.TrimSuffix(strings.TrimSuffix(f.Name(), "$bound"), "$thunk")
+				cp := f.Object().Pkg().Path()
+				// A method of an interface with the name of a log source counts
+				// too: the value behind it may be the hub or the cache.
+				_, iface := f.Object().Type().(*types.Signature).Recv().Type().Underlying().(*types.Interface)
+				if name == "RequestData" && (cp == mod+"/internal/agenthub" || iface) ||
+					(name == "Logs" || name == "OnLines") && (cp == mod+"/internal/cache" || iface) {
+					x := finding{"redact", strings.TrimPrefix(p, mod+"/"), "reads raw container logs outside the masking"}
+					if !seen[x] {
+						seen[x] = true
+						out = append(out, x)
+					}
+				}
+			}
+		}
+	}
+	return out
+}

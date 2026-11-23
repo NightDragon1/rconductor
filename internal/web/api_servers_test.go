@@ -48,7 +48,7 @@ func TestSecretsNeverLeak(t *testing.T) {
 	if srv.ProfileIds == nil || len(*srv.ProfileIds) != 1 || (*srv.ProfileIds)[0].String() != profile {
 		t.Errorf("profile_ids = %v", srv.ProfileIds)
 	}
-	// Several profiles follow with SRV-008; until then 422.
+	// The same profile twice is refused with 422 (SRV-008).
 	if r := call2(call{method: http.MethodPost, path: "/api/v1/servers",
 		body: `{"name":"two","profile_ids":["` + profile + `","` + profile + `"],"host":"mc.lan","password":"` + rconPW + `"}`}); r.code != http.StatusUnprocessableEntity {
 		t.Errorf("two profiles = %d %s", r.code, r.body)

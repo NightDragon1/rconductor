@@ -493,6 +493,27 @@ func (e SMTPSettingsEncryption) Valid() bool {
 	}
 }
 
+// Defines values for SMTPSettingsPasswordState.
+const (
+	SMTPSettingsPasswordStateNone       SMTPSettingsPasswordState = "none"
+	SMTPSettingsPasswordStateSet        SMTPSettingsPasswordState = "set"
+	SMTPSettingsPasswordStateUnreadable SMTPSettingsPasswordState = "unreadable"
+)
+
+// Valid indicates whether the value is a known member of the SMTPSettingsPasswordState enum.
+func (e SMTPSettingsPasswordState) Valid() bool {
+	switch e {
+	case SMTPSettingsPasswordStateNone:
+		return true
+	case SMTPSettingsPasswordStateSet:
+		return true
+	case SMTPSettingsPasswordStateUnreadable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SMTPSettingsInputEncryption.
 const (
 	SMTPSettingsInputEncryptionNone     SMTPSettingsInputEncryption = "none"
@@ -1056,7 +1077,9 @@ type EffectiveProfile struct {
 
 	// GamePorts Game ports of the topmost profile that sets them (D-074), not the ports stored for the server (those are on the server); only for the RCON admin and the server admin of this server (D-056), missing for other roles.
 	GamePorts *[]GamePort `json:"game_ports,omitempty"`
-	MaxLength int         `json:"max_length"`
+
+	// MaxLength Most characters of an entered command; a say the panel builds with message_command counts the built command in bytes (D-081).
+	MaxLength int `json:"max_length"`
 
 	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped.
 	MessageCommand *MessageCommand `json:"message_command,omitempty"`
@@ -1118,7 +1141,9 @@ type GameProfile struct {
 	// LastError Reason of the last rejected file; RCON admin only.
 	LastError   *string    `json:"last_error,omitempty"`
 	LastErrorAt *time.Time `json:"last_error_at,omitempty"`
-	MaxLength   int        `json:"max_length"`
+
+	// MaxLength Most characters of an entered command; a say the panel builds with message_command counts the built command in bytes (D-081).
+	MaxLength int `json:"max_length"`
 
 	// MessageCommand Messages to the players with the sender (CMD-020, D-081), from the profile field message_command; for a server the topmost profile that sets it (D-074). A command on this path is checked as typed and then sent in the fixed form of render, with prefix, sender and text escaped.
 	MessageCommand *MessageCommand `json:"message_command,omitempty"`
@@ -1532,9 +1557,12 @@ type SMTPSettings struct {
 	Host string `json:"host"`
 
 	// PasswordSet Whether a password is stored; the password itself is never returned.
-	PasswordSet bool   `json:"password_set"`
-	Port        int    `json:"port"`
-	Username    string `json:"username"`
+	PasswordSet bool `json:"password_set"`
+
+	// PasswordState none: no password stored; set: stored and readable; unreadable: stored, but it cannot be decrypted, e.g. it was sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
+	PasswordState SMTPSettingsPasswordState `json:"password_state"`
+	Port          int                       `json:"port"`
+	Username      string                    `json:"username"`
 
 	// Version Version for If-Match.
 	Version string `json:"version"`
@@ -1542,6 +1570,9 @@ type SMTPSettings struct {
 
 // SMTPSettingsEncryption defines model for SMTPSettings.Encryption.
 type SMTPSettingsEncryption string
+
+// SMTPSettingsPasswordState none: no password stored; set: stored and readable; unreadable: stored, but it cannot be decrypted, e.g. it was sealed with another master key (NFR-017), so mail fails with category auth until the password is entered again.
+type SMTPSettingsPasswordState string
 
 // SMTPSettingsInput defines model for SMTPSettingsInput.
 type SMTPSettingsInput struct {

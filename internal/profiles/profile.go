@@ -488,6 +488,8 @@ func (p *Profile) check() []string {
 		}
 		if !slices.Contains(Renders, m.Render) {
 			bad("message_command.render must be one of %s", strings.Join(Renders, ", "))
+		} else if want := renderProtocol[m.Render]; p.Protocol.Type != want {
+			bad("message_command.render %s needs protocol.type %s", m.Render, want)
 		}
 	}
 	probs = append(probs, checkLogMasks(p.LogMasks)...)
@@ -742,6 +744,10 @@ const RenderMinecraftTellraw = "minecraft-tellraw"
 // Renders are the known values of message_command.render; each has its
 // fixed form in internal/commands (D-081).
 var Renders = []string{RenderMinecraftTellraw}
+
+// renderProtocol is the protocol each render builds its command for
+// (D-081): the form of a render is only known to work over it.
+var renderProtocol = map[string]string{RenderMinecraftTellraw: sourceRCON}
 
 // maxMessagePath bounds message_command.path.
 const maxMessagePath = 32

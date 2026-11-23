@@ -34,8 +34,10 @@ const (
 )
 
 // multiAnswerBy is when the answer of a multi-server command leaves at the
-// latest, before the HTTP write deadline of 60 s; runs start only while one
-// still ends in time (a run takes at most the command timeout).
+// latest, before the HTTP write deadline of 60 s; further runs start only
+// while one still ends in time (a run takes at most the command timeout).
+// The first run that passes the checks (known, in scope, list, rate
+// limit) always goes out, also when it alone fills the budget.
 const multiAnswerBy = 55 * time.Second
 
 // MultiItem is the result of one server of a multi-server command.
@@ -104,7 +106,12 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 	parallel := s.multiSetting(ctx, users.SettingMultiParallel, limits.DefaultMultiParallel, limits.MinMultiParallel, limits.MaxMultiParallel)
 	items := make([]MultiItem, len(ids))
 	slots := make(chan struct{}, parallel)
-	// Runs start until the deadline; a run started then still ends in time.
+	// Until a run has passed its checks, runs start one after the other
+	// without the deadline; then further runs start until the deadline,
+	// so a run started then still ends in time.
+	first := true
+	var skipRights *perm.Rights
+	var skipErr error
 	deadline := s.now().Add(max(multiAnswerBy-s.timeout, 0))
 	over := false
 	var wg sync.WaitGroup
@@ -113,6 +120,32 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 		r.BatchID = batch
 		if r.RequestID, err = store.NewID(); err != nil {
 			return "", nil, err
+		}
+		if first && ctx.Err() != nil {
+			// The client left before a run went out: the rest is skipped
+			// and audited all the same.
+			first, over = false, true
+		}
+		if first {
+			slots <- struct{}{}
+			out, done := make(chan struct{}), make(chan struct{})
+			rctx := context.WithValue(ctx, passedKey{}, func() { close(out) })
+			wg.Go(func() {
+				defer func() { <-slots }()
+				defer close(done)
+				items[i] = s.multiOne(rctx, r, id, input)
+			})
+			select {
+			case <-out:
+				first = false
+			case <-done:
+				select {
+				case <-out: // sent and already done
+					first = false
+				default: // refused or failed before sending: the next one is first
+				}
+			}
+			continue
 		}
 		if !over {
 			wait := time.NewTimer(deadline.Sub(s.now()))
@@ -128,7 +161,11 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 			wait.Stop()
 		}
 		if over {
-			items[i] = s.multiSkipped(ctx, r, id, input)
+			// The rights of the caller, read once for all servers left out.
+			if skipRights == nil && skipErr == nil {
+				skipRights, skipErr = s.perm.For(ctx, req.Actor.ID)
+			}
+			items[i] = s.multiSkipped(ctx, r, id, input, skipRights, skipErr)
 			continue
 		}
 		wg.Go(func() {
@@ -143,8 +180,7 @@ func (s *Service) Multi(ctx context.Context, req users.Request, serverIDs []stri
 // multiSkipped is a server whose turn came after the time budget: in the
 // scope it gets its own audit entry, an error with the reason time_budget,
 // under its request ID and the batch; outside it is not_found as in Send.
-func (s *Service) multiSkipped(ctx context.Context, req users.Request, serverID, input string) MultiItem {
-	rights, err := s.perm.For(ctx, req.Actor.ID)
+func (s *Service) multiSkipped(ctx context.Context, req users.Request, serverID, input string, rights *perm.Rights, err error) MultiItem {
 	if err != nil {
 		s.log.Error("multi command failed", append(s.attrs(req, serverID), "err", err)...)
 		return MultiItem{ServerID: serverID, RequestID: req.RequestID, Result: ResultError}
@@ -198,4 +234,16 @@ func (s *Service) multiOne(ctx context.Context, req users.Request, serverID, inp
 		it.Result = ResultError
 	}
 	return it
+}
+
+// passedKey marks the context of a run that reports when it passed every
+// check of Send, right before the command goes out.
+type passedKey struct{}
+
+// passed reports a run of Send that passed its checks to Multi, if it waits
+// for that.
+func passed(ctx context.Context) {
+	if f, ok := ctx.Value(passedKey{}).(func()); ok {
+		f()
+	}
 }

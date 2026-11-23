@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/NightDragon1/rconductor/internal/audit"
@@ -100,6 +101,9 @@ type Service struct {
 
 	mu    sync.Mutex
 	ended []func(sessionHashes []string)
+	// badTOTPSwitch: an unreadable value of auth.totp_required was logged;
+	// logged again only after a good read (D-109).
+	badTOTPSwitch atomic.Bool
 
 	// sf is the second factor (AUTH-008); nil without it.
 	sf *secondFactorState

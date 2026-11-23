@@ -177,3 +177,27 @@ func TestSayPrefixRoles(t *testing.T) {
 		}
 	}
 }
+
+// TestC414SayPrefixRoleBeforeBody (D-051): a role without the right gets
+// 403 for a PUT without say_prefix, not 400; the RCON admin gets 400 for
+// the missing say_prefix.
+func TestC414SayPrefixRoleBeforeBody(t *testing.T) {
+	f := newAPIFixture(t, Proxies{})
+	admin, mod := f.login(t, "Boss"), f.login(t, "Mod")
+	rec := f.do(t, call{method: http.MethodPost, path: "/api/v1/server-groups", cookies: []*http.Cookie{admin}, origin: "http://panel.lan",
+		body: `{"name":"g414"}`})
+	var g api.ServerGroup
+	if err := json.Unmarshal(rec.Body.Bytes(), &g); err != nil || rec.Code != http.StatusCreated {
+		t.Fatalf("group = %d %s", rec.Code, rec.Body.String())
+	}
+	id := g.Id.String()
+	p, _ := sayPrefixOf(t, f, admin, id)
+	for _, body := range []string{"{}", `{"other":1}`} {
+		if got, b := putSayPrefix(t, f, mod, id, body, p.Version); got != http.StatusForbidden {
+			t.Errorf("moderator with body %q = %d %s, want 403", body, got, b)
+		}
+	}
+	if got, b := putSayPrefix(t, f, admin, id, "{}", p.Version); got != http.StatusBadRequest {
+		t.Errorf("admin without say_prefix = %d %s, want 400", got, b)
+	}
+}

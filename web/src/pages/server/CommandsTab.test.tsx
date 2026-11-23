@@ -4,7 +4,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Command } from '@/lib/commandform';
 import { renderPage, setLanguage, unmarked } from '@/test/render';
-import { CommandCard, HistoryItem } from './CommandsTab';
+import { CommandCard, HistoryItem, TemplateCard } from './CommandsTab';
 
 const kick: Command = {
   path: 'kick',
@@ -40,8 +40,55 @@ describe('command cards', () => {
     // Paths, descriptions, parameter names and the preview come from the
     // game profile or the input, not from the language files.
     const data =
-      /^(kick|weather|Kick a player|player|kick \{player\} \{reason\}|weather …|aria-label=.*)$/;
+      /^(kick|weather|Kick a player|player|kick two words|kick \{player\} \{reason\}|weather …|aria-label=.*)$/;
     expect(unmarked(container).filter((s) => !data.test(s))).toEqual([]);
+  });
+
+  it('show a player name in the preview as foreign text (SEC-006)', async () => {
+    setLanguage('en');
+    const { container } = await renderPage(() => (
+      <CommandCard
+        c={kick}
+        values={{ player: 'evil\u202Egnp.exe' }}
+        players={[]}
+        listId="p"
+        busy={false}
+        isPlayer={() => true}
+        onChange={() => undefined}
+        onFocusPlayer={() => undefined}
+        onRun={() => undefined}
+      />
+    ));
+    const preview = container.querySelector('p[aria-live="polite"]');
+    expect(preview?.textContent).toContain('›');
+    // The bidi control is isolated and named, not applied.
+    expect(preview?.querySelector('bdi[data-code]')).toBeTruthy();
+  });
+
+  it('show a player name in the preview of a template as foreign text (SEC-006)', async () => {
+    setLanguage('en');
+    const tmpl = {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'kick one',
+      template: 'kick {player}',
+      placeholders: ['player'],
+    } as never;
+    const { container } = await renderPage(() => (
+      <TemplateCard
+        tmpl={tmpl}
+        values={{ player: 'evil\u202Egnp.exe' }}
+        players={[]}
+        listId="p"
+        busy={false}
+        isPlayer={() => true}
+        action="Run"
+        onChange={() => undefined}
+        onFocusPlayer={() => undefined}
+        onRun={() => undefined}
+      />
+    ));
+    const preview = container.querySelector('p[aria-live="polite"]');
+    expect(preview?.querySelector('bdi[data-code]')).toBeTruthy();
   });
 
   it('keep a player field as free text when the game gives no names (PROT-003)', async () => {

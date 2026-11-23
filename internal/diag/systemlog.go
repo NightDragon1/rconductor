@@ -91,9 +91,11 @@ func (s *Service) SystemLog(ctx context.Context, req users.Request, q LogQuery) 
 		return Page{}, &users.InvalidError{Detail: "after is at least 1"}
 	}
 	if q.Source != "panel" {
-		if _, err := uuid.Parse(q.Source); err != nil {
+		u, err := uuid.Parse(q.Source)
+		if err != nil {
 			return Page{}, &users.InvalidError{Detail: "source is panel or the ID of an agent"}
 		}
+		q.Source = u.String() // one spelling per agent
 	} else if err := period(q.From, q.To); err != nil {
 		return Page{}, err
 	}
@@ -135,11 +137,15 @@ func (s *Service) firstRead(session, source string, after int64) bool {
 	return !s.viewed[session+"\x00"+source]
 }
 
+// maxViewed bounds the noted reads; a full set starts again empty, so a
+// read after it is audited once more, never less.
+const maxViewed = 10000
+
 // markRead notes the audited read of a source in a session.
 func (s *Service) markRead(session, source string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.viewed == nil {
+	if s.viewed == nil || len(s.viewed) >= maxViewed {
 		s.viewed = map[string]bool{}
 	}
 	s.viewed[session+"\x00"+source] = true

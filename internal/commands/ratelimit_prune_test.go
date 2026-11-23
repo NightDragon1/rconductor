@@ -4,9 +4,12 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/NightDragon1/rconductor/internal/commands/limits"
 )
 
 // TestRateLimitPruneByOwnLimitC15: pruning a full limiter judges each bucket
@@ -60,5 +63,45 @@ func TestRateLimitPruneByOwnLimitC15(t *testing.T) {
 	l.take("admin", "third", adm, t1)
 	if n := len(l.buckets); n < maxBuckets {
 		t.Errorf("buckets after pruning a table of spent buckets = %d, want all %d kept", n, maxBuckets)
+	}
+}
+
+// TestC342RateLimitOutsideTheCoreRange: a stored rate limit above the range
+// of the core (written past the settings API) is not used; the default of
+// the role holds (CMD-019).
+func TestC342RateLimitOutsideTheCoreRange(t *testing.T) {
+	w := newWorld(t)
+	w.setting("ratelimit.server_admin.per_minute", limits.MaxRatePerMinute+1)
+	w.setting("ratelimit.server_admin.burst", limits.MaxRateBurst+1)
+	lim := w.svc.limit(context.Background(), "server_admin")
+	if lim != DefaultLimits["server_admin"] {
+		t.Errorf("limit = %+v, want the default %+v", lim, DefaultLimits["server_admin"])
+	}
+	w.setting("ratelimit.server_admin.burst", limits.MaxRateBurst)
+	if lim := w.svc.limit(context.Background(), "server_admin"); lim.Burst != limits.MaxRateBurst {
+		t.Errorf("burst at the upper end = %d", lim.Burst)
+	}
+}
+
+// TestRateLimitPruneOncePerInterval: a full table where no bucket is full
+// again is scanned at most once per interval, not on every command; after
+// the interval the next command scans again and drops what refilled
+// (CMD-019, D-076).
+func TestRateLimitPruneOncePerInterval(t *testing.T) {
+	l := newLimiter()
+	t0 := time.Unix(1_000_000, 0)
+	for i := range maxBuckets {
+		l.buckets[bucketKey{user: fmt.Sprintf("u%d", i)}] = &bucket{tokens: 0, last: t0, rate: 1, burst: 2}
+	}
+	for i := range 50 {
+		l.take(fmt.Sprintf("n%d", i), "s", Limit{PerMinute: 60, Burst: 2}, t0.Add(time.Duration(i)*time.Millisecond))
+	}
+	if l.scans != 1 {
+		t.Errorf("%d scans for 50 commands within the interval, want 1", l.scans)
+	}
+	later := t0.Add(pruneEvery + 2*time.Second) // every bucket is full again
+	l.take("late", "s", Limit{PerMinute: 60, Burst: 2}, later)
+	if l.scans != 2 || len(l.buckets) > 2 {
+		t.Errorf("after the interval: %d scans, %d buckets", l.scans, len(l.buckets))
 	}
 }

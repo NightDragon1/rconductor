@@ -8,6 +8,8 @@
 //	       the caller's principal (internal/web.principal) or internal/perm
 //	audit  every operation that is not a read reaches internal/audit.Write
 //	cmd    only the command pipeline calls Execute of the RCON packages
+//	redact only internal/syslog writes the system log (InsertSystemLog); raw
+//	       container logs are read only where they are masked
 //	redact secrets are revealed or converted to their plain value only at
 //	       their destinations (secret-destinations.txt); nothing in
 //	       internal/ prints past the redacting log handler (fmt.Print, log,
@@ -52,6 +54,14 @@ var (
 	harness  = []string{"/internal/e2e", "/internal/integration"}
 	cmdSinks = []string{"/internal/rcon", "/internal/connmgr"}
 	cmdCore  = []string{"/internal/rcon", "/internal/connmgr", "/internal/commands"}
+	// rawLogFiles fetch raw container log lines and mask them (UI-022): the
+	// log orders of the agent hub (RequestData with any order type but those
+	// of noLogOrders, or one that is no constant) and Logs and OnLines of
+	// the agent cache are called only from these core files.
+	rawLogFiles = []string{"internal/servers/logs.go", "internal/diag/", "internal/agentview/logs.go",
+		"internal/agentview/agentview.go", "internal/agentview/insight.go", "internal/cache/agents.go"}
+	// sysLog writes the system log; only the masking sink (D-091) calls it.
+	sysLogQueries, sysLogSink = "/internal/store/sqlitedb", "/internal/syslog"
 )
 
 type finding struct{ rule, symbol, detail string }
@@ -178,6 +188,7 @@ func check(dir string, dests map[string]string) ([]finding, error) {
 	if packages.PrintErrors(pkgs) > 0 || len(pkgs) == 0 || pkgs[0].Module == nil {
 		return nil, fmt.Errorf("the module in %s does not load", dir)
 	}
+	root := pkgs[0].Module.Dir
 	mod := pkgs[0].Module.Path
 	var found []finding
 	prog, _ := ssautil.AllPackages(pkgs, ssa.InstantiateGenerics)
@@ -207,6 +218,12 @@ func check(dir string, dests map[string]string) ([]finding, error) {
 			switch {
 			case c.Name() == "Execute" && hasPrefix(cp, mod, cmdSinks) && !hasPrefix(p, mod, cmdCore):
 				edges[finding{"cmd", rel, "sends a command to a game server outside the command pipeline"}] = true
+			case (c.Name() == "RequestData" && cp == mod+"/internal/agenthub" && logOrder(e.Site) ||
+				(c.Name() == "Logs" || c.Name() == "OnLines") && cp == mod+"/internal/cache") &&
+				!inFiles(prog.Fset, fn, root, rawLogFiles) && !hasPrefix(p, mod, harness):
+				edges[finding{"redact", rel, "reads raw container logs outside the masking"}] = true
+			case c.Name() == "InsertSystemLog" && cp == mod+sysLogQueries && p != mod+sysLogSink:
+				edges[finding{"redact", rel, "writes the system log past its masking"}] = true
 			case c.Name() == "Reveal" && cp == mod+logPkg && !hasPrefix(p, mod, revealers):
 				edges[finding{"redact", rel, "reveals a secret outside its destinations"}] = true
 			case (cp == "log" || (cp == "fmt" && strings.HasPrefix(c.Name(), "Print"))) && strings.HasPrefix(p, mod+"/internal/") &&
@@ -214,6 +231,12 @@ func check(dir string, dests map[string]string) ([]finding, error) {
 				edges[finding{"redact", rel, "prints past the redacting log handler"}] = true
 			}
 		}
+	}
+	for _, f := range rawLogValues(funcs, mod, prog.Fset, root) {
+		edges[f] = true
+	}
+	for _, f := range systemLogWrites(funcs, mod) {
+		edges[f] = true
 	}
 	for _, f := range printsPastHandler(funcs, mod) {
 		edges[f] = true

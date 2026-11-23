@@ -45,10 +45,17 @@ type bucketKey struct{ user, server string }
 // is bounded by users times servers, and none of them loses its count.
 const maxBuckets = 10000
 
+// pruneEvery bounds the pruning of a full table: when no bucket is full
+// again, a scan per call would cost a walk over every bucket; one scan per
+// interval is enough, as buckets fill up only with time.
+const pruneEvery = time.Second
+
 // limiter holds one bucket per user and server (CMD-019).
 type limiter struct {
 	mu      sync.Mutex
 	buckets map[bucketKey]*bucket
+	pruned  time.Time // last scan of a full table
+	scans   int       // scans so far, for tests
 }
 
 func newLimiter() *limiter { return &limiter{buckets: map[bucketKey]*bucket{}} }
@@ -62,7 +69,7 @@ func (l *limiter) take(user, server string, lim Limit, now time.Time) (bool, tim
 	rate := float64(lim.PerMinute) / 60 // tokens per second
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if len(l.buckets) >= maxBuckets {
+	if len(l.buckets) >= maxBuckets && (l.scans == 0 || now.Sub(l.pruned) >= pruneEvery) {
 		l.prune(now)
 	}
 	k := bucketKey{user, server}
@@ -81,6 +88,8 @@ func (l *limiter) take(user, server string, lim Limit, now time.Time) (bool, tim
 }
 
 func (l *limiter) prune(now time.Time) {
+	l.pruned = now
+	l.scans++
 	for k, b := range l.buckets {
 		if b.full(now) {
 			delete(l.buckets, k)

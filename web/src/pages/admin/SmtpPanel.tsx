@@ -162,11 +162,20 @@ export function SmtpPanel() {
                 maxLength={512}
                 autoComplete="new-password"
                 placeholder={
-                  smtp.data.password_set ? t('smtp.passwordSet') : t('smtp.passwordNone')
+                  smtp.data.password_state === 'unreadable'
+                    ? t('smtp.passwordUnreadable')
+                    : smtp.data.password_set
+                      ? t('smtp.passwordSet')
+                      : t('smtp.passwordNone')
                 }
                 disabled={readOnly}
                 onChange={(e) => set({ password: e.target.value })}
               />
+              {smtp.data.password_state === 'unreadable' && (
+                <p role="status" className="text-xs text-warn">
+                  {t('smtp.passwordUnreadableHint')}
+                </p>
+              )}
               {smtp.data.password_set && !readOnly && (
                 <label className="flex items-center gap-2 text-muted">
                   <input

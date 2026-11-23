@@ -13,6 +13,7 @@ import { compileFilter, LOG_OPS, MAX_FILTER_LENGTH, type LogOp } from '@/lib/log
 import { bufferWriter, MAX_LOG_LINES, prependTail, updateBuffer, useBuffer } from '@/lib/console';
 import { stripCodes } from '@/lib/serverpage';
 import { cn } from '@/lib/utils';
+import { GapMark } from './ConsoleTab';
 import { useLogsFeed } from './useConsoleFeed';
 
 // The next request for earlier lines asks this many more (W8 A).
@@ -46,9 +47,18 @@ export function LogsView({ server }: { server: Server }) {
 
   const all = buf.logs.flatMap((l) => l.lines.map(stripCodes));
   const compiled = compileFilter({ bracket, text: rest, op });
+  const keep = compiled.ok && compiled.test ? compiled.test : () => true;
   // A part the filter refuses filters nothing; the hint says why.
-  const shown = compiled.ok && compiled.test ? all.filter(compiled.test) : all;
+  const shown = all.filter(keep);
   const text = shown.join('\n');
+  // Runs of lines and the marks of gaps between them, in order (UI-022).
+  const parts = buf.logs
+    .map((l) =>
+      l.gap !== undefined
+        ? { id: l.id, gap: l.gap }
+        : { id: l.id, text: l.lines.map(stripCodes).filter(keep).join('\n') },
+    )
+    .filter((p) => p.gap !== undefined || p.text);
 
   // Follow keeps the end in view; scrolling up ends it (Design 6.1).
   useEffect(() => {
@@ -187,7 +197,16 @@ export function LogsView({ server }: { server: Server }) {
               wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre',
             )}
           >
-            <ForeignText text={text} />
+            {parts.map((p, i) =>
+              p.gap !== undefined ? (
+                <GapMark key={p.id} omitted={p.gap} />
+              ) : (
+                <span key={p.id}>
+                  <ForeignText text={p.text ?? ''} />
+                  {i < parts.length - 1 ? '\n' : ''}
+                </span>
+              ),
+            )}
           </pre>
         )}
       </div>

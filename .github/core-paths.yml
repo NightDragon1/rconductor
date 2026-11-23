@@ -14,7 +14,9 @@
 # characters within one path segment, "?" one character other than "/".
 # A glob must not start with "*" (YAML would read it as an alias).
 # The list "generated" holds generated files: they never decide the stage
-# and do not count toward the size limit of 400 changed lines.
+# and do not count toward the size limit of 400 changed lines. The list
+# "tests" holds tests: they decide the stage like any file, but count apart,
+# so that an overrun through tests alone shows as over-limit-tests.
 
 # authz: rights, sessions, login, and the API middleware that enforces them
 authz:
@@ -40,6 +42,11 @@ authz:
   - internal/web/api_users.go
 # the session with the role and lock the pipeline is handed
   - internal/store/queries/sqlite/sessions.sql
+# who of the open connections gets a message event (MSG-001, D-085)
+  - internal/events/hub.go
+# how a broken security setting is read: switches stay on, numbers keep the
+# last value (F-93, D-109)
+  - internal/store/settings.go
 
 # cmd: commands from input to game server, and the orders the agent executes,
 # with the profile rules and queries that decide what is checked and sent
@@ -87,9 +94,14 @@ redact:
   - internal/logmask/**
   - internal/agentview/logs.go
   - internal/servers/logs.go
+# the raw sources of container logs before the masking (UI-022)
+  - internal/agentview/agentview.go
+  - internal/agentview/insight.go
+  - internal/cache/agents.go
 # the system log and the diagnostic export, blacked out before writing (D-090, D-091)
   - internal/diag/**
   - internal/syslog/**
+  - internal/store/queries/sqlite/systemlog.sql
 
 # audit: audit log and the fixed event codes
 audit:
@@ -130,6 +142,7 @@ rules:
   - web/scripts/fitness-render*
   - web/scripts/testdata/**
   - scripts/classify*
+  - scripts/line-limit.sh
   - scripts/ci-scope*
   - scripts/go-test-shard*
   - .npmrc
@@ -138,12 +151,20 @@ rules:
   - web/.redocly.*
   - web/index.html
   - web/vite.config.*
+  - web/playwright.config.ts
+  - web/src/test/pseudo.ts
+  - .golangci.*
+  - scripts/check-tool-origin.sh
+  - scripts/web-build.sh
+  - scripts/check-tool-origin-test.sh
+  - scripts/check-dockerfile*
   - Makefile
 # the license check: what reuse lint asks for (NFR-021)
   - REUSE.toml
   - .reuse/**
   - LICENSES/**
   - scripts/check-spdx.sh
+  - scripts/check-spdx-test.sh
 # which query files sqlc generates the database code from
   - sqlc.yaml
 
@@ -161,3 +182,17 @@ generated:
   - go.sum
   - tools/go.sum
   - web/package-lock.json
+
+# tests: test code and test data; counted apart from the code (PRJ-005)
+tests:
+  - internal/**/*_test.go
+  - cmd/**/*_test.go
+  - tools/**/*_test.go
+  - internal/**/testdata/**
+  - tools/**/testdata/**
+  - web/src/**/*.test.ts
+  - web/src/**/*.test.tsx
+  - web/e2e/**
+  - web/scripts/testdata/**
+  - scripts/*-test.sh
+  - web/scripts/*-test.sh
