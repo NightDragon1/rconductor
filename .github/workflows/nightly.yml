@@ -6,9 +6,10 @@
 #     the long tests (stage 3);
 #   - image scan of panel and agent (amd64) with Grype, failing on high and
 #     critical findings that have a fix, and an SBOM of each image;
-#   - watchdog: fails when a workflow run on main ended red or hangs. Runs
-#     of release.yml are left out (filtered by their name "Release"); they
-#     wait for the approval of the environment and are watched there.
+#   - watchdog: cancels workflow runs that are in progress, queued or
+#     waiting for more than 60 minutes. Runs of release.yml are left out
+#     (filtered by its name "Release"); they wait for the approval of the
+#     environment.
 name: Nightly
 
 on:
@@ -26,6 +27,10 @@ concurrency:
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
+    # PR size in ci.yml asks for it; that job runs only on pull requests.
+    permissions:
+      contents: read
+      pull-requests: write
 
   scan:
     name: Image scan and SBOM (${{ matrix.target }})
@@ -74,33 +79,25 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      actions: read
+      actions: write
     steps:
-      - name: Red or hanging runs on main
+      - name: Cancel runs older than 60 minutes
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          # Look back one day; a run longer than this hangs.
-          SINCE_HOURS: "24"
-          HANG_HOURS: "6"
+          MAX_MINUTES: "60"
           SELF: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          since=$(date -u -d "-$SINCE_HOURS hours" +%Y-%m-%dT%H:%M:%SZ)
-          hang=$(date -u -d "-$HANG_HOURS hours" +%s)
-          gh api --paginate "repos/$GH_REPO/actions/runs?branch=main&created=>=$since&per_page=100" \
-            --jq '.workflow_runs[] | select(.name != "Release" and (.id | tostring) != env.SELF) |
-              [.id, .name, .status, (.conclusion // ""), .created_at, .html_url] | @tsv' >runs.tsv
-          bad=0
-          while IFS=$'\t' read -r _ name status conclusion created url; do
-            case "$status:$conclusion" in
-              completed:failure | completed:timed_out | completed:startup_failure)
-                echo "::error::red: $name ($conclusion) $url"; bad=1 ;;
-              queued:* | in_progress:* | waiting:* | pending:*)
-                if [ "$(date -u -d "$created" +%s)" -lt "$hang" ]; then
-                  echo "::error::hangs since $created: $name $url"; bad=1
-                fi ;;
-            esac
+          before=$(date -u -d "-$MAX_MINUTES minutes" +%Y-%m-%dT%H:%M:%SZ)
+          for status in in_progress queued waiting; do
+            gh api --paginate "repos/$GH_REPO/actions/runs?status=$status&created=<$before&per_page=100" \
+              --jq '.workflow_runs[] | select(.name != "Release" and (.id | tostring) != env.SELF) |
+                [.id, .name, .status, .created_at, .html_url] | @tsv'
+          done >runs.tsv
+          while IFS=$'\t' read -r id name status created url; do
+            echo "::warning::cancel $name ($status since $created) $url"
+            gh api -X POST "repos/$GH_REPO/actions/runs/$id/cancel" >/dev/null ||
+              echo "::warning::not cancelled: $url"
           done <runs.tsv
-          echo "runs on main since $since (without Release and this run): $(wc -l <runs.tsv)" >>"$GITHUB_STEP_SUMMARY"
-          exit "$bad"
+          echo "cancelled runs older than $MAX_MINUTES minutes (without Release): $(wc -l <runs.tsv)" >>"$GITHUB_STEP_SUMMARY"

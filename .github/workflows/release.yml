@@ -123,6 +123,10 @@ jobs:
     if: github.event_name == 'push'
     needs: version
     uses: ./.github/workflows/ci.yml
+    # PR size in ci.yml asks for it; that job runs only on pull requests.
+    permissions:
+      contents: read
+      pull-requests: write
     with:
       runner: ubuntu-26.04
 

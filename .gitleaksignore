@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Known test values in commits on main (SEC-012); new ones take the
+# comment gitleaks:allow on the line instead.
+46c32ffe944270f7c147ee74f115700ce16d1c67:scripts/check-secrets-test.sh:generic-api-key:33
+4a2ea33f01c9c3801114249576bb3224b1449b14:internal/auth/totp/totp_test.go:generic-api-key:51
+4a2ea33f01c9c3801114249576bb3224b1449b14:web/src/pages/SecondFactor.test.tsx:generic-api-key:84
+4a2ea33f01c9c3801114249576bb3224b1449b14:web/src/pages/SecondFactor.test.tsx:generic-api-key:85

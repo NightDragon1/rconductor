@@ -4,9 +4,11 @@
 # Three stages (scripts/ci-scope.sh decides):
 #   1. PR gates, every run that changes more than documentation: SPDX,
 #      fitness, script tests, Go lint, Go test, web lint and test,
-#      govulncheck, and E2E by the changed paths (SPDX and Scope run always)
-#   2. push to main, manual and tags: also integration and acceptance tests
-#      and the amd64 image (CodeQL on main: codeql.yml)
+#      govulncheck, the amd64 image, acceptance tests and E2E by the changed
+#      paths (Scope, SPDX with the acceptance checksums, Secret scan and PR
+#      size run always; PR size only on pull requests and never red)
+#   2. push to main, manual and tags: also integration tests (CodeQL on
+#      main: codeql.yml)
 #   3. nightly.yml, manual and tags: arm64 images, Minecraft, the long tests
 #      and everything else regardless of paths
 # Minecraft also runs in stage 2 when RCON or profiles change. A change of documentation alone runs only Scope, SPDX and
@@ -17,8 +19,10 @@
 # The repository variable CI_RUNNER sets the runner of all jobs, for example
 # ubuntu-latest. A self-hosted runner would run code of fork pull requests,
 # so keep those to approved runs first. Only this workflow reads the
-# variable; release, PR size and the Docker Hub description have a fixed
-# GitHub-hosted runner. A caller sets the input runner, which takes
+# variable; release and the Docker Hub description have a fixed
+# GitHub-hosted runner. PR size needs pull-requests: write, so a caller of
+# this workflow grants it to its ci job (the job itself runs only on pull
+# requests). A caller sets the input runner, which takes
 # precedence over the variable; release.yml passes a fixed GitHub-hosted
 # runner.
 name: CI
@@ -80,6 +84,9 @@ jobs:
         with:
           persist-credentials: false
       - run: scripts/check-spdx.sh
+      # Every pull request, whatever its scope (NFR-019).
+      - name: Acceptance checksums
+        run: scripts/check-acceptance-sums.sh
       # The REUSE image by digest, not by tag (NFR-021); Renovate keeps it.
       - uses: docker://fsfe/reuse:6.0.0@sha256:71d7cb4e153b8765e93280398a3447b0ef13d6766a0420033dc333ddb2f6d368
         with:
@@ -134,7 +141,6 @@ jobs:
       - run: scripts/script-isolation-test.sh
       - run: scripts/pr-size-test.sh
       - run: scripts/check-acceptance-sums-test.sh
-      - run: scripts/check-acceptance-sums.sh
       - run: scripts/check-spdx-test.sh
       - run: scripts/check-tool-origin-test.sh
       - run: scripts/check-dockerfile-test.sh
@@ -296,13 +302,13 @@ jobs:
           path: internal/webui/dist
           retention-days: 1
 
-  # Stage 2 runs on main only; a pull request does not wait for these.
+  # Pull requests build the image too: the acceptance tests run on it.
   image:
     # Static names: a skipped job reports its name unevaluated, and the
     # ruleset needs these names also when documentation alone skips them.
     name: Image (amd64)
     needs: scope
-    if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.code == 'true'
+    if: needs.scope.outputs.code == 'true'
     runs-on: ${{ inputs.runner || vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 30
     steps:
@@ -364,7 +370,7 @@ jobs:
   acceptance:
     name: Acceptance tests
     needs: [scope, image]
-    if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.code == 'true'
+    if: needs.scope.outputs.code == 'true'
     runs-on: ${{ inputs.runner || vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 20
     steps:
@@ -383,6 +389,85 @@ jobs:
           docker load --input "$RUNNER_TEMP/images/panel.tar"
           docker load --input "$RUNNER_TEMP/images/agent.tar"
       - run: scripts/acceptance-run.sh -v
+
+  # Secret scan (SEC-012): a pull request scans its diff, every other run
+  # the full history. gitleaks (MIT) as release binary, pinned by checksum.
+  # Known test values: .gitleaksignore or the comment gitleaks:allow.
+  secrets:
+    name: Secret scan
+    runs-on: ${{ inputs.runner || vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: gitleaks
+        env:
+          VERSION: 8.30.1
+          SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          tgz=$RUNNER_TEMP/gitleaks.tar.gz
+          curl -fsSL --retry 3 -o "$tgz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v$VERSION/gitleaks_${VERSION}_linux_x64.tar.gz"
+          echo "$SHA256  $tgz" | sha256sum --strict -c -
+          tar -xzf "$tgz" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            git diff --merge-base "$BASE" HEAD | "$RUNNER_TEMP/gitleaks" stdin --no-banner --redact
+          else
+            "$RUNNER_TEMP/gitleaks" git --no-banner --redact .
+          fi
+
+  # Size of each pull request (PRJ-005): scripts/pr-size.sh counts the
+  # changed lines without generated files (.github/core-paths.yml) and sets
+  # the label over-limit above 400 lines, with a warning. It only informs
+  # and never fails the run. A fork pull request gets the warning only: its
+  # token cannot label.
+  pr-size:
+    name: PR size
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ inputs.runner || vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Count and label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          set -uo pipefail
+          files=$RUNNER_TEMP/files.tsv out=$RUNNER_TEMP/size.out
+          if ! gh api --paginate "repos/$GH_REPO/pulls/$PR/files" \
+            --jq '.[] | [.status, .additions, .deletions, .filename, (.previous_filename // "")] | @tsv' >"$files"; then
+            echo "::warning::file list not readable, size unknown"
+            exit 0
+          fi
+          gh pr view "$PR" --json labels --jq '.labels[].name' |
+            scripts/pr-size.sh .github/core-paths.yml "$files" >"$out" || true
+          lines=$(sed -n 's/^lines=//p' "$out")
+          size=$(sed -n 's/^size=//p' "$out")
+          mapfile -t args < <(grep -E '^--(add|remove)-label$|^over-limit' "$out")
+          if [ "$FORK" != true ] && [ "${#args[@]}" -gt 0 ]; then
+            gh pr edit "$PR" "${args[@]}" || echo "::warning::labels not set"
+          fi
+          echo "changed lines without generated files: ${lines:-unknown} (limit 400)" >>"$GITHUB_STEP_SUMMARY"
+          if [ "$size" = over ]; then
+            echo "::warning::$lines changed lines without generated files (limit 400): split it or give the reason in the PR text"
+          fi
+          exit 0
 
   e2e-shard:
     name: E2E shard ${{ matrix.shard }}

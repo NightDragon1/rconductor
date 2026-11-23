@@ -47,7 +47,8 @@ für RCON-fähige Spieleserver. Lizenz GNU AGPL-3.0.
   zum Kern gehören, legt allein die Klassendatei .github/core-paths.yml fest.
 - PR-Größe: Soll höchstens 400 geänderte Zeilen ohne generierte Dateien; darüber setzt
   die CI das Label over-limit mit Warnung, der PR-Text nennt den Grund.
-- Neue Funktionen außerhalb des Kerns liegen hinter einem Feature-Flag, Standard aus.
+- Unfertiges liegt hinter einem Feature-Flag (Standard aus); das Flag fällt weg, sobald das
+  Feature fertig ist, spätestens im Folgerelease.
 - Code außerhalb des Kerns nutzt die Kernbereiche nur über ihre Schnittstellen und baut
   sie nicht nach. Fitness Functions in der CI prüfen das. Ihre Ausnahmeliste darf nur
   schrumpfen; neue Einträge sind nicht erlaubt.

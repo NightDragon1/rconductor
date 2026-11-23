@@ -216,7 +216,11 @@
       "Bash(git -c *url.*)",
       "Bash(git remote remove*)",
       "Bash(git remote rm*)",
-      "Bash(git remote rename*)"
+      "Bash(git remote rename*)",
+      "Bash(gh release delete*)",
+      "Bash(gh api -X DELETE*)",
+      "Bash(gh api --method DELETE*)",
+      "Bash(sudo*)"
     ]
   }
 }

@@ -20,8 +20,8 @@ import (
 // pseudonym in the event auth.invite.used of the system log.
 func TestD107BuiltInPatternsWithMaskingOff(t *testing.T) {
 	a := admin(t)
-	const pwSecret = "hunter2abcAcct107"
-	const bearerSecret = "abc123def456acct"
+	const pwSecret = "hunter2abcAcct107"    // gitleaks:allow (test value)
+	const bearerSecret = "abc123def456acct" // gitleaks:allow (test value)
 
 	// Masking off; on again at the end.
 	setMasking(t, a, false)
