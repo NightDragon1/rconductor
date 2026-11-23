@@ -3,8 +3,12 @@
 
 package servers
 
-import "example.invalid/bad/internal/agenthub"
+import (
+	"context"
 
-func Raw(h *agenthub.Hub) (string, error) { return h.RequestData("a", "logs.follow") }
+	"example.invalid/bad/internal/agenthub"
+)
 
-func Version(h *agenthub.Hub) (string, error) { return h.RequestData("a", "version.detect") }
+func Raw(h *agenthub.Hub) (string, error) {
+	return h.RequestData(context.Background(), "a", "logs.follow", nil, nil)
+}

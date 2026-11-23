@@ -2,9 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package servers: logs.go masks what it fetches (allowed), other.go of
-// the same package does not (a finding), version.go orders no logs.
+// the same package does not (a finding).
 package servers
 
-import "example.invalid/bad/internal/agenthub"
+import (
+	"context"
 
-func Tail(h *agenthub.Hub) (string, error) { return h.RequestData("a", "logs.tail") }
+	"example.invalid/bad/internal/agenthub"
+)
+
+func Tail(h *agenthub.Hub) (string, error) {
+	return h.RequestData(context.Background(), "a", "logs.tail", nil, nil)
+}

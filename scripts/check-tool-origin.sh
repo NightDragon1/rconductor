@@ -17,8 +17,11 @@ for (const name of ['eslint', 'typescript', 'openapi-typescript', 'prettier', 'v
   const p = pkgs['node_modules/' + name];
   if (!p) { console.error(`${name}: missing in package-lock.json`); bad++; continue; }
   // The package itself, not another one under its name (npm alias).
-  const own = `https://registry.npmjs.org/${name}/-/${name.split('/').pop()}-`;
-  if (!String(p.resolved || '').startsWith(own)) { console.error(`${name}: comes as another package (${p.resolved})`); bad++; }
+  // The whole URL, so that dot segments or a query cannot lead elsewhere.
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const own = new RegExp(`^https://registry\\.npmjs\\.org/${esc(name)}/-/${esc(name.split('/').pop())}-[0-9][0-9A-Za-z.+-]*\\.tgz$`);
+  const url = String(p.resolved || '');
+  if (!own.test(url) || /%|\.\.|[?#]/.test(url)) { console.error(`${name}: comes as another package (${p.resolved})`); bad++; }
 }
 // Every installed package, the tools and all they load: from the registry,
 // with a checksum, never a link, a file or git.

@@ -55,11 +55,11 @@ var (
 	cmdSinks = []string{"/internal/rcon", "/internal/connmgr"}
 	cmdCore  = []string{"/internal/rcon", "/internal/connmgr", "/internal/commands"}
 	// rawLogFiles fetch raw container log lines and mask them (UI-022): the
-	// log orders of the agent hub (RequestData with logs.tail or logs.follow,
-	// or an order type that is no constant) and Logs and OnLines of the agent
-	// cache are called only from these core files.
+	// log orders of the agent hub (RequestData with any order type but those
+	// of noLogOrders, or one that is no constant) and Logs and OnLines of
+	// the agent cache are called only from these core files.
 	rawLogFiles = []string{"internal/servers/logs.go", "internal/diag/", "internal/agentview/logs.go",
-		"internal/agentview/agentview.go", "internal/cache/agents.go"}
+		"internal/agentview/agentview.go", "internal/agentview/insight.go", "internal/cache/agents.go"}
 	// sysLog writes the system log; only the masking sink (D-091) calls it.
 	sysLogQueries, sysLogSink = "/internal/store/sqlitedb", "/internal/syslog"
 )
@@ -231,6 +231,9 @@ func check(dir string, dests map[string]string) ([]finding, error) {
 				edges[finding{"redact", rel, "prints past the redacting log handler"}] = true
 			}
 		}
+	}
+	for _, f := range rawLogValues(funcs, mod, prog.Fset, root) {
+		edges[f] = true
 	}
 	for _, f := range systemLogWrites(funcs, mod) {
 		edges[f] = true

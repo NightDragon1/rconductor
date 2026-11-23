@@ -5,12 +5,18 @@
 // finding.
 package rawiface
 
-import "example.invalid/bad/internal/agenthub"
+import (
+	"context"
+
+	"example.invalid/bad/internal/agenthub"
+)
 
 type requester interface {
-	RequestData(agentID, typ string) (string, error)
+	RequestData(ctx context.Context, agentID, typ string, payload any, collect func(string)) (string, error)
 }
 
-func Tail(r requester) (string, error) { return r.RequestData("a", "logs.tail") }
+func Tail(r requester) (string, error) {
+	return r.RequestData(context.Background(), "a", "logs.tail", nil, nil)
+}
 
 func Use() { _, _ = Tail(&agenthub.Hub{}) }
