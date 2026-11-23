@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Decides what a CI run does and prints it as GITHUB_OUTPUT lines:
-#   stage2     push to main, pull requests, nightly, tags: integration, E2E
-#              and the amd64 image
-#   stage3     nightly, manual and tags: arm64 image and Minecraft
+#   stage2     push to main, nightly, manual and tags: integration and
+#              acceptance tests, CodeQL and the amd64 image; a pull request
+#              runs only the PR gates (lint, unit tests, fitness, E2E by path)
+#   stage3     nightly, manual and tags: arm64 image, Minecraft, long tests
 #   e2e        E2E is due, by the changed paths
 #   minecraft  Minecraft is due, by the changed paths
 #   sqlc       the sqlc diff is due, by the changed paths
@@ -31,11 +32,11 @@ SQLC='^(migrations/|internal/store/queries/|internal/store/sqlitedb/|sqlc\.yaml$
 DOCS='(\.md$|^docs/|^assets/|^LICENSE|^\.github/ISSUE_TEMPLATE/)'
 DOCTESTED='^(README\.md|docs/user/configuration\.md|docs/user/technical\.md|assets/logo/.*|deploy/dockerhub/overview-.*\.md)$'
 # Paths that need none of these stages.
-NONE='^(\.claude/|\.github/|\.githooks/|deploy/|docs/|scripts/|tools/|\.dockerignore$|\.editorconfig$|\.gitattributes$|\.gitignore$|\.golangci\.yml$|CHANGELOG\.md$|CLAUDE\.md$|CONTRIBUTING\.md$|Dockerfile$|LICENSE$|README\.md$|SECURITY\.md$|THIRD_PARTY_NOTICES\.md$|renovate\.json$)'
+NONE='^(acceptance/|\.claude/|\.github/|\.githooks/|deploy/|docs/|scripts/|tools/|\.dockerignore$|\.editorconfig$|\.gitattributes$|\.gitignore$|\.golangci\.yml$|CHANGELOG\.md$|CLAUDE\.md$|CONTRIBUTING\.md$|Dockerfile$|LICENSE$|README\.md$|SECURITY\.md$|THIRD_PARTY_NOTICES\.md$|renovate\.json$)'
 
 case "$EVENT:$REF" in
   schedule:* | workflow_dispatch:* | *:refs/tags/v*) stage2=true stage3=true ;;
-  pull_request:* | push:refs/heads/main) stage2=true stage3=false ;;
+  push:refs/heads/main) stage2=true stage3=false ;;
   *) stage2=false stage3=false ;;
 esac
 

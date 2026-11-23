@@ -45,7 +45,10 @@ scripts/claude-guard-test.sh
 scripts/hook-scope-test.sh
 scripts/check-secrets-test.sh
 scripts/script-isolation-test.sh
-scripts/classify-test.sh
+scripts/pr-size-test.sh
+scripts/check-acceptance-sums-test.sh
+scripts/check-acceptance-sums.sh
+scripts/release-attest-test.sh
 scripts/check-git-config-test.sh
 scripts/lockfile-packages-test.sh
 go -C tools tool golangci-lint run ./claudeguard

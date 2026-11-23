@@ -1,0 +1,103 @@
+# SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Nightly on main (PRJ-005, NFR-021):
+#   - ci.yml in full: E2E without path filter, arm64 images, Minecraft and
+#     the long tests (stage 3);
+#   - image scan of panel and agent (amd64) with Grype, failing on high and
+#     critical findings that have a fix, and an SBOM of each image;
+#   - watchdog: cancels workflow runs that are in progress, queued or
+#     waiting for more than 60 minutes. Runs of release.yml are left out
+#     (filtered by its name "Release"); they wait for the approval of the
+#     environment.
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    # PR size in ci.yml asks for it; that job runs only on pull requests.
+    permissions:
+      contents: read
+      pull-requests: write
+
+  scan:
+    name: Image scan and SBOM (${{ matrix.target }})
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [panel, agent]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          load: true
+          tags: rconductor-${{ matrix.target }}:nightly
+          build-args: VERSION=0.0.0-nightly+${{ github.sha }}
+          cache-from: type=gha,scope=amd64
+      - id: syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      - name: SBOM
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+          TARGET: ${{ matrix.target }}
+        run: '"$SYFT" scan -o "spdx-json=rconductor-$TARGET.spdx.json" "docker:rconductor-$TARGET:nightly"'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ matrix.target }}
+          path: rconductor-*.spdx.json
+          retention-days: 14
+      - uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: rconductor-${{ matrix.target }}:nightly
+          severity-cutoff: high
+          only-fixed: true
+          output-format: table
+
+  watchdog:
+    name: Watchdog
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Cancel runs older than 60 minutes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          MAX_MINUTES: "60"
+          SELF: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          before=$(date -u -d "-$MAX_MINUTES minutes" +%Y-%m-%dT%H:%M:%SZ)
+          for status in in_progress queued waiting; do
+            gh api --paginate "repos/$GH_REPO/actions/runs?status=$status&created=<$before&per_page=100" \
+              --jq '.workflow_runs[] | select(.name != "Release" and (.id | tostring) != env.SELF) |
+                [.id, .name, .status, .created_at, .html_url] | @tsv'
+          done >runs.tsv
+          while IFS=$'\t' read -r id name status created url; do
+            echo "::warning::cancel $name ($status since $created) $url"
+            gh api -X POST "repos/$GH_REPO/actions/runs/$id/cancel" >/dev/null ||
+              echo "::warning::not cancelled: $url"
+          done <runs.tsv
+          echo "cancelled runs older than $MAX_MINUTES minutes (without Release): $(wc -l <runs.tsv)" >>"$GITHUB_STEP_SUMMARY"

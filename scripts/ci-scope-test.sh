@@ -115,5 +115,23 @@ expect "C26: an unknown path: minecraft" true "$(field minecraft)"
 expect "C26: an unknown path: sqlc" true "$(field sqlc)"
 expect "an unknown path: code" true "$(field code)"
 
+change "acceptance only" <<'EOF'
+mkdir -p acceptance && echo "package acceptance" >acceptance/a_test.go
+EOF
+expect "acceptance only: e2e" false "$(field e2e)"
+expect "acceptance only: code" true "$(field code)"
+
+# The tier by event (PRJ-005): a pull request runs the PR gates only.
+tier() { # event, ref, output
+  (cd "$repo" && EVENT=$1 REF=$2 BASE=$base sh "$scope") | sed -n "s/^$3=//p"
+}
+expect "pull request: stage2" false "$(tier pull_request refs/pull/1/merge stage2)"
+expect "pull request: stage3" false "$(tier pull_request refs/pull/1/merge stage3)"
+expect "push to main: stage2" true "$(tier push refs/heads/main stage2)"
+expect "push to main: stage3" false "$(tier push refs/heads/main stage3)"
+expect "push to a branch: stage2" false "$(tier push refs/heads/x stage2)"
+expect "nightly: stage3" true "$(tier schedule refs/heads/main stage3)"
+expect "tag: stage2" true "$(tier push refs/tags/v1.4 stage2)"
+
 [ "$fails" -eq 0 ] || exit 1
 echo "ci scope ok"
