@@ -146,9 +146,10 @@ for (const width of [390, 320]) {
       await expect(page.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
     }
     const input = page.getByRole('textbox', { name: 'Command' });
-    await input.fill(`say ${width}`);
+    const said = `say ${width} ${Date.now()}`;
+    await input.fill(said);
     await page.getByRole('button', { name: 'Send' }).tap();
-    const block = page.getByRole('article', { name: `say ${width}` }).last();
+    const block = page.getByRole('article', { name: said, exact: true });
     // The toolbar wraps to more rows; the console still brings the whole
     // new block into view by itself, above the input (C367, C427, CMD-012).
     await expect(block.getByRole('button', { name: 'Copy the block' })).toBeInViewport({

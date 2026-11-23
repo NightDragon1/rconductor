@@ -391,7 +391,7 @@ export function ConsoleTab() {
           </nav>
           <div
             ref={scroller}
-            className="h-[60vh] min-h-72 flex-1 scroll-mb-20 overflow-y-auto px-3 py-3"
+            className="h-[60vh] min-h-72 flex-1 overflow-y-auto max-md:scroll-mb-20 px-3 py-3"
             onScroll={(e) => {
               const el = e.currentTarget;
               atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
