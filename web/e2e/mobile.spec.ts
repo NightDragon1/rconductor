@@ -142,17 +142,24 @@ for (const width of [390, 320]) {
     const base = `servers/${state.servers.hostile}`;
 
     await page.goto(`${base}/console`);
-    const input = page.getByRole('textbox', { name: 'Command' });
-    await input.fill(`say ${width}`);
-    await page.getByRole('button', { name: 'Send' }).tap();
-    const block = page.getByRole('article', { name: `say ${width}` });
     for (const name of ['Own commands', "Others' commands", 'Logs']) {
       await expect(page.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
     }
-    // The toolbar wraps to more rows; the console still brings the new
-    // block into view by itself (C367, CMD-012).
-    await expect(block).toBeInViewport();
-    await expect(block.getByRole('button', { name: 'Copy the block' })).toBeInViewport();
+    const input = page.getByRole('textbox', { name: 'Command' });
+    await input.fill(`say ${width}`);
+    await page.getByRole('button', { name: 'Send' }).tap();
+    const block = page.getByRole('article', { name: `say ${width}` }).last();
+    // The toolbar wraps to more rows; the console still brings the whole
+    // new block into view by itself, above the input (C367, C427, CMD-012).
+    await expect(block.getByRole('button', { name: 'Copy the block' })).toBeInViewport({
+      ratio: 1,
+    });
+    await expect(block).toBeInViewport({ ratio: 1 });
+    await expect(async () => {
+      const b = await block.boundingBox();
+      const f = await page.locator('form').filter({ has: input }).boundingBox();
+      expect(b && f && b.y + b.height <= f.y + 1, 'block above the input').toBe(true);
+    }).toPass();
     await fits(page);
 
     await page.goto(`${base}/logs`);

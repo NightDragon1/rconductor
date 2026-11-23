@@ -293,6 +293,10 @@ export function ConsoleTab() {
     const command = input.trim();
     if (!command || send.isPending) return;
     atEnd.current = true;
+    // The page above the console can be taller than the window (a phone
+    // with a wrapped toolbar), so the end of the console would sit below
+    // it; bring the console's end into the window, above the input (C427).
+    scroller.current?.scrollIntoView({ block: 'nearest' });
     setInput('');
     setWalk(-1);
     send.mutate(command);
@@ -387,7 +391,7 @@ export function ConsoleTab() {
           </nav>
           <div
             ref={scroller}
-            className="h-[60vh] min-h-72 flex-1 overflow-y-auto px-3 py-3"
+            className="h-[60vh] min-h-72 flex-1 scroll-mb-20 overflow-y-auto px-3 py-3"
             onScroll={(e) => {
               const el = e.currentTarget;
               atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
