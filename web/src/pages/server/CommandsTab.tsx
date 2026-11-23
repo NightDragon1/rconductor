@@ -221,7 +221,7 @@ export function CommandCard({
             className="wrap-anywhere md:truncate rounded bg-surface-raised px-2 py-1 font-mono text-sm"
             aria-live="polite"
           >
-            {t('commands.preview', { command })}
+            {t('commands.previewMark')} <ForeignText text={command} />
           </p>
           <Button type="submit" className="self-start max-md:self-stretch" disabled={!ok || busy}>
             {t('commands.run')}
@@ -305,7 +305,7 @@ export function TemplateCard({
         className="wrap-anywhere md:truncate rounded bg-surface-raised px-2 py-1 font-mono text-sm"
         aria-live="polite"
       >
-        {t('commands.preview', { command })}
+        {t('commands.previewMark')} <ForeignText text={command} />
       </p>
       <Button type="submit" className="self-start max-md:self-stretch" disabled={!ok || busy}>
         {action}

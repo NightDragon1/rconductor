@@ -125,6 +125,9 @@ func (m *Masker) line(s string, over func() bool) (out string, stopped bool) {
 // before it, or with nothing between group 1 and a group 2 that follows;
 // an empty value after group 1 masks nothing, so its name stays.
 // over is asked before each pattern; stopped reports that it said true.
+// leadingEscape is a CSI or charset sequence, as the separator gap knows it.
+var leadingEscape = regexp.MustCompile(`^\x1b(?:\[[0-?]*[ -/]*[@-~]|[()]\w)`)
+
 func markPatterns(res []*regexp.Regexp, s string, cover []int32, over func() bool) (found, stopped bool) {
 	for _, re := range res {
 		if over != nil && over() {
@@ -137,6 +140,20 @@ func markPatterns(res []*regexp.Regexp, s string, cover []int32, over func() boo
 			}
 			if len(l) > 5 && l[4] >= from {
 				to = l[4]
+			}
+			// A color or charset sequence at the start of the value is no
+			// part of it: it stays, so the colors of the line do not run on
+			// (C424); a value of such sequences alone masks nothing here.
+			lead := from
+			for from < to {
+				m := leadingEscape.FindStringIndex(s[from:to])
+				if m == nil {
+					break
+				}
+				from += m[1]
+			}
+			if from >= to && from > lead {
+				continue
 			}
 			if from >= to && l[1] > from {
 				// Something after group 1 but nothing to mask: whole match.

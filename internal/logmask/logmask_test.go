@@ -102,7 +102,7 @@ func TestC238ANSIBetweenNameAndSeparator(t *testing.T) {
 	for in, want := range map[string]string{
 		"\x1b[1mpassword\x1b[0m=hunter2 next":            "\x1b[1mpassword\x1b[0m=••• next",
 		"RCON_PASSWORD\x1b[0m: \x1b[33mhunter2\x1b[0m x": "RCON_PASSWORD\x1b[0m: \x1b[33m••• x",
-		"token\x1b[2m=\x1b[0m\"two words\" x":            "token\x1b[2m=•••\"•••\" x",
+		"token\x1b[2m=\x1b[0m\"two words\" x":            "token\x1b[2m=\x1b[0m\"•••\" x",
 		"password=\x1b(B\x1b[mhunter2 x":                 "password=\x1b(B\x1b[m••• x",
 		"password=\x1b[38:2:1:2:3mhunter2 x":             "password=\x1b[38:2:1:2:3m••• x",
 		"password\x1b(B: hunter2 x":                      "password\x1b(B: ••• x",
@@ -139,6 +139,31 @@ func TestC239MoreForms(t *testing.T) {
 	} {
 		if got := (*Masker)(nil).Line(in); got != want {
 			t.Errorf("%q: got %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestC424ColorResetKept (UI-022): an escape sequence right after the
+// separator stays as it is, only the value is masked, so the colors of the
+// line do not run on.
+func TestC424ColorResetKept(t *testing.T) {
+	m, err := New(nil, DefaultLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for in, want := range map[string]string{
+		"RCON_PASSWORD=\x1b[0m\"hunter2\"":     "RCON_PASSWORD=\x1b[0m\"•••\"",
+		"RCON_PASSWORD=\x1b[0mhunter2":         "RCON_PASSWORD=\x1b[0m•••",
+		"password: \x1b[32m\"abc\"\x1b[0m end": "password: \x1b[32m\"•••\"\x1b[0m end",
+	} {
+		if got := m.Line(in); got != want {
+			t.Errorf("%q: got %q, want %q", in, got, want)
+		}
+	}
+	// An escape the separator gap does not know still masks the value.
+	for _, in := range []string{"password=\x1b7hunter2 x", "password=\x1b[0m\x1bchunter2 x", "password=\x1b[0mhunter2 x"} {
+		if got := m.Line(in); strings.Contains(got, "hunter2") {
+			t.Errorf("%q: the value stays: %q", in, got)
 		}
 	}
 }
