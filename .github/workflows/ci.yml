@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Three stages (scripts/ci-scope.sh decides):
-#   1. every run that changes more than documentation: SPDX, script tests, Go lint,
-#      Go test, web lint and test, govulncheck (SPDX and Scope run always)
-#   2. push to main and pull requests: integration, E2E, amd64 image
-#   3. nightly, manual and tags: arm64 images, Minecraft and the long tests
-#      in real time, and everything else regardless of paths
-# E2E follows the changed paths; Minecraft also runs in stage 2 when RCON or
-# profiles change. A change of documentation alone runs only Scope, SPDX and
+#   1. PR gates, every run that changes more than documentation: SPDX,
+#      fitness, script tests, Go lint, Go test, web lint and test,
+#      govulncheck, and E2E by the changed paths (SPDX and Scope run always)
+#   2. push to main, manual and tags: also integration and acceptance tests
+#      and the amd64 image (CodeQL on main: codeql.yml)
+#   3. nightly.yml, manual and tags: arm64 images, Minecraft, the long tests
+#      and everything else regardless of paths
+# Minecraft also runs in stage 2 when RCON or profiles change. A change of documentation alone runs only Scope, SPDX and
 # the collecting jobs (PRJ-005); skipped jobs count as passed for the
 # ruleset, so there is no paths filter on the workflow. release.yml calls this before publishing; images are only
 # built here, never pushed.
@@ -16,7 +17,7 @@
 # The repository variable CI_RUNNER sets the runner of all jobs, for example
 # ubuntu-latest. A self-hosted runner would run code of fork pull requests,
 # so keep those to approved runs first. Only this workflow reads the
-# variable; release, classify and the Docker Hub description have a fixed
+# variable; release, PR size and the Docker Hub description have a fixed
 # GitHub-hosted runner. A caller sets the input runner, which takes
 # precedence over the variable; release.yml passes a fixed GitHub-hosted
 # runner.
@@ -26,8 +27,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "17 2 * * *"
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -45,7 +44,7 @@ env:
   GOWORK: "off"
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -133,13 +132,15 @@ jobs:
       - run: scripts/hook-scope-test.sh
       - run: scripts/check-secrets-test.sh
       - run: scripts/script-isolation-test.sh
-      - run: scripts/classify-test.sh
+      - run: scripts/pr-size-test.sh
+      - run: scripts/check-acceptance-sums-test.sh
+      - run: scripts/check-acceptance-sums.sh
       - run: scripts/check-spdx-test.sh
-      - run: scripts/classify-size-test.sh
       - run: scripts/check-tool-origin-test.sh
       - run: scripts/check-dockerfile-test.sh
       - run: scripts/fitness-ratchet-test.sh
       - run: scripts/release-test.sh
+      - run: scripts/release-attest-test.sh
       - run: scripts/check-git-config-test.sh
       - run: scripts/lockfile-packages-test.sh
       - run: scripts/third-party-go-test.sh
@@ -295,9 +296,7 @@ jobs:
           path: internal/webui/dist
           retention-days: 1
 
-  # The three stage 2 names are required checks. A push to a branch must
-  # not report them, or it satisfies the ruleset before the pull request's
-  # run has finished.
+  # Stage 2 runs on main only; a pull request does not wait for these.
   image:
     # Static names: a skipped job reports its name unevaluated, and the
     # ruleset needs these names also when documentation alone skips them.
@@ -360,10 +359,35 @@ jobs:
       - run: scripts/pull-test-images.sh internal/integration
       - run: make integration-tests
 
+  # Black-box tests of the acceptance criteria against panel and agent from
+  # the images, started with deploy/compose/all-in-one.yaml (NFR-019).
+  acceptance:
+    name: Acceptance tests
+    needs: [scope, image]
+    if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.code == 'true'
+    runs-on: ${{ inputs.runner || vars.CI_RUNNER || 'ubuntu-26.04' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: images
+          path: ${{ runner.temp }}/images
+      - run: |
+          docker load --input "$RUNNER_TEMP/images/panel.tar"
+          docker load --input "$RUNNER_TEMP/images/agent.tar"
+      - run: scripts/acceptance-run.sh -v
+
   e2e-shard:
     name: E2E shard ${{ matrix.shard }}
     needs: [scope, web]
-    if: needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true' && needs.scope.outputs.code == 'true'
+    if: needs.scope.outputs.e2e == 'true' && needs.scope.outputs.code == 'true'
     runs-on: ${{ inputs.runner || vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 30
     # Browser and its libraries come with the image; its version follows
@@ -408,14 +432,14 @@ jobs:
 
   # One stable name for the ruleset: a skipped matrix job reports no check.
   e2e:
-    name: ${{ needs.scope.outputs.stage2 == 'true' && 'E2E (Playwright)' || 'E2E (Playwright) not due' }}
+    name: E2E (Playwright)
     needs: [scope, e2e-shard]
     if: ${{ !cancelled() }}
     runs-on: ${{ inputs.runner || vars.CI_RUNNER || 'ubuntu-26.04' }}
     timeout-minutes: 5
     steps:
       - env:
-          DUE: ${{ needs.scope.outputs.stage2 == 'true' && needs.scope.outputs.e2e == 'true' && needs.scope.outputs.code == 'true' }}
+          DUE: ${{ needs.scope.outputs.e2e == 'true' && needs.scope.outputs.code == 'true' }}
           RESULT: ${{ needs.e2e-shard.result }}
         run: |
           echo "due: $DUE, shards: $RESULT"

@@ -210,7 +210,13 @@
       "Edit(~/.gitconfig)",
       "Edit(~/.config/git/**)",
       "Edit(~/.cache/rconductor-claudeguard/**)",
-      "Edit(~/.config/rconductor-guard/**)"
+      "Edit(~/.config/rconductor-guard/**)",
+      "Bash(git push*renovate/*)",
+      "Bash(git -c *includeIf.*)",
+      "Bash(git -c *url.*)",
+      "Bash(git remote remove*)",
+      "Bash(git remote rm*)",
+      "Bash(git remote rename*)"
     ]
   }
 }

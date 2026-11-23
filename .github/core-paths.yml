@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2026 NightDragon · ShadowGhost.NET
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Class file of the core paths (PRJ-005): a pull request whose diff touches
-# one of these paths is a core PR (stage 2); scripts/classify.sh decides it
-# and the workflow classify.yml labels the pull request.
+# Class file of the core paths (PRJ-005): the core areas, read by the
+# fitness test internal/commands/imports_test.go; the list "generated" is
+# read by scripts/pr-size.sh for the size label of a pull request.
 #
-# Fixed format, read by scripts/classify.sh without a YAML parser:
+# Fixed format, read without a YAML parser:
 #   - a line "<area>:" at column 0 starts the list of an area;
 #   - each "  - <glob>" below it adds a glob, relative to the repository root;
 #   - comments ("#" at the line start) and blank lines are ignored;
@@ -13,10 +13,8 @@
 # Glob: "**" matches any number of directories (also none), "*" any
 # characters within one path segment, "?" one character other than "/".
 # A glob must not start with "*" (YAML would read it as an alias).
-# The list "generated" holds generated files: they never decide the stage
-# and do not count toward the size limit of 400 changed lines. The list
-# "tests" holds tests: they decide the stage like any file, but count apart,
-# so that an overrun through tests alone shows as over-limit-tests.
+# The list "generated" holds generated files: they do not count toward the
+# size of 400 changed lines. The list "tests" holds tests and test data.
 
 # authz: rights, sessions, login, and the API middleware that enforces them
 authz:
@@ -62,7 +60,7 @@ cmd:
   - internal/profiles/forserver.go
   - internal/profiles/importer.go
   - internal/profiles/presence.go
-# the tests of the profile rules (D-074, D-076), so that no stage-1 change
+# the tests of the profile rules (D-074, D-076), so that no change outside the core
 # weakens them
   - internal/profiles/effective_test.go
   - internal/profiles/combination_test.go
@@ -127,7 +125,7 @@ boundary:
   - .github/**
 
 # rules: rule files, hooks, guard and release scripts, and the scripts and
-# test data that decide whether a check runs at all (stage, CI scope, shards),
+# test data that decide whether a check runs at all (CI scope, shards),
 # and the files that steer what the checked tools and the bundler read
 rules:
   - CLAUDE.md
@@ -141,8 +139,7 @@ rules:
   - web/eslint.config.js
   - web/scripts/fitness-render*
   - web/scripts/testdata/**
-  - scripts/classify*
-  - scripts/line-limit.sh
+  - scripts/pr-size*
   - scripts/ci-scope*
   - scripts/go-test-shard*
   - .npmrc

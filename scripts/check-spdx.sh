@@ -4,8 +4,9 @@
 #
 # Fails if a tracked text file lacks an SPDX license header in its first
 # lines. Exempt: docs/, Markdown, LICENSE, LICENSES/, AUTHORS, JSON (no
-# comment syntax), Go module files, generated code, placeholders and binary
-# files; REUSE.toml licenses them, and reuse lint checks the whole tree.
+# comment syntax), Go module files, the acceptance checksums, generated
+# code, placeholders and binary files; REUSE.toml licenses them, and reuse
+# lint checks the whole tree.
 # This script keeps the rules reuse lint does not know: AGPL-3.0-or-later
 # for own files, MIT only for the copied files below.
 # sqlc query files carry the header at the end, because sqlc copies leading
@@ -23,7 +24,7 @@ if [ -n "$others" ]; then
 fi
 # REUSE-IgnoreStart
 missing=$(git -c core.quotePath=false ls-files |
-  grep -vE '^docs/|\.md$|^LICENSE$|^LICENSES/|^AUTHORS$|\.json$|(^|/)go\.(mod|sum)$|(^|/)\.gitkeep$' |
+  grep -vE '^docs/|\.md$|^LICENSE$|^LICENSES/|^AUTHORS$|\.json$|(^|/)go\.(mod|sum)$|^acceptance/SHA256SUMS$|(^|/)\.gitkeep$' |
   while IFS= read -r f; do
     grep -Iq . "$f" 2>/dev/null || continue # binary or empty
     head -n 5 "$f" | grep -qiE 'code generated|auto-generated' && continue

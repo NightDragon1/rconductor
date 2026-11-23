@@ -42,7 +42,7 @@ var (
 )
 
 // corePackages are the directories a core area of the class file names as
-// a whole ("dir/**"); a line outside the grammar of scripts/classify.sh
+// a whole ("dir/**"); a line outside the grammar of the class file
 // fails the test.
 func corePackages(t *testing.T) []string {
 	t.Helper()

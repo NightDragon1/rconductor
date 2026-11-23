@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # The image build is part of the core (PRJ-005): Dockerfile and .dockerignore
-# may change only in a stage-2 pull request that also updates the checksum
+# may change only in a pull request that also updates the checksum
 # below. Of the base images and the syntax frontend only the version numbers
 # in the tag and the digest values are left out of the checksum, so that
 # updates of base images stay stage 1; names, tag variants and pinning stay.
@@ -31,7 +31,7 @@ done
 got=$(normalized | sha256sum | cut -d' ' -f1)
 if $print; then echo "$got"; exit 0; fi
 if [ "$got" != "$want" ]; then
-  echo "Dockerfile or .dockerignore changed beyond the base images: update the checksum in scripts/check-dockerfile.sh in a stage-2 pull request ($got)" >&2
+  echo "Dockerfile or .dockerignore changed beyond the base images: update the checksum in scripts/check-dockerfile.sh ($got)" >&2
   exit 1
 fi
 echo "image build unchanged"

@@ -21,6 +21,7 @@ für RCON-fähige Spieleserver. Lizenz GNU AGPL-3.0.
 
 ## Repository-Struktur
 - cmd/panel, cmd/agent   Einstiegspunkte
+- acceptance/            Abnahmetests (Black-Box, eigenes Modul, SHA256SUMS)
 - internal/              gesamter Go-Code, nach Modulen
 - web/                   Oberfläche
 - api/openapi.yaml       API-Beschreibung
@@ -44,9 +45,8 @@ für RCON-fähige Spieleserver. Lizenz GNU AGPL-3.0.
 ## Kern, Feature-Flags und Fitness Functions
 - Kernbereiche (Sicherheitskern): authz, cmd, render, redact, audit, input. Welche Pfade
   zum Kern gehören, legt allein die Klassendatei .github/core-paths.yml fest.
-- Ein PR, der Kernpfade, api/openapi.yaml, migrations/, .github/ oder Regeldateien
-  (CLAUDE.md, CONTRIBUTING.md, .claude/, Release-Skripte) berührt, ist ein Kern-PR:
-  höchstens 400 geänderte Zeilen, Draft bis bereit, Merge nur durch den Maintainer.
+- PR-Größe: Soll höchstens 400 geänderte Zeilen ohne generierte Dateien; darüber setzt
+  die CI das Label over-limit mit Warnung, der PR-Text nennt den Grund.
 - Neue Funktionen außerhalb des Kerns liegen hinter einem Feature-Flag, Standard aus.
 - Code außerhalb des Kerns nutzt die Kernbereiche nur über ihre Schnittstellen und baut
   sie nicht nach. Fitness Functions in der CI prüfen das. Ihre Ausnahmeliste darf nur
@@ -54,6 +54,7 @@ für RCON-fähige Spieleserver. Lizenz GNU AGPL-3.0.
 
 ## Tests und Prüfung
 - Go: go test ./..., Integrationstests mit testcontainers-go.
+- Abnahmetests: scripts/acceptance-run.sh; nach Änderung acceptance/SHA256SUMS neu.
 - Oberfläche: Vitest, Abläufe mit Playwright.
 - Vor jedem Commit: Lint und Tests der geänderten Pakete (Go mit -race), über den
   Pre-Commit-Hook. Vor jedem Push: scripts/check.sh --no-tests (golangci-lint, ESLint,

@@ -31,6 +31,11 @@ on:
 permissions:
   contents: read
 
+# One run per tag; a second run waits, a running release is never cancelled.
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 env:
   GHCR: ghcr.io/nightdragon1
   HUB: docker.io/nightdragon1

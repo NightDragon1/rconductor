@@ -19,9 +19,10 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 NightDragon · ShadowGhost.NET"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
-# Files without comment syntax: JSON (also lockfiles) and Go module files.
+# Files without comment syntax: JSON (also lockfiles), Go module files and
+# the checksum list of the acceptance tests.
 [[annotations]]
-path = ["**/*.json", "**/go.mod", "**/go.sum"]
+path = ["**/*.json", "**/go.mod", "**/go.sum", "acceptance/SHA256SUMS"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 NightDragon · ShadowGhost.NET"
 SPDX-License-Identifier = "AGPL-3.0-or-later"

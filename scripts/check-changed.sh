@@ -42,6 +42,12 @@ if [[ -n "$go_dirs" ]]; then
   for d in $go_dirs; do
     # Packages of a nested module (tools/) are checked inside that module.
     mod=$(cd "$d" && go env GOMOD)
+    # The acceptance tests need a running instance (scripts/acceptance-run.sh):
+    # lint and vet them only.
+    if [[ "$mod" == "$PWD/acceptance/go.mod" ]]; then
+      (cd acceptance && go tool -modfile=../tools/go.mod golangci-lint run ./... && go vet ./...)
+      continue
+    fi
     if [[ "$mod" != "$PWD/go.mod" ]]; then
       moddir=$(dirname "$mod")
       rel=./$(realpath --relative-to="$moddir" "$d")
